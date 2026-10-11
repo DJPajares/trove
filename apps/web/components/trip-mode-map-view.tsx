@@ -23,10 +23,12 @@ import { TripModeMapSheet } from '@/components/trip-mode-map-sheet';
 import { useTripModeData } from '@/components/trip-mode-data';
 import { useTripModePlaceDetails, useTripModePreview } from '@/components/trip-mode-shell';
 import { useOnlineStatus } from '@/components/trip-sync-status';
+import { useNowTick } from '@/hooks/use-now-tick';
 import { useTravellerPosition } from '@/hooks/use-traveller-position';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  deviceTimeZone,
   fetchItineraryDayRoutes,
   type ItineraryDayRoutes,
   type ItineraryItem,
@@ -35,6 +37,7 @@ import {
 import { dayStopNumbers, resolveDailyBases } from '@/lib/itinerary/day-sequence';
 import { placeVisitDate, scheduledPlaceUse } from '@/lib/itinerary/places';
 import { itineraryDayRouteRevision } from '@/lib/itinerary/routes';
+import { formatTravelDuration } from '@/lib/itinerary/route-format';
 import { haversineMeters } from '@/lib/maps/haversine';
 import {
   buildItineraryMapPoints,
@@ -78,6 +81,7 @@ export function TripModeMapView({
   tripId,
 }: Readonly<{ active?: boolean; tripId: string }>) {
   const t = useTranslations('tripMode.views.map');
+  const nowT = useTranslations('tripMode.views.now');
   const itineraryT = useTranslations('itinerary');
   const locale = useLocale();
   const router = useRouter();
@@ -93,6 +97,8 @@ export function TripModeMapView({
     status: locationStatus,
   } = useTravellerPosition({ enabled: !isPreview && active });
   const clearMapSelection = useCallback(() => setSelectedPointId(null), []);
+  // Ticks only while the view is on screen and the clock is real.
+  const now = useNowTick(!isPreview && active);
 
   const day = useMemo(() => {
     if (!context || !itinerary) return null;
@@ -280,6 +286,39 @@ export function TripModeMapView({
             }
           : null;
   const NoticeIcon = locationNotice?.icon;
+  const routeSummary = (
+    <ItineraryRouteSummary
+      data={routeState.status === 'loading' ? null : routeSummaryData}
+      distanceUnit={preferences.distanceUnit}
+      locale={locale}
+      status={routeState.status}
+    />
+  );
+
+  // The next move, read from the same context Now reads, so the map's peek and
+  // Now can never disagree about where the traveller is going.
+  const nextItem = day.items.find((item) => item.id === context.nextItemId) ?? null;
+  const nextIndex = nextItem ? day.items.indexOf(nextItem) : -1;
+  const nextRoute = context.leaveBy?.destinationItemId === nextItem?.id ? context.leaveBy : null;
+  const clockAt = isPreview ? context.contextAt : now.toISOString();
+  const leaveIn = nextRoute
+    ? Math.round((Date.parse(nextRoute.at) - Date.parse(clockAt)) / 60_000)
+    : null;
+  const countdown =
+    leaveIn === null
+      ? null
+      : leaveIn <= 0
+        ? nowT('leaveNow')
+        : leaveIn < 60
+          ? nowT('leaveInMinutes', { minutes: leaveIn })
+          : nowT('leaveInHours', { hours: Math.floor(leaveIn / 60), minutes: leaveIn % 60 });
+  const legZone = isPreview ? day.defaultTimeZone : (deviceTimeZone() ?? day.defaultTimeZone);
+  const nextLocation = nextItem?.tripPlace ? placeLocation(nextItem.tripPlace) : null;
+  const nextDirections =
+    online && nextLocation
+      ? `https://www.google.com/maps/dir/?api=1&destination=${nextLocation.latitude},${nextLocation.longitude}`
+      : null;
+  const canLocate = !isPreview && online && locationStatus !== 'unsupported';
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 lg:block lg:space-y-6">
@@ -341,20 +380,178 @@ export function TripModeMapView({
               </div>
             </div>
           )}
+
+          {/* Carried over the map on a phone rather than stacked above it: how
+              far and how long, which marker is which, and the device's own
+              position. At `lg:` the rail beside the map has room for all of it. */}
+          <div className="pointer-events-none absolute inset-x-3 top-[calc(var(--safe-top)+var(--header-offset)+5rem+var(--trip-mode-preview-offset,0px))] z-[1] flex flex-col items-start gap-2 md:top-[calc(var(--safe-top)+var(--header-offset)+4rem+var(--trip-mode-preview-offset,0px))] lg:hidden">
+            <div
+              className="pointer-events-auto w-full overflow-hidden rounded-[var(--radius-xl)] bg-background/95 shadow-[var(--shadow-overlay)] backdrop-blur supports-[backdrop-filter]:bg-background/88"
+              data-translucent-surface
+            >
+              {routeSummary}
+            </div>
+            {/* A solid dot is where the device is; a filled circle is where the
+                plan puts a stop. The two are never drawn alike. */}
+            <ul
+              aria-label={t('legendLabel')}
+              className="pointer-events-auto inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full bg-background/95 px-3 py-1.5 text-xs text-foreground shadow-[var(--shadow-control)]"
+            >
+              {deviceLocation ? (
+                <li className="inline-flex items-center gap-1.5">
+                  <span
+                    aria-hidden="true"
+                    className="size-2.5 rounded-full bg-status-info ring-2 ring-status-info/25"
+                  />
+                  {t('legend.device')}
+                </li>
+              ) : null}
+              <li className="inline-flex items-center gap-1.5">
+                <span aria-hidden="true" className="size-2.5 rounded-full bg-primary" />
+                {t('legend.planned')}
+              </li>
+            </ul>
+          </div>
+          {canLocate || basePoint ? (
+            <div className="absolute end-3 top-[42%] z-[1] flex flex-col gap-2 lg:hidden">
+              {canLocate ? (
+                <Button
+                  aria-busy={locationStatus === 'loading'}
+                  aria-describedby="trip-mode-map-location-status"
+                  aria-label={locationStatus === 'ready' ? t('updateLocation') : t('useLocation')}
+                  className="size-12 rounded-full border-border-subtle bg-background shadow-[var(--shadow-overlay)]"
+                  disabled={locationStatus === 'loading'}
+                  onClick={requestLocation}
+                  size="icon"
+                  variant="outline"
+                >
+                  <LocateFixed
+                    aria-hidden="true"
+                    className={cn(
+                      'size-5',
+                      locationStatus === 'ready' && 'text-status-info',
+                      locationStatus === 'loading' && 'animate-spin motion-reduce:animate-none',
+                    )}
+                  />
+                </Button>
+              ) : null}
+              {basePoint ? (
+                <Button
+                  aria-label={t('showOnMap', { name: basePoint.name })}
+                  className="size-12 rounded-full border-border-subtle bg-background shadow-[var(--shadow-overlay)]"
+                  onClick={() => setSelectedPointId(basePoint.id)}
+                  size="icon"
+                  variant="outline"
+                >
+                  <BedDouble aria-hidden="true" className="size-5" />
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
         </section>
 
         <TripModeMapSheet
           peek={
-            /* How far and how long is what the map is usually opened to answer,
-               so it is the one thing worth seeing without opening the sheet. */
-            <div className="-mx-[var(--gutter-inline-start)] lg:mx-0 lg:rounded-[var(--radius-xl)] lg:border lg:border-border-subtle lg:bg-card lg:shadow-[var(--shadow-surface)]">
-              <ItineraryRouteSummary
-                data={routeState.status === 'loading' ? null : routeSummaryData}
-                distanceUnit={preferences.distanceUnit}
-                locale={locale}
-                status={routeState.status}
-              />
-            </div>
+            <>
+              {/* On a phone the route summary rides on the map, so the peek can
+                  hold the next move - the thing a map in Trip Mode is opened
+                  to act on - and every stop of the day a tap away. */}
+              {nextItem ? (
+                <div className="flex items-center gap-3 py-1.5 lg:hidden">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-accent-strong text-sm font-semibold text-primary-foreground tabular-nums">
+                    <span className="sr-only">
+                      {t('stopNumber', { number: stopNumbers.itemOffset + nextIndex + 1 })}
+                    </span>
+                    <span aria-hidden="true">{stopNumbers.itemOffset + nextIndex + 1}</span>
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-base font-semibold text-foreground">
+                      {itemName(nextItem)}
+                    </p>
+                    <p className="truncate text-[length:var(--text-metadata)] text-muted-foreground tabular-nums">
+                      {countdown && nextRoute ? (
+                        <>
+                          <span className="font-semibold text-accent-strong">{countdown}</span>
+                          <span aria-hidden="true"> · </span>
+                          {nowT('travelEstimate', {
+                            duration: formatTravelDuration(nextRoute.routeDurationSeconds, locale),
+                            mode: nowT(`travelMode.${nextRoute.mode}`),
+                          })}
+                          <span aria-hidden="true"> · </span>
+                          {nowT('leaveByAt', {
+                            time: new Intl.DateTimeFormat(locale, {
+                              hour: 'numeric',
+                              hour12: preferences.timeFormat === '12h',
+                              minute: '2-digit',
+                              timeZone: legZone,
+                            }).format(new Date(nextRoute.at)),
+                          })}
+                        </>
+                      ) : (
+                        formatSchedule(nextItem)
+                      )}
+                    </p>
+                  </div>
+                  {nextDirections ? (
+                    <Button
+                      aria-label={nowT('directionsTo', { name: itemName(nextItem) })}
+                      className="size-12 shrink-0 rounded-full"
+                      nativeButton={false}
+                      render={<a href={nextDirections} rel="noreferrer" target="_blank" />}
+                      size="icon"
+                    >
+                      <Icons.Directions aria-hidden="true" className="size-5" />
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+              {day.items.length ? (
+                <ul
+                  aria-label={t('todayItinerary')}
+                  className="interaction-scrollbar -mx-[var(--gutter-inline-start)] flex gap-2 overflow-x-auto px-[var(--gutter-inline-start)] pt-1 pb-2 lg:hidden"
+                >
+                  {day.items.map((item, index) => {
+                    const point = scheduledPoints.find((candidate) => candidate.itemId === item.id);
+                    const isNext = item.id === nextItem?.id;
+                    const settled = item.travelStatus !== 'upcoming';
+                    return (
+                      <li className="shrink-0" key={item.id}>
+                        <Button
+                          aria-label={t('showOnMap', { name: itemName(item) })}
+                          aria-pressed={selectedPointId === point?.id}
+                          className={cn(
+                            'h-10 rounded-full px-3 font-normal shadow-none',
+                            isNext ? 'border-accent-strong' : 'border-border-subtle',
+                            settled && 'text-muted-foreground',
+                          )}
+                          disabled={!point}
+                          onClick={() => point && setSelectedPointId(point.id)}
+                          size="sm"
+                          variant="outline"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className={cn(
+                              'font-semibold tabular-nums',
+                              isNext && 'text-accent-strong',
+                            )}
+                          >
+                            {stopNumbers.itemOffset + index + 1}
+                          </span>
+                          <span aria-hidden="true" className="max-w-40 truncate">
+                            {itemName(item)}
+                          </span>
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
+              {/* How far and how long, beside the map where the rail has room. */}
+              <div className="hidden lg:block lg:overflow-hidden lg:rounded-[var(--radius-xl)] lg:border lg:border-border-subtle lg:bg-card lg:shadow-[var(--shadow-surface)]">
+                {routeSummary}
+              </div>
+            </>
           }
         >
           <div className="-mx-[var(--gutter-inline-start)] border-y border-border-subtle lg:mx-0 lg:rounded-[var(--radius-xl)] lg:border lg:bg-card lg:shadow-[var(--shadow-surface)]">
@@ -373,8 +570,8 @@ export function TripModeMapView({
                 {locationNotice.text}
               </p>
             ) : null}
-            {!isPreview && online && locationStatus !== 'unsupported' ? (
-              <div className="border-t border-border-subtle px-4 py-2.5 sm:px-6">
+            {canLocate ? (
+              <div className="hidden border-t border-border-subtle px-4 py-2.5 sm:px-6 lg:block">
                 {/* The label holds still and the icon carries the wait. A
                     control that renames itself mid-tap makes the traveller
                     re-read it to find out whether anything happened; a spinning
@@ -399,16 +596,18 @@ export function TripModeMapView({
                   />
                   {locationStatus === 'ready' ? t('updateLocation') : t('useLocation')}
                 </Button>
-                <p
-                  aria-live="polite"
-                  className="sr-only"
-                  id="trip-mode-map-location-status"
-                  role="status"
-                >
-                  {locationStatus === 'loading' ? t('locating') : ''}
-                </p>
               </div>
             ) : null}
+            {/* Outside the location control, which only the rail shows: the map
+                carries its own button on a phone, and both are described by this. */}
+            <p
+              aria-live="polite"
+              className="sr-only"
+              id="trip-mode-map-location-status"
+              role="status"
+            >
+              {locationStatus === 'loading' ? t('locating') : ''}
+            </p>
             <ul
               aria-label={t('legendLabel')}
               className="flex flex-wrap gap-x-4 gap-y-2 border-t border-border-subtle px-4 py-3 text-xs text-muted-foreground sm:px-6"

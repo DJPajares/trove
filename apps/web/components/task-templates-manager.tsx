@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CircleAlert, CopyPlus, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useCallback, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
@@ -100,6 +100,12 @@ export function TaskTemplatesManager() {
   const [deleting, setDeleting] = useState(false);
   const [applyingTemplate, setApplyingTemplate] = useState<TaskTemplate | null>(null);
   const [selectedTripId, setSelectedTripId] = useState('');
+  // The Tools shelf links here for one trip (`?trip=`), so applying a template
+  // starts with that trip chosen. Read once on arrival.
+  const [suggestedTripId, setSuggestedTripId] = useState('');
+  useEffect(() => {
+    setSuggestedTripId(new URLSearchParams(window.location.search).get('trip') ?? '');
+  }, []);
   const [applying, setApplying] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -264,7 +270,9 @@ export function TaskTemplatesManager() {
                 <Button
                   aria-label={t('applyTemplate', { name: template.name })}
                   onClick={() => {
-                    setSelectedTripId('');
+                    setSelectedTripId(
+                      trips.some((trip) => trip.id === suggestedTripId) ? suggestedTripId : '',
+                    );
                     setApplyingTemplate(template);
                   }}
                   size="sm"

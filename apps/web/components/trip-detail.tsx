@@ -25,16 +25,14 @@ import { useTripOverview } from '@/lib/trips/use-trip-overview';
  * at every stage; only what fills it changes as the trip moves from plan to
  * memory.
  */
-export function TripDetail({
-  planScoreEnabled,
-  tripId,
-}: Readonly<{ planScoreEnabled: boolean; tripId: string }>) {
+export function TripDetail({ planScoreEnabled }: Readonly<{ planScoreEnabled: boolean }>) {
   const t = useTranslations('trips');
 
   // The trip itself belongs to the layout: it is the same trip every screen
   // inside the trip is showing, and fetching it here as well is what used to
   // make the cover arrive twice.
   const tripContext = useTripContext();
+  const tripId = tripContext?.tripId ?? '';
   const loadedTrip = tripContext?.trip ?? null;
   const trip = loadedTrip
     ? { ...loadedTrip, lifecycle: overviewLifecycle(loadedTrip, new Date()) }
@@ -129,7 +127,7 @@ export function TripDetail({
           </div>
           <div className="px-[var(--gutter-inline-start)] lg:flex lg:flex-col lg:px-0 lg:[grid-area:chapter]">
             <TripHubChapter
-              failed={Boolean(overviewQuery.error)}
+              failed={!overview && Boolean(overviewQuery.error)}
               loading={overviewQuery.isPending}
               onRetry={() => void overviewQuery.refetch()}
               overview={overview}

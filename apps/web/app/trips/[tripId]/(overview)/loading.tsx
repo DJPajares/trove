@@ -1,12 +1,4 @@
-import { getTranslations } from 'next-intl/server';
-
-import { TripDetailSkeleton } from '@/components/trip-detail-skeleton';
-
-export default async function TripLoading() {
-  const t = await getTranslations('trips');
-  return (
-    <div className="mx-auto w-full max-w-5xl">
-      <TripDetailSkeleton label={t('tripLoading')} />
-    </div>
-  );
-}
+// The shared trip layout already owns the trip and Overview query cache.
+// Render from those reads while the route loads, reserving the skeleton for
+// a first visit without a loaded trip instead of hiding it on every return.
+export { default } from './page';

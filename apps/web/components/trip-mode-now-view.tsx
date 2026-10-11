@@ -736,9 +736,6 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
                   />
                   <ItemWhere item={currentItem} />
                 </div>
-                <p className="mt-1.5 text-xs leading-5 text-text-subtle">
-                  {t('locationDisclaimer')}
-                </p>
               </div>
               <div className="grid grid-cols-[repeat(auto-fit,minmax(4.25rem,1fr))] gap-2">
                 {currentReservation ? (

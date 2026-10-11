@@ -8,6 +8,7 @@ import {
   type ScoreSnapshot,
 } from './presentation';
 import { serverNow } from './clock';
+import { isItineraryEditing } from '@/lib/itinerary/edit-lifecycle';
 
 const histories = new WeakMap<
   QueryClient,
@@ -112,6 +113,10 @@ export function watchScoringAcquisition(client: QueryClient) {
 /** An in-flight read may have captured the old evidence. Coalesce one follow-up after it settles. */
 function refreshAfterAcquisition(client: QueryClient, query: Query) {
   const options = { queryKey: query.queryKey, exact: true };
+  if (isItineraryEditing(client, String(query.queryKey[1]))) {
+    void client.invalidateQueries({ ...options, refetchType: 'none' });
+    return;
+  }
   if (query.state.fetchStatus !== 'fetching' || !query.promise) {
     void client.invalidateQueries(options, { cancelRefetch: false });
     return;
@@ -123,7 +128,10 @@ function refreshAfterAcquisition(client: QueryClient, query: Query) {
   void client.invalidateQueries({ ...options, refetchType: 'none' });
   const refresh = () => {
     queued.delete(query.queryHash);
-    if (client.getQueryCache().find(options) === query)
+    if (
+      client.getQueryCache().find(options) === query &&
+      !isItineraryEditing(client, String(query.queryKey[1]))
+    )
       void client.invalidateQueries(options, { cancelRefetch: false });
   };
   void query.promise.then(refresh, refresh);

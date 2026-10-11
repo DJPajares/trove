@@ -1,3 +1,4 @@
+import { withItineraryEdit } from '../lib/itinerary/edit-lifecycle';
 import { QueryObserver } from '@tanstack/react-query';
 import { expect, test, vi } from 'vitest';
 
@@ -161,6 +162,7 @@ test('trip-scoped keys put the trip id directly after the root', () => {
     queryKeys.gapSuggestions('trip-1', 'day-1'),
     queryKeys.hoursNotices('trip-1'),
     queryKeys.itinerary('trip-1'),
+    queryKeys.itineraryTiming('trip-1', 'day-1', 'rev'),
     queryKeys.itineraryDayRoutes('trip-1', 'day-1', 'rev', false, undefined),
     queryKeys.memories('trip-1'),
     queryKeys.placeGroupings('trip-1'),
@@ -344,4 +346,59 @@ test('Home weather persists and separates timezone fallbacks from real coordinat
   expect(utc).not.toEqual(queryKeys.locationWeather(0, 0, 'celsius', 'UTC'));
   client.setQueryData(tokyo, { fetchedAt: '2026-10-03T00:00:00Z' });
   expect(shouldDehydrateQuery(client.getQueryCache().find({ queryKey: tokyo })!)).toBe(false);
+});
+
+test('a pending itinerary reconciliation marks derived reads stale without evaluating intermediate state', async () => {
+  const client = createQueryClient();
+  const score = vi.fn(async () => ({ fingerprint: 'canonical' }));
+  const timing = vi.fn(async () => ({ issues: [] }));
+  const scoreOptions = {
+    queryKey: queryKeys.planScore('trip'),
+    queryFn: score,
+    staleTime: Infinity,
+  };
+  const timingOptions = {
+    queryKey: queryKeys.itineraryTiming('trip', 'day', 'revision'),
+    queryFn: timing,
+    staleTime: Infinity,
+  };
+  client.setQueryData(scoreOptions.queryKey, { fingerprint: 'before' });
+  client.setQueryData(timingOptions.queryKey, { issues: [] });
+  const scoreObserver = new QueryObserver(client, scoreOptions);
+  const timingObserver = new QueryObserver(client, timingOptions);
+  const unsubscribeScore = scoreObserver.subscribe(() => {});
+  const unsubscribeTiming = timingObserver.subscribe(() => {});
+  let finish!: () => void;
+  const pending = withItineraryEdit(
+    client,
+    'trip',
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+  // Even observers that have not rendered their disabled state yet cannot read.
+  await invalidateTripQueries(client, 'trip', ITINERARY_EDIT_QUERY_ROOTS);
+  await client.fetchQuery({
+    queryKey: queryKeys.itineraryDayRoutes('trip', 'day', 'new-order', false, 'en'),
+    queryFn: async () => ({ route: 'new' }),
+  });
+  expect(score).not.toHaveBeenCalled();
+  expect(timing).not.toHaveBeenCalled();
+  expect(client.getQueryState(scoreOptions.queryKey)?.isInvalidated).toBe(true);
+  expect(client.getQueryState(timingOptions.queryKey)?.isInvalidated).toBe(true);
+  scoreObserver.setOptions({ ...scoreOptions, enabled: false });
+  timingObserver.setOptions({ ...timingOptions, enabled: false });
+  finish();
+  await pending;
+  scoreObserver.setOptions({ ...scoreOptions, enabled: true });
+  timingObserver.setOptions({ ...timingOptions, enabled: true });
+  await vi.waitFor(() => {
+    expect(score).toHaveBeenCalledTimes(1);
+    expect(timing).toHaveBeenCalledTimes(1);
+  });
+  unsubscribeScore();
+  unsubscribeTiming();
+  client.clear();
 });

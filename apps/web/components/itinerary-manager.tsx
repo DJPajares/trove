@@ -7,6 +7,8 @@ import {
   readItineraryTimingPending,
   readItineraryTimingReview,
 } from '@/lib/itinerary/api';
+import { isItineraryEditing, withItineraryEdit } from '@/lib/itinerary/edit-lifecycle';
+import { useItineraryEditing } from '@/lib/itinerary/use-itinerary-editing';
 import { DayPlanningContextSheet } from '@/components/day-planning-context';
 
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -348,6 +350,7 @@ export function ItineraryManager({
     };
   }, [tripId]);
   const [organizingItemId, setOrganizingItemId] = useState<string | null>(null);
+  const itineraryEditing = useItineraryEditing(tripId);
   // A stop on its way to another day, or out of Unscheduled onto one.
   const [moveTarget, setMoveTarget] = useState<{
     allowUnscheduled: boolean;
@@ -463,17 +466,16 @@ export function ItineraryManager({
     [itinerary, selectedDayId],
   );
   const timingAssessment = useQuery({
-    queryKey: [
-      'itinerary-timing',
+    queryKey: queryKeys.itineraryTiming(
       tripId,
       selectedDay?.id,
       JSON.stringify([
         selectedDay?.planningContext,
         selectedDay?.items.map((item) => [item.id, item.updatedAt, item.position]),
       ]),
-    ],
-    enabled: online && Boolean(selectedDay),
-    queryFn: () => fetchItineraryDayTimeSuggestions(tripId, selectedDay!.id),
+    ),
+    enabled: online && !itineraryEditing && !timingPending && Boolean(selectedDay),
+    queryFn: ({ signal }) => fetchItineraryDayTimeSuggestions(tripId, selectedDay!.id, { signal }),
   });
 
   // What Trove has stored about each place on the selected day: whether it is
@@ -736,7 +738,7 @@ export function ItineraryManager({
   const planScore = useTripPlanScore(planScoreEnabled ? tripId : null);
   const currentScore =
     planScore.data &&
-    !['disabled', 'loading', 'offline', 'syncing'].includes(planScore.status) &&
+    !['disabled', 'loading', 'offline', 'syncing', 'updating'].includes(planScore.status) &&
     currentAssessment(planScore.data, serverNow())
       ? planScore.data
       : null;
@@ -1129,34 +1131,38 @@ export function ItineraryManager({
     itineraryDayId: string | null,
     position: number,
   ) {
-    setOrganizingItemId(item.id);
-    setError(null);
-    try {
-      // Shown at once - dropped, moved earlier, sent to another day - through the
-      // same replay the offline queue uses, and put back if the server says no.
-      await optimisticItineraryEdit({
-        commit: () =>
-          organizeItineraryItem(tripId, item.id, {
-            itineraryDayId,
-            position,
-            timingPolicy: 'reconcile_flexible',
-          }),
-        operation: {
-          baseItem: item,
-          input: { itineraryDayId, position, timingPolicy: 'reconcile_flexible' },
-          itemId: item.id,
-          kind: 'itinerary_item_organize',
-        },
-        queryClient,
-        tripId,
-      });
-      if (!online) setTimingPending(true);
-      await refresh();
-    } catch {
-      setError(t('organizeError'));
-    } finally {
-      setOrganizingItemId(null);
-    }
+    // A second drop must start from the canonical result of the first one.
+    if (isItineraryEditing(queryClient, tripId)) return;
+    await withItineraryEdit(queryClient, tripId, async () => {
+      setOrganizingItemId(item.id);
+      setError(null);
+      try {
+        // Shown at once - dropped, moved earlier, sent to another day - through the
+        // same replay the offline queue uses, and put back if the server says no.
+        await optimisticItineraryEdit({
+          commit: () =>
+            organizeItineraryItem(tripId, item.id, {
+              itineraryDayId,
+              position,
+              timingPolicy: 'reconcile_flexible',
+            }),
+          operation: {
+            baseItem: item,
+            input: { itineraryDayId, position, timingPolicy: 'reconcile_flexible' },
+            itemId: item.id,
+            kind: 'itinerary_item_organize',
+          },
+          queryClient,
+          tripId,
+        });
+        if (!online) setTimingPending(true);
+        await refresh();
+      } catch {
+        setError(t('organizeError'));
+      } finally {
+        setOrganizingItemId(null);
+      }
+    });
   }
 
   async function handleDuplicate(item: ItineraryItem) {
@@ -1759,10 +1765,19 @@ export function ItineraryManager({
               <DayTimeline
                 observeItem={observeStop}
                 attentionFor={(item) => {
+                  if (itineraryEditing || timingPending) return null;
+                  const issues = timingAssessment.data?.issues ?? [];
                   // A stop already offering its missing Place or location in one
                   // tap is not told about it twice.
                   const problems = (dayProblems.byItem.get(item.id) ?? []).filter(
-                    (problem) => problem.action !== 'LINK_PLACE' || !stopPartial(item),
+                    (problem) =>
+                      (problem.action !== 'LINK_PLACE' || !stopPartial(item)) &&
+                      !(
+                        problem.factor === 'FEASIBILITY' &&
+                        issues.some(
+                          (issue) => issue.severity === 'conflict' && issue.itemId === item.id,
+                        )
+                      ),
                   );
                   const holidays = (hoursNotices?.notices ?? []).filter(
                     (notice) =>
@@ -1770,9 +1785,7 @@ export function ItineraryManager({
                       notice.dayId === selectedDay.id &&
                       notice.tripPlaceId === item.tripPlace?.id,
                   );
-                  const timingIssues = (timingAssessment.data?.issues ?? []).filter(
-                    (issue) => issue.itemId === item.id,
-                  );
+                  const timingIssues = issues.filter((issue) => issue.itemId === item.id);
                   if (!problems.length && !holidays.length && !timingIssues.length) return null;
                   return (
                     <>
@@ -1785,17 +1798,32 @@ export function ItineraryManager({
                           }
                           key={issue.code}
                         >
-                          <Button
-                            className="h-auto whitespace-normal px-0 text-left text-sm"
-                            type="button"
-                            variant="link"
-                            onClick={() => setTimingItem(item)}
-                          >
+                          <span>
                             <span className="sr-only">
                               {t(`connectedTiming.issueLabel.${issue.severity}`)}:{' '}
                             </span>
                             {t(`connectedTiming.issue.${issue.code}`)}
-                          </Button>
+                          </span>
+                          <div className="mt-1 flex flex-wrap gap-x-4">
+                            <Button
+                              className="h-auto px-0 text-sm"
+                              type="button"
+                              variant="link"
+                              onClick={() => setTimingItem(item)}
+                            >
+                              {t('connectedTiming.reviewTiming')}
+                            </Button>
+                            {issue.severity === 'conflict' ? (
+                              <Button
+                                className="h-auto px-0 text-sm"
+                                type="button"
+                                variant="link"
+                                onClick={() => setMoveTarget({ allowUnscheduled: true, item })}
+                              >
+                                {t('itemMenu.moveToDay')}
+                              </Button>
+                            ) : null}
+                          </div>
                         </AttentionNote>
                       ))}
                       {problems.map((problem, index) => (
@@ -1839,7 +1867,11 @@ export function ItineraryManager({
                 onInsert={(position, afterName) => openInsert(selectedDay, position, afterName)}
                 onEditTiming={setTimingItem}
                 onModeChange={(segment, mode) => void handleRouteModeChange(segment, mode)}
-                onReorder={(item, position) => void handleOrganize(item, selectedDay.id, position)}
+                onReorder={
+                  itineraryEditing
+                    ? undefined
+                    : (item, position) => void handleOrganize(item, selectedDay.id, position)
+                }
                 onSelectBase={selectBaseOnMap}
                 onSelectItem={selectItemOnMap}
                 onViewBaseDetails={(tripPlaceId) =>

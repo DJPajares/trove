@@ -3,6 +3,7 @@
 import { CircleAlert } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ import {
   type ItineraryItem,
 } from '@/lib/itinerary/api';
 import { reorderMoves } from '@/lib/itinerary/better-order';
+import { isItineraryEditing, withItineraryEdit } from '@/lib/itinerary/edit-lifecycle';
 
 type Props = {
   day: ItineraryDay | null;
@@ -44,6 +46,7 @@ export function ItineraryBetterOrder({
   tripId,
 }: Readonly<Props>) {
   const t = useTranslations('itinerary.betterOrder');
+  const queryClient = useQueryClient();
   const [status, setStatus] = useState<'applying' | 'error' | 'loading' | 'ready'>('loading');
   const [proposal, setProposal] = useState<DayBetterOrder | null>(null);
 
@@ -74,25 +77,29 @@ export function ItineraryBetterOrder({
       : [];
 
   async function apply() {
-    if (!day || proposal?.status !== 'ok') return;
-    setStatus('applying');
-    try {
-      const moves = reorderMoves(
-        day.items.map((item) => item.id),
-        proposal.order,
-      );
-      for (const [index, move] of moves.entries()) {
-        await organizeItineraryItem(tripId, move.itemId, {
-          itineraryDayId: day.id,
-          position: move.position,
-          timingPolicy: index === moves.length - 1 ? 'reconcile_flexible' : 'preserve',
-        });
+    if (!day || proposal?.status !== 'ok' || isItineraryEditing(queryClient, tripId)) return;
+    await withItineraryEdit(queryClient, tripId, async () => {
+      setStatus('applying');
+      try {
+        const moves = reorderMoves(
+          day.items.map((item) => item.id),
+          proposal.order,
+        );
+        for (const [index, move] of moves.entries()) {
+          await organizeItineraryItem(tripId, move.itemId, {
+            itineraryDayId: day.id,
+            position: move.position,
+            timingPolicy: index === moves.length - 1 ? 'reconcile_flexible' : 'preserve',
+          });
+        }
+        await onApplied();
+        onOpenChange(false);
+      } catch {
+        // Earlier moves may already have committed; refresh even after a later failure.
+        await onApplied().catch(() => undefined);
+        setStatus('error');
       }
-      await onApplied();
-      onOpenChange(false);
-    } catch {
-      setStatus('error');
-    }
+    });
   }
 
   const hoursNote =

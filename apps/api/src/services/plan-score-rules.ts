@@ -31,6 +31,8 @@ export const PLAN_SCORE_CONTRACT_VERSION = 8;
  * version, usually stays put; either change invalidates every stored score.
  */
 export const PLAN_SCORE_RUBRIC_VERSION = 12;
+/** Bug-fix revision: invalidate derived results without changing calibration or payload shape. */
+const PLAN_SCORE_EVALUATOR_REVISION = 2;
 /**
  * A category or component publishes its number once this share of its weight
  * is assessed from known or estimated evidence. Below it the number would rest
@@ -555,6 +557,7 @@ export function scoringInputRevision(input: unknown) {
         canonical({
           version: PLAN_SCORE_CONTRACT_VERSION,
           rubric: PLAN_SCORE_RUBRIC_VERSION,
+          evaluator: PLAN_SCORE_EVALUATOR_REVISION,
           input,
         }),
       ),

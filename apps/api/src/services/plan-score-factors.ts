@@ -573,7 +573,15 @@ export function evaluateFeasibility(
             duration > input.availability.endMinute - input.availability.startMinute),
       );
     }
-    if (duration === null || start === null) {
+    const unplaceableFlexible =
+      !item.fixed &&
+      [`window:${item.id}`, `hours:${item.id}`, `availability:${item.id}`].some((id) =>
+        conflicts.has(id),
+      );
+    if (duration === null || start === null || unplaceableFlexible) {
+      // An impossible hypothetical slot is not a real departure. Keep the
+      // root conflict, then assess later stops from their own timing until a
+      // known anchor restores the chain. Do not propagate a made-up late time.
       earliest = null;
       chainTrusted = false;
     } else {

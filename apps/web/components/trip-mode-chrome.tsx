@@ -1,11 +1,10 @@
 'use client';
 
-import { ArrowLeft } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { usePathname } from 'next/navigation';
 
-import { NavActiveIndicator } from '@/components/nav-active-indicator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { isNavigationPathActive } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
@@ -66,19 +65,25 @@ export function TripModeTabBar({
                 className={cn(
                   'relative isolate flex min-h-[3.25rem] flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] px-2 pt-1.5 pb-2 text-[length:var(--text-metadata)] font-medium outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none lg:min-h-11 lg:flex-row lg:gap-1.5 lg:py-1.5',
                   active
-                    ? 'font-semibold text-brand [--icon-stroke:var(--icon-stroke-emphasis)] lg:bg-secondary lg:font-medium lg:text-secondary-foreground'
+                    ? 'font-semibold text-secondary-foreground [--icon-stroke:var(--icon-stroke-emphasis)] lg:bg-secondary lg:font-medium'
                     : 'text-muted-foreground hover:text-foreground lg:hover:bg-surface-hover',
                 )}
                 href={withPreviewHref(href)}
               >
-                {/* Colour alone cannot carry this: brand against muted measures
-                    1.20:1, so the selected tab dissolves into its neighbours in
-                    greyscale. The mark is the second channel WCAG 1.4.1 asks
-                    for, exactly as the app's main bar does it. At `lg:` the
-                    filled pill is already that channel, so the mark stands
+                {/* Colour alone cannot carry this: the selected tab would
+                    dissolve into its neighbours in greyscale. The filled pill
+                    behind the icon is the second channel WCAG 1.4.1 asks for.
+                    At `lg:` the whole tab is the pill, so the icon's own steps
                     down. */}
-                {active ? <NavActiveIndicator className="lg:hidden" /> : null}
-                <Icon aria-hidden="true" className="size-5 lg:size-4" />
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'flex h-8 w-14 items-center justify-center rounded-full transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none lg:h-auto lg:w-auto lg:bg-transparent',
+                    active && 'bg-secondary',
+                  )}
+                >
+                  <Icon className="size-5 lg:size-4" />
+                </span>
                 <span>{t(`views.${key}.label`)}</span>
               </Link>
             </li>
@@ -109,24 +114,26 @@ export function TripModeTopBar({
       data-slot="trip-mode-top-bar"
       data-translucent-surface
     >
+      {/* A visible way out, drawn as a control rather than a quiet link:
+          outdoors and one-handed, the edge of a word is not a target. */}
       <Link
-        className="-ms-2 inline-flex min-h-11 items-center justify-self-start gap-1.5 rounded-[var(--radius-md)] px-2 text-sm font-medium text-muted-foreground outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none"
+        className="inline-flex min-h-11 items-center justify-self-start gap-1 rounded-full border border-border bg-card ps-2.5 pe-4 text-sm font-semibold text-foreground shadow-[var(--shadow-control)] outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none"
         // Back to the trip this mode belongs to, not to the whole library. A
         // traveller who opened Trip Mode from their trip could not previously
         // get back to it in one tap.
         href={`/trips/${tripId}`}
       >
-        <ArrowLeft aria-hidden="true" className="size-4" />
+        <ChevronLeft aria-hidden="true" className="size-4.5" />
         {t('exit')}
       </Link>
 
       {tripName ? (
-        <p className="min-w-0 truncate text-center text-[length:var(--text-metadata)] font-medium text-muted-foreground">
+        <p className="min-w-0 truncate text-center text-base font-semibold text-foreground">
           {tripName}
         </p>
       ) : (
         <div className="flex min-w-0 justify-center">
-          <Skeleton className="h-[length:var(--text-metadata)] w-28 max-w-full" />
+          <Skeleton className="h-4 w-28 max-w-full" />
         </div>
       )}
     </div>

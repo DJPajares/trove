@@ -1,6 +1,6 @@
 'use client';
 
-import { BedDouble, CalendarDays, ChevronDown, ChevronRight, Users } from 'lucide-react';
+import { BedDouble, CalendarDays, ChevronDown, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, type ReactNode } from 'react';
@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/item';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchExpenses } from '@/lib/expenses/api';
+import { dayTown } from '@/lib/itinerary/day-place';
 import { queryKeys } from '@/lib/query/keys';
 import { useTripResource } from '@/lib/query/use-trip-resource';
 import type { Task, TasksResponse } from '@/lib/tasks/api';
@@ -243,6 +244,41 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
   const itineraryHref = selectedDay
     ? `/trips/${tripId}/itinerary?day=${encodeURIComponent(selectedDay.id)}`
     : `/trips/${tripId}/itinerary`;
+  // Where the traveller is in the trip, counted on the trip's own dates. Preview
+  // only ever selects a day inside them, so the count stays inside its bounds.
+  const dayMs = 86_400_000;
+  const tripStart = Date.parse(`${trip.startDate}T00:00:00.000Z`);
+  const totalTripDays =
+    Math.round((Date.parse(`${trip.endDate}T00:00:00.000Z`) - tripStart) / dayMs) + 1;
+  const tripDayNumber = Math.min(
+    totalTripDays,
+    Math.max(
+      1,
+      Math.round((Date.parse(`${context.selectedDate}T00:00:00.000Z`) - tripStart) / dayMs) + 1,
+    ),
+  );
+  const daysToGo = totalTripDays - tripDayNumber;
+  const visitedCount = itinerary.days.reduce(
+    (count, day) => count + day.items.filter((item) => item.travelStatus === 'completed').length,
+    0,
+  );
+  // "9 – 13 Oct" rather than two full dates: it has a third of a phone to fit in.
+  const dateRangeShort = new Intl.DateTimeFormat(locale, {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  }).formatRange(
+    new Date(`${trip.startDate}T00:00:00.000Z`),
+    new Date(`${trip.endDate}T00:00:00.000Z`),
+  );
+  const dayChip = (value: string) => ({
+    number: new Intl.DateTimeFormat(locale, { day: 'numeric', timeZone: 'UTC' }).format(
+      new Date(`${value}T00:00:00.000Z`),
+    ),
+    weekday: new Intl.DateTimeFormat(locale, { timeZone: 'UTC', weekday: 'short' }).format(
+      new Date(`${value}T00:00:00.000Z`),
+    ),
+  });
   const tools: Tool[] = [
     {
       descriptionKey: 'itineraryDescription',
@@ -288,66 +324,77 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
 
   return (
     <div className="space-y-8 pb-2 sm:space-y-10">
-      <header className="max-w-[var(--layout-reading)]">
-        <h2 className="sr-only">{t('title')}</h2>
-        {/* Standing guidance until the traveller has written their own account
-            of the trip, at which point theirs is the more useful sentence. It
-            stays out of the notes list below: that list is reminders. */}
-        <p
-          className={cn(
-            'text-sm leading-[1.55] text-pretty text-muted-foreground',
-            tripDescription && 'whitespace-pre-wrap',
-          )}
-        >
-          {tripDescription || t('description')}
-        </p>
-      </header>
+      <h2 className="sr-only">{t('title')}</h2>
 
-      <section aria-labelledby="trip-mode-summary-heading">
-        <h3 className="sr-only" id="trip-mode-summary-heading">
-          {t('summary')}
-        </h3>
-        <dl className="grid gap-x-6 gap-y-5 border-y border-border-subtle py-5 sm:grid-cols-3">
-          <div>
-            <dt className="text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-              {t('dates')}
-            </dt>
-            <dd className="mt-1.5 text-sm font-medium text-foreground">
-              {t('dateRange', {
-                endDate: dateFormatter.format(new Date(`${trip.endDate}T00:00:00.000Z`)),
-                startDate: dateFormatter.format(new Date(`${trip.startDate}T00:00:00.000Z`)),
-              })}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-              {t('where')}
-            </dt>
-            {/* The country the trip declared, with the destinations underneath
-                it rather than beside it: a traveller in Trip Mode is already
-                somewhere, and the country is the line that orients them. The
-                cell no longer has a "still open" state to fall back to, because
-                every trip names a country now. */}
-            <dd className="mt-1.5 text-sm font-medium text-foreground">
+      {/* Where the traveller is in the whole trip, on the same dark surface Now
+          gives the next move: the trip at a glance, before its tools. */}
+      <section
+        aria-labelledby="trip-mode-summary-heading"
+        className="rounded-[1.75rem] bg-[color:var(--score-media-background)] p-5 text-[color:var(--score-media-foreground)] shadow-[var(--shadow-card)] sm:p-6 dark:ring-1 dark:ring-border"
+      >
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            {/* The country the trip declared, with the destinations after it: a
+                traveller in Trip Mode is already somewhere, and the country is
+                the line that orients them. */}
+            <p className="truncate text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-[color:var(--score-media-brand)] uppercase">
               {countries ?? destinations ?? trip.name}
-              {countries && destinations ? (
-                <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
-                  {destinations}
-                </span>
-              ) : null}
-            </dd>
+            </p>
+            <h3
+              className="mt-1 font-journal text-[2.5rem] leading-none font-normal tracking-[-0.01em] tabular-nums"
+              id="trip-mode-summary-heading"
+            >
+              {t('summaryDay', { number: tripDayNumber, total: totalTripDays })}
+            </h3>
           </div>
-          <div>
-            <dt className="text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-              {t('travellers')}
-            </dt>
-            <dd className="mt-1.5 inline-flex items-center gap-2 text-sm font-medium text-foreground">
-              <Users aria-hidden="true" className="size-4 text-brand" />
-              {t('travellerCount', { count: trip.partySize })}
-            </dd>
+          <p className="shrink-0 pb-1 text-sm text-[color:var(--score-media-muted)] tabular-nums">
+            {t('daysToGo', { count: daysToGo })}
+          </p>
+        </div>
+        <div aria-hidden="true" className="mt-4 flex gap-1">
+          {Array.from({ length: totalTripDays }, (_, index) => (
+            <span
+              className={cn(
+                'h-1.5 flex-1 rounded-full',
+                index + 1 < tripDayNumber
+                  ? 'bg-[color:var(--score-media-brand)]'
+                  : index + 1 === tripDayNumber
+                    ? 'bg-accent'
+                    : 'bg-[color:var(--score-media-foreground)]/15',
+              )}
+              key={index}
+            />
+          ))}
+        </div>
+        {/* Each figure reads value-first; the term still leads in the markup. */}
+        <dl className="mt-5 grid grid-cols-3 gap-3">
+          <div className="flex min-w-0 flex-col-reverse">
+            <dt className="text-xs text-[color:var(--score-media-muted)]">{t('dates')}</dt>
+            <dd className="truncate text-base font-semibold tabular-nums">{dateRangeShort}</dd>
+          </div>
+          <div className="flex min-w-0 flex-col-reverse">
+            <dt className="text-xs text-[color:var(--score-media-muted)]">{t('travellers')}</dt>
+            <dd className="text-base font-semibold tabular-nums">{trip.partySize}</dd>
+          </div>
+          <div className="flex min-w-0 flex-col-reverse">
+            <dt className="text-xs text-[color:var(--score-media-muted)]">{t('visited')}</dt>
+            <dd className="text-base font-semibold tabular-nums">{visitedCount}</dd>
           </div>
         </dl>
+        {countries && destinations ? (
+          <p className="mt-4 text-[length:var(--text-metadata)] leading-5 text-[color:var(--score-media-muted)]">
+            {destinations}
+          </p>
+        ) : null}
       </section>
+
+      {/* The traveller's own account of the trip, when they have written one.
+          It stays out of the notes list below: that list is reminders. */}
+      {tripDescription ? (
+        <p className="max-w-[var(--layout-reading)] text-sm leading-[1.55] whitespace-pre-wrap text-pretty text-muted-foreground">
+          {tripDescription}
+        </p>
+      ) : null}
 
       <EditorialSection
         actions={
@@ -362,6 +409,7 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
             <ManageTasksLink tripId={tripId} />
           </>
         }
+        className="rounded-[var(--radius-2xl)] border border-border-subtle bg-card p-5 shadow-[var(--shadow-control)] sm:p-6"
         description={tasksT('tripDescription', { count: openTripTaskCount })}
         headingId="trip-mode-tasks-heading"
         headingLevel={3}
@@ -416,40 +464,56 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
         >
           {visibleDays.length ? (
             <>
-              <ItemGroup variant="list">
-                {visibleDays.map((day, index) => (
-                  <Item
-                    key={day.id}
-                    render={
-                      <Link href={`/trips/${tripId}/itinerary?day=${encodeURIComponent(day.id)}`} />
-                    }
-                  >
-                    <ItemMedia variant="icon">
-                      <CalendarDays aria-hidden="true" className="text-brand" />
-                    </ItemMedia>
-                    <ItemContent>
-                      <ItemTitle>
-                        {day.name ?? dateFormatter.format(new Date(`${day.date}T00:00:00.000Z`))}
-                      </ItemTitle>
-                      <ItemDescription>
-                        {day.name
-                          ? t('daySummaryNamed', {
-                              count: day.items.length,
-                              day: itineraryT('dayOption', {
-                                date: dateFormatter.format(new Date(`${day.date}T00:00:00.000Z`)),
+              <ItemGroup className="gap-2" variant="list">
+                {visibleDays.map((day, index) => {
+                  // The same ladder Today's hero uses: the day's name, then the
+                  // town it is safely in, then its date.
+                  const dayTitle = day.name?.trim() || dayTown(day, itinerary.tripPlaces);
+                  return (
+                    <Item
+                      className="rounded-[var(--radius-xl)] border border-border-subtle bg-card shadow-[var(--shadow-control)]"
+                      key={day.id}
+                      render={
+                        <Link
+                          href={`/trips/${tripId}/itinerary?day=${encodeURIComponent(day.id)}`}
+                        />
+                      }
+                    >
+                      <ItemMedia
+                        aria-hidden="true"
+                        className="w-10 flex-col gap-0 text-center tabular-nums"
+                      >
+                        <span className="text-[0.6875rem] leading-4 text-muted-foreground">
+                          {dayChip(day.date).weekday}
+                        </span>
+                        <span className="text-lg leading-5 font-semibold text-foreground">
+                          {dayChip(day.date).number}
+                        </span>
+                      </ItemMedia>
+                      <ItemContent>
+                        <ItemTitle className="font-journal text-[1.3125rem] leading-[1.1] font-normal">
+                          {dayTitle ?? dateFormatter.format(new Date(`${day.date}T00:00:00.000Z`))}
+                        </ItemTitle>
+                        <ItemDescription>
+                          {dayTitle
+                            ? t('daySummaryNamed', {
+                                count: day.items.length,
+                                day: itineraryT('dayOption', {
+                                  date: dateFormatter.format(new Date(`${day.date}T00:00:00.000Z`)),
+                                  number: selectedDayIndex + index + 1,
+                                }),
+                              })
+                            : t('daySummary', {
+                                count: day.items.length,
                                 number: selectedDayIndex + index + 1,
-                              }),
-                            })
-                          : t('daySummary', {
-                              count: day.items.length,
-                              number: selectedDayIndex + index + 1,
-                            })}
-                      </ItemDescription>
-                    </ItemContent>
-                    <TripDayWeather forecast={tripWeatherForDate(weather, day.date)} />
-                    <ChevronRight aria-hidden="true" className="size-4 text-muted-foreground" />
-                  </Item>
-                ))}
+                              })}
+                        </ItemDescription>
+                      </ItemContent>
+                      <TripDayWeather forecast={tripWeatherForDate(weather, day.date)} />
+                      <ChevronRight aria-hidden="true" className="size-4 text-muted-foreground" />
+                    </Item>
+                  );
+                })}
               </ItemGroup>
               {remainingDayCount > 0 ? (
                 <p className="mt-3 text-xs leading-5 text-text-subtle">

@@ -4,11 +4,11 @@ import { useTripPlacesDrawer } from '@/components/trip-places-provider';
 
 import { dayActionLink } from '@/lib/plan-score/presentation';
 
-import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode, Ref } from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { DatePicker } from '@/components/date-picker';
@@ -24,9 +24,8 @@ import { TripModeDataProvider } from '@/components/trip-mode-data';
 import { TripSyncStatus } from '@/components/trip-sync-status';
 import { TripModeTasksProvider } from '@/components/trip-mode-tasks';
 import { useTripContext } from '@/components/trip-provider';
-import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
-import { Field, FieldLabel } from '@/components/ui/field';
+import { Slider } from '@/components/ui/slider';
 import {
   deviceTimeZone,
   fetchItinerary,
@@ -42,7 +41,6 @@ import { queryKeys } from '@/lib/query/keys';
 import { useTripResource } from '@/lib/query/use-trip-resource';
 import { resolveProviderPlaceName, resolveTripPlaceName } from '@/lib/trip-places/place-name';
 import { isTripModeAvailable } from '@/lib/trips/navigation';
-import { cn } from '@/lib/utils';
 import * as Icons from '@/lib/icons';
 
 type PreviewSelection = { date: string; time: string };
@@ -124,146 +122,135 @@ function adjacentPreviewDate(date: string, offset: number, startDate: string, en
 type PreviewControlsProps = {
   activityCounts: Readonly<Record<string, number>>;
   endDate: string;
-  idPrefix: string;
   onChange: (next: { date?: string; time?: string }) => void;
+  ref?: Ref<HTMLElement>;
   selection: PreviewSelection;
   startDate: string;
 };
 
-/** The two controls that define the active Preview state. */
+const MINUTES_PER_DAY = 24 * 60;
+const PREVIEW_TIME_STEP_MINUTES = 5;
+
+function minutesFromTime(time: string) {
+  const [hour = 0, minute = 0] = time.split(':').map(Number);
+  return hour * 60 + minute;
+}
+
+function timeFromMinutes(minutes: number) {
+  const clamped = Math.min(Math.max(Math.round(minutes), 0), MINUTES_PER_DAY - 1);
+  return `${String(Math.floor(clamped / 60)).padStart(2, '0')}:${String(clamped % 60).padStart(2, '0')}`;
+}
+
+/**
+ * The two controls that define the active Preview state, always in view.
+ *
+ * Preview identifies itself here rather than in the header, and neither value
+ * sits behind an Edit or Change step: the day steps a tap at a time, and the
+ * time scrubs. The slider moves only its own reading while it is dragged and
+ * writes the URL once, on release - every committed value asks the server for
+ * that moment's context, and a drag across the day should be one question, not
+ * two hundred.
+ */
 function TripModePreviewControls({
   activityCounts,
   endDate,
-  idPrefix,
   onChange,
+  ref,
   selection,
   startDate,
 }: Readonly<PreviewControlsProps>) {
   const t = useTranslations('tripMode');
-  const previousDate = adjacentPreviewDate(selection.date, -1, startDate, endDate);
-  const nextDate = adjacentPreviewDate(selection.date, 1, startDate, endDate);
-
-  return (
-    <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
-      <Field className="min-w-0">
-        <FieldLabel htmlFor={`${idPrefix}-date`}>{t('preview.date')}</FieldLabel>
-        {/* Stepping a day at a time is the move Preview is made for, so it
-            costs a tap rather than a trip through the calendar. */}
-        <div className="flex items-center gap-2">
-          <Button
-            aria-label={t('preview.previousDay')}
-            disabled={!previousDate}
-            onClick={() => previousDate && onChange({ date: previousDate })}
-            size="icon"
-            variant="outline"
-          >
-            <ChevronLeft aria-hidden="true" />
-          </Button>
-          <DatePicker
-            activityCounts={activityCounts}
-            className="flex-1"
-            clearable={false}
-            id={`${idPrefix}-date`}
-            label={t('preview.date')}
-            max={endDate}
-            min={startDate}
-            onChange={(date) => date && onChange({ date })}
-            value={selection.date}
-            required
-          />
-          <TimeInput
-            id={`${idPrefix}-time`}
-            onValueChange={(time) => time && onChange({ time })}
-            value={selection.time}
-            required
-          />
-          <Button
-            aria-label={t('preview.nextDay')}
-            disabled={!nextDate}
-            onClick={() => nextDate && onChange({ date: nextDate })}
-            size="icon"
-            variant="outline"
-          >
-            <ChevronRight aria-hidden="true" />
-          </Button>
-        </div>
-      </Field>
-    </div>
-  );
-}
-
-/**
- * Keeps the current simulated moment visible and immediately adjustable before
- * the traveller moves into the previewed Trip Mode experience.
- */
-function TripModePreviewSummary({
-  activityCounts,
-  endDate,
-  onChange,
-  selection,
-  startDate,
-}: Readonly<Omit<PreviewControlsProps, 'idPrefix'>>) {
-  const t = useTranslations('tripMode');
   const locale = useLocale();
   const { preferences } = usePreferences();
-  const [controlsOpen, setControlsOpen] = useState(false);
+  const previousDate = adjacentPreviewDate(selection.date, -1, startDate, endDate);
+  const nextDate = adjacentPreviewDate(selection.date, 1, startDate, endDate);
+  const committedMinutes = minutesFromTime(selection.time);
+  const [scrubMinutes, setScrubMinutes] = useState<number | null>(null);
+  const minutes = scrubMinutes ?? committedMinutes;
 
-  const dateLabel = new Intl.DateTimeFormat(locale, {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-    weekday: 'short',
-  }).format(new Date(`${selection.date}T00:00:00.000Z`));
-  const [hour, minute] = selection.time.split(':').map(Number);
-  const timeLabel = new Intl.DateTimeFormat(locale, {
-    hour: 'numeric',
-    hour12: preferences.timeFormat === '12h',
-    minute: '2-digit',
-    timeZone: 'UTC',
-  }).format(new Date(Date.UTC(2000, 0, 1, hour ?? 9, minute ?? 0)));
-  const summary = t('preview.summary', { date: dateLabel, time: timeLabel });
+  // A committed value replaces the scrub reading, from whichever control set it.
+  useEffect(() => {
+    setScrubMinutes(null);
+  }, [selection.time]);
+
+  const formatClock = (value: number) =>
+    new Intl.DateTimeFormat(locale, {
+      hour: 'numeric',
+      hour12: preferences.timeFormat === '12h',
+      minute: '2-digit',
+      timeZone: 'UTC',
+    }).format(new Date(Date.UTC(2000, 0, 1, Math.floor(value / 60), value % 60)));
 
   return (
-    // Which day is being previewed is worth one line; the controls that change
-    // it are worth a row only while they are being used. Open they cost about
-    // 300px, which on the map was most of the map.
-    <Collapsible
-      className="-mx-[var(--gutter-inline-start)] border-y border-accent-strong/35 bg-accent-strong/8"
-      onOpenChange={setControlsOpen}
-      open={controlsOpen}
+    <section
+      aria-label={t('preview.label')}
+      // Above the Map view's map, which runs full screen behind the bars: the
+      // controls are how Preview identifies itself, so nothing may cover them.
+      className="relative z-[3] rounded-[var(--radius-2xl)] bg-secondary px-3 pt-1.5 pb-2 text-secondary-foreground sm:px-4"
+      data-slot="trip-mode-preview-controls"
+      ref={ref}
     >
-      <div className="flex items-center gap-2.5 px-[var(--gutter-inline-start)] py-2 sm:gap-3">
-        <Eye aria-hidden="true" className="size-4 shrink-0 text-accent-strong" />
-        <p className="min-w-0 flex-1 text-sm leading-5 font-medium text-pretty text-foreground">
-          {summary}
-        </p>
-        <CollapsibleTrigger
-          className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-[var(--radius-md)] px-2 text-[length:var(--text-metadata)] font-medium text-accent-strong outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
-          render={<button type="button" />}
+      <p className="inline-flex items-center gap-1.5 text-[length:var(--text-metadata)] leading-5 font-semibold tracking-[0.08em] uppercase">
+        <Eye aria-hidden="true" className="size-4 shrink-0" />
+        {t('preview.badge')}
+      </p>
+      <div className="mt-1 flex items-center gap-1">
+        {/* Stepping a day at a time is the move Preview is made for, so it
+            costs a tap rather than a trip through the calendar. */}
+        <Button
+          aria-label={t('preview.previousDay')}
+          disabled={!previousDate}
+          onClick={() => previousDate && onChange({ date: previousDate })}
+          size="icon"
+          variant="ghost"
         >
-          {t(controlsOpen ? 'preview.hideControls' : 'preview.showControls')}
-          <ChevronDown
-            aria-hidden="true"
-            className={cn(
-              'size-3.5 transition-transform duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none',
-              controlsOpen && 'rotate-180',
-            )}
-          />
-        </CollapsibleTrigger>
+          <ChevronLeft aria-hidden="true" />
+        </Button>
+        <DatePicker
+          activityCounts={activityCounts}
+          className="min-w-0 flex-1"
+          clearable={false}
+          id="trip-mode-preview-date"
+          label={t('preview.date')}
+          max={endDate}
+          min={startDate}
+          onChange={(date) => date && onChange({ date })}
+          value={selection.date}
+          required
+        />
+        <Button
+          aria-label={t('preview.nextDay')}
+          disabled={!nextDate}
+          onClick={() => nextDate && onChange({ date: nextDate })}
+          size="icon"
+          variant="ghost"
+        >
+          <ChevronRight aria-hidden="true" />
+        </Button>
       </div>
-      <CollapsiblePanel>
-        <div className="border-t border-accent-strong/25 px-[var(--gutter-inline-start)] py-4">
-          <TripModePreviewControls
-            activityCounts={activityCounts}
-            endDate={endDate}
-            idPrefix="trip-mode-preview-controls"
-            onChange={onChange}
-            selection={selection}
-            startDate={startDate}
-          />
-        </div>
-      </CollapsiblePanel>
-    </Collapsible>
+      <div className="mt-1 flex items-center gap-3 ps-1">
+        <TimeInput
+          aria-label={t('preview.time')}
+          className="w-32 shrink-0"
+          id="trip-mode-preview-time"
+          onValueChange={(time) => time && onChange({ time })}
+          value={timeFromMinutes(minutes)}
+          required
+        />
+        <Slider
+          className="min-w-0 flex-1"
+          getAriaValueText={(_formatted, value) => formatClock(value)}
+          largeStep={60}
+          max={MINUTES_PER_DAY - PREVIEW_TIME_STEP_MINUTES}
+          min={0}
+          onValueChange={(value) => setScrubMinutes(value as number)}
+          onValueCommitted={(value) => onChange({ time: timeFromMinutes(value as number) })}
+          step={PREVIEW_TIME_STEP_MINUTES}
+          thumbLabel={t('preview.timeScrub')}
+          value={minutes}
+        />
+      </div>
+    </section>
   );
 }
 
@@ -367,6 +354,13 @@ export function TripModeShell({
     [],
   );
   const placeDetailsContext = useMemo(() => ({ openPlaceDetails }), [openPlaceDetails]);
+  const [previewControlsHeight, setPreviewControlsHeight] = useState(0);
+  const previewControlsRef = useCallback((node: HTMLElement | null) => {
+    if (!node) return;
+    const observer = new ResizeObserver(() => setPreviewControlsHeight(node.offsetHeight));
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   const isPreview = searchParams.get('preview') === '1';
   const requestedDate = searchParams.get('date');
@@ -561,6 +555,15 @@ export function TripModeShell({
         <TripModeTasksProvider tripId={trip.id}>
           <section
             className="mx-auto flex min-h-[calc(100dvh-var(--safe-top))] w-full max-w-6xl flex-col lg:min-h-0 gap-2"
+            // How far the Preview controls reach below the header, for anything
+            // that floats over the full-screen map and must clear them.
+            style={
+              {
+                '--trip-mode-preview-offset': previewSelection
+                  ? `${previewControlsHeight + 8}px`
+                  : '0px',
+              } as CSSProperties
+            }
             data-slot="trip-mode-shell"
           >
             <TripModeTopBar tripId={trip.id} tripName={trip.name} />
@@ -571,10 +574,11 @@ export function TripModeShell({
             <TripModeTabBar tripId={trip.id} withPreviewHref={withPreviewHref} />
 
             {previewSelection ? (
-              <TripModePreviewSummary
+              <TripModePreviewControls
                 activityCounts={activityCounts}
                 endDate={trip.endDate}
                 onChange={updatePreview}
+                ref={previewControlsRef}
                 selection={previewSelection}
                 startDate={trip.startDate}
               />

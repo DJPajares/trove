@@ -52,8 +52,9 @@ export function TripModeMapSheet({
         // the map is never entirely covered and scrolling instead. A flat pixel
         // cap did this job before and cut whatever happened to cross it in
         // half - a button, a sentence - which is the one thing a sheet must not
-        // do.
-        'absolute inset-x-0 bottom-0 z-[2] flex max-h-[92%] flex-col overflow-hidden rounded-t-[var(--trip-sheet-radius)] border-t border-border-subtle bg-background shadow-[var(--shadow-overlay)] lg:static lg:max-h-none lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none',
+        // do. The map runs on under the tab bar; the sheet rests on top of it,
+        // so its peek is never the part the bar covers.
+        'absolute inset-x-0 bottom-[calc(var(--bottom-bar-height)+var(--safe-bottom))] z-[2] flex max-h-[80%] flex-col overflow-hidden rounded-t-[var(--trip-sheet-radius)] border-t border-border-subtle bg-background shadow-[var(--shadow-overlay)] lg:static lg:max-h-none lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none',
       )}
       drag={reducedMotion ? false : 'y'}
       dragConstraints={{ bottom: 0, top: 0 }}

@@ -157,6 +157,77 @@ export function buildAiPlanningReviewMapPoints(draft: AiPlanningDraft): Itinerar
   });
 }
 
+export type AiPlanningDraftChange =
+  | { kind: 'added'; label: string; day: number | null }
+  | { kind: 'moved'; label: string; from: number | null; to: number | null }
+  | { kind: 'removed'; label: string; day: number | null };
+
+export type AiPlanningDraftChanges = {
+  dates: {
+    from: { endDate: string; startDate: string };
+    to: { endDate: string; startDate: string };
+  } | null;
+  items: AiPlanningDraftChange[];
+};
+
+/**
+ * Where each stop sits in a draft, by identity rather than by item ID: every
+ * run mints new IDs, so the only thing two revisions share is the place itself.
+ * A verified place is the provider identity; anything else is its label. The
+ * day is 1-based, and null means the stop is unscheduled.
+ */
+function stopsByIdentity(draft: AiPlanningDraft) {
+  const places = new Map(draft.places.map((place) => [place.id, place]));
+  const stops = new Map<string, { day: number | null; label: string }>();
+  const record = (item: AiPlanningDraftItem, day: number | null) => {
+    const place = item.placeRefId ? places.get(item.placeRefId) : undefined;
+    const key =
+      place?.resolution === 'verified'
+        ? `place:${place.placeId}`
+        : `label:${item.label.trim().toLocaleLowerCase()}`;
+    if (!stops.has(key)) stops.set(key, { day, label: item.label });
+  };
+  draft.days.forEach((day, index) => day.items.forEach((item) => record(item, index + 1)));
+  draft.unscheduledItems.forEach((item) => record(item, null));
+  return stops;
+}
+
+/**
+ * What a regenerate changed, worked out on the device from the two drafts.
+ * No model or provider call is involved; it compares what the traveller has
+ * already been shown with what replaced it.
+ */
+export function diffAiPlanningDrafts(
+  previous: AiPlanningDraft,
+  next: AiPlanningDraft,
+): AiPlanningDraftChanges {
+  const before = stopsByIdentity(previous);
+  const after = stopsByIdentity(next);
+  const added: AiPlanningDraftChange[] = [];
+  const moved: AiPlanningDraftChange[] = [];
+  const removed: AiPlanningDraftChange[] = [];
+  for (const [key, stop] of after) {
+    const old = before.get(key);
+    if (!old) added.push({ day: stop.day, kind: 'added', label: stop.label });
+    else if (old.day !== stop.day)
+      moved.push({ from: old.day, kind: 'moved', label: stop.label, to: stop.day });
+  }
+  for (const [key, stop] of before) {
+    if (!after.has(key)) removed.push({ day: stop.day, kind: 'removed', label: stop.label });
+  }
+  const datesChanged =
+    previous.trip.startDate !== next.trip.startDate || previous.trip.endDate !== next.trip.endDate;
+  return {
+    dates: datesChanged
+      ? {
+          from: { endDate: previous.trip.endDate, startDate: previous.trip.startDate },
+          to: { endDate: next.trip.endDate, startDate: next.trip.startDate },
+        }
+      : null,
+    items: [...added, ...moved, ...removed],
+  };
+}
+
 /**
  * Mirrors what Apply just committed on the server: the session is applied, its
  * private review content is gone. Writing this into

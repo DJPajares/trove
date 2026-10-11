@@ -1,3 +1,5 @@
+import type { TrovePlaceCategory } from '@/lib/place-categories';
+
 export const aiPlanningExampleSets = {
   foodAndNature: ['tokyoFood', 'costaRicaOutdoors', 'singaporeWork'],
   sharedAdventures: ['lisbonBudget', 'scottishRoadTrip', 'barcelonaFamily'],
@@ -7,6 +9,26 @@ export const aiPlanningExampleSets = {
 
 type ExampleSetId = keyof typeof aiPlanningExampleSets;
 export type AiPlanningExampleId = (typeof aiPlanningExampleSets)[ExampleSetId][number];
+
+/**
+ * The tint and glyph each idea card borrows from the place-category fallbacks.
+ * Decorative and local: an idea card never fetches a photograph, so browsing
+ * ideas stays free of provider requests.
+ */
+export const aiPlanningExampleCategories: Record<AiPlanningExampleId, TrovePlaceCategory> = {
+  bangkokFood: 'food_and_drink',
+  barcelonaFamily: 'things_to_do',
+  beachEscape: 'stay',
+  costaRicaOutdoors: 'things_to_do',
+  icelandPhotography: 'destination',
+  lisbonBudget: 'destination',
+  queenstownAdventure: 'things_to_do',
+  romePacked: 'things_to_do',
+  scottishRoadTrip: 'transport',
+  singaporeWork: 'destination',
+  tokyoFood: 'food_and_drink',
+  vietnamFriends: 'destination',
+};
 
 export const AI_PLANNING_EXAMPLES_STORAGE_KEY = 'trove:ai-planning-examples:v1';
 const setIds = Object.keys(aiPlanningExampleSets) as ExampleSetId[];

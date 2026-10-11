@@ -16,7 +16,9 @@ import {
 
 import { AiPlanningComposer } from '@/components/ai-planning-composer';
 import { AiPlanningGeneratingOverlay } from '@/components/ai-planning-generating-overlay';
+import { journalSerif } from '@/components/memories/journal-font';
 import { TripForm } from '@/components/trip-form';
+import { Button } from '@/components/ui/button';
 import {
   Sheet,
   SheetContent,
@@ -24,9 +26,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { Tabs, TabsIndicator, TabsList, TabsPanel, TabsTab } from '@/components/ui/tabs';
 import { useAiPlanningLifecycle } from '@/lib/ai-planning/use-lifecycle';
+import * as Icons from '@/lib/icons';
 import type { Trip } from '@/lib/trips/api';
+import { cn } from '@/lib/utils';
 
 /**
  * How long the finished route stays on screen before the itinerary takes over.
@@ -166,35 +169,40 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
         <>
           <Sheet onOpenChange={setOpen} open={open}>
             <SheetContent
-              className="w-full md:data-[side=right]:w-[min(36rem,calc(100%-0.5rem))]"
+              className={cn(
+                journalSerif.variable,
+                'w-full gap-3 bg-background md:data-[side=right]:w-[min(36rem,calc(100%-0.5rem))]',
+                creationMode === 'ai' && 'h-[90dvh] md:h-full',
+              )}
               closeLabel={t('close')}
             >
-              <SheetHeader className="border-b">
-                <SheetTitle>{t('createTitle')}</SheetTitle>
-                <SheetDescription>{t('aiPlanning.description')}</SheetDescription>
-              </SheetHeader>
-              {open ? (
-                <Tabs
-                  className="flex min-h-0 flex-1 flex-col gap-4"
-                  onValueChange={(value) => setCreationMode(value as 'ai' | 'manual')}
-                  value={creationMode}
-                >
-                  <TabsList className="mx-5 w-fit" variant="segmented">
-                    <TabsTab value="ai" variant="segmented">
-                      {t('aiPlanning.tab')}
-                    </TabsTab>
-                    <TabsTab value="manual" variant="segmented">
-                      {t('aiPlanning.manualTab')}
-                    </TabsTab>
-                    <TabsIndicator variant="segmented" />
-                  </TabsList>
-                  <TabsPanel className="flex min-h-0 flex-1 flex-col" value="ai">
-                    <AiPlanningComposer lifecycle={lifecycle} />
-                  </TabsPanel>
-                  <TabsPanel className="flex min-h-0 flex-1 flex-col" value="manual">
-                    <TripForm onCancel={() => setOpen(false)} onSaved={handleSaved} trip={null} />
-                  </TabsPanel>
-                </Tabs>
+              {/* The AI brief leads, and setting the trip up by hand is one tap
+                  beside its main action rather than a tab above it. Either way
+                  is the same sheet, so switching never loses the brief. */}
+              {open && creationMode === 'ai' ? (
+                <AiPlanningComposer
+                  lifecycle={lifecycle}
+                  onCreateManually={() => setCreationMode('manual')}
+                />
+              ) : null}
+              {open && creationMode === 'manual' ? (
+                <>
+                  <SheetHeader className="gap-3">
+                    <Button
+                      className="-ml-3 self-start text-brand hover:text-brand-strong"
+                      onClick={() => setCreationMode('ai')}
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <Icons.Ai aria-hidden="true" data-icon="inline-start" />
+                      {t('aiPlanning.backToAi')}
+                    </Button>
+                    <SheetTitle>{t('createTitle')}</SheetTitle>
+                    <SheetDescription>{t('createDescription')}</SheetDescription>
+                  </SheetHeader>
+                  <TripForm onCancel={() => setOpen(false)} onSaved={handleSaved} trip={null} />
+                </>
               ) : null}
             </SheetContent>
           </Sheet>

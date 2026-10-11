@@ -1654,11 +1654,26 @@
     "approximateHome": "Approx. {amount} in your home currency"
   },
   "tools": {
+    "eyebrow": "Utilities",
     "title": "Tools",
-    "description": "A couple of small tools that save you from redoing the same thing twice.",
-    "currencyUseCase": "Check a price or compare costs while you plan.",
-    "taskTemplatesUseCase": "Keep packing lists and repeatable tasks ready for every trip.",
-    "openTool": "Open {tool}"
+    "underway": "underway",
+    "groups": {
+      "road": "On the road",
+      "before": "Before you go"
+    },
+    "rateLine": "1 {source} ≈ {rate} {target}",
+    "referenceRate": "Reference rate · {date}",
+    "savedRate": "Saved rate from {date}",
+    "openToConvert": "Open to convert",
+    "tripCurrency": "Convert to {currency}",
+    "addChecklist": "Add a checklist to this trip",
+    "templatesReady": "{count, plural, one {# checklist ready} other {# checklists ready}}",
+    "currencyGlance": "Convert at today's reference rate",
+    "lastPair": "Last: {pair}",
+    "lastPairWithRate": "Last: {pair} · {rate}",
+    "templatesGlance": "{count, plural, one {# list} other {# lists}} · {names}",
+    "templatesEmptyGlance": "A checklist once, for every trip",
+    "wayfinding": "Expenses, Reservations and Trip info live inside each trip."
   },
   "currency": {
     "title": "Currency",

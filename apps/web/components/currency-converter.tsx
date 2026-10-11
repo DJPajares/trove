@@ -14,51 +14,20 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui
 import { convertCurrencyAmount, deriveRateFromBoard } from '@/lib/currency/api';
 import { formatCurrencyAmount } from '@/lib/currency/money';
 import { useRateBoard } from '@/hooks/use-rate-board';
-
-type CurrencyPair = { source: string; target: string };
-
-const recentPairsKey = 'trove:currency-recent-pairs:v1';
-const maxRecentPairs = 4;
+import {
+  isCurrencyCode,
+  MAX_RECENT_CURRENCY_PAIRS,
+  readRecentCurrencyPairs,
+  writeRecentCurrencyPairs,
+  type CurrencyPair,
+} from '@/lib/currency/recent-pairs';
 
 function normalizeCurrencyCode(value: string) {
   return value.trim().toUpperCase();
 }
 
-function isCurrencyCode(value: string) {
-  return /^[A-Z]{3}$/.test(value);
-}
-
 function validAmount(value: string) {
   return /^(?:0|[1-9]\d{0,9})(?:\.\d{1,2})?$/.test(value);
-}
-
-function readRecentPairs(): CurrencyPair[] {
-  if (typeof window === 'undefined') return [];
-
-  try {
-    const value: unknown = JSON.parse(window.localStorage.getItem(recentPairsKey) ?? 'null');
-    if (!Array.isArray(value)) return [];
-
-    return value
-      .filter(
-        (pair): pair is CurrencyPair =>
-          Boolean(pair) &&
-          typeof pair === 'object' &&
-          isCurrencyCode(String((pair as CurrencyPair).source)) &&
-          isCurrencyCode(String((pair as CurrencyPair).target)),
-      )
-      .slice(0, maxRecentPairs);
-  } catch {
-    return [];
-  }
-}
-
-function writeRecentPairs(pairs: CurrencyPair[]) {
-  try {
-    window.localStorage.setItem(recentPairsKey, JSON.stringify(pairs));
-  } catch {
-    // Private browsing or a full quota should not break the converter.
-  }
 }
 
 export function CurrencyConverter() {
@@ -81,7 +50,16 @@ export function CurrencyConverter() {
   }, [preferredCurrency, preferencesStatus]);
 
   useEffect(() => {
-    setRecentPairs(readRecentPairs());
+    setRecentPairs(readRecentCurrencyPairs());
+    // The Tools shelf opens straight onto a pair (`?from=EUR&to=JPY`). Read once
+    // on arrival; after that the fields are the traveller's.
+    const params = new URLSearchParams(window.location.search);
+    const from = normalizeCurrencyCode(params.get('from') ?? '');
+    const to = normalizeCurrencyCode(params.get('to') ?? '');
+    if (isCurrencyCode(from) && isCurrencyCode(to)) {
+      setSource(from);
+      setTarget(to);
+    }
   }, []);
 
   const currencyNames = useMemo(
@@ -104,8 +82,8 @@ export function CurrencyConverter() {
       const next = [
         pair,
         ...current.filter((entry) => entry.source !== pair.source || entry.target !== pair.target),
-      ].slice(0, maxRecentPairs);
-      writeRecentPairs(next);
+      ].slice(0, MAX_RECENT_CURRENCY_PAIRS);
+      writeRecentCurrencyPairs(next);
       return next;
     });
   }, []);

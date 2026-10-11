@@ -110,6 +110,11 @@ export function createQueryClient() {
     client.setQueryDefaults([root], { staleTime });
   }
 
+  // The owned Trips list does not acquire provider evidence. Reuse fresh data
+  // on return and refresh stale/invalidated lists in the background; leave the
+  // stricter automatic-refetch policy on all provider-billable reads.
+  client.setQueryDefaults(['trips'], { staleTime: STALE_TIME_BY_ROOT.trips, refetchOnMount: true });
+
   watchScoringAcquisition(client);
   return client;
 }

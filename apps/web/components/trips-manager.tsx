@@ -25,6 +25,7 @@ import { libraryLedger } from '@/lib/trips/library';
 import { groupTripsForLibrary } from '@/lib/trips/lifecycle';
 import { resolveTripNextUp } from '@/lib/trips/next-up';
 import { libraryEditorialSubjects, tripEditorialSubject } from '@/lib/trips/summary';
+import { useLibraryView } from '@/lib/trips/use-library-view';
 
 const EMPTY_TRIPS: Trip[] = [];
 
@@ -49,7 +50,9 @@ export function TripsManager() {
   const queryClient = useQueryClient();
   const tripsQuery = useQuery({ queryFn: fetchTrips, queryKey: queryKeys.trips() });
   const trips = tripsQuery.data?.trips ?? EMPTY_TRIPS;
-  const status = tripsQuery.isPending ? 'loading' : tripsQuery.error ? 'error' : 'idle';
+  // A failed background refresh must not replace a usable library with an error.
+  const status = tripsQuery.data ? 'idle' : tripsQuery.isPending ? 'loading' : 'error';
+  const view = useLibraryView(tripsQuery.data !== undefined);
 
   const library = useMemo(() => groupTripsForLibrary(trips), [trips]);
   const ledger = useMemo(() => libraryLedger(trips), [trips]);
@@ -126,7 +129,7 @@ export function TripsManager() {
         <LibrarySkeleton label={t('loading')} />
       ) : status === 'error' ? (
         <PageState
-          actions={<Button onClick={() => window.location.reload()}>{t('tryAgain')}</Button>}
+          actions={<Button onClick={() => void tripsQuery.refetch()}>{t('tryAgain')}</Button>}
           description={t('loadErrorDescription')}
           headingLevel={2}
           icon={<CircleAlert aria-hidden="true" />}
@@ -144,6 +147,7 @@ export function TripsManager() {
         <>
           {lead ? (
             <LibraryLead
+              animateEntrance={view.animateEntrance}
               editorial={editorialFor(lead)}
               nextUp={resolveTripNextUp(tripModeContextQuery.data ?? null)}
               trip={lead}
@@ -164,7 +168,12 @@ export function TripsManager() {
             />
           ) : null}
 
-          <LibraryRemembered editorialFor={editorialFor} trips={library.past} />
+          <LibraryRemembered
+            editorialFor={editorialFor}
+            expanded={view.expanded}
+            onExpandedChange={view.setExpanded}
+            trips={library.past}
+          />
         </>
       )}
     </section>

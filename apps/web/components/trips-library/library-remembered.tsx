@@ -3,7 +3,7 @@
 import { ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { useState, type CSSProperties } from 'react';
+import type { CSSProperties } from 'react';
 
 import { ExperienceRatingMark } from '@/components/experience-rating';
 import { JourneyPrint, JourneyPrintFan, journeyPrints } from '@/components/journey-prints';
@@ -141,6 +141,8 @@ function Postcard({
 }
 
 export type LibraryRememberedProps = {
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
   editorialFor: (trip: Trip) => EditorialImageReference | null;
   /** Finished trips, most recent first. Empty shows where they will gather. */
   trips: Trip[];
@@ -155,9 +157,13 @@ export type LibraryRememberedProps = {
  * The most recent journey leads as a story; the rest are an album by year,
  * the first few showing and the remainder one tap away.
  */
-export function LibraryRemembered({ editorialFor, trips }: Readonly<LibraryRememberedProps>) {
+export function LibraryRemembered({
+  editorialFor,
+  expanded,
+  onExpandedChange,
+  trips,
+}: Readonly<LibraryRememberedProps>) {
   const t = useTranslations('trips.library.remembered');
-  const [expanded, setExpanded] = useState(false);
   const [latest, ...older] = trips;
   // Folding away one or two prints saves less than the button that replaces
   // them costs, so the album only folds when it would hide a real handful.
@@ -214,7 +220,7 @@ export function LibraryRemembered({ editorialFor, trips }: Readonly<LibraryRemem
             <Button
               aria-expanded={expanded}
               className="group"
-              onClick={() => setExpanded((value) => !value)}
+              onClick={() => onExpandedChange(!expanded)}
               variant="outline"
             >
               <ChevronDown

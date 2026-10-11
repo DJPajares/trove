@@ -1,4 +1,5 @@
-import { expect, test } from 'vitest';
+import { QueryObserver } from '@tanstack/react-query';
+import { expect, test, vi } from 'vitest';
 
 import {
   billableRootsWithoutInfiniteStaleTime,
@@ -38,6 +39,68 @@ test('every provider-billable root refetches only on invalidation or a key chang
   for (const root of PROVIDER_BILLABLE_QUERY_ROOTS) {
     expect(client.getQueryDefaults([root]).staleTime).toBe(Number.POSITIVE_INFINITY);
   }
+});
+
+test('returning to a fresh Trips list reuses its answer without a new request', () => {
+  const client = createQueryClient();
+  const cached = { trips: [{ id: 'trip' }] };
+  client.setQueryData(queryKeys.trips(), cached);
+  const fetch = vi.fn(async () => cached);
+  const observer = new QueryObserver(client, { queryKey: queryKeys.trips(), queryFn: fetch });
+  const unsubscribe = observer.subscribe(() => {});
+  expect(observer.getCurrentResult().data).toEqual(cached);
+  expect(observer.getCurrentResult().isPending).toBe(false);
+  expect(fetch).not.toHaveBeenCalled();
+  unsubscribe();
+  client.clear();
+});
+
+test('a stale Trips list remains visible while a return refreshes it in the background', async () => {
+  const client = createQueryClient();
+  const cached = { trips: [{ id: 'trip' }] };
+  client.setQueryData(queryKeys.trips(), cached, { updatedAt: Date.now() - 31_000 });
+  let resolve!: (value: typeof cached) => void;
+  const fetch = vi.fn(
+    () =>
+      new Promise<typeof cached>((done) => {
+        resolve = done;
+      }),
+  );
+  const observer = new QueryObserver(client, { queryKey: queryKeys.trips(), queryFn: fetch });
+  const unsubscribe = observer.subscribe(() => {});
+  expect(fetch).toHaveBeenCalledOnce();
+  expect(observer.getCurrentResult()).toMatchObject({
+    data: cached,
+    isPending: false,
+    isFetching: true,
+  });
+  const refreshed = { trips: [{ id: 'trip' }, { id: 'new-trip' }] };
+  resolve(refreshed);
+  await vi.waitFor(() => expect(observer.getCurrentResult().data).toEqual(refreshed));
+  unsubscribe();
+  client.clear();
+});
+
+test('an invalidated Trips list retains its data after a failed background refresh', async () => {
+  const client = createQueryClient();
+  const cached = { trips: [{ id: 'trip' }] };
+  client.setQueryData(queryKeys.trips(), cached);
+  await client.invalidateQueries({ queryKey: queryKeys.trips() });
+  const fetch = vi.fn(async () => {
+    throw new Error('network unavailable');
+  });
+  const observer = new QueryObserver(client, {
+    queryKey: queryKeys.trips(),
+    queryFn: fetch,
+    retry: false,
+  });
+  const unsubscribe = observer.subscribe(() => {});
+  expect(observer.getCurrentResult().data).toEqual(cached);
+  expect(observer.getCurrentResult().isPending).toBe(false);
+  await vi.waitFor(() => expect(observer.getCurrentResult().isError).toBe(true));
+  expect(observer.getCurrentResult().data).toEqual(cached);
+  unsubscribe();
+  client.clear();
 });
 
 test('no provider-billable root carries a refetch interval', () => {

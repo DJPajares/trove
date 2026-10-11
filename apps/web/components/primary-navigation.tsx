@@ -69,6 +69,7 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
                 active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
               )}
               href={href}
+              scroll={href === '/trips' ? false : undefined}
               key={href}
             >
               {active ? (
@@ -123,6 +124,7 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
                         : 'text-muted-foreground hover:text-foreground',
                     )}
                     href={href}
+                    scroll={href === '/trips' ? false : undefined}
                   >
                     {active ? <NavActiveIndicator /> : null}
                     <Icon aria-hidden="true" className="size-5" />

@@ -114,6 +114,7 @@ function StatusLine({ nextUp, trip }: Readonly<{ nextUp: TripNextUp | null; trip
 }
 
 export type LibraryLeadProps = {
+  animateEntrance: boolean;
   editorial: EditorialImageReference | null;
   nextUp: TripNextUp | null;
   trip: Trip;
@@ -130,7 +131,12 @@ export type LibraryLeadProps = {
  * the largest thing on it, because "how long until" and "how far in" are what
  * a traveller comes to this screen to feel.
  */
-export function LibraryLead({ editorial, nextUp, trip }: Readonly<LibraryLeadProps>) {
+export function LibraryLead({
+  animateEntrance,
+  editorial,
+  nextUp,
+  trip,
+}: Readonly<LibraryLeadProps>) {
   const t = useTranslations('trips.library.lead');
   const tripsT = useTranslations('trips');
   const itineraryT = useTranslations('itinerary');
@@ -146,7 +152,7 @@ export function LibraryLead({ editorial, nextUp, trip }: Readonly<LibraryLeadPro
       aria-labelledby="library-lead-heading"
       className="group relative isolate overflow-hidden rounded-[var(--radius-2xl)] bg-surface-media text-white shadow-[var(--shadow-elevated)]"
       data-slot="library-lead"
-      initial={reduced ? false : { opacity: 0, y: 8 }}
+      initial={reduced || !animateEntrance ? false : { opacity: 0, y: 8 }}
       transition={
         reduced ? { duration: 0 } : { duration: motionDuration.standard, ease: motionEase }
       }

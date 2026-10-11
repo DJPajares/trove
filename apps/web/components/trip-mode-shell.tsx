@@ -20,6 +20,7 @@ import { TripModeTabBar, TripModeTopBar, tripModeViews } from '@/components/trip
 import { TripModeMapView } from '@/components/trip-mode-map-view';
 import { TripModeDataProvider } from '@/components/trip-mode-data';
 import { TripSyncStatus } from '@/components/trip-sync-status';
+import { TripModeExpenseProvider } from '@/components/trip-mode-expense-sheet';
 import { TripModeTasksProvider } from '@/components/trip-mode-tasks';
 import { tripModeCardClass } from '@/components/trip-mode-ui';
 import { useTripContext } from '@/components/trip-provider';
@@ -371,6 +372,10 @@ export function TripModeShell({
   const [previewControlsHeight, setPreviewControlsHeight] = useState(0);
   const previewControlsRef = useCallback((node: HTMLElement | null) => {
     if (!node) return;
+    // Read once now as well: the observer's first report waits for a rendering
+    // step, and until it arrives the Map sheet would be capped as if the
+    // controls were not there.
+    setPreviewControlsHeight(node.offsetHeight);
     const observer = new ResizeObserver(() => setPreviewControlsHeight(node.offsetHeight));
     observer.observe(node);
     return () => observer.disconnect();
@@ -564,91 +569,97 @@ export function TripModeShell({
         tripId={trip.id}
       >
         <TripModeTasksProvider tripId={trip.id}>
-          <section
-            className="mx-auto flex min-h-[calc(100dvh-var(--safe-top))] w-full max-w-6xl flex-col lg:min-h-0 gap-2"
-            // How far the Preview controls reach below the header, for anything
-            // that floats over the full-screen map and must clear them.
-            style={
-              {
-                '--trip-mode-preview-offset': previewSelection
-                  ? `${previewControlsHeight + 8}px`
-                  : '0px',
-              } as CSSProperties
-            }
-            data-slot="trip-mode-shell"
-          >
-            <TripModeTopBar tripId={trip.id} tripName={trip.name} />
+          <TripModeExpenseProvider tripId={trip.id}>
+            <section
+              className="mx-auto flex min-h-[calc(100dvh-var(--safe-top))] w-full max-w-6xl flex-col lg:min-h-0 gap-2"
+              // How far the Preview controls reach below the header, for anything
+              // that floats over the full-screen map and must clear them.
+              style={
+                {
+                  '--trip-mode-preview-offset': previewSelection
+                    ? `${previewControlsHeight + 8}px`
+                    : '0px',
+                } as CSSProperties
+              }
+              data-slot="trip-mode-shell"
+            >
+              <TripModeTopBar tripId={trip.id} tripName={trip.name} />
 
-            {/* Fixed to the foot of a phone, in the thumb's reach; a plain row
+              {/* Fixed to the foot of a phone, in the thumb's reach; a plain row
                 under the bar on a desktop, which has no thumb zone to aim at.
                 Ordered here so that row lands where a reader looks for it. */}
-            <TripModeTabBar tripId={trip.id} withPreviewHref={withPreviewHref} />
+              <TripModeTabBar tripId={trip.id} withPreviewHref={withPreviewHref} />
 
-            {previewSelection ? (
-              <TripModePreviewControls
-                endDate={trip.endDate}
-                onChange={updatePreview}
-                ref={previewControlsRef}
-                selection={previewSelection}
-                startDate={trip.startDate}
-              />
-            ) : null}
+              {previewSelection ? (
+                <TripModePreviewControls
+                  endDate={trip.endDate}
+                  onChange={updatePreview}
+                  ref={previewControlsRef}
+                  selection={previewSelection}
+                  startDate={trip.startDate}
+                />
+              ) : null}
 
-            <TripSyncStatus tripId={trip.id} />
+              <TripSyncStatus tripId={trip.id} />
 
-            {/* The view starts where the bar ends. The padding at the foot is
+              {/* The view starts where the bar ends. The padding at the foot is
                 the tab bar's own height plus the safe area, so the last row of
                 any view can still be reached above it. */}
-            {/* `flex-1` rather than a `dvh` guess: a view that wants the rest
+              {/* `flex-1` rather than a `dvh` guess: a view that wants the rest
                 of the screen gets exactly what the bars leave it, and gets it
                 right again when the preview banner opens above. */}
-            <div className="flex min-h-[min(32rem,55dvh)] flex-1 flex-col pt-5 pb-[calc(var(--bottom-bar-height)+var(--safe-bottom)+1rem)] sm:pt-6 lg:pb-8">
-              <TripModePlaceDetailsContext.Provider value={placeDetailsContext}>
-                {children}
-                {mapLifecycle.render ? (
-                  <div className={mapLifecycle.active ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
-                    <TripModeMapView active={mapLifecycle.active} tripId={trip.id} />
-                  </div>
-                ) : null}
-              </TripModePlaceDetailsContext.Provider>
+              <div className="flex min-h-[min(32rem,55dvh)] flex-1 flex-col pt-5 pb-[calc(var(--bottom-bar-height)+var(--safe-bottom)+1rem)] sm:pt-6 lg:pb-8">
+                <TripModePlaceDetailsContext.Provider value={placeDetailsContext}>
+                  {children}
+                  {mapLifecycle.render ? (
+                    <div
+                      className={mapLifecycle.active ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}
+                    >
+                      <TripModeMapView active={mapLifecycle.active} tripId={trip.id} />
+                    </div>
+                  ) : null}
+                </TripModePlaceDetailsContext.Provider>
 
-              {/* Day quality is a review of the plan, not an answer to "what do I
+                {/* Day quality is a review of the plan, not an answer to "what do I
                   need now". Above the view it was the largest single thing between a
                   phone and its own itinerary. It stays inside this container so the
                   tab bar's padding lands below it, not above it. */}
-              {planScoreEnabled && previewSelection ? (
-                <TripModePreviewPlanScore
-                  className="mt-4"
-                  date={previewSelection.date}
-                  tripId={trip.id}
-                />
-              ) : null}
-            </div>
-          </section>
+                {planScoreEnabled && previewSelection ? (
+                  <TripModePreviewPlanScore
+                    className="mt-4"
+                    date={previewSelection.date}
+                    tripId={trip.id}
+                  />
+                ) : null}
+              </div>
+            </section>
 
-          {detailsPlace ? (
-            <PlaceDetailsSheet
-              key={detailsPlace.place.id}
-              editorialImages={detailsEditorialImages}
-              meta={[
-                detailsPlace.priority
-                  ? {
-                      label: tripPlacesT('priorityLabel'),
-                      value: tripPlacesT(`priority.${detailsPlace.priority}`),
-                    }
-                  : null,
-                detailsPlace.note ? { label: itineraryT('notes'), value: detailsPlace.note } : null,
-              ].filter((row): row is PlaceDetailsRow => row !== null)}
-              name={resolveTripPlaceName(detailsPlace, {
-                custom: itineraryT('customPlace'),
-                provider: itineraryT('providerPlace'),
-              })}
-              officialName={detailsPlace.customName?.trim() ? detailsProviderName : null}
-              onOpenChange={(open) => !open && setDetailsPlace(null)}
-              place={detailsPlace.place}
-              visitDate={detailsVisitDate}
-            />
-          ) : null}
+            {detailsPlace ? (
+              <PlaceDetailsSheet
+                key={detailsPlace.place.id}
+                editorialImages={detailsEditorialImages}
+                meta={[
+                  detailsPlace.priority
+                    ? {
+                        label: tripPlacesT('priorityLabel'),
+                        value: tripPlacesT(`priority.${detailsPlace.priority}`),
+                      }
+                    : null,
+                  detailsPlace.note
+                    ? { label: itineraryT('notes'), value: detailsPlace.note }
+                    : null,
+                ].filter((row): row is PlaceDetailsRow => row !== null)}
+                name={resolveTripPlaceName(detailsPlace, {
+                  custom: itineraryT('customPlace'),
+                  provider: itineraryT('providerPlace'),
+                })}
+                officialName={detailsPlace.customName?.trim() ? detailsProviderName : null}
+                onOpenChange={(open) => !open && setDetailsPlace(null)}
+                place={detailsPlace.place}
+                visitDate={detailsVisitDate}
+              />
+            ) : null}
+          </TripModeExpenseProvider>
         </TripModeTasksProvider>
       </TripModeDataProvider>
     </TripModePreviewProvider>

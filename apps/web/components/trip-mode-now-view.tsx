@@ -1011,16 +1011,19 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
           ) : !nextItem.startInstant ? (
             <div className="mt-3 space-y-3">
               <p className={cn('text-sm leading-6', dock.muted)}>{t('timingFlexible')}</p>
-              {/* Times are set where the day is edited; the link lands on this
-                  stop rather than at the top of the list. */}
+              {/* Times are set in the planner, where the day is edited -
+                  opened on this day. Trip Mode reads the plan; it does not
+                  rearrange it. */}
               <Button
                 className="w-full rounded-full border-0 bg-[color:var(--score-media-foreground)] text-[color:var(--score-media-background)] hover:bg-[color:var(--score-media-foreground)]/90 hover:text-[color:var(--score-media-background)]"
                 nativeButton={false}
                 render={
                   <Link
-                    href={withPreviewHref(
-                      `/trips/${tripId}/mode/today#trip-mode-item-${nextItem.id}`,
-                    )}
+                    href={
+                      day
+                        ? `/trips/${tripId}/itinerary?day=${encodeURIComponent(day.id)}`
+                        : `/trips/${tripId}/itinerary`
+                    }
                   />
                 }
                 variant="ghost"

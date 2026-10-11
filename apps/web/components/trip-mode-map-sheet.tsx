@@ -52,9 +52,14 @@ export function TripModeMapSheet({
         // the map is never entirely covered and scrolling instead. A flat pixel
         // cap did this job before and cut whatever happened to cross it in
         // half - a button, a sentence - which is the one thing a sheet must not
-        // do. The map runs on under the tab bar; the sheet rests on top of it,
-        // so its peek is never the part the bar covers.
-        'absolute inset-x-0 bottom-[calc(var(--bottom-bar-height)+var(--safe-bottom))] z-[2] flex max-h-[80%] flex-col overflow-hidden rounded-t-[var(--trip-sheet-radius)] border-t border-border-subtle bg-background shadow-[var(--shadow-overlay)] lg:static lg:max-h-none lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none',
+        // do.
+        //
+        // It runs down under the tab bar, padded by the bar's height, so the
+        // sheet and the bar meet with no strip of map between them. Its tallest
+        // position stops below the header - and below the Preview controls,
+        // whose height the shell publishes - so the two never overlap and both
+        // stay usable while the sheet is open.
+        'absolute inset-x-0 bottom-0 z-[2] flex max-h-[calc(100dvh-var(--safe-top)-var(--header-offset)-4.25rem-var(--trip-mode-preview-offset,0px)-0.5rem)] flex-col overflow-hidden rounded-t-[var(--trip-sheet-radius)] border-t border-border-subtle bg-background pb-[calc(var(--bottom-bar-height)+var(--safe-bottom))] shadow-[var(--shadow-overlay)] md:max-h-[calc(100dvh-var(--safe-top)-var(--header-offset)-3.25rem-var(--trip-mode-preview-offset,0px)-0.5rem)] lg:static lg:max-h-none lg:rounded-none lg:border-0 lg:bg-transparent lg:pb-0 lg:shadow-none',
       )}
       drag={reducedMotion ? false : 'y'}
       dragConstraints={{ bottom: 0, top: 0 }}

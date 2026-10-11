@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, CircleAlert, ImagePlus, RefreshCw, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
-import type { ChangeEvent, FormEvent } from 'react';
+import type { ChangeEvent, FormEvent, ReactNode } from 'react';
 
 import { TripMedia } from '@/components/trip-media';
 import { TripPlanningPreferencesFields } from '@/components/trip-planning-preferences';
@@ -49,6 +49,12 @@ import {
 import { cn } from '@/lib/utils';
 
 type TripFormProps = {
+  /**
+   * The other way to start a trip, offered where Cancel would sit. The
+   * creation sheet passes "Plan with AI" so the two ways in mirror each other;
+   * the sheet's own close button still dismisses it.
+   */
+  alternative?: { icon?: ReactNode; label: string; onClick: () => void };
   onCancel: () => void;
   onDelete?: () => void;
   onSaved: (trip: Trip) => void;
@@ -96,7 +102,7 @@ function createInitialForm(trip: Trip | null): FormState {
   };
 }
 
-export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
+export function TripForm({ alternative, onCancel, onDelete, onSaved, trip }: TripFormProps) {
   const queryClient = useQueryClient();
   const t = useTranslations('trips');
   const preferencesT = useTranslations('planningPreferences');
@@ -622,19 +628,36 @@ export function TripForm({ onCancel, onDelete, onSaved, trip }: TripFormProps) {
           ) : null}
           <div
             className={cn(
-              'flex flex-col-reverse gap-2 sm:flex-row',
-              !trip && 'w-full sm:justify-end',
+              alternative ? 'flex w-full gap-2' : 'flex flex-col-reverse gap-2 sm:flex-row',
+              !trip && !alternative && 'w-full sm:justify-end',
             )}
           >
+            {alternative ? (
+              <Button
+                className="h-12 rounded-full px-5"
+                disabled={status === 'saving'}
+                onClick={alternative.onClick}
+                type="button"
+                variant="outline"
+              >
+                {alternative.icon}
+                {alternative.label}
+              </Button>
+            ) : (
+              <Button
+                disabled={status === 'saving'}
+                onClick={onCancel}
+                type="button"
+                variant="outline"
+              >
+                {t('cancel')}
+              </Button>
+            )}
             <Button
+              className={cn(alternative && 'h-12 flex-1 rounded-full')}
               disabled={status === 'saving'}
-              onClick={onCancel}
-              type="button"
-              variant="outline"
+              type="submit"
             >
-              {t('cancel')}
-            </Button>
-            <Button disabled={status === 'saving'} type="submit">
               {/* Moving a trip re-dates every day of it and every time on those
                   days, which on a long trip is long enough that a label going
                   grey reads as a screen that has stopped rather than one that

@@ -19,6 +19,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { AiPlanningAdjustSheet } from '@/components/ai-planning-adjust-sheet';
+import { useAiPlanningBriefCatalogue } from '@/components/ai-planning-brief-field';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { CountryMultiCombobox } from '@/components/country-multi-combobox';
 import { PageState } from '@/components/page-state';
@@ -71,7 +72,11 @@ import {
   type AiPlanningDraft,
   type AiPlanningDraftItem,
 } from '@/lib/ai-planning/api';
-import type { AiPlanningBriefTray } from '@/lib/ai-planning/brief';
+import {
+  composeAiPlanningBrief,
+  type AiPlanningBriefIngredient,
+  type AiPlanningBriefSelection,
+} from '@/lib/ai-planning/brief';
 import {
   activeAiPlanningAssumptions,
   aiPlanningAssumptionMessageValues,
@@ -211,8 +216,12 @@ export function AiPlanningReview({
   // pays twice for a map they already opened.
   const [mapRevealed, setMapRevealed] = useState(false);
   const [confirmApply, setConfirmApply] = useState(false);
+  const briefCatalogue = useAiPlanningBriefCatalogue();
+  // The brief Adjust reopens: the traveller's words and their choices, split
+  // back out of the prompt this draft was planned from.
   const [regeneratePrompt, setRegeneratePrompt] = useState('');
-  const [adjust, setAdjust] = useState<{ open: boolean; tray: AiPlanningBriefTray | null }>({
+  const [regenerateSelections, setRegenerateSelections] = useState<AiPlanningBriefSelection[]>([]);
+  const [adjust, setAdjust] = useState<{ open: boolean; tray: AiPlanningBriefIngredient | null }>({
     open: false,
     tray: null,
   });
@@ -273,6 +282,7 @@ export function AiPlanningReview({
     sessionRef.current = null;
     setDraft(null);
     setRegeneratePrompt('');
+    setRegenerateSelections([]);
     setDescription('');
     setName('');
     setCountries([]);
@@ -290,8 +300,17 @@ export function AiPlanningReview({
   useEffect(() => {
     if (expired || !session?.draft) return;
     setDraft(session.draft);
-    setRegeneratePrompt(session.prompt ?? '');
-  }, [expired, serverExpired, session?.draft, session?.draftRevision, session?.prompt]);
+  }, [expired, serverExpired, session?.draft, session?.draftRevision]);
+
+  // Seeded per revision and prompt rather than per read, so a background
+  // refetch never wipes a brief the traveller is in the middle of adjusting.
+  const sessionPrompt = expired ? null : (session?.prompt ?? null);
+  useEffect(() => {
+    if (sessionPrompt === null) return;
+    const brief = briefCatalogue.split(sessionPrompt);
+    setRegeneratePrompt(brief.text);
+    setRegenerateSelections(brief.selections);
+  }, [briefCatalogue, session?.draftRevision, session?.id, sessionPrompt]);
 
   useEffect(() => {
     sessionRef.current = expired || serverExpired ? null : session;
@@ -515,7 +534,8 @@ export function AiPlanningReview({
   }
 
   async function regenerate() {
-    if (!session || expired || serverExpired || publishing || !regeneratePrompt.trim()) return;
+    const brief = composeAiPlanningBrief(regeneratePrompt, regenerateSelections);
+    if (!session || expired || serverExpired || publishing || !brief) return;
     setOperation('regenerating');
     setError(null);
     setChanges(null);
@@ -526,7 +546,7 @@ export function AiPlanningReview({
         (
           await regenerateAiPlanningSession(
             session.id,
-            regeneratePrompt,
+            brief,
             session.draftRevision,
             crypto.randomUUID(),
           )
@@ -562,6 +582,7 @@ export function AiPlanningReview({
       const applied = appliedAiPlanningSession(saved, result.trip.id);
       setDraft(null);
       setRegeneratePrompt('');
+      setRegenerateSelections([]);
       setDescription('');
       setName('');
       setCountries([]);
@@ -716,10 +737,8 @@ export function AiPlanningReview({
         aiPlanningAssumptionMessageValues(assumption, draft, locale),
       ),
     }));
-  const openAdjust = (tray: AiPlanningBriefTray | null = null) => {
-    if (!regeneratePrompt) setRegeneratePrompt(session.prompt ?? '');
+  const openAdjust = (tray: AiPlanningBriefIngredient | null = null) =>
     setAdjust({ open: true, tray });
-  };
   const stageIndex = Math.max(0, REGENERATE_STAGES.indexOf(session.stage));
 
   return (
@@ -1248,9 +1267,11 @@ export function AiPlanningReview({
         busy={publishing}
         initialTray={adjust.tray}
         onOpenChange={(open) => setAdjust((current) => ({ ...current, open }))}
+        onSelectionsChange={setRegenerateSelections}
         onSubmit={() => void regenerate()}
         onValueChange={setRegeneratePrompt}
         open={adjust.open}
+        selections={regenerateSelections}
         tripName={tripName}
         value={regeneratePrompt}
       />

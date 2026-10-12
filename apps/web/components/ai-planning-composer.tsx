@@ -1,31 +1,16 @@
 'use client';
 
-import {
-  CalendarRange,
-  ChevronDown,
-  CircleAlert,
-  CircleCheck,
-  Copy,
-  PencilLine,
-  ScanSearch,
-  Timer,
-} from 'lucide-react';
+import { CircleAlert, CircleCheck, Copy } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 
 import { AiPlanningAllowance } from '@/components/ai-planning-allowance';
 import { AiPlanningBriefField } from '@/components/ai-planning-brief-field';
-import { BrandedFallback } from '@/components/media-frame';
 import { Button } from '@/components/ui/button';
-import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import type { AiPlanningAvailability } from '@/lib/ai-planning/api';
-import {
-  aiPlanningExampleCategories,
-  aiPlanningExampleRotation,
-  type AiPlanningExampleId,
-} from '@/lib/ai-planning/examples';
+import { aiPlanningExampleRotation, type AiPlanningExampleId } from '@/lib/ai-planning/examples';
 import { aiPlanningErrorMessageKey } from '@/lib/ai-planning/presentation';
 import type { AiPlanningLifecycle } from '@/lib/ai-planning/use-lifecycle';
 import * as Icons from '@/lib/icons';
@@ -54,7 +39,6 @@ export function AiPlanningComposer({
 }: Readonly<{ lifecycle: AiPlanningLifecycle; onCreateManually: () => void }>) {
   const t = useTranslations('trips.aiPlanning');
   const [examples, setExamples] = useState<readonly AiPlanningExampleId[]>([]);
-  const [examplesAnnouncement, setExamplesAnnouncement] = useState('');
   const initializedExamples = useRef(false);
   const {
     availability,
@@ -91,14 +75,6 @@ export function AiPlanningComposer({
     initializedExamples.current = true;
     setExamples(aiPlanningExampleRotation.next());
   }, []);
-
-  function showMoreExamples() {
-    const next = aiPlanningExampleRotation.next();
-    setExamples(next);
-    setExamplesAnnouncement(
-      t('examplesUpdated', { examples: next.map((id) => t(`exampleLabels.${id}`)).join(', ') }),
-    );
-  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -218,72 +194,43 @@ export function AiPlanningComposer({
                 selections={briefSelections}
                 text={prompt}
               />
-              <ul
-                className="space-y-1.5 px-1 text-[length:var(--text-metadata)] leading-snug text-muted-foreground"
+              <p
+                className="-mt-2 px-1 text-[length:var(--text-metadata)] leading-snug text-muted-foreground"
                 id={`${PROMPT_ID}-hint`}
               >
-                <li className="flex gap-2">
-                  <PencilLine aria-hidden="true" className="mt-px size-4 shrink-0" />
-                  {t('promptHint')}
-                </li>
-                <li className="flex gap-2">
-                  <Icons.Saved aria-hidden="true" className="mt-px size-4 shrink-0" />
-                  {t('savedPlacesHint')}
-                </li>
-              </ul>
+                {t('promptHint')}
+              </p>
             </>
           )}
 
-          {!exhausted && !hasWords ? (
-            <section aria-labelledby="ai-planning-ideas" className="space-y-2">
-              <div className="flex items-center justify-between gap-2 px-1">
-                <h3 className="text-sm font-semibold" id="ai-planning-ideas">
-                  {t('examplesLabel')}
-                </h3>
+          {!exhausted && !hasWords && examples.length ? (
+            <section
+              aria-labelledby="ai-planning-ideas"
+              className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0"
+            >
+              <h3
+                className="shrink-0 px-1 text-[length:var(--text-metadata)] font-semibold text-muted-foreground"
+                id="ai-planning-ideas"
+              >
+                {t('examplesLabel')}
+              </h3>
+              {examples.map((example) => (
                 <Button
-                  className="text-brand hover:text-brand-strong"
-                  disabled={busy || examples.length === 0}
-                  onClick={showMoreExamples}
-                  size="sm"
+                  className="h-11 shrink-0 rounded-full border-border bg-background px-4 font-journal text-[1.0625rem] font-normal shadow-none"
+                  disabled={busy}
+                  key={example}
+                  onClick={() => {
+                    setPrompt(t(`examples.${example}`));
+                    document.getElementById(PROMPT_ID)?.focus();
+                  }}
                   type="button"
-                  variant="ghost"
+                  variant="outline"
                 >
-                  {t('moreExamples')}
+                  {t(`exampleLabels.${example}`)}
                 </Button>
-              </div>
-              <div className="-mx-4 flex snap-x scroll-px-4 gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-3 sm:px-0">
-                {examples.map((example) => (
-                  <button
-                    className="group/idea flex w-[9.5rem] shrink-0 snap-start flex-col overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-card text-left outline-none transition-[border-color,box-shadow] duration-[var(--motion-standard)] hover:border-border-strong focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-50 sm:w-auto"
-                    disabled={busy}
-                    key={example}
-                    onClick={() => {
-                      setPrompt(t(`examples.${example}`));
-                      document.getElementById(PROMPT_ID)?.focus();
-                    }}
-                    type="button"
-                  >
-                    <span className="relative block h-24 w-full">
-                      <BrandedFallback alt="" category={aiPlanningExampleCategories[example]} />
-                    </span>
-                    <span className="flex flex-col gap-1 px-3 pt-2.5 pb-3">
-                      <span className="font-journal text-[1.1875rem] leading-[1.08] font-normal">
-                        {t(`exampleLabels.${example}`)}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {t(`exampleDetails.${example}`)}
-                      </span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-              <p aria-atomic="true" className="sr-only" role="status">
-                {examplesAnnouncement}
-              </p>
+              ))}
             </section>
           ) : null}
-
-          {!exhausted && hasBrief ? <HowGapsAreFilled /> : null}
         </div>
 
         <div className="space-y-2.5 border-t border-border-subtle bg-background px-4 pt-3 pb-4 sm:px-6">
@@ -461,36 +408,5 @@ function KeptBrief({ prompt }: Readonly<{ prompt: string }>) {
         {t('noCredits.manualHint')}
       </p>
     </section>
-  );
-}
-
-/** The PRD's assumption rules, said before the tap rather than discovered after it. */
-function HowGapsAreFilled() {
-  const t = useTranslations('trips.aiPlanning.gaps');
-  const rows = [
-    { Icon: CalendarRange, key: 'dates' },
-    { Icon: Timer, key: 'times' },
-    { Icon: ScanSearch, key: 'review' },
-  ] as const;
-  return (
-    <Collapsible className="rounded-[var(--radius-xl)] border border-border-subtle bg-card px-4">
-      <CollapsibleTrigger className="group/gaps flex min-h-12 w-full justify-between text-base font-semibold text-foreground hover:text-foreground">
-        {t('title')}
-        <ChevronDown
-          aria-hidden="true"
-          className="transition-transform duration-[var(--motion-standard)] group-data-[panel-open]/gaps:rotate-180 motion-reduce:transition-none"
-        />
-      </CollapsibleTrigger>
-      <CollapsiblePanel>
-        <ul className="space-y-2.5 pb-4 text-sm leading-relaxed">
-          {rows.map(({ Icon, key }) => (
-            <li className="flex gap-2.5" key={key}>
-              <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-strong" />
-              {t(key)}
-            </li>
-          ))}
-        </ul>
-      </CollapsiblePanel>
-    </Collapsible>
   );
 }

@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import {
   applyTimeDigit,
   canonicalFromDraft,
@@ -529,9 +529,7 @@ export function TimeInput({
           </Button>
           <Sheet onOpenChange={changeOpen} open={open}>
             <SheetContent closeLabel={t('close')} side="bottom">
-              <SheetHeader className="border-b">
-                <SheetTitle>{t('title')}</SheetTitle>
-              </SheetHeader>
+              <SheetHeading title={t('title')} />
               <div className="p-5">
                 <TimePickerFields onChange={selectTime} value={value} />
               </div>

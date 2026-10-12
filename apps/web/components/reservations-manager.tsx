@@ -52,14 +52,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import {
   createReservation,
@@ -608,12 +601,10 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
           className="w-full md:data-[side=right]:w-[min(42rem,calc(100%-0.5rem))]"
           closeLabel={t('close')}
         >
-          <SheetHeader className="border-b">
-            <SheetTitle>{editor.mode === 'edit' ? t('editTitle') : t('createTitle')}</SheetTitle>
-            <SheetDescription>
-              {editor.mode === 'edit' ? t('editDescription') : t('createDescription')}
-            </SheetDescription>
-          </SheetHeader>
+          <SheetHeading
+            title={editor.mode === 'edit' ? t('editTitle') : t('createTitle')}
+            description={editor.mode === 'edit' ? t('editDescription') : t('createDescription')}
+          />
           {editor.mode !== 'closed' ? (
             <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
               <div className="min-h-0 flex-1 overflow-y-auto p-5">

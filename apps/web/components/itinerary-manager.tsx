@@ -73,14 +73,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import {
   createItineraryItem,
@@ -2133,22 +2126,18 @@ export function ItineraryManager({
         <SheetContent closeLabel={t('close')}>
           {dayMoveSource ? (
             <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleDayMove}>
-              <SheetHeader className="border-b">
-                <SheetTitle>
-                  {effectiveDayMoveStrategy === 'swap'
-                    ? t('dayMove.swapTitle')
-                    : t('dayMove.title')}
-                </SheetTitle>
-                <SheetDescription>
-                  {t('dayMove.description', {
-                    count: dayMoveSource.items.length,
-                    day: dayOption(
-                      dayMoveSource,
-                      itinerary.days.findIndex(({ id }) => id === dayMoveSource.id),
-                    ),
-                  })}
-                </SheetDescription>
-              </SheetHeader>
+              <SheetHeading
+                title={
+                  effectiveDayMoveStrategy === 'swap' ? t('dayMove.swapTitle') : t('dayMove.title')
+                }
+                description={t('dayMove.description', {
+                  count: dayMoveSource.items.length,
+                  day: dayOption(
+                    dayMoveSource,
+                    itinerary.days.findIndex(({ id }) => id === dayMoveSource.id),
+                  ),
+                })}
+              />
               <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
                 <FieldGroup>
                   <Field>
@@ -2268,14 +2257,12 @@ export function ItineraryManager({
       >
         <SheetContent closeLabel={t('close')}>
           <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleDayNoteSave}>
-            <SheetHeader className="border-b">
-              <SheetTitle>{t('dayNoteTitle')}</SheetTitle>
-              <SheetDescription>
-                {t('dayNoteDescription', {
-                  date: dayNoteEditor ? formatDate(dayNoteEditor.date, true) : '',
-                })}
-              </SheetDescription>
-            </SheetHeader>
+            <SheetHeading
+              title={t('dayNoteTitle')}
+              description={t('dayNoteDescription', {
+                date: dayNoteEditor ? formatDate(dayNoteEditor.date, true) : '',
+              })}
+            />
             <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
               <Field>
                 <FieldLabel htmlFor="itinerary-day-note">{t('dayNoteLabel')}</FieldLabel>
@@ -2337,14 +2324,12 @@ export function ItineraryManager({
       >
         <SheetContent closeLabel={t('close')}>
           <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleDayNameSave}>
-            <SheetHeader className="border-b">
-              <SheetTitle>{t('dayNameTitle')}</SheetTitle>
-              <SheetDescription>
-                {t('dayNameDescription', {
-                  date: dayNameEditor ? formatDate(dayNameEditor.date, true) : '',
-                })}
-              </SheetDescription>
-            </SheetHeader>
+            <SheetHeading
+              title={t('dayNameTitle')}
+              description={t('dayNameDescription', {
+                date: dayNameEditor ? formatDate(dayNameEditor.date, true) : '',
+              })}
+            />
             <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
               <Field>
                 <FieldLabel htmlFor="itinerary-day-name">{t('dayNameLabel')}</FieldLabel>

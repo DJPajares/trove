@@ -1,6 +1,5 @@
 'use client';
 
-import { ArrowLeft } from 'lucide-react';
 import { AnimatePresence, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { usePathname, useRouter } from 'next/navigation';
@@ -20,8 +19,7 @@ import { AiPlanningComposer } from '@/components/ai-planning-composer';
 import { AiPlanningGeneratingOverlay } from '@/components/ai-planning-generating-overlay';
 import { journalSerif } from '@/components/memories/journal-font';
 import { TripForm } from '@/components/trip-form';
-import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeading } from '@/components/ui/sheet';
 import { useAiPlanningLifecycle } from '@/lib/ai-planning/use-lifecycle';
 import * as Icons from '@/lib/icons';
 import type { Trip } from '@/lib/trips/api';
@@ -184,29 +182,14 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
               ) : null}
               {open && creationMode === 'manual' ? (
                 <>
-                  {/* The same frame as the brief, so the two ways in read as one
-                      sheet: back to the brief at the top, and the brief's way in
-                      offered where the brief offers this one. */}
-                  <div className="flex items-center gap-1 px-2 pt-3 pr-16">
-                    <Button
-                      aria-label={t('aiPlanning.backToAi')}
-                      onClick={() => setCreationMode('ai')}
-                      size="icon"
-                      type="button"
-                      variant="ghost"
-                    >
-                      <ArrowLeft aria-hidden="true" />
-                    </Button>
-                    <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
-                      {t('aiPlanning.createManually')}
-                    </p>
-                  </div>
-                  <div className="space-y-1.5 px-5 pb-2">
-                    <SheetTitle className="font-journal text-[2rem] leading-[1.04] font-normal tracking-[-0.01em] sm:text-[2.5rem]">
-                      {t('createTitle')}
-                    </SheetTitle>
-                    <SheetDescription>{t('createDescription')}</SheetDescription>
-                  </div>
+                  {/* The same sheet as the brief, so the two ways in read as one:
+                      back to the brief at the top, and the brief's way in offered
+                      where the brief offers this one. */}
+                  <SheetHeading
+                    back={{ label: t('aiPlanning.backToAi'), onClick: () => setCreationMode('ai') }}
+                    description={t('createDescription')}
+                    title={t('createTitle')}
+                  />
                   <TripForm
                     alternative={{
                       icon: <Icons.Ai aria-hidden="true" data-icon="inline-start" />,

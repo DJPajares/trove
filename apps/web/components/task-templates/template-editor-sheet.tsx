@@ -6,15 +6,9 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import type { TaskTemplateInput } from '@/lib/tasks/api';
 
 export const MAX_TEMPLATE_TASKS = 20;
@@ -33,9 +27,9 @@ type TemplateEditorSheetProps = {
 };
 
 /**
- * A template as a list you write in place: the name in the journal serif, then
- * one task per line. Return starts the next line, blank lines are dropped on
- * save, and a task's note (set elsewhere) rides along untouched.
+ * A template as a list you write in place: its name, then one task per line.
+ * Return starts the next line, blank lines are dropped on save, and a task's
+ * note (set elsewhere) rides along untouched.
  */
 export function TemplateEditorSheet({
   draft,
@@ -120,30 +114,29 @@ function EditorForm({
 
   return (
     <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-      <SheetHeader className="gap-1 border-b-0 px-5 pt-6 pb-0 sm:px-6">
-        <SheetTitle className="text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase">
-          {editing ? t('editTitle') : t('createTitle')}
-        </SheetTitle>
-        <label className="block">
-          <span className="sr-only">{t('name')}</span>
-          <input
-            autoComplete="off"
-            className="w-full border-0 border-b border-border-subtle bg-transparent pt-1 pb-2.5 font-journal text-[2.25rem] leading-tight text-foreground outline-none placeholder:text-text-subtle focus-visible:border-brand"
-            maxLength={100}
-            onChange={(event) => setName(event.target.value)}
-            placeholder={t('namePlaceholder')}
-            value={name}
-          />
-        </label>
-      </SheetHeader>
+      <SheetHeading
+        description={editing ? t('editNote') : t('createNote')}
+        title={editing ? t('editTitle') : t('createTitle')}
+      />
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-4 pb-4 sm:px-6">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-4 pb-4">
         {error ? (
           <Alert className="mb-3" role="alert" variant="destructive">
             <CircleAlert aria-hidden="true" />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
+        <Field className="mb-5">
+          <FieldLabel htmlFor="task-template-name">{t('name')}</FieldLabel>
+          <Input
+            autoComplete="off"
+            id="task-template-name"
+            maxLength={100}
+            onChange={(event) => setName(event.target.value)}
+            placeholder={t('namePlaceholder')}
+            value={name}
+          />
+        </Field>
         <div className="flex items-baseline justify-between pb-1">
           <h3 className="text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase">
             {t('templateTasks')}
@@ -217,10 +210,7 @@ function EditorForm({
         ) : null}
       </div>
 
-      <SheetFooter className="gap-3 px-5 pt-4 sm:px-6">
-        <SheetDescription className="text-[0.8125rem] leading-5">
-          {editing ? t('editNote') : t('createNote')}
-        </SheetDescription>
+      <SheetFooter className="px-5 pt-4">
         <div className="flex gap-2">
           {editing && onDelete ? (
             <Button

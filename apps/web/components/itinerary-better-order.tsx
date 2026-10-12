@@ -7,14 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import {
   fetchDayBetterOrder,
   organizeItineraryItem,
@@ -114,10 +107,7 @@ export function ItineraryBetterOrder({
   return (
     <Sheet onOpenChange={onOpenChange} open={day !== null}>
       <SheetContent closeLabel={t('close')}>
-        <SheetHeader className="border-b">
-          <SheetTitle>{t('title')}</SheetTitle>
-          <SheetDescription>{t('description')}</SheetDescription>
-        </SheetHeader>
+        <SheetHeading title={t('title')} description={t('description')} />
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
           {status === 'loading' ? (
             <p aria-live="polite" className="text-sm text-muted-foreground" role="status">

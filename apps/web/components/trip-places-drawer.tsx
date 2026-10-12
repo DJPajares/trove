@@ -20,13 +20,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { journalSerif } from '@/components/memories/journal-font';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeading } from '@/components/ui/sheet';
 import { useTripPlaceSignals } from '@/hooks/use-trip-place-signals';
 import { fetchItinerary, type Itinerary } from '@/lib/itinerary/api';
 import {
@@ -237,18 +231,17 @@ export function TripPlacesDrawer({
         finalFocus={finalFocus}
         side="right"
       >
-        <SheetHeader className="gap-1 border-b-0 pb-3">
-          <SheetTitle className="font-journal text-[2rem] leading-[1.04] font-normal tracking-[-0.01em]">
-            {t('placesDrawerTitle')}
-          </SheetTitle>
-          <SheetDescription>
-            {hasPlaces
+        <SheetHeading
+          description={
+            hasPlaces
               ? t('collectionSummary', {
                   planned: view.counts.all - view.counts.unplanned,
                   total: view.counts.all,
                 })
-              : t('description')}
-          </SheetDescription>
+              : t('description')
+          }
+          title={t('placesDrawerTitle')}
+        >
           {dayContext ? (
             // The day the drawer is working for, said once and plainly, so
             // every + below reads as "add to this day".
@@ -268,7 +261,7 @@ export function TripPlacesDrawer({
               </span>
             </p>
           ) : null}
-        </SheetHeader>
+        </SheetHeading>
 
         {hasPlaces ? (
           <TripPlacesToolbar
@@ -285,7 +278,7 @@ export function TripPlacesDrawer({
                 <Plus aria-hidden="true" />
               </Button>
             }
-            className="px-5 pb-3"
+            className="px-5 pt-4 pb-3"
             dayNumber={dayContext?.dayNumber}
             lens={activeLens}
             onLensChange={setLens}

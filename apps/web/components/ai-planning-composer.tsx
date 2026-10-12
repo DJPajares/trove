@@ -8,7 +8,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'rea
 import { AiPlanningAllowance } from '@/components/ai-planning-allowance';
 import { AiPlanningBriefField } from '@/components/ai-planning-brief-field';
 import { Button } from '@/components/ui/button';
-import { SheetDescription, SheetTitle } from '@/components/ui/sheet';
+import { SheetHeading } from '@/components/ui/sheet';
 import type { AiPlanningAvailability } from '@/lib/ai-planning/api';
 import { aiPlanningExampleRotation, type AiPlanningExampleId } from '@/lib/ai-planning/examples';
 import { aiPlanningErrorMessageKey } from '@/lib/ai-planning/presentation';
@@ -83,16 +83,10 @@ export function AiPlanningComposer({
 
   return (
     <>
-      <div className="flex items-center gap-2 px-5 pt-5 pr-16 text-brand">
-        <Icons.Ai aria-hidden="true" className="size-4" />
-        <SheetTitle className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
-          {t('sheetTitle')}
-        </SheetTitle>
-        <SheetDescription className="sr-only">{t('description')}</SheetDescription>
-      </div>
+      <SheetHeading description={t('description')} title={t('sheetTitle')} />
 
       <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-        <div className="flex-1 space-y-5 overflow-y-auto px-4 pb-6 sm:px-6">
+        <div className="flex-1 space-y-5 overflow-y-auto px-4 pt-2 pb-6 sm:px-6">
           {exhausted && availability ? (
             <CreditsSpent availability={availability} />
           ) : unavailable && availability ? (
@@ -180,10 +174,7 @@ export function AiPlanningComposer({
                 disabled={busy}
                 id={PROMPT_ID}
                 label={
-                  <label
-                    className="px-1 font-journal text-[2rem] leading-[1.04] font-normal tracking-[-0.01em] text-balance sm:text-[2.5rem]"
-                    htmlFor={PROMPT_ID}
-                  >
+                  <label className="sr-only" htmlFor={PROMPT_ID}>
                     {t('promptLabel')}
                   </label>
                 }

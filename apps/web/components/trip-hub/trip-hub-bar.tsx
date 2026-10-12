@@ -33,14 +33,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeading, SheetTrigger } from '@/components/ui/sheet';
 import { tripSectionIcons } from '@/lib/icons';
 import type { Trip } from '@/lib/trips/api';
 import { cn } from '@/lib/utils';
@@ -126,10 +119,7 @@ export function TripHubBar({
             <ChevronDown aria-hidden="true" data-icon="inline-end" />
           </SheetTrigger>
           <SheetContent closeLabel={t('close')}>
-            <SheetHeader>
-              <SheetTitle>{t('tripTools')}</SheetTitle>
-              <SheetDescription>{hub('toolsDescription')}</SheetDescription>
-            </SheetHeader>
+            <SheetHeading title={t('tripTools')} description={hub('toolsDescription')} />
             <ul className="px-4 pb-4">
               {supporting.map((destination) => {
                 const Icon = tripSectionIcons[destination.section];
@@ -253,10 +243,7 @@ export function TripHubBar({
 
       <Sheet onOpenChange={setOfflineOpen} open={offlineOpen}>
         <SheetContent closeLabel={t('close')}>
-          <SheetHeader>
-            <SheetTitle>{offline('title')}</SheetTitle>
-            <SheetDescription>{offline('description')}</SheetDescription>
-          </SheetHeader>
+          <SheetHeading title={offline('title')} description={offline('description')} />
           {/* The status draws its own top rule for the page it used to sit on;
             under a sheet header that rule would be a second one. */}
           <div className="px-4 pb-6 [&>section]:border-t-0 [&>section]:pt-0">

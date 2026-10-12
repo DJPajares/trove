@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 import { useRef, type ComponentProps } from 'react';
 
 import { PlanScorePanel } from '@/components/plan-score-panel';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeading } from '@/components/ui/sheet';
 
 /**
  * A day's score, opened from the chip on its header: the breakdown the chip
@@ -44,9 +44,7 @@ export function PlanScoreSheet({
         className="w-full md:data-[side=right]:w-[min(32rem,calc(100%-0.5rem))]"
         closeLabel={t('close')}
       >
-        <SheetHeader className="border-b">
-          <SheetTitle>{title}</SheetTitle>
-        </SheetHeader>
+        <SheetHeading title={title} />
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(var(--safe-bottom)+1.5rem)] sm:px-6">
           {open ? (
             <PlanScorePanel

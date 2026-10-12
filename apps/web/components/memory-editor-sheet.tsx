@@ -26,14 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { TimeInput } from '@/components/time-input';
@@ -361,12 +354,10 @@ export function MemoryEditorSheet({
           className="w-full md:data-[side=right]:w-[min(38rem,calc(100%-0.5rem))]"
           closeLabel={t('cancel')}
         >
-          <SheetHeader className="border-b">
-            <SheetTitle>{isCreate ? t('addTitle') : t('editTitle')}</SheetTitle>
-            <SheetDescription>
-              {isCreate ? t('addDescription') : t('editDescription')}
-            </SheetDescription>
-          </SheetHeader>
+          <SheetHeading
+            title={isCreate ? t('addTitle') : t('editTitle')}
+            description={isCreate ? t('addDescription') : t('editDescription')}
+          />
 
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
             <Field>

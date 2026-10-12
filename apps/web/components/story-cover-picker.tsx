@@ -6,14 +6,7 @@ import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { TripMedia } from '@/components/trip-media';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { setStoryCoverPhoto, type Memory, type StoryCover } from '@/lib/memories/api';
 
 /**
@@ -54,10 +47,7 @@ export function StoryCoverPicker({
   return (
     <Sheet onOpenChange={onOpenChange} open={open}>
       <SheetContent closeLabel={t('close')}>
-        <SheetHeader>
-          <SheetTitle>{t('title')}</SheetTitle>
-          <SheetDescription>{t('description')}</SheetDescription>
-        </SheetHeader>
+        <SheetHeading title={t('title')} description={t('description')} />
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
           {photos.length ? (

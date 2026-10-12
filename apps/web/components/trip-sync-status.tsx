@@ -6,13 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeading } from '@/components/ui/sheet';
 import {
   listUserMutations,
   isOfflineApiReachable,
@@ -173,10 +167,7 @@ export function TripSyncStatus({ tripId }: Readonly<{ tripId: string }>) {
 
       <Sheet onOpenChange={setOpen} open={open}>
         <SheetContent closeLabel={t('close')}>
-          <SheetHeader>
-            <SheetTitle>{t('title')}</SheetTitle>
-            <SheetDescription>{t('description')}</SheetDescription>
-          </SheetHeader>
+          <SheetHeading title={t('title')} description={t('description')} />
 
           <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
             <ul aria-label={t('listLabel')} className="border-y border-border">

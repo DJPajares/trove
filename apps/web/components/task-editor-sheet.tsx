@@ -17,14 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import {
   firstTaskItemForDay,
@@ -234,12 +227,10 @@ export function TaskEditorSheet({
         className="w-full md:data-[side=right]:w-[min(38rem,calc(100%-0.5rem))]"
         closeLabel={t('close')}
       >
-        <SheetHeader className="border-b">
-          <SheetTitle>{task ? t('editTitle') : t('createTitle')}</SheetTitle>
-          <SheetDescription>
-            {task ? t('editDescription') : t('createDescription')}
-          </SheetDescription>
-        </SheetHeader>
+        <SheetHeading
+          title={task ? t('editTitle') : t('createTitle')}
+          description={task ? t('editDescription') : t('createDescription')}
+        />
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
           <div className="min-h-0 flex-1 overflow-y-auto p-5">
             <FieldGroup>

@@ -7,14 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { usePreferences } from '@/components/preferences-provider';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
 import {
   fetchItineraryDayTimeSuggestions,
@@ -108,10 +101,7 @@ export function ItineraryDayTimeSuggestions({
   return (
     <Sheet onOpenChange={onOpenChange} open={open}>
       <SheetContent closeLabel={t('close')}>
-        <SheetHeader className="border-b">
-          <SheetTitle>{t('dayTimes.title')}</SheetTitle>
-          <SheetDescription>{t('dayTimes.description')}</SheetDescription>
-        </SheetHeader>
+        <SheetHeading title={t('dayTimes.title')} description={t('dayTimes.description')} />
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
           {status === 'loading' ? (
             <p aria-live="polite" className="text-sm text-muted-foreground" role="status">

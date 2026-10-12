@@ -6,14 +6,7 @@ import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { updateCustomPlace } from '@/lib/saved/api';
 import type { TripPlace } from '@/lib/trip-places/api';
@@ -99,10 +92,7 @@ export function EditTripPlaceSheet({
         className="w-full md:data-[side=right]:w-[min(34rem,calc(100%-0.5rem))]"
         closeLabel={t('close')}
       >
-        <SheetHeader className="border-b">
-          <SheetTitle>{t('editPlaceTitle')}</SheetTitle>
-          <SheetDescription>{t('editPlaceDescription')}</SheetDescription>
-        </SheetHeader>
+        <SheetHeading title={t('editPlaceTitle')} description={t('editPlaceDescription')} />
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
           <Field>

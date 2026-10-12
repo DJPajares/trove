@@ -1,6 +1,7 @@
 {
   "id": "trip-mode-clearer-day",
   "date": "2026-10-11",
+  "version": "1.0.0",
   "summaries": {
     "en": [
       "Today in Trip Mode reads like a timeline, with times down the side and travel time between your stops.",

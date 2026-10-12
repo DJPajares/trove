@@ -1,6 +1,7 @@
 {
   "id": "restore-ai-place-matching",
   "date": "2026-10-12",
+  "version": "1.0.0",
   "summaries": {
     "en": [
       "AI trip plans now recognise more places across languages and name variations, with destination countries filled in more reliably."

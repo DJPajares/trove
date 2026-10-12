@@ -1,6 +1,7 @@
 import { getLocale, getTranslations } from 'next-intl/server';
 
 import { AccountSettings, PrivacySecuritySettings } from '@/components/account-settings';
+import { AppVersion } from '@/components/app-version';
 import { PageHeader } from '@/components/page-header';
 import { NotificationSettings } from '@/components/notification-settings';
 import { OfflineStorageSettings } from '@/components/offline-storage-settings';
@@ -22,6 +23,7 @@ export default async function ProfilePage() {
           <OfflineStorageSettings />
           <PrivacySecuritySettings />
           <AccountSettings />
+          <AppVersion />
         </div>
       </div>
     </section>

@@ -1,6 +1,7 @@
 {
   "id": "consistent-page-headings",
   "date": "2026-10-12",
+  "version": "1.0.0",
   "summaries": {
     "en": [
       "Trips, Saved and Tools now share the same heading style, with clearer one-line descriptions."

@@ -1,6 +1,7 @@
 {
   "id": "trip-mode-calm-today",
   "date": "2026-10-11",
+  "version": "1.0.0",
   "summaries": {
     "en": [
       "Today in Trip Mode keeps just what you need on the move, with a quick way to edit the day in the planner.",

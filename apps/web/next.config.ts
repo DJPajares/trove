@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { withSerwist } from '@serwist/turbopack';
 import type { NextConfig } from 'next';
 import { PHASE_PRODUCTION_BUILD } from 'next/constants';
@@ -43,7 +45,13 @@ export default function config(phase: string) {
   if (phase === PHASE_PRODUCTION_BUILD && !release) {
     throw new Error('Build through pnpm build so the app and worker share release metadata');
   }
-  const manifest = release ?? createReleaseManifest([], 'development');
+  const manifest =
+    release ??
+    createReleaseManifest(
+      [],
+      'development',
+      JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version,
+    );
   const { entries: _entries, ...installed } = manifest;
   return withSerwist(
     withNextIntl({

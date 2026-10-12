@@ -10,3 +10,4 @@ export * from './editorial.js';
 export * from './trip-overview.js';
 export * from './day-place.js';
 export * from './itinerary-timing.js';
+export * from './health.js';

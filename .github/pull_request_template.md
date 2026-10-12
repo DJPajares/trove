@@ -6,6 +6,8 @@
 
 <!-- List focused checks and simple steps a reviewer can use to see the changes. -->
 
+<!-- Bump apps/web and/or apps/api package.json versions for every deployed change (AGENTS.md, Versioning). -->
+
 ## Changelog
 
 <!-- Replace this comment with exactly one declaration:

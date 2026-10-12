@@ -1,6 +1,7 @@
 {
   "id": "reliable-update-details",
   "date": "2026-10-11",
+  "version": "1.0.0",
   "summaries": {
     "en": [
       "See what’s new before installing an update, even after reopening Trove.",

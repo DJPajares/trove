@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 import { readChangelogCatalog, readChangelogAtRef } from '../lib/updates/catalog.ts';
@@ -8,6 +9,7 @@ import { createReleaseManifest } from '../lib/updates/release.ts';
 const release = createReleaseManifest(
   readChangelogCatalog(fileURLToPath(new URL('../changelog/', import.meta.url))),
   'validation',
+  createRequire(import.meta.url)('../package.json').version,
 );
 if (process.argv.includes('--pr')) {
   const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));

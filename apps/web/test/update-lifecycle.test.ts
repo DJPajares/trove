@@ -12,6 +12,7 @@ const hooks = vi.hoisted(() => {
     schemaVersion: 1,
     appId: 'trove-web',
     buildId: 'page-build',
+    version: '1.0.0',
     entryIds: ['old', 'new'],
   });
   return {
@@ -59,10 +60,19 @@ vi.mock('../lib/updates/worker', async (original) => ({
 
 import { useAppUpdate } from '../lib/updates/use-app-update';
 
-const note = (id: string) => ({ id, date: '2026-10-11', summaries: { en: [id] } });
-const old = createReleaseManifest([note('old')], 'old-build');
-const page = createReleaseManifest([note('old'), note('new')], 'page-build');
-const latest = createReleaseManifest([note('old'), note('new'), note('latest')], 'latest-build');
+const note = (id: string) => ({
+  id,
+  date: '2026-10-11',
+  version: '1.0.0',
+  summaries: { en: [id] },
+});
+const old = createReleaseManifest([note('old')], 'old-build', '1.0.0');
+const page = createReleaseManifest([note('old'), note('new')], 'page-build', '1.0.0');
+const latest = createReleaseManifest(
+  [note('old'), note('new'), note('latest')],
+  'latest-build',
+  '1.0.0',
+);
 
 class Worker extends EventTarget {
   scriptURL = 'https://trove.test/serwist/sw.js';
@@ -145,7 +155,7 @@ describe('app and worker release lifecycle', () => {
     expect(update.visible).toBe(true);
     expect(installedIds()).toEqual(['old']);
     expect(unseenSummaries(page, update.installedRelease, update.installedIds, 'en')).toEqual([
-      { id: 'new:0', text: 'new' },
+      { version: '1.0.0', lines: [{ id: 'new:0', text: 'new' }] },
     ]);
     update.dismiss();
     expect(installedIds()).toEqual(['old']);
@@ -268,7 +278,7 @@ describe('app and worker release lifecycle', () => {
     const update = await settle();
     expect(update.installedIds).toEqual(['old']);
     expect(unseenSummaries(page, update.installedRelease, update.installedIds, 'en')).toEqual([
-      { id: 'new:0', text: 'new' },
+      { version: '1.0.0', lines: [{ id: 'new:0', text: 'new' }] },
     ]);
     await update.reload();
     expect(registration.waiting!.postMessage).toHaveBeenCalledOnce();
@@ -277,7 +287,7 @@ describe('app and worker release lifecycle', () => {
   test('an observed code-only update remains refreshable after another tab activates it', async () => {
     registration.active = new Worker(page, 'activated');
     registration.waiting = new Worker(
-      createReleaseManifest(page.entries, 'internal-build'),
+      createReleaseManifest(page.entries, 'internal-build', '1.0.0'),
       'installed',
     );
     render();

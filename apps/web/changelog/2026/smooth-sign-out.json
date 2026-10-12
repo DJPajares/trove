@@ -1,6 +1,7 @@
 {
   "id": "smooth-sign-out",
   "date": "2026-10-11",
+  "version": "1.0.0",
   "summaries": {
     "en": [
       "Sign out with a clear transition to the sign-in screen, without flashes of trip data or loading errors."

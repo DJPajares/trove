@@ -1,6 +1,7 @@
 {
   "id": "tools-shelf",
   "date": "2026-10-11",
+  "version": "1.0.0",
   "summaries": {
     "en": [
       "Tools is now a compact shelf that shows your last currency pair and checklists at a glance.",

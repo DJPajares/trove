@@ -1,6 +1,7 @@
 {
   "id": "ai-planner-brief",
   "date": "2026-10-11",
+  "version": "1.0.0",
   "summaries": {
     "en": [
       "Plan a trip with AI from a calmer brief: start from an idea, or add when, who and pace with a tap.",

@@ -27,3 +27,5 @@ jobs:
           node-version: 24
       - name: Validate catalog and PR decision
         run: node apps/web/scripts/check-changelog.mjs --pr
+      - name: Validate web and API version bumps
+        run: node scripts/check-versions.mjs --pr

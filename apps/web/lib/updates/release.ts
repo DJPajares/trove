@@ -1,3 +1,5 @@
+import { compareSemver, isSemver } from './version.ts';
+
 export const RELEASE_SCHEMA_VERSION = 1;
 export const WEB_APP_ID = 'trove-web';
 export const RELEASE_MESSAGE = 'TROVE_GET_RELEASE';
@@ -6,6 +8,8 @@ export const MAX_DISPLAY_ENTRIES = 100;
 export interface ChangelogEntry {
   id: string;
   date: string;
+  /** The web version whose release delivered this note. */
+  version: string;
   summaries: Record<string, string[]>;
 }
 
@@ -13,6 +17,8 @@ export interface InstalledRelease {
   schemaVersion: typeof RELEASE_SCHEMA_VERSION;
   appId: typeof WEB_APP_ID;
   buildId: string;
+  /** Absent only on releases built before versioning; the field rides schema 1. */
+  version?: string;
   entryIds: string[];
 }
 
@@ -30,7 +36,7 @@ export function isEntryId(value: unknown): value is string {
 
 export function parseChangelogEntry(value: unknown): ChangelogEntry {
   if (!isRecord(value) || !isEntryId(value.id)) throw new Error('Invalid changelog ID');
-  const { date, summaries } = value;
+  const { date, version, summaries } = value;
   if (
     typeof date !== 'string' ||
     !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
@@ -39,6 +45,7 @@ export function parseChangelogEntry(value: unknown): ChangelogEntry {
   ) {
     throw new Error(`Invalid changelog date: ${value.id}`);
   }
+  if (!isSemver(version)) throw new Error(`Invalid changelog version: ${value.id}`);
   if (!isRecord(summaries) || !Object.hasOwn(summaries, 'en')) {
     throw new Error(`Changelog requires English summaries: ${value.id}`);
   }
@@ -62,14 +69,21 @@ export function parseChangelogEntry(value: unknown): ChangelogEntry {
     }
     parsed[locale] = lines;
   }
-  return { id: value.id, date, summaries: parsed };
+  return { id: value.id, date, version, summaries: parsed };
 }
 
-export function createReleaseManifest(entries: ChangelogEntry[], buildId: string): ReleaseManifest {
+export function createReleaseManifest(
+  entries: ChangelogEntry[],
+  buildId: string,
+  version: string,
+): ReleaseManifest {
   const catalog = entries.map(parseChangelogEntry);
   const ids = catalog.map((entry) => entry.id);
   if (new Set(ids).size !== ids.length) throw new Error('Duplicate changelog IDs');
   if (!buildId.trim()) throw new Error('Missing web build ID');
+  if (!isSemver(version)) throw new Error(`Invalid web version: ${version}`);
+  const ahead = catalog.find((entry) => compareSemver(entry.version, version) > 0);
+  if (ahead) throw new Error(`Changelog ${ahead.id} is newer than web ${version}`);
   const sorted = catalog.toSorted(
     (a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id),
   );
@@ -77,6 +91,7 @@ export function createReleaseManifest(entries: ChangelogEntry[], buildId: string
     schemaVersion: RELEASE_SCHEMA_VERSION,
     appId: WEB_APP_ID,
     buildId,
+    version,
     entryIds: sorted.map((entry) => entry.id),
     entries: sorted.slice(0, MAX_DISPLAY_ENTRIES),
   };
@@ -89,6 +104,7 @@ export function parseInstalledRelease(value: unknown): InstalledRelease | null {
     value.appId !== WEB_APP_ID ||
     typeof value.buildId !== 'string' ||
     !value.buildId.trim() ||
+    (value.version !== undefined && !isSemver(value.version)) ||
     !Array.isArray(value.entryIds) ||
     !value.entryIds.every(isEntryId) ||
     new Set(value.entryIds).size !== value.entryIds.length
@@ -99,6 +115,7 @@ export function parseInstalledRelease(value: unknown): InstalledRelease | null {
     schemaVersion: RELEASE_SCHEMA_VERSION,
     appId: WEB_APP_ID,
     buildId: value.buildId,
+    ...(isSemver(value.version) ? { version: value.version } : {}),
     entryIds: value.entryIds,
   };
 }
@@ -106,6 +123,9 @@ export function parseInstalledRelease(value: unknown): InstalledRelease | null {
 export function parseReleaseManifest(value: unknown): ReleaseManifest | null {
   const installed = parseInstalledRelease(value);
   if (!installed || !isRecord(value) || !Array.isArray(value.entries)) return null;
+  // A worker built before versioning still identifies its installed entries,
+  // which is all a baseline needs; its unversioned notes are not shown.
+  if (!installed.version) return { ...installed, entries: [] };
   try {
     const entries = value.entries.map(parseChangelogEntry);
     if (
@@ -121,22 +141,33 @@ export function parseReleaseManifest(value: unknown): ReleaseManifest | null {
   }
 }
 
+export interface UnseenRelease {
+  version: string;
+  lines: { id: string; text: string }[];
+}
+
+/** Unseen notes grouped by the release that delivered them, newest version first. */
 export function unseenSummaries(
   target: ReleaseManifest,
   installed: InstalledRelease | null,
   installedIds: readonly string[],
   locale: string,
-): { id: string; text: string }[] {
+): UnseenRelease[] {
   // Only an activated worker establishes an installed baseline. A network
   // navigation can already load the waiting build's JavaScript before Update.
   if (!installed) return [];
   const known = new Set([...installed.entryIds, ...installedIds]);
-  return target.entries
-    .filter((entry) => !known.has(entry.id))
-    .flatMap((entry) =>
-      (entry.summaries[locale] ?? entry.summaries.en ?? []).map((text, index) => ({
+  const releases = new Map<string, UnseenRelease>();
+  for (const entry of target.entries) {
+    if (known.has(entry.id)) continue;
+    const release = releases.get(entry.version) ?? { version: entry.version, lines: [] };
+    releases.set(entry.version, release);
+    release.lines.push(
+      ...(entry.summaries[locale] ?? entry.summaries.en ?? []).map((text, index) => ({
         id: `${entry.id}:${index}`,
         text,
       })),
     );
+  }
+  return [...releases.values()].toSorted((a, b) => compareSemver(b.version, a.version));
 }

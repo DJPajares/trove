@@ -1,6 +1,7 @@
 {
   "id": "trip-mode-live-companion",
   "date": "2026-10-11",
+  "version": "1.0.0",
   "summaries": {
     "en": [
       "Trip Mode now shows one moment at a time: where you are, and a clear countdown to your next move.",

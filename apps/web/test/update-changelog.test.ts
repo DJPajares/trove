@@ -18,10 +18,12 @@ import {
   unseenSummaries,
   type ChangelogEntry,
 } from '../lib/updates/release.ts';
+import { checkVersions, type VersionCheckInput } from '../lib/updates/version-check.ts';
+import { compareSemver, isSemver } from '../lib/updates/version.ts';
 import { requestWorkerRelease } from '../lib/updates/worker.ts';
 
-function note(id: string, date = '2026-10-11'): ChangelogEntry {
-  return { id, date, summaries: { en: [`Your trip feels clearer with ${id}.`] } };
+function note(id: string, date = '2026-10-11', version = '1.0.0'): ChangelogEntry {
+  return { id, date, version, summaries: { en: [`Your trip feels clearer with ${id}.`] } };
 }
 
 afterEach(() => {
@@ -49,14 +51,32 @@ describe('catalog integrity', () => {
     const entries = Array.from({ length: 103 }, (_, index) =>
       note(`trip-${index}`, index < 3 ? '2025-01-01' : '2026-10-11'),
     );
-    const release = createReleaseManifest(entries, 'build-a');
+    const release = createReleaseManifest(entries, 'build-a', '1.0.0');
     expect(release.entryIds).toHaveLength(103);
     expect(release.entries).toHaveLength(100);
     expect(release.entries.every((entry) => entry.date === '2026-10-11')).toBe(true);
-    expect(() => createReleaseManifest([note('same'), note('same')], 'build-a')).toThrow(
+    expect(() => createReleaseManifest([note('same'), note('same')], 'build-a', '1.0.0')).toThrow(
       /Duplicate/,
     );
-    expect(() => createReleaseManifest([], '')).toThrow(/build ID/);
+    expect(() => createReleaseManifest([], '', '1.0.0')).toThrow(/build ID/);
+  });
+
+  test('ties every note to a web version no newer than the release carrying it', () => {
+    expect(() => parseChangelogEntry({ ...note('days'), version: '1.0' })).toThrow(/version/);
+    expect(() => parseChangelogEntry({ ...note('days'), version: undefined })).toThrow(/version/);
+    expect(() => createReleaseManifest([note('days')], 'build-a', 'v1')).toThrow(/web version/);
+    expect(() =>
+      createReleaseManifest([note('days', '2026-10-11', '1.2.0')], 'build-a', '1.1.9'),
+    ).toThrow(/newer than web 1.1.9/);
+    expect(createReleaseManifest([note('days')], 'build-a', '1.10.0').version).toBe('1.10.0');
+  });
+
+  test('orders versions numerically', () => {
+    expect(compareSemver('1.10.0', '1.9.9')).toBe(1);
+    expect(compareSemver('2.0.0', '2.0.0')).toBe(0);
+    expect(compareSemver('0.9.0', '1.0.0')).toBe(-1);
+    expect(isSemver('1.0.0-beta')).toBe(false);
+    expect(isSemver('01.0.0')).toBe(false);
   });
 
   test('requires filenames and year folders to match the entry', () => {
@@ -73,7 +93,7 @@ describe('catalog integrity', () => {
   });
 
   test('rejects incompatible, duplicate, or unregistered worker metadata', () => {
-    const valid = createReleaseManifest([note('days')], 'build-a');
+    const valid = createReleaseManifest([note('days')], 'build-a', '1.0.0');
     expect(parseReleaseManifest(valid)).toEqual(valid);
     for (const invalid of [
       null,
@@ -89,19 +109,58 @@ describe('catalog integrity', () => {
 });
 
 describe('installed and unseen changes', () => {
-  const old = createReleaseManifest([note('old')], 'build-a');
-  const target = createReleaseManifest([note('old'), note('middle'), note('newest')], 'build-c');
+  const old = createReleaseManifest([note('old')], 'build-a', '1.0.0');
+  const target = createReleaseManifest(
+    [note('old'), note('middle'), note('newest')],
+    'build-c',
+    '1.0.0',
+  );
 
   test('includes skipped updates while excluding the running build and installed history', () => {
-    expect(unseenSummaries(target, old, [], 'en').map((line) => line.id)).toEqual([
-      'middle:0',
-      'newest:0',
-    ]);
-    expect(unseenSummaries(target, old, ['middle'], 'en').map((line) => line.id)).toEqual([
-      'newest:0',
-    ]);
+    const lineIds = (releases: ReturnType<typeof unseenSummaries>) =>
+      releases.flatMap((release) => release.lines.map((line) => line.id));
+    expect(lineIds(unseenSummaries(target, old, [], 'en'))).toEqual(['middle:0', 'newest:0']);
+    expect(lineIds(unseenSummaries(target, old, ['middle'], 'en'))).toEqual(['newest:0']);
     expect(unseenSummaries(target, target, [], 'en')).toEqual([]);
     expect(unseenSummaries(target, null, [], 'en')).toEqual([]);
+  });
+
+  test('groups unseen notes under the release that delivered them, newest first', () => {
+    const grouped = createReleaseManifest(
+      [
+        note('first', '2026-10-01', '1.1.0'),
+        note('patch', '2026-10-03', '1.1.1'),
+        note('feature', '2026-10-05', '1.10.0'),
+        note('second', '2026-10-02', '1.1.0'),
+      ],
+      'build-d',
+      '1.10.0',
+    );
+    expect(
+      unseenSummaries(grouped, old, [], 'en').map((release) => [
+        release.version,
+        release.lines.map((line) => line.id),
+      ]),
+    ).toEqual([
+      ['1.10.0', ['feature:0']],
+      ['1.1.1', ['patch:0']],
+      ['1.1.0', ['second:0', 'first:0']],
+    ]);
+  });
+
+  test('a worker built before versioning stays a baseline without showing notes', () => {
+    const { version: _version, ...legacy } = createReleaseManifest(
+      [note('old')],
+      'legacy-build',
+      '1.0.0',
+    );
+    const parsed = parseReleaseManifest({
+      ...legacy,
+      entries: [{ id: 'old', date: '2026-10-01', summaries: { en: ['Old.'] } }],
+    });
+    expect(parsed?.entryIds).toEqual(['old']);
+    expect(parsed?.entries).toEqual([]);
+    expect(parseReleaseManifest({ ...legacy, version: 'next' })).toBeNull();
   });
 
   test('uses translated copy with English fallback', () => {
@@ -113,9 +172,12 @@ describe('installed and unseen changes', () => {
         },
       ],
       'build-b',
+      '1.0.0',
     );
-    expect(unseenSummaries(localized, old, [], 'fr')[0]?.text).toBe('Des journées plus claires.');
-    expect(unseenSummaries(localized, old, [], 'de')[0]?.text).toBe('Clearer trip days.');
+    expect(unseenSummaries(localized, old, [], 'fr')[0]?.lines[0]?.text).toBe(
+      'Des journées plus claires.',
+    );
+    expect(unseenSummaries(localized, old, [], 'de')[0]?.lines[0]?.text).toBe('Clearer trip days.');
   });
 
   test('initializes the first install without replaying history, then preserves IDs through rollbacks and tabs', () => {
@@ -182,6 +244,89 @@ describe('PR changelog decisions', () => {
   });
 });
 
+describe('PR version bumps', () => {
+  const input = (overrides: Partial<VersionCheckInput> = {}): VersionCheckInput => ({
+    changedFiles: [],
+    versions: { web: { base: '1.0.0', head: '1.0.0' }, api: { base: '1.0.0', head: '1.0.0' } },
+    baseEntries: [{ id: 'old', version: '1.0.0' }],
+    headEntries: [note('old')],
+    ...overrides,
+  });
+  const bumped = { base: '1.0.0', head: '1.0.1' };
+
+  test('every deployed change bumps the app that ships it', () => {
+    expect(() => checkVersions(input({ changedFiles: ['apps/web/app/page.tsx'] }))).toThrow(
+      /bump apps\/web/,
+    );
+    expect(() =>
+      checkVersions(
+        input({
+          changedFiles: ['apps/web/app/page.tsx'],
+          versions: { web: bumped, api: { base: '1.0.0', head: '1.0.0' } },
+        }),
+      ),
+    ).not.toThrow();
+    expect(() =>
+      checkVersions(input({ changedFiles: ['packages/db/prisma/schema.prisma'] })),
+    ).toThrow(/bump apps\/api/);
+    // Shared contracts deploy with both apps.
+    expect(() =>
+      checkVersions(
+        input({
+          changedFiles: ['packages/types/src/health.ts'],
+          versions: { web: bumped, api: { base: '1.0.0', head: '1.0.0' } },
+        }),
+      ),
+    ).toThrow(/bump apps\/api/);
+  });
+
+  test('tests, docs and tooling outside the apps need no bump', () => {
+    expect(() =>
+      checkVersions(
+        input({
+          changedFiles: [
+            'apps/web/test/update-changelog.test.ts',
+            'apps/api/src/services/health.test.ts',
+            'apps/web/README.md',
+            'AGENTS.md',
+            'scripts/check-versions.mjs',
+          ],
+        }),
+      ),
+    ).not.toThrow();
+  });
+
+  test('versions never go backwards and stay well formed', () => {
+    expect(() =>
+      checkVersions(input({ versions: { web: { base: '1.2.0', head: '1.1.9' }, api: bumped } })),
+    ).toThrow(/must not go back/);
+    expect(() =>
+      checkVersions(input({ versions: { web: { base: '1.0.0', head: 'next' }, api: bumped } })),
+    ).toThrow(/major.minor.patch/);
+  });
+
+  test('new notes use this PR web version and shipped notes keep theirs', () => {
+    const versions = { web: bumped, api: { base: '1.0.0', head: '1.0.0' } };
+    expect(() =>
+      checkVersions(
+        input({ versions, headEntries: [note('old'), note('new', '2026-10-12', '1.0.1')] }),
+      ),
+    ).not.toThrow();
+    expect(() =>
+      checkVersions(
+        input({ versions, headEntries: [note('old'), note('new', '2026-10-12', '1.0.0')] }),
+      ),
+    ).toThrow(/must use this PR's web version 1.0.1/);
+    expect(() =>
+      checkVersions(input({ versions, headEntries: [note('old', '2026-10-11', '1.0.1')] })),
+    ).toThrow(/shipped in 1.0.0/);
+    // Notes written before versioning may take their first version.
+    expect(() =>
+      checkVersions(input({ versions, baseEntries: [{ id: 'old' }], headEntries: [note('old')] })),
+    ).not.toThrow();
+  });
+});
+
 describe('worker metadata protocol', () => {
   test('unavailable message channels keep the generic update usable', async () => {
     vi.stubGlobal(
@@ -198,7 +343,7 @@ describe('worker metadata protocol', () => {
   });
 
   test('requests the exact supplied worker and validates its reply', async () => {
-    const release = createReleaseManifest([note('new')], 'waiting-build');
+    const release = createReleaseManifest([note('new')], 'waiting-build', '1.0.0');
     const postMessage = vi.fn((_message, ports: MessagePort[]) => ports[0]?.postMessage(release));
     expect(await requestWorkerRelease({ postMessage } as unknown as ServiceWorker)).toEqual(
       release,

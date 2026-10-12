@@ -8,7 +8,7 @@
   ],
   "functions": {
     "api/index.mjs": {
-      "includeFiles": "dist/services/data/timezones-1970.geojson.geo.dat"
+      "includeFiles": "{dist/services/data/timezones-1970.geojson.geo.dat,package.json}"
     }
   },
   "outputDirectory": "dist",

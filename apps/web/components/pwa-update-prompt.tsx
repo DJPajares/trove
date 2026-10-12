@@ -8,31 +8,47 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { motionDuration, motionEase } from '@/lib/motion';
-import { unseenSummaries } from '@/lib/updates/release';
+import { unseenSummaries, type UnseenRelease } from '@/lib/updates/release';
 import { useAppUpdate } from '@/lib/updates/use-app-update';
 
-function UpdateDetails({ summaries }: { summaries: { id: string; text: string }[] }) {
+const COLLAPSED_LINES = 5;
+
+function UpdateDetails({ releases }: { releases: UnseenRelease[] }) {
   const t = useTranslations('pwaUpdate');
   const [showAll, setShowAll] = useState(false);
-  const shown = showAll ? summaries : summaries.slice(0, 5);
+  const total = releases.reduce((count, release) => count + release.lines.length, 0);
+  // The collapsed view counts lines, not releases, so a long release cannot crowd the toast.
+  let budget = showAll ? total : COLLAPSED_LINES;
+  const shown = releases.flatMap((release) => {
+    const lines = release.lines.slice(0, budget);
+    budget -= lines.length;
+    return lines.length ? [{ ...release, lines }] : [];
+  });
 
   return (
     <CollapsiblePanel>
       <div className="mx-4 border-t border-border-subtle">
-        <div className="max-h-[40dvh] overflow-y-auto overscroll-contain py-3">
-          <ul className="list-disc space-y-2.5 pr-1 pl-4 text-sm leading-relaxed text-muted-foreground marker:text-border-strong">
-            {shown.map((summary) => (
-              <li key={summary.id}>{summary.text}</li>
-            ))}
-          </ul>
-          {summaries.length > 5 ? (
+        <div className="max-h-[40dvh] space-y-3 overflow-y-auto overscroll-contain py-3">
+          {shown.map((release) => (
+            <section key={release.version}>
+              <h3 className="mb-1.5 text-xs leading-4 font-medium text-text-subtle tabular-nums">
+                {t('versionHeading', { version: release.version })}
+              </h3>
+              <ul className="list-disc space-y-2.5 pr-1 pl-4 text-sm leading-relaxed text-muted-foreground marker:text-border-strong">
+                {release.lines.map((summary) => (
+                  <li key={summary.id}>{summary.text}</li>
+                ))}
+              </ul>
+            </section>
+          ))}
+          {total > COLLAPSED_LINES ? (
             <Button
-              className="mt-2 min-h-11 max-w-full whitespace-normal"
+              className="min-h-11 max-w-full whitespace-normal"
               onClick={() => setShowAll((previous) => !previous)}
               size="sm"
               variant="ghost"
             >
-              {showAll ? t('showLess') : t('showMore', { count: summaries.length - 5 })}
+              {showAll ? t('showLess') : t('showMore', { count: total - COLLAPSED_LINES })}
             </Button>
           ) : null}
         </div>
@@ -46,9 +62,11 @@ export function PwaUpdatePrompt() {
   const t = useTranslations('pwaUpdate');
   const locale = useLocale();
   const update = useAppUpdate();
-  const summaries = update.waiting?.release
+  const releases = update.waiting?.release
     ? unseenSummaries(update.waiting.release, update.installedRelease, update.installedIds, locale)
     : [];
+  const targetVersion = update.waiting?.release?.version;
+  const title = targetVersion ? t('titleWithVersion', { version: targetVersion }) : t('title');
 
   return (
     <AnimatePresence>
@@ -65,12 +83,12 @@ export function PwaUpdatePrompt() {
             className="rounded-[var(--radius-md)] border border-border-subtle bg-popover text-popover-foreground shadow-[var(--shadow-overlay)]"
           >
             <p className="sr-only" role="status">
-              {t('title')}
+              {title}
             </p>
             <div className="flex flex-wrap items-center gap-1 p-2">
-              {summaries.length ? (
+              {releases.length ? (
                 <CollapsibleTrigger className="min-h-11 min-w-28 flex-1 flex-col items-start justify-center gap-0.5 px-2 py-1 text-left hover:bg-surface-hover">
-                  <span className="text-sm leading-5 text-popover-foreground">{t('title')}</span>
+                  <span className="text-sm leading-5 text-popover-foreground">{title}</span>
                   <span className="inline-flex items-center gap-1 text-xs font-normal leading-4">
                     {t('whatsNew')}
                     <ChevronDown
@@ -80,9 +98,7 @@ export function PwaUpdatePrompt() {
                   </span>
                 </CollapsibleTrigger>
               ) : (
-                <p className="min-w-28 flex-1 px-2 py-1 text-sm leading-5 font-medium">
-                  {t('title')}
-                </p>
+                <p className="min-w-28 flex-1 px-2 py-1 text-sm leading-5 font-medium">{title}</p>
               )}
               <Button
                 className="h-auto min-h-11 min-w-22 max-w-full px-3 py-2 whitespace-normal"
@@ -103,7 +119,7 @@ export function PwaUpdatePrompt() {
                 <X aria-hidden="true" />
               </Button>
             </div>
-            {summaries.length ? <UpdateDetails summaries={summaries} /> : null}
+            {releases.length ? <UpdateDetails releases={releases} /> : null}
             {update.reloadError ? (
               <p className="px-4 pb-3 text-sm leading-relaxed text-muted-foreground" role="alert">
                 {t('reloadError')}

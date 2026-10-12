@@ -8,12 +8,12 @@ import {
   parseInstalledHistory,
   rememberInstalledEntries,
 } from './history';
-import { parseInstalledRelease, type InstalledRelease, type ReleaseManifest } from './release';
+import { type InstalledRelease, type ReleaseManifest } from './release';
+import { runningRelease as builtRelease } from './running-release';
 import { isTroveWorker, requestWorkerRelease, TROVE_WORKER_PATH } from './worker';
 
-export const runningRelease = parseInstalledRelease(
-  JSON.parse(process.env.NEXT_PUBLIC_TROVE_RELEASE ?? 'null'),
-);
+// A module-local binding lets the callbacks below keep their null narrowing.
+const runningRelease = builtRelease;
 
 interface WaitingUpdate {
   worker: ServiceWorker;

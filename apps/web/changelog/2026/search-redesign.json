@@ -1,6 +1,7 @@
 {
   "id": "search-redesign",
   "date": "2026-10-12",
+  "version": "1.0.0",
   "summaries": {
     "en": [
       "Search opens straight to the field, with shortcuts into your current trip and your recent searches.",

@@ -2,7 +2,15 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { parseChangelogEntry, type ChangelogEntry } from './release.ts';
+import { isEntryId, parseChangelogEntry, type ChangelogEntry } from './release.ts';
+import { isSemver } from './version.ts';
+
+/** What a PR check needs from its base: identity, and the version a note shipped in. */
+export interface BaseChangelogEntry {
+  id: string;
+  /** Absent for notes written before versioning. */
+  version?: string;
+}
 
 export function readChangelogCatalog(directory: string): ChangelogEntry[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((year) => {
@@ -21,8 +29,11 @@ export function readChangelogCatalog(directory: string): ChangelogEntry[] {
   });
 }
 
-/** Read IDs from the PR base so edits and renamed files cannot masquerade as new notes. */
-export function readChangelogAtRef(repository: string, ref: string): ChangelogEntry[] {
+/**
+ * Read IDs from the PR base so edits and renamed files cannot masquerade as new
+ * notes. Only identity is read: the base may predate today's entry rules.
+ */
+export function readChangelogAtRef(repository: string, ref: string): BaseChangelogEntry[] {
   if (!/^[a-f0-9]{40}$/.test(ref))
     throw new Error('Expected a commit SHA for changelog comparison');
   const files = execFileSync(
@@ -36,11 +47,12 @@ export function readChangelogAtRef(repository: string, ref: string): ChangelogEn
   return files
     .split('\n')
     .filter((file) => /^apps\/web\/changelog\/\d{4}\/[^/]+\.json$/.test(file))
-    .map((file) =>
-      parseChangelogEntry(
-        JSON.parse(
-          execFileSync('git', ['show', `${ref}:${file}`], { cwd: repository, encoding: 'utf8' }),
-        ),
-      ),
-    );
+    .map((file) => {
+      const entry: unknown = JSON.parse(
+        execFileSync('git', ['show', `${ref}:${file}`], { cwd: repository, encoding: 'utf8' }),
+      );
+      const { id, version } = (entry ?? {}) as Record<string, unknown>;
+      if (!isEntryId(id)) throw new Error(`Invalid base changelog ID: ${file}`);
+      return isSemver(version) ? { id, version } : { id };
+    });
 }

@@ -1,6 +1,7 @@
 {
   "id": "ai-planner-longer-trips-and-retry",
   "date": "2026-10-12",
+  "version": "1.0.0",
   "summaries": {
     "en": [
       "Keep your brief when you cancel AI planning, ready to edit or try again.",

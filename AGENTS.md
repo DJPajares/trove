@@ -150,11 +150,18 @@ Example:
 ## User-facing Changelog
 
 - Before final validation and commit for every implementation task, decide whether the work adds a meaningful visible improvement or fix. Add/update that task's note in the same PR; do not defer this to a release chore. Hidden or disabled features get a note only when users can access them.
-- Keep one JSON entry per task at `apps/web/changelog/<year>/<id>.json`: stable unique `id`, ISO `date` matching the year folder, and `summaries` with required `en` plus optional translations. Each locale has 1–3 short sentences, each at most 180 characters. Describe traveller benefits in friendly product language; omit implementation details, issue numbers, and developer jargon.
-- Example: `{ "id": "clearer-trip-days", "date": "2026-10-11", "summaries": { "en": ["Find your way through each trip day with clearer headings."] } }`.
-- Preserve shipped entry IDs and history. Correct typos/translations without changing identity; add a new entry for new behavior. Annual folders retain history, and builds automatically attach the newest 100 entries and all IDs to the web app and its worker.
+- Keep one JSON entry per task at `apps/web/changelog/<year>/<id>.json`: stable unique `id`, ISO `date` matching the year folder, `version` equal to the PR's web version (see Versioning), and `summaries` with required `en` plus optional translations. Each locale has 1–3 short sentences, each at most 180 characters. Describe traveller benefits in friendly product language; omit implementation details, issue numbers, and developer jargon.
+- Example: `{ "id": "clearer-trip-days", "date": "2026-10-11", "version": "1.3.0", "summaries": { "en": ["Find your way through each trip day with clearer headings."] } }`.
+- Preserve shipped entry IDs and history. Correct typos/translations without changing identity or the version a note shipped in; add a new entry for new behavior. Annual folders retain history, and builds automatically attach the newest 100 entries and all IDs to the web app and its worker.
 - Internal refactors, dependency maintenance, tests, and documentation normally need no note. Every PR must include exactly one line: `Changelog: added` (with a link to the new entry) or `Changelog: none — <reason>`. PR checks verify that declaration against new IDs and reject removal of historical IDs; reviewers assess relevance and tone.
-- Run `pnpm --filter @trove/web changelog:check` with focused validation. Use the normal `pnpm build`/web build script so the app and worker share one release identity. Installing an update consumes its notes per device; reading or dismissing the toast does not.
+- Run `pnpm --filter @trove/web changelog:check` with focused validation. Use the normal `pnpm build`/web build script so the app and worker share one release identity. Installing an update consumes its notes per device; reading or dismissing the toast does not. What's new groups unseen notes under their version.
+
+## Versioning
+
+- Web and API carry independent SemVer (`major.minor.patch`, no suffix) in `apps/web/package.json` and `apps/api/package.json`. Each is the deployed app's version: Profile shows both, and the API reports its own from `GET /health`.
+- Every PR that changes what an app deploys bumps that app in the same PR: anything under its `apps/<app>/` except tests and Markdown, `packages/types` (both apps), or `packages/db` (API). Patch for fixes and changes travellers can't see; minor for new user-visible capability; major only on the user's call.
+- A changelog entry lives in `apps/web`, so adding one always bumps web.
+- After rebasing onto a newer `main`, re-check the bump is still above `main`'s version. `node scripts/check-versions.mjs --base main` runs the PR check locally.
 
 ## Completion Response
 

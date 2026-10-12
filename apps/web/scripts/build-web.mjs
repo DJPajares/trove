@@ -7,11 +7,12 @@ import { readChangelogCatalog } from '../lib/updates/catalog.ts';
 import { createReleaseManifest } from '../lib/updates/release.ts';
 
 const webRoot = fileURLToPath(new URL('../', import.meta.url));
+const require = createRequire(import.meta.url);
 const release = createReleaseManifest(
   readChangelogCatalog(fileURLToPath(new URL('../changelog/', import.meta.url))),
   randomUUID(),
+  require('../package.json').version,
 );
-const require = createRequire(import.meta.url);
 const build = spawn(
   process.execPath,
   [require.resolve('next/dist/bin/next'), 'build', ...process.argv.slice(2)],

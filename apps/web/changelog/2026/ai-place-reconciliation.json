@@ -1,6 +1,7 @@
 {
   "id": "ai-place-reconciliation",
   "date": "2026-10-11",
+  "version": "1.0.0",
   "summaries": {
     "en": [
       "AI plans find more places by their local and alternate names, so fewer stops need locating by hand."

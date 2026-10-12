@@ -54,6 +54,8 @@
     "title": "Profile and travel settings",
     "description": "Set these once, and every new trip starts pointed the right way.",
     "sectionNavigation": "Settings sections",
+    "appVersion": "Web {web} · API {api}",
+    "versionUnknown": "—",
     "profileSection": "Profile",
     "profileSectionDescription": "Your details and the defaults Trove uses when a trip begins.",
     "preferencesSection": "Travel preferences",
@@ -3100,6 +3102,8 @@
   },
   "pwaUpdate": {
     "title": "Update available",
+    "titleWithVersion": "Update available · {version}",
+    "versionHeading": "Version {version}",
     "reload": "Update",
     "reloading": "Updating…",
     "later": "Later",

@@ -12,8 +12,11 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { BackLink } from '@/components/back-link';
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
 import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-details-sheet';
@@ -116,7 +119,14 @@ const SMALL_COLLECTION = 4;
 const REDISCOVER_KEPT_STORAGE_KEY = 'trove:saved-rediscover-kept:v1';
 const EMPTY_COLLECTIONS: SavedCollection[] = [];
 
-export function SavedPlacesManager() {
+/**
+ * Saved, or one collection of it. With `collectionId` the same library opens on
+ * that collection as its own page: its heading, its places, and its options,
+ * with every place action and sheet shared with Saved itself.
+ */
+export function SavedPlacesManager({
+  collectionId = null,
+}: Readonly<{ collectionId?: string | null }> = {}) {
   const t = useTranslations('saved');
   const mediaTranslations = useTranslations('media');
   const locale = useLocale();
@@ -167,7 +177,9 @@ export function SavedPlacesManager() {
       writeSaved('collections', next),
     [writeSaved],
   );
-  const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
+  const router = useRouter();
+  const activeCollectionId = collectionId;
+  const collectionMode = collectionId !== null;
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const status = savedQuery.isPending ? 'loading' : savedQuery.error ? 'error' : 'idle';
   const [error, setError] = useState<string | null>(null);
@@ -557,7 +569,7 @@ export function SavedPlacesManager() {
           collections: savedPlace.collections.filter((item) => item.id !== collectionToDelete.id),
         })),
       );
-      if (activeCollectionId === collectionToDelete.id) setActiveCollectionId(null);
+      if (activeCollectionId === collectionToDelete.id) router.push('/saved');
       setCollectionToDelete(null);
     } catch (errorValue) {
       setError(getErrorMessage(errorValue));
@@ -619,8 +631,20 @@ export function SavedPlacesManager() {
     }
   }
 
-  const small = savedPlaces.length <= SMALL_COLLECTION;
-  const filtering = Boolean(query.trim()) || categoryFilter !== 'all' || Boolean(activeCollection);
+  // The places this page is about: all of Saved, or one collection's members.
+  const scopePlaces = activeCollectionId
+    ? savedPlaces.filter((savedPlace) =>
+        savedPlace.collections.some((collection) => collection.id === activeCollectionId),
+      )
+    : savedPlaces;
+  const small = scopePlaces.length <= SMALL_COLLECTION;
+  const filtering = Boolean(query.trim()) || categoryFilter !== 'all';
+  // Only categories something here belongs to; a chip that empties the grid helps no one.
+  const presentCategoryFilters = categoryFilters.filter(
+    (filter) =>
+      filter === 'all' ||
+      scopePlaces.some((savedPlace) => savedPlace.place.snapshot?.category === filter),
+  );
 
   const card = (savedPlace: SavedPlace, featured = false) => {
     const name = getPlaceName(savedPlace);
@@ -733,19 +757,63 @@ export function SavedPlacesManager() {
 
   return (
     <section className="mx-auto w-full max-w-6xl space-y-8">
-      <PageHeader
-        actions={
-          // A phone already adds a place from the + at the centre of its bottom bar.
-          <Button className="max-md:hidden" onClick={() => setAddOpen(true)}>
-            <Plus aria-hidden="true" data-icon="inline-start" />
-            {t('addPlace')}
-          </Button>
-        }
-        description={t('description')}
-        eyebrow={t('eyebrow')}
-        title={t('title')}
-        titleFont="journal"
-      />
+      {collectionMode ? (
+        <div>
+          <BackLink href="/saved" label={t('backToSaved')} />
+          <PageHeader
+            actions={
+              activeCollection ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button className="rounded-full" size="sm" type="button" variant="outline" />
+                    }
+                  >
+                    <Pencil aria-hidden="true" data-icon="inline-start" />
+                    {t('editCollectionAction')}
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52">
+                    <DropdownMenuItem
+                      onClick={() => openCollectionEditor('rename', activeCollection)}
+                    >
+                      <Pencil aria-hidden="true" />
+                      {t('renameCollectionTitle')}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => setCollectionToDelete(activeCollection)}
+                      variant="destructive"
+                    >
+                      <Trash2 aria-hidden="true" />
+                      {t('deleteCollection')}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : undefined
+            }
+            description={
+              activeCollection ? t('placeCount', { count: scopePlaces.length }) : undefined
+            }
+            eyebrow={t('collectionEyebrow')}
+            title={activeCollection?.name ?? t('collectionEyebrow')}
+            titleFont="journal"
+          />
+        </div>
+      ) : (
+        <PageHeader
+          actions={
+            // A phone already adds a place from the + at the centre of its bottom bar.
+            <Button className="max-md:hidden" onClick={() => setAddOpen(true)}>
+              <Plus aria-hidden="true" data-icon="inline-start" />
+              {t('addPlace')}
+            </Button>
+          }
+          description={t('description')}
+          eyebrow={t('eyebrow')}
+          title={t('title')}
+          titleFont="journal"
+        />
+      )}
 
       {error ? (
         <Alert role="alert" variant="destructive">
@@ -764,6 +832,32 @@ export function SavedPlacesManager() {
           icon={<CircleAlert aria-hidden="true" />}
           kind="error"
           title={t('loadError')}
+        />
+      ) : collectionMode && !activeCollection ? (
+        <PageState
+          actions={
+            <Button nativeButton={false} render={<Link href="/saved" />} variant="outline">
+              {t('backToSavedAction')}
+            </Button>
+          }
+          description={t('collectionNotFoundDescription')}
+          headingLevel={2}
+          icon={<Icons.Saved aria-hidden="true" />}
+          kind="empty"
+          title={t('collectionNotFoundTitle')}
+        />
+      ) : collectionMode && activeCollection && scopePlaces.length === 0 ? (
+        <PageState
+          actions={
+            <Button nativeButton={false} render={<Link href="/saved" />} variant="outline">
+              {t('backToSavedAction')}
+            </Button>
+          }
+          description={t('collectionEmptyHint')}
+          headingLevel={2}
+          icon={<FolderPlus aria-hidden="true" />}
+          kind="empty"
+          title={t('collectionEmptyTitle', { name: activeCollection.name })}
         />
       ) : savedPlaces.length === 0 ? (
         // Collections and category filters are inert with nothing to filter yet,
@@ -793,9 +887,9 @@ export function SavedPlacesManager() {
             />
           )}
 
-          <SavedReadyForTrip nameOf={getPlaceName} saved={savedPlaces} />
+          {collectionMode ? null : <SavedReadyForTrip nameOf={getPlaceName} saved={savedPlaces} />}
 
-          {collections.length || !small ? (
+          {!collectionMode && (collections.length || !small) ? (
             <section aria-labelledby="saved-collections" className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-lg font-semibold" id="saved-collections">
@@ -817,21 +911,17 @@ export function SavedPlacesManager() {
                     savedPlace.collections.some((item) => item.id === collection.id),
                   );
                   const cover = members.find((member) => member.place.kind === 'provider');
-                  const active = activeCollectionId === collection.id;
                   return (
-                    <button
-                      aria-pressed={active}
+                    // A collection opens as its own page rather than filtering
+                    // the grid below: it is a place to return to, with an
+                    // address. Focus draws inside the cover so the scroller
+                    // never clips it.
+                    <Link
                       className="group/collection flex w-40 shrink-0 snap-start flex-col gap-2 text-left outline-none"
+                      href={`/saved/collections/${collection.id}`}
                       key={collection.id}
-                      onClick={() => setActiveCollectionId(active ? null : collection.id)}
-                      type="button"
                     >
-                      <span
-                        className={cn(
-                          'grid aspect-[4/5] w-full grid-cols-2 grid-rows-[2fr_1fr] gap-0.5 overflow-hidden rounded-[var(--radius-xl)] ring-offset-2 ring-offset-background transition-shadow duration-[var(--motion-standard)] group-focus-visible/collection:ring-3 group-focus-visible/collection:ring-ring/50',
-                          active && 'ring-3 ring-brand',
-                        )}
-                      >
+                      <span className="relative grid aspect-[4/5] w-full grid-cols-2 grid-rows-[2fr_1fr] gap-0.5 overflow-hidden rounded-[var(--radius-xl)] after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:transition-shadow after:duration-[var(--motion-standard)] group-hover/collection:after:shadow-[inset_0_0_0_2px_var(--color-border-strong)] group-focus-visible/collection:after:shadow-[inset_0_0_0_3px_var(--color-ring)]">
                         <span className="relative col-span-2">
                           {cover ? (
                             <PlaceMedia
@@ -865,7 +955,7 @@ export function SavedPlacesManager() {
                           {t('placeCount', { count: collection.placeCount })}
                         </span>
                       </span>
-                    </button>
+                    </Link>
                   );
                 })}
                 {collections.length ? null : (
@@ -882,30 +972,24 @@ export function SavedPlacesManager() {
             </section>
           ) : null}
 
-          <section aria-labelledby="saved-everything" className="space-y-4">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2">
+          <section
+            aria-label={collectionMode ? activeCollection?.name : undefined}
+            aria-labelledby={collectionMode ? undefined : 'saved-everything'}
+            className="space-y-4"
+          >
+            {collectionMode ? null : (
+              <div className="flex flex-wrap items-end justify-between gap-3">
                 <h2
                   className="font-journal text-[2rem] leading-[1] font-normal"
                   id="saved-everything"
                 >
-                  {activeCollection?.name ?? t('everything')}
+                  {t('everything')}
                 </h2>
-                {activeCollection ? (
-                  <Button
-                    aria-label={t('editCollection', { name: activeCollection.name })}
-                    onClick={() => openCollectionEditor('rename', activeCollection)}
-                    size="icon-sm"
-                    variant="ghost"
-                  >
-                    <Pencil aria-hidden="true" />
-                  </Button>
-                ) : null}
+                <p className="text-sm text-muted-foreground">
+                  {t('placeCount', { count: visibleSavedPlaces.length })}
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground">
-                {t('placeCount', { count: visibleSavedPlaces.length })}
-              </p>
-            </div>
+            )}
             {small ? null : (
               <ChipGroup
                 className="interaction-scrollbar -mx-1 flex-nowrap overflow-x-auto px-1 pb-1"
@@ -913,7 +997,7 @@ export function SavedPlacesManager() {
                 onValueChange={([value]) => setCategoryFilter((value ?? 'all') as CategoryFilter)}
                 value={[categoryFilter]}
               >
-                {categoryFilters.map((filter) => (
+                {presentCategoryFilters.map((filter) => (
                   <Chip key={filter} value={filter}>
                     {t(`categories.${filter}`)}
                   </Chip>
@@ -952,7 +1036,7 @@ export function SavedPlacesManager() {
             )}
           </section>
 
-          {small ? (
+          {small && !collectionMode ? (
             <section className="space-y-2 rounded-[var(--radius-xl)] border border-status-warning/25 bg-surface-tint p-5">
               <h2 className="font-semibold">{t('growTitle')}</h2>
               <p className="text-sm leading-relaxed text-muted-foreground">
@@ -961,7 +1045,7 @@ export function SavedPlacesManager() {
             </section>
           ) : null}
 
-          {rediscover ? (
+          {rediscover && !collectionMode ? (
             <section
               aria-labelledby="saved-rediscover"
               className="flex flex-wrap items-center gap-4 rounded-[var(--radius-xl)] border border-status-warning/25 bg-surface-tint p-5"

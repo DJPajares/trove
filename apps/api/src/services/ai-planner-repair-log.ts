@@ -17,7 +17,7 @@ export const AI_PLANNER_REPAIR_CODES = [
   'reference_cleared',
   'destination_repaired',
   'date_range_repaired',
-  'duration_tier_defaulted',
+  'duration_defaulted',
   'exact_time_relaxed',
   'duration_provenance_relaxed',
   'must_go_relaxed',

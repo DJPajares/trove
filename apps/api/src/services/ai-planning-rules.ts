@@ -31,7 +31,7 @@ export type AiPlannerRuleIssueCode =
   | 'invalid_evidence'
   | 'invented_exact_time'
   | 'missing_assumption'
-  | 'missing_duration_tier'
+  | 'missing_duration'
   | 'overlapping_items'
   | 'too_many_days'
   | 'too_many_real_place_items'
@@ -81,7 +81,7 @@ function plannerDate(value: string) {
 
 export function resolveAiPlannerDateRange(
   request: AiPlannerNormalizedRequest,
-  selectedDurationDays: 3 | 5 | 7 | null,
+  selectedDurationDays: number | null,
   generationDate: Date | string,
   maxItineraryDays = plannerContractMaxDays(),
 ) {
@@ -97,7 +97,8 @@ export function resolveAiPlannerDateRange(
     };
   }
 
-  if (!selectedDurationDays) throw new AiPlannerRulesError('missing_duration_tier');
+  if (!selectedDurationDays) throw new AiPlannerRulesError('missing_duration');
+  if (selectedDurationDays > maxItineraryDays) throw new AiPlannerRulesError('too_many_days');
 
   let minimumStart = addDays(parseGenerationDate(generationDate), 14);
   if (request.datePreference.kind === 'flexible' && request.datePreference.earliestStartDate) {
@@ -332,6 +333,12 @@ function modelProposalRuleIssues(proposal: AiPlannerModelProposal, maxItineraryD
       issues.push({ code: 'invalid_date_range', path: ['normalizedRequest', 'datePreference'] });
     }
   }
+  if (
+    request.datePreference.kind !== 'exact' &&
+    proposal.selectedDurationDays !== null &&
+    proposal.selectedDurationDays > maxItineraryDays
+  )
+    issues.push({ code: 'too_many_days', path: ['selectedDurationDays'] });
   const candidates = new Set(proposal.places.map((place) => place.id));
   const destinationIntents = new Set(request.destinations.map((destination) => destination.id));
   const constraints = new Map(request.constraints.map((constraint) => [constraint.id, constraint]));
@@ -346,7 +353,7 @@ function modelProposalRuleIssues(proposal: AiPlannerModelProposal, maxItineraryD
     issues.push({ code: 'invalid_contract', path: ['selectedDurationDays'] });
   }
   if (request.datePreference.kind !== 'exact' && proposal.selectedDurationDays === null) {
-    issues.push({ code: 'missing_duration_tier', path: ['selectedDurationDays'] });
+    issues.push({ code: 'missing_duration', path: ['selectedDurationDays'] });
   }
 
   proposal.destinations.forEach((destination, index) => {

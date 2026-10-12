@@ -4,6 +4,14 @@ import type { AiPlanningDraft, AiPlanningDraftItem, AiPlanningSession } from './
 
 export type AiPlanningReviewPageState = 'error' | 'loading' | 'redirecting' | 'reviewing';
 
+/** An in-flight correction belongs to this revision, even if suggestions refresh. */
+export function preserveAiPlanningCountrySelection(
+  editedRevision: string | null,
+  session: Pick<AiPlanningSession, 'id' | 'draftRevision'>,
+) {
+  return editedRevision === `${session.id}:${session.draftRevision}`;
+}
+
 export function aiPlanningCountriesReviewed(session: AiPlanningSession, countries: string[]) {
   return (
     session.countriesReviewedRevision === session.draftRevision &&
@@ -83,6 +91,15 @@ export function aiPlanningAssumptionMessageValues(
       ? []
       : [String(assumption.value)];
 
+  const assumptionValues =
+    assumption.code === 'country_inferred'
+      ? inferredValues.map(
+          (code) =>
+            (/^[A-Z]{2}$/.test(code)
+              ? new Intl.DisplayNames(locale, { type: 'region' }).of(code)
+              : null) ?? code,
+        )
+      : inferredValues;
   const assumedDates = assumption.code === 'dates_defaulted' ? inferredValues : [];
 
   return {
@@ -100,7 +117,7 @@ export function aiPlanningAssumptionMessageValues(
         ? assumption.value
         : draft.trip.pace,
     startDate: assumedDates[0] ?? draft.trip.startDate,
-    value: inferredValues.length ? listFormatter.format(inferredValues) : '',
+    value: assumptionValues.length ? listFormatter.format(assumptionValues) : '',
   };
 }
 
@@ -117,6 +134,7 @@ export function activeAiPlanningAssumptions(draft: AiPlanningDraft) {
 
   return draft.assumptions.filter(
     (assumption) =>
+      assumption.code === 'country_inferred' ||
       assumption.code === 'interest_inferred' ||
       assumption.code === 'date_year_inferred' ||
       assumption.code === 'optional_destination_omitted' ||

@@ -61,7 +61,7 @@ test('missing duration tiers fail instead of allowing the model to invent dates'
 
   expect(() =>
     resolveAiPlannerDateRange(proposal.normalizedRequest, null, '2026-08-30'),
-  ).toThrowError('missing_duration_tier');
+  ).toThrowError('missing_duration');
 });
 
 test('flexible date windows constrain the deterministic Friday selection', () => {
@@ -317,4 +317,44 @@ test('dangling references, missing assumptions, and unsupported versions fail sa
 
   const version = { ...explicitDraft(), schemaVersion: 99 };
   expect(issueCodes(validateAiPlannerDraft(version))).toContain('unsupported_schema_version');
+});
+
+test.each([8, 10, 14, 20, 30])(
+  'missing dates retain %i inclusive days without a duration tier',
+  (days) => {
+    const request = missingDetailsProposal().normalizedRequest;
+    const dates = resolveAiPlannerDateRange(request, days, '2026-08-30', days);
+    expect((Date.parse(dates.endDate) - Date.parse(dates.startDate)) / 86_400_000 + 1).toBe(days);
+    expect(() => resolveAiPlannerDateRange(request, days + 1, '2026-08-30', days)).toThrow(
+      'too_many_days',
+    );
+  },
+);
+
+test('changing only centralized Paid configuration permits a thirty-day contract', async () => {
+  const { SUBSCRIPTION_PLANS, plannerContractMaxDays } =
+    await import('../src/services/plan-entitlements.js');
+  const { buildAiPlannerContext } = await import('../src/services/ai-planner-prompt.js');
+  const descriptor = Object.getOwnPropertyDescriptor(
+    SUBSCRIPTION_PLANS.paid.aiPlanner,
+    'maxItineraryDays',
+  )!;
+  try {
+    Object.defineProperty(SUBSCRIPTION_PLANS.paid.aiPlanner, 'maxItineraryDays', { value: 30 });
+    expect(plannerContractMaxDays()).toBe(30);
+    expect(
+      buildAiPlannerContext({ generationDate: new Date('2026-08-30'), homeLocation: null })
+        .maxItineraryDays,
+    ).toBe(30);
+    const proposal = missingDetailsProposal();
+    proposal.selectedDurationDays = 30;
+    expect(validateAiPlannerModelProposal(proposal).success).toBe(true);
+    const dates = resolveAiPlannerDateRange(proposal.normalizedRequest, 30, '2026-08-30');
+    expect((Date.parse(dates.endDate) - Date.parse(dates.startDate)) / 86_400_000 + 1).toBe(30);
+    expect(() => resolveAiPlannerDateRange(proposal.normalizedRequest, 31, '2026-08-30')).toThrow(
+      'too_many_days',
+    );
+  } finally {
+    Object.defineProperty(SUBSCRIPTION_PLANS.paid.aiPlanner, 'maxItineraryDays', descriptor);
+  }
 });

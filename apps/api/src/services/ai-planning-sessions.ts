@@ -557,6 +557,7 @@ export async function createAiPlanningSession(
     return transaction.aiPlanningSession.create({
       data: {
         expiresAt: new Date(now.getTime() + AI_PLANNING_SESSION_TTL_MS),
+        draftMaxDays: entitlement.limits.maxItineraryDays,
         ownerId,
         rawPrompt: prompt,
         runs: { create: reservedRun },

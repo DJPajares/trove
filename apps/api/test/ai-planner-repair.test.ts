@@ -217,7 +217,7 @@ describe('repairAiPlannerModelProposal', () => {
     flexible.normalizedRequest.datePreference = { kind: 'missing' };
     flexible.selectedDurationDays = null;
     repairAiPlannerModelProposal(flexible);
-    expect(flexible.selectedDurationDays).toBe(3);
+    expect(flexible.selectedDurationDays).toBe(2);
   });
 });
 

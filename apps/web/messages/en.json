@@ -412,7 +412,7 @@
       "cancel": "Cancel planning",
       "startOver": "Start over",
       "cancelling": "Cancelling…",
-      "cancelled": "Planning cancelled. No trip was created.",
+      "cancelled": "Planning cancelled. Your brief is ready to edit or try again.",
       "generating": {
         "label": "Building your itinerary",
         "hints": {
@@ -529,6 +529,7 @@
         "descriptionHint": "We drafted this from your request. Edit it, or leave it as is — it saves to the trip when you create it.",
         "descriptionSaving": "Saving description…",
         "assumptionCodes": {
+          "country_inferred": "We suggested {value} from the places in your plan. Check the countries before creating your trip.",
           "dates_defaulted": "You didn't provide exact dates, so we chose {startDate} to {endDate} from your requested trip length.",
           "date_year_inferred": "You didn't give a year, so we used {value} for these dates.",
           "destination_inferred": "You didn't choose a destination, so we suggested {value} from your request.",

@@ -18,6 +18,7 @@ import {
   aiPlanningPrompts,
   ambiguousModelProposal,
   compactModelProposal,
+  withFixtureDayCoverage,
   contradictoryDraft,
   explicitModelProposal,
   missingDetailsProposal,
@@ -148,7 +149,10 @@ async function evaluate(options: {
     async generateStructured<OUTPUT>(request: AiStructuredGenerationRequest<OUTPUT>) {
       prompts.push(request.prompt);
       if (options.providerFails) throw new AiGenerationError('provider_unavailable', METADATA);
-      return { metadata: METADATA, output: compactModelProposal(options.proposal) as OUTPUT };
+      return {
+        metadata: METADATA,
+        output: compactModelProposal(withFixtureDayCoverage(options.proposal)) as OUTPUT,
+      };
     },
   };
 

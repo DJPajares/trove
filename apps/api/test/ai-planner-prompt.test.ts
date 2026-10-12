@@ -1,7 +1,6 @@
 import {
   AI_PLANNER_MAX_REAL_PLACE_ITEMS,
   AI_PLANNER_MAX_TRIP_DESCRIPTION,
-  AI_PLANNER_TRIP_LENGTH_TIERS,
   aiPlannerNormalizedRequestSchema,
 } from '@trove/types';
 import { expect, test } from 'vitest';
@@ -48,7 +47,6 @@ test('the planner context resolves every default the model would otherwise inven
     maxRealPlaceItems: AI_PLANNER_MAX_REAL_PLACE_ITEMS,
     maxTripDescription: AI_PLANNER_MAX_TRIP_DESCRIPTION,
     naming: { tone: 'understated', toneBrief: AI_PLANNER_NAME_TONES.understated },
-    tripLengthTiers: AI_PLANNER_TRIP_LENGTH_TIERS,
   });
 });
 
@@ -165,4 +163,18 @@ test('the prompt preserves separate occurrences and optional destinations', () =
   );
   expect(prompt).toContain('24-48 hour tailoring is elapsed time');
   expect(prompt).toContain('Optional destinations may be omitted');
+});
+
+test('duration instructions use the entitlement and preserve requested weeks without legacy tiers', () => {
+  const plannerContext = buildAiPlannerContext({
+    generationDate: new Date('2026-08-30'),
+    homeLocation: null,
+    maxItineraryDays: 30,
+  });
+  const prompt = buildAiPlannerPrompt('Make this 2 weeks in New Zealand', plannerContext);
+  expect(plannerContext).not.toHaveProperty('tripLengthTiers');
+  expect(prompt).not.toContain('3, 5, or 7');
+  expect(prompt).toContain('converting weeks to days');
+  expect(prompt).toContain('never shorten it to fit the allowance');
+  expect(prompt).toContain('"maxItineraryDays":30');
 });

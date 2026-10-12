@@ -1,6 +1,6 @@
 # AI place reconciliation regression — 2026-10-12
 
-The unchanged traveller prompt is retained in `apps/api/test/fixtures/south-island-planner.json`. It requests two weeks without exact dates; the current planner contract selects a 3-, 5-, or 7-day tier in this case. Both captured proposals therefore contain seven days. This fix does not change date/duration policy.
+The unchanged traveller prompt is retained in `apps/api/test/fixtures/south-island-planner.json`. These historical captures predate the entitlement-based duration fix: the former 3-, 5-, or 7-day schema shortened the undated two-week request to seven days. The reconciliation fixture now explicitly requests seven days to exercise that captured output. Current generation preserves requested durations within the account’s allowance, including two weeks on Paid.
 
 ## Reproduction and results
 

@@ -3,7 +3,6 @@ import { z } from 'zod';
 
 export const AI_PLANNER_SCHEMA_VERSION = 1 as const;
 export const AI_PLANNER_MAX_REAL_PLACE_ITEMS = 24;
-export const AI_PLANNER_TRIP_LENGTH_TIERS = [3, 5, 7] as const;
 export const AI_PLANNER_MAX_TRIP_DESCRIPTION = 500;
 
 const identifierSchema = z.string().trim().min(1).max(120);
@@ -16,7 +15,12 @@ const schemaVersionField = z.literal(AI_PLANNER_SCHEMA_VERSION);
 const dayPartSchema = z.enum(['morning', 'afternoon', 'evening', 'anytime']);
 const prioritySchema = z.enum(['must_go', 'interested', 'maybe']).nullable();
 const paceSchema = z.enum(['relaxed', 'balanced', 'packed']);
-const tripLengthTierSchema = z.union([z.literal(3), z.literal(5), z.literal(7)]);
+const tripDurationSchema = z.number().int().positive();
+const countryCodeHintSchema = z
+  .string()
+  .regex(/^[A-Z]{2}$/)
+  .nullable()
+  .optional();
 
 export const aiPlannerDatePreferenceSchema = z.discriminatedUnion('kind', [
   z
@@ -84,6 +88,7 @@ export const aiPlannerAssumptionSchema = z
   .object({
     code: z.enum([
       'dates_defaulted',
+      'country_inferred',
       'date_year_inferred',
       'destination_inferred',
       'interest_inferred',
@@ -150,6 +155,9 @@ export const aiPlannerCandidatePlaceSchema = z
     id: identifierSchema,
     name: labelSchema,
     note: noteSchema,
+    countryCodeHint: countryCodeHintSchema.describe(
+      'ISO 3166-1 alpha-2 country of this place when known, otherwise null. A planning hint, never provider verification.',
+    ),
     searchName: labelSchema
       .nullable()
       .optional()
@@ -212,7 +220,7 @@ export const aiPlannerModelProposalSchema = z
     partySize: z.number().int().min(1).max(99).nullable(),
     places: z.array(aiPlannerCandidatePlaceSchema),
     schemaVersion: schemaVersionField,
-    selectedDurationDays: tripLengthTierSchema.nullable(),
+    selectedDurationDays: tripDurationSchema.nullable(),
     /**
      * Where the traveller said they are staying, as a candidate place and the
      * zero-based days whose nights are spent there. Never invented.
@@ -273,6 +281,7 @@ export const aiPlannerDraftPlaceSchema = z.discriminatedUnion('resolution', [
         )
         .optional(),
       id: identifierSchema,
+      countryCodeHint: countryCodeHintSchema,
       /** Provider-derived country context; older retained drafts may omit it. */
       countryCode: z
         .string()
@@ -297,6 +306,7 @@ export const aiPlannerDraftPlaceSchema = z.discriminatedUnion('resolution', [
       id: identifierSchema,
       name: labelSchema,
       note: noteSchema,
+      countryCodeHint: countryCodeHintSchema,
       resolution: z.literal('custom'),
       verification: z.enum(['unverified', 'not_checked']),
     })

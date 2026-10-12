@@ -502,3 +502,31 @@ export function customPlaceDraft(): AiPlannerDraft {
 export function emptyPlanScore() {
   return buildPlanScoreFromEvaluations({ days: [], mustGoIds: [], scheduledIds: [] });
 }
+
+/** Venue-focused fixtures need ordinary arrival/departure blocks for the full
+ * generation coverage contract. Explicit sparse-output tests opt out. */
+export function withFixtureDayCoverage(input: AiPlannerModelProposal): AiPlannerModelProposal {
+  const proposal = structuredClone(input);
+  const dates = proposal.normalizedRequest.datePreference;
+  const length =
+    dates.kind === 'exact'
+      ? (Date.parse(dates.endDate) - Date.parse(dates.startDate)) / 86_400_000 + 1
+      : (proposal.selectedDurationDays ?? 0);
+  for (let dayIndex = 0; dayIndex < length; dayIndex++) {
+    if (proposal.items.some((item) => item.dayIndex === dayIndex)) continue;
+    proposal.items.push({
+      ...explicitModelProposal().items[0]!,
+      id: `coverage:${dayIndex}`,
+      dayIndex,
+      blockType: 'free_time',
+      candidatePlaceId: null,
+      constraintIds: [],
+      origin: 'model',
+      priority: null,
+      durationProvenance: 'ai_estimated',
+      label: 'Time to explore',
+      schedule: { kind: 'day_part', dayPart: 'afternoon' },
+    });
+  }
+  return proposal;
+}

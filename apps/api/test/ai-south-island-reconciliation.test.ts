@@ -311,7 +311,9 @@ test('the exact South Island prompt reconciles its entire seven-day schedule wit
         baseDraftRevision: 0,
         maxItineraryDays: 20,
         deadlineAt: new Date(NOW.getTime() + 60_000),
-        prompt: fixture.prompt,
+        // This historical captured output is seven days; the explicit two-week
+        // request is now covered by duration tests and must no longer be shortened.
+        prompt: fixture.prompt.replace('Make this 2 weeks', 'Make this 7 days'),
         model: 'fixture',
         provider: 'vertex',
       };

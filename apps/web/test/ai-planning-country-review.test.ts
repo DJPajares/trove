@@ -78,3 +78,12 @@ test('a timezone change discovered during the country save does not hold back Ap
   const save = vi.fn().mockResolvedValue(reviewed);
   expect(await prepareAiPlanningCountriesForApply(current, ['VN'], save)).toEqual(reviewed);
 });
+
+test('background suggestions cannot replace a correction on the same revision', async () => {
+  const { preserveAiPlanningCountrySelection } = await import('../lib/ai-planning/review.ts');
+  const current = { id: 'draft', draftRevision: 2 };
+  expect(preserveAiPlanningCountrySelection('draft:2', current)).toBe(true);
+  expect(preserveAiPlanningCountrySelection('draft:1', current)).toBe(false);
+  expect(preserveAiPlanningCountrySelection('other:2', current)).toBe(false);
+  expect(preserveAiPlanningCountrySelection(null, current)).toBe(false);
+});

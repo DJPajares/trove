@@ -73,6 +73,10 @@ export function explicitAiTripDays(prompt: string): number | null {
   ))
     lengths.push(unitDays(match[1]!, match[2]!));
   for (const match of text.matchAll(
+    new RegExp(`\\bmake\\s+(?:this|it)(?:\\s+a)?\\s+(${NUMBER})[- ]+(days?|weeks?)\\b`, 'g'),
+  ))
+    lengths.push(unitDays(match[1]!, match[2]!));
+  for (const match of text.matchAll(
     /\b(?:from\s+)?(\d{4}-\d{2}-\d{2})\s*(?:to|through|until|-)\s*(\d{4}-\d{2}-\d{2})\b/g,
   )) {
     const start = date(match[1]!);
@@ -87,7 +91,11 @@ export function explicitAiTripDays(prompt: string): number | null {
 
 export function checkAiPlannerPromptDays(prompt: string, maxItineraryDays: number) {
   const days = explicitAiTripDays(prompt);
-  if (days !== null && days > maxItineraryDays)
+  if (days !== null) checkAiPlannerDurationDays(days, maxItineraryDays);
+}
+
+export function checkAiPlannerDurationDays(days: number, maxItineraryDays: number) {
+  if (days > maxItineraryDays)
     throw new EntitlementError('itinerary_day_limit_exceeded', 400, null, maxItineraryDays);
 }
 

@@ -19,39 +19,62 @@ function visitedDayPlaceIds(day: AiPlannerDraft['days'][number]) {
   ].filter((id): id is string => Boolean(id));
 }
 
-/** Provider addresses already resolved for this draft take precedence over labels. */
+/** Countries are trip metadata; only provider identity makes a Place verified. */
+function draftCountrySuggestions(
+  draft: AiPlannerDraft,
+  storedPlaces: readonly StoredDestinationPlace[] = [],
+) {
+  const places = new Map(draft.places.map((place) => [place.id, place]));
+  const addresses = new Map(storedPlaces.map((place) => [place.id, place.providerAddress]));
+  const codes: string[] = [];
+  const inferred = new Set<string>();
+  const add = (id: string) => {
+    const place = places.get(id);
+    if (!place) return;
+    const address = place.resolution === 'verified' ? addresses.get(place.placeId) : null;
+    const provider =
+      place.resolution === 'verified'
+        ? ((place.countryCode && timeZoneForCountry(place.countryCode)
+            ? place.countryCode
+            : null) ?? (address ? resolveDestinationCountryCode(address) : null))
+        : null;
+    const hint = place.countryCodeHint?.trim().toUpperCase();
+    const code =
+      provider ??
+      (hint && timeZoneForCountry(hint) ? hint : null) ??
+      resolveDestinationCountryCode(place.name);
+    if (!code) return;
+    if (!codes.includes(code)) codes.push(code);
+    if (!provider) inferred.add(code);
+  };
+  for (const destination of draft.trip.destinations) {
+    add(destination.placeRefId);
+    for (const day of draft.days.filter((day) => day.destinationId === destination.id))
+      for (const id of visitedDayPlaceIds(day)) add(id);
+  }
+  for (const day of draft.days.filter((day) => !day.destinationId))
+    for (const id of visitedDayPlaceIds(day)) add(id);
+  return { codes, inferred: [...inferred] };
+}
+
 export function suggestedDraftCountries(
   draft: AiPlannerDraft,
   storedPlaces: readonly StoredDestinationPlace[] = [],
 ): string[] {
-  const places = new Map(draft.places.map((place) => [place.id, place]));
-  const addresses = new Map(storedPlaces.map((place) => [place.id, place.providerAddress]));
-  const providerCountry = (id: string) => {
-    const place = places.get(id);
-    if (place?.resolution !== 'verified') return null;
-    if (place.countryCode && timeZoneForCountry(place.countryCode)) return place.countryCode;
-    const address = addresses.get(place.placeId);
-    return address ? resolveDestinationCountryCode(address) : null;
-  };
-  return [
-    ...new Set(
-      draft.trip.destinations.flatMap((destination) => {
-        const place = places.get(destination.placeRefId);
-        const code =
-          providerCountry(destination.placeRefId) ??
-          (place ? resolveDestinationCountryCode(place.name) : null);
-        const visited = draft.days
-          .filter((day) => day.destinationId === destination.id)
-          .flatMap(visitedDayPlaceIds)
-          .flatMap((id) => providerCountry(id) ?? []);
-        return [...(code ? [code] : []), ...visited];
-      }),
-    ),
-    ...draft.days
-      .filter((day) => !day.destinationId)
-      .flatMap(visitedDayPlaceIds)
-      .flatMap((id) => providerCountry(id) ?? []),
-  ].filter((code, index, all) => all.indexOf(code) === index);
+  return draftCountrySuggestions(draft, storedPlaces).codes;
+}
+
+/** Attach reviewable country assumptions after grounding and scheduling settle. */
+export function addDraftCountryAssumptions(draft: AiPlannerDraft) {
+  const { inferred } = draftCountrySuggestions(draft);
+  if (!inferred.length) return;
+  draft.assumptions.push({
+    id: 'system:countries-inferred',
+    code: 'country_inferred',
+    fieldPath: 'trip.countries',
+    value: inferred,
+    rationale: null,
+  });
 }
 
 /** Reads only already stored Place addresses; no provider lookup or draft mutation. */

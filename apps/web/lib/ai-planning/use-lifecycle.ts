@@ -18,6 +18,7 @@ import { composeAiPlanningBrief, type AiPlanningBriefSelection } from './brief';
 import { isAiPlanningPromptValid, isAiPlanningSessionGenerating } from './presentation';
 import { isAiPlanningSessionExpired, releasesMirroredAiPlanningSession } from './review';
 
+import { isAuthDeparting, subscribeAuthTransition } from '@/lib/auth/transition';
 import { queryKeys } from '@/lib/query/keys';
 
 const INITIAL_SESSION_POLL_MS = 3_000;
@@ -58,11 +59,54 @@ export function useAiPlanningLifecycle(
   const [operation, setOperation] = useState<AiPlanningOperation>('idle');
   const [requestError, setRequestError] = useState<string | null>(null);
   const [cancelled, setCancelled] = useState(false);
+  const [retainedBriefExpiresAt, setRetainedBriefExpiresAt] = useState<string | null>(null);
   const attempt = useRef(0);
   const pendingPlanningAttempt = useRef<PendingPlanningAttempt | null>(null);
-  const cancelledSessionIds = useRef(new Set<string>());
+  const retiredSessionIds = useRef(new Set<string>());
   const promptTouched = useRef(false);
   const mirroredRecoveryId = useRef<string | null>(null);
+  const pendingCancellation = useRef<{ clearBrief: boolean; runAttempt: number } | null>(null);
+  const cancellingSessionId = useRef<string | null>(null);
+  const cancelSessionRef = useRef<(next: AiPlanningSession) => Promise<void>>(
+    async () => undefined,
+  );
+
+  const clearBrief = useCallback(() => {
+    setPromptValue('');
+    setBriefSelectionsValue([]);
+    setRetainedBriefExpiresAt(null);
+    promptTouched.current = false;
+    pendingPlanningAttempt.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (enabled) return;
+    attempt.current += 1;
+    pendingCancellation.current = null;
+    cancellingSessionId.current = null;
+    retiredSessionIds.current.clear();
+    mirroredRecoveryId.current = null;
+    clearBrief();
+    setSession(null);
+    setOperation('idle');
+    setCancelled(false);
+    setRequestError(null);
+  }, [enabled, clearBrief]);
+
+  useEffect(
+    () =>
+      subscribeAuthTransition(() => {
+        if (!isAuthDeparting()) return;
+        attempt.current += 1;
+        pendingCancellation.current = null;
+        cancellingSessionId.current = null;
+        clearBrief();
+        setSession(null);
+        setOperation('idle');
+        setCancelled(false);
+      }),
+    [clearBrief],
+  );
 
   const recoveryQuery = useQuery({
     enabled,
@@ -79,11 +123,14 @@ export function useAiPlanningLifecycle(
 
   const discardExpiredSession = useCallback(
     (expiredSessionId: string) => {
+      attempt.current += 1;
+      retiredSessionIds.current.add(expiredSessionId);
+      pendingCancellation.current = null;
+      cancellingSessionId.current = null;
       setSession(null);
-      setPromptValue('');
-      setBriefSelectionsValue([]);
-      promptTouched.current = false;
-      pendingPlanningAttempt.current = null;
+      clearBrief();
+      setOperation('idle');
+      setCancelled(false);
       queryClient.setQueryData(queryKeys.aiPlanningSession(expiredSessionId), { session: null });
       queryClient.setQueryData(queryKeys.aiPlanningRecovery(), { session: null });
       setRequestError('session_expired');
@@ -91,12 +138,16 @@ export function useAiPlanningLifecycle(
       // request-time scrub instead of waiting for the maintenance sweep.
       void fetchAiPlanningSession(expiredSessionId).catch(() => undefined);
     },
-    [queryClient],
+    [clearBrief, queryClient],
   );
 
   const publishSession = useCallback(
     (next: AiPlanningSession | null) => {
-      if (next && cancelledSessionIds.current.has(next.id)) return;
+      if (next && retiredSessionIds.current.has(next.id)) return;
+      if (next && pendingCancellation.current) {
+        void cancelSessionRef.current(next);
+        return;
+      }
       if (next && isAiPlanningSessionExpired(next)) {
         discardExpiredSession(next.id);
         return;
@@ -112,21 +163,27 @@ export function useAiPlanningLifecycle(
   }, [recoveryQuery.refetch]);
 
   useEffect(() => {
-    if (!recoveredSession || cancelledSessionIds.current.has(recoveredSession.id)) return;
+    if (
+      !enabled ||
+      isAuthDeparting() ||
+      !recoveredSession ||
+      retiredSessionIds.current.has(recoveredSession.id)
+    )
+      return;
     if (isAiPlanningSessionExpired(recoveredSession)) {
       discardExpiredSession(recoveredSession.id);
       return;
     }
-    setSession(recoveredSession);
+    publishSession(recoveredSession);
     // A recovered prompt is the traveller's own words coming back to them, but
     // it must never overwrite words they are in the middle of typing.
-    if (!promptTouched.current) {
+    if (!promptTouched.current && !pendingCancellation.current) {
       const recovered = recoveredSession.prompt ?? '';
       const brief = splitBriefRef.current?.(recovered) ?? { selections: [], text: recovered };
       setPromptValue(brief.text);
       setBriefSelectionsValue(brief.selections);
     }
-  }, [discardExpiredSession, recoveredSession]);
+  }, [discardExpiredSession, enabled, publishSession, recoveredSession]);
 
   useEffect(() => {
     if (!session) return;
@@ -146,6 +203,27 @@ export function useAiPlanningLifecycle(
     };
   }, [discardExpiredSession, session]);
 
+  useEffect(() => {
+    if (!retainedBriefExpiresAt) return;
+    const expireBrief = () => {
+      if (Date.parse(retainedBriefExpiresAt) > Date.now()) return;
+      clearBrief();
+      setCancelled(false);
+      setRequestError('session_expired');
+    };
+    const timer = window.setTimeout(
+      expireBrief,
+      Math.max(0, Date.parse(retainedBriefExpiresAt) - Date.now()),
+    );
+    window.addEventListener('focus', expireBrief);
+    document.addEventListener('visibilitychange', expireBrief);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('focus', expireBrief);
+      document.removeEventListener('visibilitychange', expireBrief);
+    };
+  }, [clearBrief, retainedBriefExpiresAt]);
+
   // The seeding above only copies recovery in. This copies it *out* again: when
   // recovery drops the session this hook was following — Apply empties that cache
   // — the mirror has to let go with it. `cancel` already pairs the two by hand;
@@ -157,19 +235,20 @@ export function useAiPlanningLifecycle(
     if (operation !== 'idle') return;
     const previousRecoveredId = mirroredRecoveryId.current;
     mirroredRecoveryId.current = recoveredSessionId;
-    setSession((current) =>
-      releasesMirroredAiPlanningSession(current, previousRecoveredId, recoveredSessionId)
-        ? null
-        : current,
-    );
-  }, [operation, recoveredSessionId]);
+    if (releasesMirroredAiPlanningSession(session, previousRecoveredId, recoveredSessionId)) {
+      if (session) retiredSessionIds.current.add(session.id);
+      setSession(null);
+      clearBrief();
+    }
+  }, [operation, recoveredSessionId, session, clearBrief]);
 
   // Create reserves its session before the POST completes. Follow that one
   // session through recovery and stage reads; schedule the next read only after
   // the previous read has settled, so slow responses cannot pile up.
   useEffect(() => {
     const active = session && isAiPlanningSessionGenerating(session.status);
-    if (!enabled || (!active && !(operation === 'starting' && !session))) return;
+    if (!enabled || (!active && !(['starting', 'cancelling'].includes(operation) && !session)))
+      return;
     let current = true;
     let timer: number | undefined;
     const startedAt = Date.now();
@@ -181,10 +260,7 @@ export function useAiPlanningLifecycle(
         if (current && active) {
           const code = error instanceof AiPlanningApiError ? error.code : 'request_failed';
           if (code === 'session_expired') {
-            publishSession(null);
-            setPromptValue('');
-            setBriefSelectionsValue([]);
-            promptTouched.current = false;
+            discardExpiredSession(session.id);
           }
           setRequestError(code);
         }
@@ -204,6 +280,7 @@ export function useAiPlanningLifecycle(
       if (timer !== undefined) window.clearTimeout(timer);
     };
   }, [
+    discardExpiredSession,
     enabled,
     operation,
     publishSession,
@@ -234,6 +311,7 @@ export function useAiPlanningLifecycle(
     pendingPlanningAttempt.current = null;
     promptTouched.current = true;
     setPromptValue(value);
+    setRetainedBriefExpiresAt(null);
     setCancelled(false);
     setRequestError(null);
   }, []);
@@ -242,6 +320,7 @@ export function useAiPlanningLifecycle(
     pendingPlanningAttempt.current = null;
     promptTouched.current = true;
     setBriefSelectionsValue(value);
+    setRetainedBriefExpiresAt(null);
     setCancelled(false);
     setRequestError(null);
   }, []);
@@ -259,6 +338,7 @@ export function useAiPlanningLifecycle(
     setCancelled(false);
     setRequestError(null);
     setOperation('starting');
+    setRetainedBriefExpiresAt(null);
     const trimmedPrompt = composedPrompt.trim();
     const currentAttempt = {
       prompt: trimmedPrompt,
@@ -284,47 +364,96 @@ export function useAiPlanningLifecycle(
             idempotencyKey,
           )
         : await createAiPlanningSession(trimmedPrompt, idempotencyKey);
-      if (attempt.current === requestAttempt) {
+      if (pendingCancellation.current?.runAttempt === requestAttempt) {
+        await cancelSessionRef.current(result.session);
+      } else if (attempt.current === requestAttempt) {
         pendingPlanningAttempt.current = null;
         publishSession(result.session);
       }
     } catch (error) {
-      if (attempt.current === requestAttempt) {
+      // The request may have reserved a session even if its response was lost.
+      if (
+        pendingCancellation.current?.runAttempt === requestAttempt &&
+        !cancellingSessionId.current
+      ) {
+        try {
+          const reserved = await recover();
+          if (reserved) await cancelSessionRef.current(reserved);
+          else {
+            pendingCancellation.current = null;
+            pendingPlanningAttempt.current = null;
+            setCancelled(true);
+            setOperation('idle');
+          }
+        } catch {
+          // Keep polling and keep retry disabled until reservation state is known.
+          setRequestError('request_failed');
+        }
+      } else if (attempt.current === requestAttempt) {
         setRequestError(error instanceof AiPlanningApiError ? error.code : 'request_failed');
       }
     } finally {
       if (attempt.current === requestAttempt) setOperation('idle');
       await refreshAvailability();
     }
-  }, [canGenerate, composedPrompt, publishSession, refreshAvailability, session]);
+  }, [canGenerate, composedPrompt, publishSession, recover, refreshAvailability, session]);
 
-  const cancel = useCallback(async () => {
-    const sessionId = session?.id;
-    if (!sessionId || operation === 'cancelling') return;
-    attempt.current += 1;
-    setOperation('cancelling');
-    setRequestError(null);
-
-    try {
-      await cancelAiPlanningSession(sessionId);
-    } catch (error) {
-      setRequestError(error instanceof AiPlanningApiError ? error.code : 'request_failed');
+  const cancelSession = useCallback(
+    async (next: AiPlanningSession) => {
+      const sessionId = next.id;
+      if (!pendingCancellation.current || cancellingSessionId.current) return;
+      cancellingSessionId.current = sessionId;
+      const cancellationAttempt = attempt.current;
+      try {
+        await cancelAiPlanningSession(sessionId);
+      } catch (error) {
+        if (attempt.current !== cancellationAttempt) return;
+        pendingCancellation.current = null;
+        cancellingSessionId.current = null;
+        setRequestError(error instanceof AiPlanningApiError ? error.code : 'request_failed');
+        setOperation('idle');
+        void recover();
+        return;
+      }
+      if (attempt.current !== cancellationAttempt) return;
+      const reset = pendingCancellation.current?.clearBrief;
+      retiredSessionIds.current.add(sessionId);
+      queryClient.removeQueries({ queryKey: queryKeys.aiPlanningSession(sessionId) });
+      queryClient.setQueryData(queryKeys.aiPlanningRecovery(), { session: null });
+      setSession(null);
+      pendingPlanningAttempt.current = null;
+      pendingCancellation.current = null;
+      cancellingSessionId.current = null;
+      if (reset) clearBrief();
+      else {
+        promptTouched.current = true;
+        setRetainedBriefExpiresAt(next.expiresAt);
+      }
+      setCancelled(!reset);
       setOperation('idle');
-      return;
-    }
+      await refreshAvailability();
+    },
+    [clearBrief, queryClient, recover, refreshAvailability],
+  );
+  cancelSessionRef.current = cancelSession;
 
-    cancelledSessionIds.current.add(sessionId);
-    queryClient.removeQueries({ queryKey: queryKeys.aiPlanningSession(sessionId) });
-    queryClient.setQueryData(queryKeys.aiPlanningRecovery(), { session: null });
-    setSession(null);
-    pendingPlanningAttempt.current = null;
-    setPromptValue('');
-    setBriefSelectionsValue([]);
-    promptTouched.current = false;
-    setCancelled(true);
-    setOperation('idle');
-    await refreshAvailability();
-  }, [operation, queryClient, refreshAvailability, session?.id]);
+  const cancel = useCallback(
+    async (clear = false) => {
+      if (pendingCancellation.current) return;
+      if (!session && operation !== 'starting') {
+        if (clear) clearBrief();
+        return;
+      }
+      const runAttempt = attempt.current;
+      attempt.current += 1;
+      pendingCancellation.current = { clearBrief: clear, runAttempt };
+      setOperation('cancelling');
+      setRequestError(null);
+      if (session) await cancelSession(session);
+      // Before Create returns, recovery or its eventual response supplies the ID.
+    },
+    [cancelSession, clearBrief, operation, session],
+  );
 
   return {
     availability,
@@ -343,6 +472,7 @@ export function useAiPlanningLifecycle(
     session,
     setBriefSelections,
     setPrompt,
+    startOver: () => cancel(true),
     visibleError,
   };
 }

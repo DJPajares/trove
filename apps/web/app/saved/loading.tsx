@@ -1,25 +1,3 @@
-import { getTranslations } from 'next-intl/server';
-
-import { PageHeader } from '@/components/page-header';
-import { PageState } from '@/components/page-state';
-import { Button } from '@/components/ui/button';
-
-/** The same shell `SavedPlacesManager` renders, with only the places waiting. */
-export default async function SavedLoading() {
-  const t = await getTranslations('saved');
-
-  return (
-    <section className="mx-auto w-full max-w-6xl space-y-8">
-      <PageHeader
-        actions={
-          <Button disabled type="button">
-            {t('addPlace')}
-          </Button>
-        }
-        description={t('description')}
-        title={t('title')}
-      />
-      <PageState headingLevel={2} kind="loading" loadingShape="list" title={t('loading')} />
-    </section>
-  );
-}
+// The route boundary renders the page itself, so its header never changes
+// when data arrives. The page keeps skeletons for the parts that wait on data.
+export { default } from './page';

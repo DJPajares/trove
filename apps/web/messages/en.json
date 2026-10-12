@@ -214,11 +214,8 @@
       "planWithAi": "Plan with AI",
       "promptLabel": "Where to, and what matters?",
       "promptPlaceholder": "Tokyo and Kyoto in October: food, small museums, one work afternoon and time to wander.",
-      "promptHint": "A sentence is enough. Anything you leave out, Trove fills in and shows you first.",
-      "savedPlacesHint": "Your saved places are used where they fit.",
-      "examplesLabel": "Start from an idea",
-      "moreExamples": "More ideas",
-      "examplesUpdated": "New examples: {examples}.",
+      "promptHint": "Trove fills any gaps, uses your saved places where they fit, and shows you first.",
+      "examplesLabel": "Try",
       "exampleLabels": {
         "tokyoFood": "Tokyo food weekend",
         "costaRicaOutdoors": "Costa Rica outdoors",
@@ -247,23 +244,10 @@
         "queenstownAdventure": "Plan five active days around Queenstown for a solo traveller, with hiking, cycling, and one adventure activity. Keep one lighter day and offer alternatives for bad weather.",
         "vietnamFriends": "Plan seven days split between Hanoi and Ninh Binh for six friends. Mix food, history, and cycling, keep costs moderate, and leave room for different energy levels."
       },
-      "exampleDetails": {
-        "tokyoFood": "3 days · solo · ramen",
-        "costaRicaOutdoors": "7 days · two · wildlife",
-        "singaporeWork": "5 days · work and hawker food",
-        "lisbonBudget": "3 days · two · €70 a day",
-        "scottishRoadTrip": "7 days · four friends",
-        "barcelonaFamily": "5 days · family · beach",
-        "romePacked": "3 days · two · early starts",
-        "icelandPhotography": "5 days · two · road trip",
-        "beachEscape": "5 days · two · from Singapore",
-        "bangkokFood": "3 days · two friends · markets",
-        "queenstownAdventure": "5 days · solo · active",
-        "vietnamFriends": "7 days · six friends"
-      },
       "brief": {
-        "addTitle": "Add to your brief",
         "nudgesTitle": "Quick changes",
+        "more": "More",
+        "moreLabel": "More ways to add to your brief",
         "backgroundHint": "Your choices go with your words when you plan. Tap × to turn one off.",
         "chipValue": "{ingredient}: {value}",
         "remove": "Remove {name} from your brief",
@@ -361,12 +345,6 @@
           },
           "shorter": { "label": "Shorter trip", "sentence": "Make the trip a day or two shorter." }
         }
-      },
-      "gaps": {
-        "title": "How Trove fills the gaps",
-        "dates": "No exact dates? The trip starts on a Friday at least two weeks away.",
-        "times": "Times you give are kept. Other stops get a time of day, and an exact time where one fits.",
-        "review": "You see every guess before anything becomes a trip."
       },
       "credits": {
         "left": "{count, plural, one {# AI Planner credit left} other {# AI Planner credits left}}",

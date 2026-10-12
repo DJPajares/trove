@@ -26,6 +26,13 @@ export const aiPlanningBriefIngredients = [
 
 export type AiPlanningBriefIngredient = (typeof aiPlanningBriefIngredients)[number];
 
+/** The ingredients a first brief shows up front; the rest wait behind "More". */
+export const aiPlanningBriefPrimaryIngredients: readonly AiPlanningBriefIngredient[] = [
+  'when',
+  'who',
+  'pace',
+];
+
 /** What a regenerate most often asks for, each one a sentence beside the brief. */
 export const aiPlanningBriefNudges = [
   'moreFood',

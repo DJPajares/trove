@@ -1,16 +1,6 @@
 'use client';
 
-import {
-  CalendarRange,
-  Check,
-  ChevronUp,
-  Laptop,
-  Timer,
-  TrainFront,
-  Users,
-  X,
-  type LucideIcon,
-} from 'lucide-react';
+import { Check, ChevronUp, Plus, X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useId, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 
@@ -22,6 +12,7 @@ import {
   aiPlanningBriefIngredients,
   aiPlanningBriefNudges,
   aiPlanningBriefPicks,
+  aiPlanningBriefPrimaryIngredients,
   fixedAiPlanningBriefMatcher,
   splitAiPlanningBrief,
   templateAiPlanningBriefMatcher,
@@ -33,14 +24,6 @@ import { AI_PLANNING_PROMPT_MAX_LENGTH } from '@/lib/ai-planning/presentation';
 import * as Icons from '@/lib/icons';
 import { cn } from '@/lib/utils';
 
-const ingredientIcons: Record<AiPlanningBriefIngredient, LucideIcon> = {
-  mustSee: Icons.MustGo,
-  pace: Timer,
-  travel: TrainFront,
-  when: CalendarRange,
-  who: Users,
-  work: Laptop,
-};
 const selectionOrder: readonly string[] = [...aiPlanningBriefIngredients, ...aiPlanningBriefNudges];
 
 function isPickIngredient(key: string): key is AiPlanningBriefPickIngredient {
@@ -164,13 +147,19 @@ export function AiPlanningBriefField({
   const [places, setPlaces] = useState(
     () => selections.find((selection) => selection.key === 'mustSee')?.label ?? '',
   );
+  const [showAll, setShowAll] = useState(false);
   const selected = (key: string) => selections.find((selection) => selection.key === key) ?? null;
-  // Quick changes lead with When, but any choice the brief already carries is
-  // shown too: a choice that is sent must always be one the traveller can see.
-  const ingredients: readonly AiPlanningBriefIngredient[] =
-    mode === 'ingredients'
-      ? aiPlanningBriefIngredients
-      : aiPlanningBriefIngredients.filter((key) => key === 'when' || selected(key));
+  // A first brief leads with three ingredients and keeps the rest behind More;
+  // quick changes lead with When. Either way, any choice the brief already
+  // carries is shown too: a choice that is sent must always be one the
+  // traveller can see.
+  const leading: readonly AiPlanningBriefIngredient[] =
+    mode === 'ingredients' ? aiPlanningBriefPrimaryIngredients : ['when'];
+  const ingredients = aiPlanningBriefIngredients.filter(
+    (key) => (mode === 'ingredients' && showAll) || leading.includes(key) || selected(key),
+  );
+  const moreHidden =
+    mode === 'ingredients' && ingredients.length < aiPlanningBriefIngredients.length;
 
   function choose(key: string, next: AiPlanningBriefSelection | null) {
     const previous = selected(key);
@@ -203,13 +192,22 @@ export function AiPlanningBriefField({
           placeholder={placeholder}
           value={text}
         />
-        <div className="border-t border-border-subtle pt-2 pb-3">
-          <p className="px-5 text-[length:var(--text-metadata)] font-semibold text-muted-foreground">
-            {mode === 'ingredients' ? t('addTitle') : t('nudgesTitle')}
-          </p>
-          <div className="mt-1.5 flex scroll-px-4 gap-2 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] md:flex-wrap">
+        <div className="border-t border-border-subtle pt-3 pb-3">
+          {mode === 'nudges' ? (
+            <p className="mb-1.5 px-5 text-[length:var(--text-metadata)] font-semibold text-muted-foreground">
+              {t('nudgesTitle')}
+            </p>
+          ) : null}
+          <div
+            className={cn(
+              'flex scroll-px-4 gap-2 px-4 pb-0.5',
+              // A first brief has few enough chips to wrap; quick changes scroll.
+              mode === 'ingredients'
+                ? 'flex-wrap'
+                : 'overflow-x-auto [scrollbar-width:none] md:flex-wrap',
+            )}
+          >
             {ingredients.map((key) => {
-              const Icon = ingredientIcons[key];
               const choice = selected(key);
               const open = tray === key;
               const name = t(`ingredients.${key}`);
@@ -225,11 +223,6 @@ export function AiPlanningBriefField({
                     type="button"
                     variant="outline"
                   >
-                    <Icon
-                      aria-hidden="true"
-                      className={open ? 'text-current' : 'text-brand'}
-                      data-icon="inline-start"
-                    />
                     {name}
                     {open ? <ChevronUp aria-hidden="true" data-icon="inline-end" /> : null}
                   </Button>
@@ -249,7 +242,6 @@ export function AiPlanningBriefField({
                     onClick={() => setTray(open ? null : key)}
                     type="button"
                   >
-                    <Icon aria-hidden="true" className="size-4 shrink-0" />
                     <span className="truncate">{choice.label}</span>
                   </button>
                   <button
@@ -264,6 +256,19 @@ export function AiPlanningBriefField({
                 </span>
               );
             })}
+            {moreHidden ? (
+              <Button
+                aria-label={t('moreLabel')}
+                className={chipClass}
+                disabled={disabled}
+                onClick={() => setShowAll(true)}
+                type="button"
+                variant="outline"
+              >
+                <Plus aria-hidden="true" className="text-brand" data-icon="inline-start" />
+                {t('more')}
+              </Button>
+            ) : null}
             {mode === 'nudges'
               ? aiPlanningBriefNudges.map((key) => {
                   const on = Boolean(selected(key));

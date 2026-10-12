@@ -182,18 +182,21 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
               ) : null}
               {open && creationMode === 'manual' ? (
                 <>
-                  {/* The same sheet as the brief, so the two ways in read as one:
-                      back to the brief at the top, and the brief's way in offered
-                      where the brief offers this one. */}
+                  {/* The two ways in mirror each other: each is titled with the
+                      label that led to it, and offers the other where the other
+                      offers it - the footer's secondary button. */}
                   <SheetHeading
-                    back={{ label: t('aiPlanning.backToAi'), onClick: () => setCreationMode('ai') }}
                     description={t('createDescription')}
-                    title={t('createTitle')}
+                    title={t('aiPlanning.createManually')}
                   />
                   <TripForm
                     alternative={{
                       icon: <Icons.Ai aria-hidden="true" data-icon="inline-start" />,
-                      label: t('aiPlanning.planWithAi'),
+                      // A brief already written is kept across the switch, so the
+                      // way back says so rather than promising a fresh start.
+                      label: lifecycle.composedPrompt
+                        ? t('aiPlanning.backToBrief')
+                        : t('aiPlanning.planWithAi'),
                       onClick: () => setCreationMode('ai'),
                     }}
                     onCancel={() => setOpen(false)}

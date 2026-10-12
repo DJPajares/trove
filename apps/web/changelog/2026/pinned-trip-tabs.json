@@ -1,0 +1,9 @@
+{
+  "id": "pinned-trip-tabs",
+  "date": "2026-10-12",
+  "summaries": {
+    "en": [
+      "A trip's tabs now stay pinned on every section as you scroll, and sit flush at the top without rounded corners."
+    ]
+  }
+}

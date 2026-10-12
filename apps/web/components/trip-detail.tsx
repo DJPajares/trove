@@ -8,6 +8,7 @@ import { PageState } from '@/components/page-state';
 import { TripActionsProvider, TripActionFeedback } from '@/components/trip-actions-provider';
 import { TripDetailSkeleton } from '@/components/trip-detail-skeleton';
 import { TripHubBar } from '@/components/trip-hub/trip-hub-bar';
+import { TripNavigationSheet } from '@/components/trip-hub/trip-navigation-sheet';
 import { TripHubChapter } from '@/components/trip-hub/trip-hub-chapter';
 import { TripHubCover } from '@/components/trip-hub/trip-hub-cover';
 import { TripHubJourney } from '@/components/trip-hub/trip-hub-journey';
@@ -112,8 +113,10 @@ export function TripDetail({ planScoreEnabled }: Readonly<{ planScoreEnabled: bo
         {/* Phone: the cover, then a sheet that rises over it carrying the trip's
         row and its chapter. Desktop: the photograph and the chapter side by
         side, with the row beneath both. One order in the document either way. */}
-        <div className="-mx-[var(--gutter-inline-start)] -mt-8 lg:mx-0 lg:mt-0 lg:grid lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-x-5 lg:gap-y-4 lg:[grid-template-areas:'cover_chapter'_'bar_bar']">
-          <div className="lg:[grid-area:cover]">
+        {/* Flattened on a phone so the navigation stays pinned for the whole
+            page, not only while the cover is in view. */}
+        <div className="contents lg:grid lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-x-5 lg:gap-y-4 lg:[grid-template-areas:'cover_chapter'_'bar_bar']">
+          <div className="-mx-[var(--gutter-inline-start)] -mt-8 lg:mx-0 lg:mt-0 lg:[grid-area:cover]">
             <TripHubCover
               editorial={editorial}
               onCoverExpired={() => tripContext?.refresh()}
@@ -122,10 +125,10 @@ export function TripDetail({ planScoreEnabled }: Readonly<{ planScoreEnabled: bo
               trip={trip}
             />
           </div>
-          <div className="relative -mt-8 rounded-t-[var(--trip-sheet-radius)] bg-background px-[var(--gutter-inline-start)] pt-2 lg:mt-0 lg:rounded-none lg:bg-transparent lg:px-0 lg:pt-0 lg:[grid-area:bar]">
+          <TripNavigationSheet className="lg:mx-0 lg:mt-0 lg:rounded-none lg:bg-transparent lg:px-0 lg:pt-0 lg:[grid-area:bar]">
             <TripHubBar overview={overview} trip={trip} />
-          </div>
-          <div className="px-[var(--gutter-inline-start)] lg:flex lg:flex-col lg:px-0 lg:[grid-area:chapter]">
+          </TripNavigationSheet>
+          <div className="lg:flex lg:flex-col lg:[grid-area:chapter]">
             <TripHubChapter
               failed={!overview && Boolean(overviewQuery.error)}
               loading={overviewQuery.isPending}

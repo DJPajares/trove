@@ -2,7 +2,6 @@
 
 import { CircleAlert, Ellipsis } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 
@@ -10,14 +9,13 @@ import { TripActionFeedback, TripActionsProvider } from '@/components/trip-actio
 import { PageState } from '@/components/page-state';
 import { TripHubBar } from '@/components/trip-hub/trip-hub-bar';
 import { TripHubCover, TripHubCoverSkeleton } from '@/components/trip-hub/trip-hub-cover';
+import { TripNavigationSheet } from '@/components/trip-hub/trip-navigation-sheet';
 import { TripTabs } from '@/components/trip-tabs';
 import { useTripContext } from '@/components/trip-provider';
 import { Button } from '@/components/ui/button';
 import * as Icons from '@/lib/icons';
-import { tripSectionFromPathname } from '@/lib/trips/navigation';
 import { overviewLifecycle, tripHubStage } from '@/lib/trips/overview';
 import { useTripOverview } from '@/lib/trips/use-trip-overview';
-import { cn } from '@/lib/utils';
 
 type TripChromeSlots = {
   /** The section toolbar's leading edge: a screen's view control, or its guidance. */
@@ -38,7 +36,6 @@ export function TripChrome({
   tripId,
 }: Readonly<{ children: ReactNode; tripId: string }>) {
   const t = useTranslations('trips');
-  const pathname = usePathname();
   const context = useTripContext();
   const loadedTrip = context?.trip ?? null;
   const trip = loadedTrip
@@ -47,7 +44,6 @@ export function TripChrome({
   const overviewQuery = useTripOverview(tripId, Boolean(trip));
   const [leadingSlot, setLeadingSlot] = useState<HTMLElement | null>(null);
   const [actionsSlot, setActionsSlot] = useState<HTMLElement | null>(null);
-  const stickyNavigation = tripSectionFromPathname(pathname, tripId) === 'itinerary';
   const slots = useMemo<TripChromeSlots>(
     () => ({ actionsSlot, leadingSlot }),
     [actionsSlot, leadingSlot],
@@ -80,9 +76,10 @@ export function TripChrome({
 
   const content = (
     <div className="mx-auto w-full max-w-5xl">
-      {/* Flatten the mobile itinerary header so its sticky row is bounded by
-          the full planning section, rather than just the photograph. */}
-      <header className={cn(stickyNavigation && 'contents md:block')} data-slot="trip-chrome">
+      {/* Flatten the mobile header so the sticky navigation is bounded by the
+          whole section, rather than just the photograph. Every section keeps
+          its navigation in reach, not only the itinerary. */}
+      <header className="contents md:block" data-slot="trip-chrome">
         <div className="-mx-[var(--gutter-inline-start)] -mt-8 lg:mx-0 lg:mt-0">
           {trip ? (
             <TripHubCover
@@ -97,13 +94,7 @@ export function TripChrome({
             <TripHubCoverSkeleton label={t('titleLoading')} layout="section" />
           )}
         </div>
-        <div
-          className={cn(
-            'relative -mx-[var(--gutter-inline-start)] -mt-8 rounded-t-[var(--trip-sheet-radius)] bg-background px-[var(--gutter-inline-start)] pt-2 lg:mx-0 lg:mt-4 lg:rounded-none lg:px-0 lg:pt-0',
-            stickyNavigation &&
-              'sticky top-[calc(var(--safe-top)+var(--header-offset))] z-[var(--layer-sticky)] md:relative md:top-auto md:z-auto',
-          )}
-        >
+        <TripNavigationSheet className="lg:mx-0 lg:mt-4 lg:rounded-none lg:px-0 lg:pt-0">
           {trip ? (
             <TripHubBar overview={overviewQuery.data} trip={trip} />
           ) : (
@@ -119,7 +110,7 @@ export function TripChrome({
               </div>
             </div>
           )}
-        </div>
+        </TripNavigationSheet>
         <div
           className="mt-3 hidden min-h-11 items-center gap-3 has-[>*>*]:flex"
           data-slot="trip-section-toolbar"

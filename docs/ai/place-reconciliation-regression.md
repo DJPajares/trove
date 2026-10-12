@@ -17,7 +17,7 @@ A subsequent browser generation of the same unchanged prompt produced a larger, 
 - Geographic destinations and exactly named walking routes were rejected by inappropriate type checks. Type ranking also distinguishes an attraction from its equally named address/locality.
 - Broad model search hints tied unrelated candidates. Original-name evidence now disambiguates such ties, and a geographic parent cannot replace a more specific named facility/viewpoint.
 - Blanket mark stripping erased meaningful non-Latin distinctions. Latin accents are normalized while meaningful marks in other scripts remain intact. Conservative contraction/compound tiers require multiple agreeing complete words.
-- Review country suggestions depended on destination labels/addresses. Provider-derived country codes now survive draft serialization and cache reads; verified scheduled stops and stays also supply visited countries. Transport origins and unscheduled ideas do not.
+- Review country suggestions depended on destination labels/addresses. Provider-derived country codes now survive draft serialization and cache reads; verified scheduled stops and stays also supply visited countries. Transport origins and unscheduled ideas do not. Accepting a prefilled country still withholds a score when it changes an unlocated day’s timezone context.
 
 ## Full 25-place decision record
 
@@ -61,4 +61,4 @@ The precise South Africa prompt was not available during reproduction. A focused
 
 ## Validation
 
-264 focused API tests and 54 focused web tests passed, including quota/cancellation, negative-cache and alias-cache safety, ambiguity, country review, Apply, and map retention. Repository lint, type checks, the normal release build, Prisma schema validation, formatting, and `changelog:check` passed. The regression adds no database migration.
+277 focused API tests and 54 focused web tests passed, including quota/cancellation, negative-cache and alias-cache safety, ambiguity, country review, Apply, and map retention. Repository lint, type checks, the normal release build, Prisma schema validation, formatting, and `changelog:check` passed. The regression adds no database migration.

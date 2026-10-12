@@ -94,35 +94,28 @@ export function normalizeReviewedCountries(input: readonly string[]): string[] |
   return [...new Set(codes)];
 }
 
-/** Uses Apply's place and fallback precedence without creating Places or calling providers. */
+/** Compare review's country fallback with the scorer's country-free timezone baseline. */
 export async function countryCorrectionChangesTimeContext(
   transaction: Prisma.TransactionClient,
-  ownerId: string,
+  _ownerId: string,
   draft: AiPlannerDraft,
   reviewedCountries: readonly string[],
 ) {
-  if (suggestedDraftCountries(draft).join(',') === reviewedCountries.join(',')) return false;
-
   const verifiedIds = [
     ...new Set(
       draft.places.flatMap((place) => (place.resolution === 'verified' ? [place.placeId] : [])),
     ),
   ];
-  const [storedPlaces, profile] = await Promise.all([
-    transaction.place.findMany({
-      where: { id: { in: verifiedIds } },
-      select: {
-        customTimeZone: true,
-        id: true,
-        kind: true,
-        providerAddress: true,
-        providerRefs: true,
-      },
-    }),
-    transaction.profile.findUnique({ where: { id: ownerId }, select: { homeTimeZone: true } }),
-  ]);
-  const suggestedCountries = suggestedDraftCountries(draft, storedPlaces);
-  if (suggestedCountries.join(',') === reviewedCountries.join(',')) return false;
+  const storedPlaces = await transaction.place.findMany({
+    where: { id: { in: verifiedIds } },
+    select: {
+      customTimeZone: true,
+      id: true,
+      kind: true,
+      providerAddress: true,
+      providerRefs: true,
+    },
+  });
   const stored = new Map(storedPlaces.map((place) => [place.id, place]));
   const zones = new Map(
     draft.places.map((place) => {
@@ -144,10 +137,12 @@ export async function countryCorrectionChangesTimeContext(
       countries,
       destinations,
       deviceTimeZone: 'UTC',
-      profileHome: profile?.homeTimeZone ? { placeId: null, timeZone: profile.homeTimeZone } : null,
+      profileHome: null,
       startingLocation: null,
     });
-  const before = reference(suggestedCountries);
+  // readDraftPlanScore uses located places/destinations, then UTC. Suggestions
+  // do not change those inputs, even when the traveller accepts the prefill.
+  const before = reference([]);
   const after = reference(reviewedCountries);
   if (before.timeZone === after.timeZone && before.source !== 'DEVICE_FALLBACK') return false;
 

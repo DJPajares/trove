@@ -34,8 +34,11 @@ import {
 
 import {
   geographicallyEligible,
+  hasComparableLocalityMismatch,
+  identityCompatible,
   identityTokens,
   localityMatches,
+  nameMatchTier,
   normalizeIdentityText,
   rankPlaceMatches,
   sameIdentityName,
@@ -50,6 +53,7 @@ export type AiPlaceGroundingCandidate = AiPlannerCandidatePlace & {
   detail?: PlaceDetailLevel;
   languageCode?: string;
   localityHint?: string | null;
+  destinationName?: string;
   countryCode?: string;
   contextConflict?: boolean;
   locationBias?: PlaceLocationBias;
@@ -57,6 +61,7 @@ export type AiPlaceGroundingCandidate = AiPlannerCandidatePlace & {
 };
 
 export type GroundedPlaceContext = {
+  localityName?: string;
   countryCode?: string;
   evidence?: Extract<PlaceDetailsResult, { status: 'ok' }>;
   externalPlaceId: string;
@@ -128,7 +133,7 @@ function cacheKey(request: PlaceTextSearchRequest, candidate: AiPlaceGroundingCa
   return createHash('sha256')
     .update(
       JSON.stringify([
-        'google:grounding:v3',
+        'google:grounding:v6',
         memoKey(request),
         normalizeIdentityText(candidate.name),
         candidate.localityHint?.trim() ? normalizeIdentityText(candidate.localityHint) : null,
@@ -136,6 +141,7 @@ function cacheKey(request: PlaceTextSearchRequest, candidate: AiPlaceGroundingCa
         candidate.searchName ? normalizeIdentityText(candidate.searchName) : null,
         candidate.countryCode?.toUpperCase() ?? null,
         candidate.contextConflict ?? false,
+        candidate.destinationName ?? null,
       ]),
     )
     .digest('hex');
@@ -168,14 +174,15 @@ function verified(
   identity: GroundingIdentity,
   placeId: string,
   checkedAt: Date,
+  countryCode = identity.addressComponents?.find((part) => part.types.includes('country'))
+    ?.shortText ?? candidate.countryCode,
 ): AiPlaceGroundingResult {
   return {
     context: {
+      ...(candidate.requireExactName ? { localityName: identity.name } : {}),
       externalPlaceId: identity.externalPlaceId,
       location: identity.location,
-      countryCode:
-        identity.addressComponents?.find((part) => part.types.includes('country'))?.shortText ??
-        candidate.countryCode,
+      countryCode,
       ...(candidate.languageCode ? { languageCode: candidate.languageCode } : {}),
       ...(candidate.regionCode ? { regionCode: candidate.regionCode } : {}),
     },
@@ -196,6 +203,7 @@ function verified(
       placeId,
       provider: 'google',
       resolution: 'verified',
+      ...(countryCode ? { countryCode: countryCode.toUpperCase() } : {}),
     },
     warnings: [],
   };
@@ -355,8 +363,13 @@ export class AiPlaceGrounder {
         provider: 'google',
         source: 'ai-planner',
       });
-      const result = verified(candidate, identity, reference.placeId, entry.checkedAt);
-      if (result.context && entry.countryCode) result.context.countryCode = entry.countryCode;
+      const result = verified(
+        candidate,
+        identity,
+        reference.placeId,
+        entry.checkedAt,
+        entry.countryCode ?? candidate.countryCode,
+      );
       return { result };
     } catch {
       return { reason: 'cache_read_failed' };
@@ -499,15 +512,31 @@ export class AiPlaceGrounder {
         const attempt = initialResult;
         const { candidate, request } = attempt;
         const aliases = new Map<string, string[]>();
+        const addressAliases = new Map<string, string[]>();
         let blockedByOtherPrediction = false;
         if (candidate.signal?.aborted) {
           counts.skippedRetries++;
           return this.unavailable(candidate);
         }
-        const plausible = attempt.identities.filter((identity) =>
-          geographicallyEligible(identity, candidate),
+        const plausible = attempt.identities.filter(
+          (identity) =>
+            identityCompatible(identity, candidate) &&
+            (geographicallyEligible(identity, candidate) ||
+              (!hasComparableLocalityMismatch(identity, candidate) &&
+                [candidate.name, candidate.searchName].some(
+                  (name) => name && nameMatchTier(name, identity.name) > 0,
+                ))),
         );
-        const retryQuery = localizedTextQuery(candidate.name, candidate.localityHint);
+        const localizedName = localizedTextQuery(candidate.name, candidate.localityHint);
+        // A model locality can redirect a specific viewpoint/facility query to
+        // its geographic parent. Use the manual clean name for this recovery;
+        // keep the same bias and all geographic/type validation on the results.
+        const retryQuery =
+          normalizeIdentityText(localizedName) === normalizeIdentityText(request.textQuery) &&
+          attempt.identities.length > 0 &&
+          !attempt.identities.some((identity) => identityCompatible(identity, candidate))
+            ? candidate.name.trim()
+            : localizedName;
         try {
           if (plausible.length && this.provider.search) {
             const memo = memoKey({ ...request, textQuery: retryQuery });
@@ -527,13 +556,19 @@ export class AiPlaceGrounder {
               attempt.identities.map((identity) => identity.externalPlaceId),
             );
             for (const suggestion of suggestions) {
-              if (knownIds.has(suggestion.externalPlaceId))
+              if (knownIds.has(suggestion.externalPlaceId)) {
                 aliases.set(suggestion.externalPlaceId, [suggestion.name]);
-              else if (sameIdentityName(suggestion.name, candidate.name))
+                if (suggestion.description)
+                  addressAliases.set(suggestion.externalPlaceId, [suggestion.description]);
+              } else if (sameIdentityName(suggestion.name, candidate.name))
                 blockedByOtherPrediction = true;
             }
           } else if (
-            !plausible.length &&
+            (!plausible.length ||
+              (!this.provider.search &&
+                !attempt.identities.some((identity) =>
+                  geographicallyEligible(identity, candidate),
+                ))) &&
             (candidate.requireExactName || candidate.localityHint || candidate.locationBias) &&
             normalizeIdentityText(retryQuery) !== normalizeIdentityText(request.textQuery)
           ) {
@@ -552,7 +587,7 @@ export class AiPlaceGrounder {
           counts.skippedRetries++;
           return this.unavailable(candidate);
         }
-        const matches = rankPlaceMatches(attempt.identities, candidate, aliases);
+        const matches = rankPlaceMatches(attempt.identities, candidate, aliases, addressAliases);
         if (matches.length === 1 && !blockedByOtherPrediction) {
           counts.recoveredMatches++;
           return this.accept(attempt, matches[0]!);

@@ -29,7 +29,10 @@ import {
   type AiPlanningTelemetryEvent,
 } from '../src/services/ai-planning-telemetry.js';
 import { emptyPlanScore, explicitDraft } from './fixtures/ai-planning.js';
-import { suggestedDraftCountries } from '../src/services/ai-planning-countries.js';
+import {
+  countryCorrectionChangesTimeContext,
+  suggestedDraftCountries,
+} from '../src/services/ai-planning-countries.js';
 
 const OWNER_ID = '00000000-0000-4000-8000-000000000001';
 const OTHER_OWNER_ID = '00000000-0000-4000-8000-000000000002';
@@ -782,6 +785,64 @@ describe('planning-session reservations and recovery', () => {
 });
 
 describe('review session safety', () => {
+  test('prefilled stop countries do not conceal a change to an unlocated day timezone', async () => {
+    const draft = explicitDraft();
+    const destination = draft.places.find((place) => place.id === 'place:tokyo')!;
+    draft.places[draft.places.indexOf(destination)] = {
+      id: destination.id,
+      name: 'Cape Town',
+      note: null,
+      resolution: 'custom',
+      verification: 'unverified',
+    };
+    const museum = draft.places.find((place) => place.id === 'place:museum')!;
+    if (museum.resolution !== 'verified') throw new Error('expected verified stop');
+    museum.countryCode = 'ZA';
+    const store = createPlanningStore([
+      {
+        id: museum.placeId,
+        kind: 'PROVIDER',
+        providerAddress: 'Cape Town, South Africa',
+        providerRefs: [],
+        customTimeZone: null,
+      },
+    ]);
+    expect(suggestedDraftCountries(draft)).toEqual(['ZA']);
+    expect(
+      await countryCorrectionChangesTimeContext(store.prisma as never, OWNER_ID, draft, ['ZA']),
+    ).toBe(true);
+  });
+
+  test('verified scheduled stops suggest countries when a destination is unresolved, excluding transport and unscheduled places', () => {
+    const draft = explicitDraft();
+    const destination = draft.places.find((place) => place.id === 'place:tokyo')!;
+    draft.places[draft.places.indexOf(destination)] = {
+      id: destination.id,
+      name: 'Cape Town',
+      note: null,
+      resolution: 'custom',
+      verification: 'unverified',
+    };
+    const museum = draft.places.find((place) => place.id === 'place:museum')!;
+    if (museum.resolution !== 'verified') throw new Error('expected verified stop');
+    museum.countryCode = 'ZA';
+    // Country evidence survives translated provider labels and missing stored addresses.
+    expect(suggestedDraftCountries(draft)).toEqual(['ZA']);
+    const located = draft.days
+      .flatMap((day) => day.items)
+      .find((item) => item.placeRefId === museum.id)!;
+    located.blockType = 'transport';
+    expect(suggestedDraftCountries(draft)).toEqual([]);
+    located.blockType = 'activity';
+    draft.unscheduledItems.push(located);
+    draft.days.forEach((day) => {
+      day.items = day.items.filter((item) => item !== located);
+    });
+    expect(suggestedDraftCountries(draft)).toEqual([]);
+    draft.days[0]!.dailyBasePlaceRefId = museum.id;
+    expect(suggestedDraftCountries(draft)).toEqual(['ZA']);
+  });
+
   test('country suggestions use only named destination countries in their draft order', () => {
     const draft = explicitDraft();
     expect(suggestedDraftCountries(draft)).toStrictEqual([]);

@@ -1,0 +1,552 @@
+{
+  "prompt": "I would like to visit New Zealand South Island next year with my future wife after the wedding. Plan for us the best places south island had to offer. We would be doing a lot of driving, photography, and drone flying. I would like to see a lot of mountains, lakes, coastal areas, and nature parks. I would also want to experience the south island scenic train ride at least for the whole day. This will be an adventure of a lifetime for me and my future wife. Make this 2 weeks, the most memorable for the both of us.",
+  "output": {
+    "destinations": [
+      {
+        "candidatePlaceIndex": 0,
+        "destinationIntentIndex": 0,
+        "rationale": null,
+        "source": "user"
+      },
+      {
+        "candidatePlaceIndex": 4,
+        "destinationIntentIndex": null,
+        "rationale": "Key base for stargazing, alpine lakes, and Mount Cook photography.",
+        "source": "model"
+      },
+      {
+        "candidatePlaceIndex": 8,
+        "destinationIntentIndex": null,
+        "rationale": "Renowned alpine lake town ideal for landscape photography and scenic driving.",
+        "source": "model"
+      },
+      {
+        "candidatePlaceIndex": 11,
+        "destinationIntentIndex": null,
+        "rationale": "Hub for Southern Lakes scenery and day access to Fiordland landscapes.",
+        "source": "model"
+      }
+    ],
+    "items": [
+      {
+        "blockType": "activity",
+        "durationMinutes": 120,
+        "durationProvenance": "ai_estimated",
+        "isAnchor": false,
+        "label": "Walk through Christchurch Botanic Gardens",
+        "notes": "Gentle post-arrival walk along the Avon River.",
+        "origin": "model",
+        "priority": "interested",
+        "dayIndex": 0,
+        "schedule": {
+          "dayPart": "afternoon",
+          "kind": "day_part"
+        },
+        "candidatePlaceIndex": 1,
+        "constraintIndices": [],
+        "destinationIntentIndex": 0
+      },
+      {
+        "blockType": "activity",
+        "durationMinutes": 90,
+        "durationProvenance": "ai_estimated",
+        "isAnchor": false,
+        "label": "Dinner around Riverside Market",
+        "notes": "Explore local produce and dining by the river.",
+        "origin": "model",
+        "priority": null,
+        "dayIndex": 0,
+        "schedule": {
+          "dayPart": "evening",
+          "kind": "day_part"
+        },
+        "candidatePlaceIndex": 2,
+        "constraintIndices": [],
+        "destinationIntentIndex": 0
+      },
+      {
+        "blockType": "activity",
+        "durationMinutes": 540,
+        "durationProvenance": "ai_estimated",
+        "isAnchor": false,
+        "label": "TranzAlpine scenic train return journey",
+        "notes": "Full-day scenic railway across the Canterbury Plains and Southern Alps to Greymouth.",
+        "origin": "model",
+        "priority": "must_go",
+        "dayIndex": 1,
+        "schedule": {
+          "dayPart": "morning",
+          "kind": "day_part"
+        },
+        "candidatePlaceIndex": 3,
+        "constraintIndices": [0],
+        "destinationIntentIndex": 0
+      },
+      {
+        "blockType": "activity",
+        "durationMinutes": 90,
+        "durationProvenance": "ai_estimated",
+        "isAnchor": false,
+        "label": "Evening stroll by Christchurch central square",
+        "notes": "Relaxed evening in central Christchurch.",
+        "origin": "model",
+        "priority": null,
+        "dayIndex": 1,
+        "schedule": {
+          "dayPart": "evening",
+          "kind": "day_part"
+        },
+        "candidatePlaceIndex": 1,
+        "constraintIndices": [],
+        "destinationIntentIndex": 0
+      },
+      {
+        "blockType": "activity",
+        "durationMinutes": 180,
+        "durationProvenance": "ai_estimated",
+        "isAnchor": false,
+        "label": "Drive inland across Mackenzie Country to Lake Tekapo",
+        "notes": "Scenic drive through tussock lands with lakeside views.",
+        "origin": "model",
+        "priority": "interested",
+        "dayIndex": 2,
+        "schedule": {
+          "dayPart": "morning",
+          "kind": "day_part"
+        },
+        "candidatePlaceIndex": 4,
+        "constraintIndices": [],
+        "destinationIntentIndex": null
+      },
+      {
+        "blockType": "activity",
+        "durationMinutes": 60,
+        "durationProvenance": "ai_estimated",
+        "isAnchor": false,
+        "label": "Photograph Church of the Good Shepherd and lakefront",
+        "notes": "Historic stone church set against turquoise glacial water.",
+        "origin": "model",
+        "priority": "interested",
+        "dayIndex": 2,
+        "schedule": {
+          "dayPart": "afternoon",
+          "kind": "day_part"
+        },
+        "candidatePlaceIndex": 5,
+        "constraintIndices": [],
+        "destinationIntentIndex": null
+      },
+      {
+        "blockType": "activity",
+        "durationMinutes": 120,
+        "durationProvenance": "ai_estimated",
+        "isAnchor": false,
+        "label": "Sunset views from Mount John Observatory summit",
+        "notes": "Panoramic vistas overlooking Lake Tekapo and surrounding peaks.",
+        "origin": "model",
+        "priority": "interested",
+        "dayIndex": 2,
+        "schedule": {
+          "dayPart": "evening",
+          "kind": "day_part"
+        },
+        "candidatePlaceIndex": 6,
+        "constraintIndices": [],
+        "destinationIntentIndex": null
+      },
+      {
+        "blockType": "activity",
+        "durationMinutes": 75,
+        "durationProvenance": "ai_estimated",
+        "isAnchor": false,
+        "label": "Drive along Lake Pukaki to Mount Cook Village",
+        "notes": "Glacial lake road with direct views of Aoraki.",
+        "origin": "model",
+        "priority": "interested",
+        "dayIndex": 3,
+        "schedule": {
+          "dayPart": "morning",
+          "kind": "day_part"
+        },
+        "candidatePlaceIndex": 7,
+        "constraintIndices": [],
+        "destinationIntentIndex": null
+      },
+      {
+        "blockType": "activity",
+        "durationMinutes": 210,
+        "durationProvenance": "ai_estimated",
+        "isAnchor": false,
+        "label": "Hike the Hooker Valley Track",
+        "notes": "Boardwalks, swing bridges, and glacial lake scenery below Aoraki.",
+        "origin": "model",
+        "priority": "must_go",
+        "dayIndex": 3,
+        "schedule": {
+          "dayPart": "afternoon",
+          "kind": "day_part"
+        },
+        "candidatePlaceIndex": 7,
+        "constraintIndices": [],
+        "destinationIntentIndex": null
+      },
+      {
+        "blockType": "activity",
+        "durationMinutes": 90,
+        "durationProvenance": "ai_estimated",
+        "isAnchor": false,
+        "label": "Alpine dinner in Aoraki Mount Cook Village",
+        "notes": "Quiet evening surrounded by alpine peaks.",
+        "origin": "model",
+        "priority": null,
+        "dayIndex": 3,
+        "schedule": {
+          "dayPart": "evening",
+          "kind": "day_part"
+        },
+        "candidatePlaceIndex": 7,
+        "constraintIndices": [],
+        "destinationIntentIndex": null
+      },
+      {
+        "blockType": "activity",
+        "durationMinutes": 150,
+        "durationProvenance": "ai_estimated",
+        "isAnchor": false,
+        "label": "Drive through Lindis Pass to Wanaka",
+        "notes": "Dramatic mountain pass landscape with rolling tussock hills.",
+        "origin": "model",
+        "priority": "interested",
+        "dayIndex": 4,
+        "schedule": {
+          "dayPart": "morning",
+          "kind": "day_part"
+        },
+        "candidatePlaceIndex": 8,
+        "constraintIndices": [],
+        "destinationIntentIndex": null
+      },
+      {
+        "blockType": "activity",
+        "durationMinutes": 60,
+        "durationProvenance": "ai_estimated",
+        "isAnchor": false,
+        "label": "Photograph That Wanaka Tree and Roys Bay",
+        "notes": "Iconic willow tree growing in Lake Wanaka waters.",
+        "origin": "model",
+        "priority": "interested",
+        "dayIndex": 4,
+        "schedule": {
+          "dayPart": "afternoon",
+          "kind": "day_part"
+        },
+        "candidatePlaceIndex": 9,
+        "constraintIndices": [],
+        "destinationIntentIndex": null
+      },
+      {
+        "blockType": "activity",
+        "durationMinutes": 120,
+        "durationProvenance": "ai_estimated",
+        "isAnchor": false,
+        "label": "Lakeside dining along Wanaka waterfront",
+        "notes": "Dinner with mountain views across Lake Wanaka.",
+        "origin": "model",
+        "priority": null,
+        "dayIndex": 4,
+        "schedule": {
+          "dayPart": "evening",
+          "kind": "day_part"
+        },
+        "candidatePlaceIndex": 8,
+        "constraintIndices": [],
+        "destinationIntentIndex": null
+      },
+      {
+        "blockType": "activity",
+        "durationMinutes": 90,
+        "durationProvenance": "ai_estimated",
+        "isAnchor": false,
+        "label": "Drive Crown Range Road to Queenstown",
+        "notes": "New Zealand's highest main highway with sweeping basin views.",
+        "origin": "model",
+        "priority": "interested",
+        "dayIndex": 5,
+        "schedule": {
+          "dayPart": "morning",
+          "kind": "day_part"
+        },
+        "candidatePlaceIndex": 10,
+        "constraintIndices": [],
+        "destinationIntentIndex": null
+      },
+      {
+        "blockType": "activity",
+        "durationMinutes": 120,
+        "durationProvenance": "ai_estimated",
+        "isAnchor": false,
+        "label": "Ride Skyline Queenstown Gondola to Bob's Peak",
+        "notes": "Lookout point over Queenstown, Lake Wakatipu, and The Remarkables.",
+        "origin": "model",
+        "priority": "interested",
+        "dayIndex": 5,
+        "schedule": {
+          "dayPart": "afternoon",
+          "kind": "day_part"
+        },
+        "candidatePlaceIndex": 11,
+        "constraintIndices": [],
+        "destinationIntentIndex": null
+      },
+      {
+        "blockType": "activity",
+        "durationMinutes": 120,
+        "durationProvenance": "ai_estimated",
+        "isAnchor": false,
+        "label": "Dinner and walk around Queenstown Bay waterfront",
+        "notes": "Lively lakeside promenade dining.",
+        "origin": "model",
+        "priority": null,
+        "dayIndex": 5,
+        "schedule": {
+          "dayPart": "evening",
+          "kind": "day_part"
+        },
+        "candidatePlaceIndex": 11,
+        "constraintIndices": [],
+        "destinationIntentIndex": null
+      },
+      {
+        "blockType": "activity",
+        "durationMinutes": 480,
+        "durationProvenance": "ai_estimated",
+        "isAnchor": false,
+        "label": "Fiordland scenic excursion and Milford Sound cruise",
+        "notes": "Drive through Homer Tunnel and cruise beneath Mitre Peak waterfalls.",
+        "origin": "model",
+        "priority": "must_go",
+        "dayIndex": 6,
+        "schedule": {
+          "dayPart": "morning",
+          "kind": "day_part"
+        },
+        "candidatePlaceIndex": 12,
+        "constraintIndices": [],
+        "destinationIntentIndex": null
+      },
+      {
+        "blockType": "activity",
+        "durationMinutes": 120,
+        "durationProvenance": "ai_estimated",
+        "isAnchor": false,
+        "label": "Celebratory farewell dinner in central Queenstown",
+        "notes": "Final evening celebrating the Southern Lakes journey.",
+        "origin": "model",
+        "priority": null,
+        "dayIndex": 6,
+        "schedule": {
+          "dayPart": "evening",
+          "kind": "day_part"
+        },
+        "candidatePlaceIndex": 11,
+        "constraintIndices": [],
+        "destinationIntentIndex": null
+      }
+    ],
+    "daySummaries": [
+      {
+        "dayIndex": 0,
+        "name": "Christchurch Arrival and Gardens",
+        "itemIndices": [0, 1]
+      },
+      {
+        "dayIndex": 1,
+        "name": "TranzAlpine Southern Alps Journey",
+        "itemIndices": [2, 3]
+      },
+      {
+        "dayIndex": 2,
+        "name": "Mackenzie Country and Lake Tekapo",
+        "itemIndices": [4, 5, 6]
+      },
+      {
+        "dayIndex": 3,
+        "name": "Aoraki Mount Cook and Hooker Valley",
+        "itemIndices": [7, 8, 9]
+      },
+      {
+        "dayIndex": 4,
+        "name": "Lindis Pass and Wanaka Lakefront",
+        "itemIndices": [10, 11, 12]
+      },
+      {
+        "dayIndex": 5,
+        "name": "Crown Range and Queenstown Overlook",
+        "itemIndices": [13, 14, 15]
+      },
+      {
+        "dayIndex": 6,
+        "name": "Milford Sound and Queenstown Finale",
+        "itemIndices": [16, 17]
+      }
+    ],
+    "normalizedRequest": {
+      "datePreference": {
+        "kind": "missing"
+      },
+      "interests": [
+        "driving",
+        "photography",
+        "drone flying",
+        "mountains",
+        "lakes",
+        "coastal areas",
+        "nature parks",
+        "scenic train ride"
+      ],
+      "pace": "balanced",
+      "partySize": 2,
+      "tripName": "South Island Alps and Lakes",
+      "constraints": [
+        {
+          "date": null,
+          "dayPart": "morning",
+          "durationMinutes": 540,
+          "kind": "activity",
+          "label": "Scenic South Island train ride",
+          "localTime": null,
+          "priority": "must_go",
+          "source": "user",
+          "strength": "flexible",
+          "destinationIntentIndex": 0
+        }
+      ],
+      "destinations": ["New Zealand South Island"]
+    },
+    "omittedOptionalDestinations": [],
+    "partySize": 2,
+    "places": [
+      {
+        "name": "Christchurch",
+        "note": "South Island gateway city.",
+        "searchName": "Christchurch",
+        "localityHint": "Canterbury, New Zealand",
+        "searchQuery": "Christchurch New Zealand"
+      },
+      {
+        "name": "Christchurch Botanic Gardens",
+        "note": "Sprawling public gardens established in 1863 along the Avon River.",
+        "searchName": "Christchurch Botanic Gardens",
+        "localityHint": "Christchurch, Canterbury, New Zealand",
+        "searchQuery": "Christchurch Botanic Gardens Rolleston Avenue Christchurch New Zealand"
+      },
+      {
+        "name": "Riverside Market",
+        "note": "Seven-day indoor market with local food vendors in central Christchurch.",
+        "searchName": "Riverside Market",
+        "localityHint": "Christchurch, Canterbury, New Zealand",
+        "searchQuery": "Riverside Market 96 Oxford Terrace Christchurch New Zealand"
+      },
+      {
+        "name": "Christchurch Railway Station",
+        "note": "Departure station for the TranzAlpine train across the Southern Alps.",
+        "searchName": "Christchurch Railway Station",
+        "localityHint": "Christchurch, Canterbury, New Zealand",
+        "searchQuery": "Christchurch Railway Station Troup Drive Christchurch New Zealand"
+      },
+      {
+        "name": "Lake Tekapo",
+        "note": "Glacial lake famed for turquoise water and dark sky reserve.",
+        "searchName": "Lake Tekapo",
+        "localityHint": "Mackenzie Basin, Canterbury, New Zealand",
+        "searchQuery": "Lake Tekapo Canterbury New Zealand"
+      },
+      {
+        "name": "Church of the Good Shepherd",
+        "note": "Pioneering stone memorial church situated on the shores of Lake Tekapo.",
+        "searchName": "Church of the Good Shepherd",
+        "localityHint": "Lake Tekapo, Canterbury, New Zealand",
+        "searchQuery": "Church of the Good Shepherd Lake Tekapo New Zealand"
+      },
+      {
+        "name": "University of Canterbury Mount John Observatory",
+        "note": "Astronomical observatory atop Mount John overlooking Lake Tekapo.",
+        "searchName": "Mount John Observatory",
+        "localityHint": "Lake Tekapo, Canterbury, New Zealand",
+        "searchQuery": "Mount John Observatory Godley Peaks Road Lake Tekapo New Zealand"
+      },
+      {
+        "name": "Aoraki Mount Cook National Park",
+        "note": "Alpine national park home to New Zealand's highest peaks and glaciers.",
+        "searchName": "Aoraki / Mount Cook National Park",
+        "localityHint": "Canterbury, New Zealand",
+        "searchQuery": "Aoraki Mount Cook National Park Canterbury New Zealand"
+      },
+      {
+        "name": "Wanaka",
+        "note": "Resort town set against Lake Wanaka and Mount Aspiring National Park.",
+        "searchName": "Wanaka",
+        "localityHint": "Otago, New Zealand",
+        "searchQuery": "Wanaka Otago New Zealand"
+      },
+      {
+        "name": "That Wanaka Tree",
+        "note": "Famous lone willow tree standing in the shallow waters of Lake Wanaka.",
+        "searchName": "That Wanaka Tree",
+        "localityHint": "Wanaka, Otago, New Zealand",
+        "searchQuery": "That Wanaka Tree Roys Bay Wanaka New Zealand"
+      },
+      {
+        "name": "Crown Range Summit",
+        "note": "Scenic mountain pass lookout between Wanaka and Queenstown.",
+        "searchName": "Crown Range Summit",
+        "localityHint": "Otago, New Zealand",
+        "searchQuery": "Crown Range Summit Crown Range Road Queenstown New Zealand"
+      },
+      {
+        "name": "Queenstown",
+        "note": "Lakeside alpine hub framed by Lake Wakatipu and The Remarkables.",
+        "searchName": "Queenstown",
+        "localityHint": "Otago, New Zealand",
+        "searchQuery": "Queenstown Otago New Zealand"
+      },
+      {
+        "name": "Milford Sound",
+        "note": "Fiord in Fiordland National Park renowned for towering cliffs and waterfalls.",
+        "searchName": "Milford Sound / Piopiotahi",
+        "localityHint": "Southland, New Zealand",
+        "searchQuery": "Milford Sound Fiordland National Park Southland New Zealand"
+      }
+    ],
+    "selectedDurationDays": 7,
+    "stays": [
+      {
+        "candidatePlaceIndex": 0,
+        "firstNightDayIndex": 0,
+        "lastNightDayIndex": 1
+      },
+      {
+        "candidatePlaceIndex": 4,
+        "firstNightDayIndex": 2,
+        "lastNightDayIndex": 2
+      },
+      {
+        "candidatePlaceIndex": 7,
+        "firstNightDayIndex": 3,
+        "lastNightDayIndex": 3
+      },
+      {
+        "candidatePlaceIndex": 8,
+        "firstNightDayIndex": 4,
+        "lastNightDayIndex": 4
+      },
+      {
+        "candidatePlaceIndex": 11,
+        "firstNightDayIndex": 5,
+        "lastNightDayIndex": 6
+      }
+    ],
+    "tripDescription": "A seven-day road and rail journey across New Zealand's South Island taking in alpine passes, glacial lakes, and Fiordland.",
+    "tripName": "South Island Alps and Lakes"
+  }
+}

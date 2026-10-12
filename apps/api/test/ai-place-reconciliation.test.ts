@@ -17,6 +17,11 @@ import {
   type ProviderPlaceSearchResult,
 } from '../src/services/places.js';
 import { setAiPlanningTelemetrySink } from '../src/services/ai-planning-telemetry.js';
+import {
+  nameMatchTier,
+  rankPlaceMatches,
+  sameIdentityName,
+} from '../src/services/place-identity-matching.js';
 
 const NOW = new Date('2026-10-11T10:00:00Z');
 const bias = { latitude: 13.75, longitude: 100.5, radiusMeters: 50_000 };
@@ -361,6 +366,167 @@ test('destination candidates cannot resolve to similarly named venues', async ()
   ).toBe('custom');
 });
 
+test('nearby coordinates cannot override a known wrong city', async () => {
+  const api = setup({
+    textSearch: async () => [
+      place({
+        name: 'Wat Pho',
+        addressComponents: [
+          { longText: 'Ayutthaya', shortText: 'Ayutthaya', types: ['locality'] },
+          { longText: 'Thailand', shortText: 'TH', types: ['country'] },
+        ],
+      }),
+    ],
+  });
+  expect((await api.grounder.groundCandidate(candidate())).place.resolution).toBe('custom');
+  expect(api.canonical).not.toHaveBeenCalled();
+});
+
+test('an exact street/address name cannot tie with its attraction', () => {
+  const venue = place({ name: 'National Park', rawTypes: ['national_park'] });
+  const address = place({
+    name: 'National Park',
+    externalPlaceId: 'address',
+    rawTypes: ['premise', 'street_address'],
+  });
+  expect(rankPlaceMatches([address, venue], candidate({ name: 'National Park' }))).toEqual([venue]);
+});
+
+test('contracted words need multiple agreeing complete words', () => {
+  expect(
+    nameMatchTier('Mount John Observatory', 'University of Canterbury Mt John Observatory'),
+  ).toBe(2);
+  expect(nameMatchTier('North Museum', 'Nth Museum')).toBe(0);
+  expect(nameMatchTier('Museum North Gate', 'Museum South Gate')).toBe(0);
+  expect(nameMatchTier('Tasman Glacier Viewpoint', 'Tasman Glacier View')).toBe(1);
+  expect(nameMatchTier('Tasman Glacier Viewpoint', 'Tasman Glacier View Cafe')).toBe(0);
+});
+
+test('a natural feature without a city component can use corroborated region and country', () => {
+  const feature = place({
+    name: 'Queenstown Bay Beach',
+    rawTypes: ['beach', 'natural_feature'],
+    location: { latitude: -45, longitude: 168.7 },
+    addressComponents: [
+      {
+        longText: 'Otago Region',
+        shortText: 'Otago Region',
+        types: ['administrative_area_level_1'],
+      },
+      { longText: 'New Zealand', shortText: 'NZ', types: ['country'] },
+    ],
+  });
+  const context = candidate({
+    name: feature.name,
+    localityHint: 'Queenstown, Otago, New Zealand',
+    locationBias: undefined,
+    countryCode: 'NZ',
+  });
+  expect(rankPlaceMatches([feature], context)).toEqual([feature]);
+  expect(
+    rankPlaceMatches([feature], { ...context, localityHint: 'Queenstown, New Zealand' }),
+  ).toEqual([]);
+  expect(
+    rankPlaceMatches(
+      [
+        {
+          ...feature,
+          addressComponents: [
+            ...feature.addressComponents!,
+            { longText: 'Dunedin', shortText: 'Dunedin', types: ['locality'] },
+          ],
+        },
+      ],
+      context,
+    ),
+  ).toEqual([]);
+});
+
+test('a city remains a valid named stop, while an equally named attraction has compatible venue types', () => {
+  const city = place({ name: 'Lake Tekapo', rawTypes: ['locality', 'political'] });
+  expect(rankPlaceMatches([city], candidate({ name: 'Lake Tekapo' }))).toEqual([city]);
+  const sound = place({
+    name: 'Milford Sound / Piopiotahi',
+    rawTypes: ['natural_feature', 'establishment'],
+  });
+  const locality = place({
+    name: 'Milford Sound',
+    rawTypes: ['locality', 'political'],
+    externalPlaceId: 'sound-city',
+  });
+  expect(
+    rankPlaceMatches(
+      [locality, sound],
+      candidate({ name: 'Milford Sound', searchName: sound.name }),
+    ),
+  ).toEqual([sound]);
+});
+
+test('the original attraction name distinguishes a broad model hint from a cafe', () => {
+  const track = place({ name: 'Pancake Rocks and Blowholes Track', rawTypes: ['hiking_area'] });
+  const cafe = place({ name: 'Pancake Rocks Cafe', externalPlaceId: 'cafe', rawTypes: ['cafe'] });
+  expect(
+    rankPlaceMatches(
+      [cafe, track],
+      candidate({ name: 'Pancake Rocks and Blowholes', searchName: 'Pancake Rocks' }),
+    ),
+  ).toEqual([track]);
+});
+
+test('a named trail can resolve an exact route while a street cannot impersonate a venue', () => {
+  const trail = place({ name: 'Mount Iron Track', rawTypes: ['route'] });
+  expect(rankPlaceMatches([trail], candidate({ name: trail.name }))).toEqual([trail]);
+  expect(rankPlaceMatches([trail], candidate({ name: `${trail.name} Visitor Centre` }))).toEqual(
+    [],
+  );
+});
+
+test('a geographic parent cannot replace its viewpoint and receives one clean manual-style retry', async () => {
+  const parent = place({ name: 'Tasman Glacier', rawTypes: ['natural_feature'] });
+  const viewpoint = place({
+    name: 'Tasman Glacier View Point',
+    externalPlaceId: 'viewpoint',
+    rawTypes: ['scenic_spot'],
+  });
+  const textSearch = vi.fn().mockResolvedValueOnce([parent]).mockResolvedValueOnce([viewpoint]);
+  const api = setup({ textSearch });
+  const result = await api.grounder.groundCandidate(
+    candidate({
+      name: 'Tasman Glacier Viewpoint',
+      searchQuery: 'Tasman Glacier Viewpoint, Bangkok, Thailand',
+    }),
+  );
+  expect(result.context?.externalPlaceId).toBe('viewpoint');
+  expect(textSearch).toHaveBeenCalledTimes(2);
+  expect(textSearch.mock.calls[1]![0].textQuery).toBe('Tasman Glacier Viewpoint');
+  expect(api.search).not.toHaveBeenCalled();
+});
+
+test('an approximate excursion locality can use verified destination coordinates without overriding that destination city', () => {
+  const summit = place({
+    name: 'Crown Range Summit',
+    location: { latitude: -45, longitude: 168.9 },
+    addressComponents: [
+      { longText: 'Roaring Meg', shortText: 'Roaring Meg', types: ['locality'] },
+      {
+        longText: 'Otago Region',
+        shortText: 'Otago Region',
+        types: ['administrative_area_level_1'],
+      },
+      { longText: 'New Zealand', shortText: 'NZ', types: ['country'] },
+    ],
+  });
+  const context = candidate({
+    name: summit.name,
+    localityHint: 'Cardrona, Otago, New Zealand',
+    destinationName: 'Wānaka',
+    countryCode: 'NZ',
+    locationBias: { latitude: -44.7, longitude: 169.1, radiusMeters: 50_000 },
+  });
+  expect(rankPlaceMatches([summit], context)).toEqual([summit]);
+  expect(rankPlaceMatches([summit], { ...context, destinationName: 'Cardrona' })).toEqual([]);
+});
+
 test('the shared Google budget caps all first passes and recoveries at 50 requests', async () => {
   const budget = new ProviderCallBudget();
   let requests = 0;
@@ -465,4 +631,130 @@ test('destination country qualifiers reject a same-named city in the wrong count
       )
     ).place.resolution,
   ).toBe('verified');
+});
+
+test.each([
+  ['Singapore', 'SG'],
+  ['Monaco', 'MC'],
+])(
+  'an explicit %s locality is evidence even when the country has the same name',
+  (locality, countryCode) => {
+    const identity = place({
+      name: 'History Museum',
+      addressComponents: [
+        { longText: locality, shortText: locality, types: ['locality'] },
+        { longText: locality, shortText: countryCode, types: ['country'] },
+      ],
+    });
+    expect(
+      rankPlaceMatches([identity], { name: 'History Museum', localityHint: locality }),
+    ).toEqual([identity]);
+    expect(
+      rankPlaceMatches([{ ...identity, addressComponents: identity.addressComponents!.slice(1) }], {
+        name: 'History Museum',
+        localityHint: locality,
+      }),
+    ).toEqual([]);
+  },
+);
+
+test('a missing regional component is unknown, not a contradiction of exact city and country evidence', () => {
+  const paris = place({
+    name: 'Paris',
+    rawTypes: ['locality'],
+    addressComponents: [
+      { longText: 'Paris', shortText: 'Paris', types: ['locality'] },
+      { longText: 'France', shortText: 'FR', types: ['country'] },
+    ],
+  });
+  expect(
+    rankPlaceMatches([paris], {
+      name: 'Paris',
+      localityHint: 'Paris, Île-de-France, France',
+      requireExactName: true,
+    }),
+  ).toEqual([paris]);
+  expect(
+    rankPlaceMatches([paris], {
+      name: 'Paris',
+      localityHint: 'Paris, Texas, United States',
+      requireExactName: true,
+    }),
+  ).toEqual([]);
+});
+
+test('autocomplete can corroborate a local-language address for an already-fetched exact venue', async () => {
+  const textSearch = vi.fn(async () => [
+    place({
+      name: 'Wat Pho',
+      formattedAddress: 'กรุงเทพมหานคร, ประเทศไทย',
+      addressComponents: [
+        { longText: 'กรุงเทพมหานคร', shortText: 'กรุงเทพมหานคร', types: ['locality'] },
+        { longText: 'Thailand', shortText: 'TH', types: ['country'] },
+      ],
+    }),
+  ]);
+  const api = setup({ textSearch });
+  const result = await api.grounder.groundCandidate(candidate({ locationBias: undefined }));
+  expect(result.place.resolution).toBe('verified');
+  expect(textSearch).toHaveBeenCalledOnce();
+  expect(api.search).toHaveBeenCalledOnce();
+});
+
+test('normalization preserves name-bearing marks outside Latin scripts', () => {
+  expect(sameIdentityName('ป่า', 'ป้า')).toBe(false);
+  expect(nameMatchTier('ป่า', 'ป้า')).toBe(0);
+  expect(sameIdentityName('Đà Nẵng', 'Da Nang')).toBe(true);
+});
+
+test('a verified destination name supplies local-script context on live and cached decisions', async () => {
+  const city = place({
+    name: 'กรุงเทพมหานคร',
+    rawTypes: ['locality'],
+    addressComponents: [
+      { longText: 'กรุงเทพมหานคร', shortText: 'กรุงเทพมหานคร', types: ['locality'] },
+      { longText: 'Thailand', shortText: 'TH', types: ['country'] },
+    ],
+  });
+  const textSearch = vi.fn(async () => [city]);
+  const api = setup({ textSearch }, true);
+  const destination = candidate({
+    id: 'destination',
+    name: 'Bangkok',
+    searchName: city.name,
+    requireExactName: true,
+    locationBias: undefined,
+  });
+  const live = await api.grounder.groundCandidate(destination);
+  const cached = await api.create().groundCandidate(destination);
+  expect(live.context?.localityName).toBe(city.name);
+  expect(cached.context?.localityName).toBe(city.name);
+  expect(textSearch).toHaveBeenCalledOnce();
+  const venue = place({ name: 'Wat Pho', addressComponents: city.addressComponents });
+  expect(
+    rankPlaceMatches([venue], {
+      name: 'Wat Pho',
+      localityHint: 'Bangkok',
+      destinationName: cached.context!.localityName,
+    }),
+  ).toEqual([venue]);
+});
+
+test('Autocomplete locality evidence cannot override a provider country conflict', async () => {
+  const api = setup({
+    textSearch: async () => [
+      place({
+        name: 'Wat Pho',
+        addressComponents: [
+          { longText: 'Paris', shortText: 'Paris', types: ['locality'] },
+          { longText: 'France', shortText: 'FR', types: ['country'] },
+        ],
+      }),
+    ],
+  });
+  expect(
+    (await api.grounder.groundCandidate(candidate({ countryCode: 'TH' }))).place.resolution,
+  ).toBe('custom');
+  expect(api.search).not.toHaveBeenCalled();
+  expect(api.canonical).not.toHaveBeenCalled();
 });

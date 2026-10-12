@@ -273,6 +273,11 @@ export const aiPlannerDraftPlaceSchema = z.discriminatedUnion('resolution', [
         )
         .optional(),
       id: identifierSchema,
+      /** Provider-derived country context; older retained drafts may omit it. */
+      countryCode: z
+        .string()
+        .regex(/^[A-Z]{2}$/)
+        .optional(),
       /** Draft-only map context. It is provider-derived and never client-editable. */
       location: z
         .object({

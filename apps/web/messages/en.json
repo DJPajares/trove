@@ -655,7 +655,7 @@
     "markReady": "Mark as ready",
     "markInProgress": "Move back to in progress",
     "library": {
-      "description": "Your journeys come together here, planned, lived and remembered.",
+      "description": "Every trip you're planning, taking or looking back on.",
       "ledger": {
         "ahead": "{count} ahead",
         "remembered": "{count} remembered",
@@ -1634,6 +1634,7 @@
   "tools": {
     "eyebrow": "Utilities",
     "title": "Tools",
+    "description": "Currency and reusable checklists, for planning and on the road.",
     "underway": "underway",
     "groups": {
       "road": "On the road",
@@ -1656,6 +1657,7 @@
   "currency": {
     "eyebrow": "On the road",
     "title": "Currency",
+    "description": "Convert prices at today's reference rate.",
     "back": "Tools",
     "amountIn": "Amount in {currency}",
     "amountPlaceholder": "100",
@@ -2645,8 +2647,7 @@
   "saved": {
     "eyebrow": "Your collection",
     "title": "Saved",
-    "description": "Spots worth remembering, saved until a trip actually needs them.",
-    "summary": "{count, plural, one {# place worth keeping} other {# places worth keeping}}",
+    "description": "Places you'd like to go, ready to add to any trip.",
     "findLabel": "Search saved places",
     "findPlaceholder": "Search places, notes and collections",
     "everything": "Everything",

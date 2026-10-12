@@ -212,7 +212,12 @@ export function CurrencyConverter() {
     <section className="mx-auto w-full max-w-5xl space-y-6">
       <div>
         <ToolsBackLink label={t('back')} />
-        <PageHeader eyebrow={t('eyebrow')} title={t('title')} titleFont="journal" />
+        <PageHeader
+          description={t('description')}
+          eyebrow={t('eyebrow')}
+          title={t('title')}
+          titleFont="journal"
+        />
       </div>
 
       {boardStatus === 'unavailable' ? (

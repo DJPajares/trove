@@ -14,8 +14,8 @@ import {
 import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
-import { Skeleton } from '@/components/ui/skeleton';
 import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-details-sheet';
 import { BrandedFallback } from '@/components/media-frame';
 import { PlaceMedia } from '@/components/place-media';
@@ -733,29 +733,19 @@ export function SavedPlacesManager() {
 
   return (
     <section className="mx-auto w-full max-w-6xl space-y-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="space-y-1">
-          <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
-            {t('eyebrow')}
-          </p>
-          <h1 className="font-journal text-[3rem] leading-[0.95] font-normal tracking-[-0.01em] md:text-[4rem]">
-            {t('title')}
-          </h1>
-          {status === 'loading' ? (
-            // The count is the only header text that waits on data; hold its
-            // line rather than swapping in the empty-state description.
-            <Skeleton aria-hidden="true" className="h-6 w-48 motion-reduce:animate-none" />
-          ) : (
-            <p className="text-muted-foreground">
-              {savedPlaces.length ? t('summary', { count: savedPlaces.length }) : t('description')}
-            </p>
-          )}
-        </div>
-        <Button className="rounded-full" onClick={() => setAddOpen(true)}>
-          <Plus aria-hidden="true" data-icon="inline-start" />
-          {t('addPlace')}
-        </Button>
-      </header>
+      <PageHeader
+        actions={
+          // A phone already adds a place from the + at the centre of its bottom bar.
+          <Button className="max-md:hidden" onClick={() => setAddOpen(true)}>
+            <Plus aria-hidden="true" data-icon="inline-start" />
+            {t('addPlace')}
+          </Button>
+        }
+        description={t('description')}
+        eyebrow={t('eyebrow')}
+        title={t('title')}
+        titleFont="journal"
+      />
 
       {error ? (
         <Alert role="alert" variant="destructive">

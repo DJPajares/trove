@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import { PageHeader } from '@/components/page-header';
 import { usePreferences } from '@/components/preferences-provider';
 import { localToday } from '@/components/saved/saved-ready-for-trip';
 import { useRateBoard } from '@/hooks/use-rate-board';
@@ -83,14 +84,12 @@ export function ToolsLauncher() {
 
   return (
     <section className="mx-auto w-full max-w-3xl space-y-7">
-      <header className="space-y-1">
-        <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
-          {t('eyebrow')}
-        </p>
-        <h1 className="font-journal text-[3rem] leading-[0.95] font-normal tracking-[-0.01em] md:text-[4rem]">
-          {t('title')}
-        </h1>
-      </header>
+      <PageHeader
+        description={t('description')}
+        eyebrow={t('eyebrow')}
+        title={t('title')}
+        titleFont="journal"
+      />
 
       {trip && (tripPair || templateList.length) ? (
         <section

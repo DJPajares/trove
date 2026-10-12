@@ -15,6 +15,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { PageState } from '@/components/page-state';
+import { Skeleton } from '@/components/ui/skeleton';
 import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-details-sheet';
 import { BrandedFallback } from '@/components/media-frame';
 import { PlaceMedia } from '@/components/place-media';
@@ -740,9 +741,15 @@ export function SavedPlacesManager() {
           <h1 className="font-journal text-[3rem] leading-[0.95] font-normal tracking-[-0.01em] md:text-[4rem]">
             {t('title')}
           </h1>
-          <p className="text-muted-foreground">
-            {savedPlaces.length ? t('summary', { count: savedPlaces.length }) : t('description')}
-          </p>
+          {status === 'loading' ? (
+            // The count is the only header text that waits on data; hold its
+            // line rather than swapping in the empty-state description.
+            <Skeleton aria-hidden="true" className="h-6 w-48 motion-reduce:animate-none" />
+          ) : (
+            <p className="text-muted-foreground">
+              {savedPlaces.length ? t('summary', { count: savedPlaces.length }) : t('description')}
+            </p>
+          )}
         </div>
         <Button className="rounded-full" onClick={() => setAddOpen(true)}>
           <Plus aria-hidden="true" data-icon="inline-start" />

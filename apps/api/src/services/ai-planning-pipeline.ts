@@ -1,5 +1,10 @@
 import { EntitlementError, plannerContractMaxDays } from './plan-entitlements.js';
-import { checkAiPlannerDateDays } from './ai-planner-preflight.js';
+import { addDraftCountryAssumptions } from './ai-planning-countries.js';
+import {
+  checkAiPlannerDateDays,
+  checkAiPlannerDurationDays,
+  explicitAiTripDays,
+} from './ai-planner-preflight.js';
 import { createHash } from 'node:crypto';
 
 import { getPrismaClient } from '@trove/db';
@@ -413,7 +418,10 @@ export function applyGroundingToDraft(draft: AiPlannerDraft, grounding: Grounded
   for (const result of grounding) {
     const index = draft.places.findIndex((place) => place.id === result.place.id);
     if (index === -1) continue;
-    draft.places[index] = result.place;
+    draft.places[index] = {
+      ...result.place,
+      countryCodeHint: draft.places[index]!.countryCodeHint,
+    };
     draft.evidence.push(result.evidence);
     for (const warning of result.warnings) {
       draft.warnings.push({ ...warning, itemIds: itemIds.get(result.place.id) ?? [] });
@@ -760,6 +768,7 @@ export function assembleAiPlanningDraft(
       id: candidate.id,
       name: candidate.name,
       note: candidate.note,
+      countryCodeHint: candidate.countryCodeHint,
       resolution: 'custom' as const,
       verification: 'not_checked' as const,
     })),
@@ -1642,6 +1651,11 @@ export async function runAiPlanningPipeline(
       if (!compact) {
         throw new AiPlanningPipelineFailure('invalid_response', metadata, ['unusable_output']);
       }
+      if (
+        compact.normalizedRequest.datePreference.kind !== 'exact' &&
+        compact.selectedDurationDays !== null
+      )
+        checkAiPlannerDurationDays(compact.selectedDurationDays, claim.maxItineraryDays);
       if (compact.normalizedRequest.datePreference.kind === 'exact') {
         checkAiPlannerDateDays(
           compact.normalizedRequest.datePreference.startDate,
@@ -1653,7 +1667,20 @@ export async function runAiPlanningPipeline(
         expandAiPlannerProposal(compact, claim.prompt, repairs),
         repairs,
         claim.maxItineraryDays,
+        explicitAiTripDays(claim.prompt),
       );
+      const requestedDays = explicitAiTripDays(claim.prompt);
+      const preference = expanded.normalizedRequest.datePreference;
+      const actualDays =
+        preference.kind === 'exact'
+          ? enumerateDateRange(preference.startDate, preference.endDate).length
+          : expanded.selectedDurationDays;
+      if (requestedDays !== null && requestedDays !== actualDays)
+        throw new AiPlanningPipelineFailure('invalid_response', metadata, [
+          'requested_duration_changed',
+        ]);
+      if (isSparseProposal(expanded))
+        throw new AiPlanningPipelineFailure('invalid_response', metadata, ['missing_day_coverage']);
     } catch (error) {
       if (error instanceof AiPlanningPipelineFailure || error instanceof EntitlementError)
         throw error;
@@ -1736,6 +1763,7 @@ export async function runAiPlanningPipeline(
       claim.maxItineraryDays,
     );
     finalizeDraftDayTitles(validated.draft, proposal.data.daySummaries);
+    addDraftCountryAssumptions(validated.draft);
     // The provider run has finished acquiring its ordinary evidence. Reuse the
     // same cache-only normalizer as a retained draft, with the clock read after
     // its asynchronous evidence reads rather than before generation began.

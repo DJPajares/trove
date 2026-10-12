@@ -1,7 +1,6 @@
 import {
   AI_PLANNER_MAX_REAL_PLACE_ITEMS,
   AI_PLANNER_MAX_TRIP_DESCRIPTION,
-  AI_PLANNER_TRIP_LENGTH_TIERS,
   type AiPlannerNormalizedRequest,
 } from '@trove/types';
 
@@ -80,7 +79,6 @@ export type AiPlannerPromptContext = {
   naming: { tone: AiPlannerNameTone; toneBrief: string };
   /** Venues the traveller saved, to prefer where the trip goes near them. */
   savedPlaces?: ReadonlyArray<{ area: string; name: string }>;
-  tripLengthTiers: readonly number[];
 };
 
 /**
@@ -110,7 +108,6 @@ export function buildAiPlannerContext(input: {
     maxTripDescription: AI_PLANNER_MAX_TRIP_DESCRIPTION,
     naming: { tone, toneBrief: AI_PLANNER_NAME_TONES[tone] },
     ...(input.savedPlaces?.length ? { savedPlaces: input.savedPlaces } : {}),
-    tripLengthTiers: AI_PLANNER_TRIP_LENGTH_TIERS,
   };
 }
 
@@ -156,7 +153,7 @@ export function buildAiPlannerPrompt(rawPrompt: string, context: AiPlannerPrompt
     '',
     'Use zero-based array indexes for candidatePlaceIndex, destinationIntentIndex, and constraintIndices. Every non-null index must point to an existing entry in the corresponding places, normalizedRequest.destinations, or normalizedRequest.constraints array. Reuse one place entry when multiple items visit the same venue.',
     '',
-    "In places, choose identifiable real venues. Keep name as the traveller-recognizable venue name, without activity wording; put activities in item labels. When known, provide searchName as the venue's official or local-language name and localityHint as its actual city, region and country. Set searchQuery to one venue name followed by that locality, not a category or several alternative names. Use null for unknown hints. You have not searched Google and must not claim a listing is verified or invent provider IDs or coordinates; Trove verifies your suggestions against Google before review.",
+    "In places, choose identifiable real venues. Keep name as the traveller-recognizable venue name, without activity wording; put activities in item labels. When known, provide searchName as the venue's official or local-language name and localityHint as its actual city, region and country. Set searchQuery to one venue name followed by that locality, not a category or several alternative names. Provide countryCodeHint as the place country's ISO two-letter code when known. Use null for unknown hints. You have not searched Google and must not claim a listing is verified or invent provider IDs or coordinates; Trove verifies your suggestions against Google before review.",
     '',
     'planner_context.savedPlaces, when present, lists venues the traveller has already saved, with their address. Where the trip goes near any of them, prefer them for stops they genuinely suit, and use the name exactly as listed. Never add one only because it is listed, and never move the trip somewhere because of it.',
     '',
@@ -164,8 +161,8 @@ export function buildAiPlannerPrompt(rawPrompt: string, context: AiPlannerPrompt
     '',
     'For a destination with source "user", candidatePlaceIndex must refer to the city or locality itself, never a hotel or venue; set destinationIntentIndex to its request destination and rationale to null. For a model-suggested destination, use a null destinationIntentIndex and explain it in rationale. Optional destinations may be omitted when they make the trip impractical; list their names in omittedOptionalDestinations. Never omit a required destination. If a hotel is requested, show it as an unbooked arrival-day suggestion, never as the destination; do not imply availability, price, or suitability was checked.',
     '',
-    "Never propose more than planner_context.maxItineraryDays inclusive days. Preserve a traveller's exact date range in normalizedRequest even if it exceeds that limit; Trove will reject the request rather than silently shorten it.",
-    'For exact dates set selectedDurationDays to null and count days inclusively from startDate to endDate. If the traveller omitted a year, use the next upcoming occurrence from planner_context.generationDate. Otherwise select a 3, 5, or 7 day tier, defaulting to planner_context.defaults.durationDays; application code assigns those dates. Use planner_context defaults for pace and party size only when the traveller did not supply them.',
+    "The account allows planner_context.maxItineraryDays inclusive itinerary days. Preserve a traveller's exact date range in normalizedRequest even if it exceeds that limit; Trove will reject the request rather than silently shorten it.",
+    'For exact dates set selectedDurationDays to null and count days inclusively from startDate to endDate. If the traveller omitted a year, use the next upcoming occurrence from planner_context.generationDate. Otherwise set selectedDurationDays to the traveller’s requested number of inclusive itinerary days, converting weeks to days. When no duration was requested, use planner_context.defaults.durationDays. Preserve an excessive requested duration so Trove can reject it; never shorten it to fit the allowance. Application code assigns those dates. Use planner_context defaults for pace and party size only when the traveller did not supply them.',
     '',
     'Plan each day around one or two neighbourhoods, ordered so consecutive stops are a short walk apart. Travellers walk or take public transport between stops, not a car, so never put far-apart stops back to back in the same day part.',
     '',

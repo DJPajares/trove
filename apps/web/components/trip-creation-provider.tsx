@@ -71,7 +71,7 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
   const briefCatalogue = useAiPlanningBriefCatalogue();
   const lifecycle = useAiPlanningLifecycle(enabled, briefCatalogue.split);
   const { cancel, generating, operation, refreshRecovery, session } = lifecycle;
-  const running = operation === 'starting' || generating;
+  const running = operation === 'starting' || operation === 'cancelling' || generating;
   // Whether the draft about to arrive is one this screen watched being built.
   // A `reviewing` session recovered on a cold load has nothing to hand off from.
   const handedOff = useRef(false);

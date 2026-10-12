@@ -82,6 +82,7 @@ import {
   aiPlanningAssumptionMessageValues,
   aiPlanningReviewPageState,
   aiPlanningCountriesReviewed,
+  preserveAiPlanningCountrySelection,
   aiPlanningCountrySaveIsCurrent,
   prepareAiPlanningCountriesForApply,
   appliedAiPlanningSession,
@@ -248,6 +249,7 @@ export function AiPlanningReview({
   const [countrySaveFailed, setCountrySaveFailed] = useState(false);
   const countrySaveTimer = useRef<number | null>(null);
   const countriesRef = useRef(countries);
+  const editedCountryRevision = useRef<string | null>(null);
   const sessionRef = useRef<AiPlanningSession | null>(null);
   const expired = Boolean(session && isAiPlanningSessionExpired(session, clock));
   const serverExpired =
@@ -366,6 +368,14 @@ export function AiPlanningReview({
   const reviewedCountryKey = session?.reviewedCountries.join(',') ?? '';
   const suggestedCountryKey = session?.suggestedCountries.join(',') ?? '';
   useEffect(() => {
+    if (
+      !expired &&
+      !serverExpired &&
+      session &&
+      preserveAiPlanningCountrySelection(editedCountryRevision.current, session)
+    )
+      return;
+    editedCountryRevision.current = null;
     const seeded = expired || serverExpired ? [] : countrySeed;
     countriesRef.current = seeded;
     setCountries(seeded);
@@ -516,6 +526,7 @@ export function AiPlanningReview({
   }
 
   function changeCountries(next: string[]) {
+    if (session) editedCountryRevision.current = `${session.id}:${session.draftRevision}`;
     countriesRef.current = next;
     setCountries(next);
     setCountrySaveFailed(false);
@@ -731,6 +742,7 @@ export function AiPlanningReview({
         (assumption.code !== 'trip_name_inferred' || session.tripName === null),
     )
     .map((assumption) => ({
+      id: assumption.id,
       code: assumption.code,
       message: t(
         `assumptionCodes.${assumption.code}`,
@@ -952,7 +964,7 @@ export function AiPlanningReview({
               <FilledInRow label={t('rows.stays')} value={listFormatter.format(stayNames)} />
             ) : null}
             {otherAssumptions.map((assumption) => (
-              <li className="flex items-start justify-between gap-3 py-3.5" key={assumption.code}>
+              <li className="flex items-start justify-between gap-3 py-3.5" key={assumption.id}>
                 <p className="text-sm leading-relaxed">{assumption.message}</p>
                 {assumption.code === 'interest_inferred' ? null : <SourceTag source="picked" />}
               </li>

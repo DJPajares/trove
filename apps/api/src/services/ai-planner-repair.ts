@@ -1,11 +1,9 @@
 import { plannerContractMaxDays } from './plan-entitlements.js';
-import { checkAiPlannerDateDays } from './ai-planner-preflight.js';
+import { checkAiPlannerDateDays, checkAiPlannerDurationDays } from './ai-planner-preflight.js';
+import { AI_PLANNER_DEFAULT_TRIP_LENGTH_DAYS } from './ai-planning-rules.js';
+import { timeZoneForCountry } from '@trove/types/countries';
 import type { z } from 'zod';
-import {
-  AI_PLANNER_TRIP_LENGTH_TIERS,
-  type AiPlannerConstraint,
-  type AiPlannerModelProposal,
-} from '@trove/types';
+import { type AiPlannerConstraint, type AiPlannerModelProposal } from '@trove/types';
 import {
   aiPlannerCompactProposalSchema,
   type AiPlannerCompactProposal,
@@ -193,6 +191,7 @@ function fieldDefault(root: Json, path: Path, rawPrompt: string): { value: unkno
     switch (key) {
       case 'searchName':
       case 'localityHint':
+      case 'countryCodeHint':
         return { value: null };
       case 'note':
         return { value: null };
@@ -259,6 +258,17 @@ export function repairCompactOutput(
 ): AiPlannerCompactProposal | null {
   if (!isObject(output)) return null;
   const root = structuredClone(output);
+  if (Array.isArray(root.places))
+    for (const place of root.places) {
+      if (!isObject(place) || !Object.hasOwn(place, 'countryCodeHint')) continue;
+      const code =
+        typeof place.countryCodeHint === 'string'
+          ? place.countryCodeHint.trim().toUpperCase()
+          : null;
+      const normalized = code && timeZoneForCountry(code) ? code : null;
+      if (place.countryCodeHint !== normalized) log.add('output_field_defaulted');
+      place.countryCodeHint = normalized;
+    }
 
   for (let pass = 0; pass < MAX_PASSES; pass += 1) {
     const parsed = aiPlannerCompactProposalSchema.safeParse(root);
@@ -427,6 +437,7 @@ export function repairAiPlannerModelProposal(
   proposal: AiPlannerModelProposal,
   log = new AiPlannerRepairLog(),
   maxItineraryDays = plannerContractMaxDays(),
+  requestedDurationDays: number | null = null,
 ): AiPlannerModelProposal {
   const request = proposal.normalizedRequest;
   const constraints = new Map(request.constraints.map((constraint) => [constraint.id, constraint]));
@@ -457,27 +468,26 @@ export function repairAiPlannerModelProposal(
   }
   if (request.datePreference.kind === 'exact' && proposal.selectedDurationDays !== null) {
     proposal.selectedDurationDays = null;
-    log.add('duration_tier_defaulted');
+    log.add('duration_defaulted');
   }
   if (request.datePreference.kind !== 'exact' && proposal.selectedDurationDays === null) {
-    const flexible = request.datePreference;
-    const window =
-      flexible.kind === 'flexible' && flexible.earliestStartDate && flexible.latestEndDate
-        ? enumerateDateRange(flexible.earliestStartDate, flexible.latestEndDate).length
-        : null;
     const covered = Math.max(0, ...proposal.items.map((item) => (item.dayIndex ?? -1) + 1));
-    const wanted = window ?? (covered || AI_PLANNER_TRIP_LENGTH_TIERS[0]);
     proposal.selectedDurationDays =
-      AI_PLANNER_TRIP_LENGTH_TIERS.toReversed().find((tier) => tier <= wanted) ??
-      AI_PLANNER_TRIP_LENGTH_TIERS[0];
-    log.add('duration_tier_defaulted');
+      requestedDurationDays ?? (covered || AI_PLANNER_DEFAULT_TRIP_LENGTH_DAYS);
+    log.add('duration_defaulted');
+  }
+  if (proposal.selectedDurationDays !== null)
+    checkAiPlannerDurationDays(proposal.selectedDurationDays, maxItineraryDays);
+  for (const place of proposal.places) {
+    const code = place.countryCodeHint?.trim().toUpperCase();
+    place.countryCodeHint = code && timeZoneForCountry(code) ? code : null;
   }
   const dates =
     request.datePreference.kind === 'exact'
       ? enumerateDateRange(request.datePreference.startDate, request.datePreference.endDate)
       : null;
   const dayCount =
-    dates?.length ?? proposal.selectedDurationDays ?? AI_PLANNER_TRIP_LENGTH_TIERS[0];
+    dates?.length ?? proposal.selectedDurationDays ?? AI_PLANNER_DEFAULT_TRIP_LENGTH_DAYS;
 
   // A model may suggest; only the traveller makes something fixed.
   for (const constraint of request.constraints) {
@@ -580,7 +590,7 @@ function alignHardConstraints(
     ),
   );
   const dayCount =
-    dates?.length ?? proposal.selectedDurationDays ?? AI_PLANNER_TRIP_LENGTH_TIERS[0];
+    dates?.length ?? proposal.selectedDurationDays ?? AI_PLANNER_DEFAULT_TRIP_LENGTH_DAYS;
   for (const constraint of constraints.values()) {
     if (constraint.source !== 'user' || constraint.strength !== 'hard') continue;
     // A commitment dated outside the trip cannot be kept on it. It stays the

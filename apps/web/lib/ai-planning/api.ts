@@ -29,6 +29,7 @@ export type AiPlanningDraft = {
   assumptions: Array<{
     code:
       | 'dates_defaulted'
+      | 'country_inferred'
       | 'date_year_inferred'
       | 'destination_inferred'
       | 'interest_inferred'
@@ -63,6 +64,8 @@ export type AiPlanningDraft = {
   places: Array<
     | {
         id: string;
+        countryCode?: string;
+        countryCodeHint?: string | null;
         location?: { latitude: number; longitude: number };
         name: string;
         placeId: string;
@@ -73,6 +76,7 @@ export type AiPlanningDraft = {
         id: string;
         name: string;
         note: string | null;
+        countryCodeHint?: string | null;
         resolution: 'custom';
         verification: 'not_checked' | 'unverified';
       }

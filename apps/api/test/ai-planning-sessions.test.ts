@@ -1,3 +1,4 @@
+import { getPlanEntitlements } from '../src/services/plan-entitlements.js';
 import { creditModels } from './support/fake-ai-credits.js';
 import { draftPlanScoreInputRevision } from '../src/services/ai-planning-plan-score.js';
 import Fastify from 'fastify';
@@ -68,6 +69,7 @@ type SessionState = {
   createdAt: Date;
   draft: unknown;
   draftRevision: number;
+  draftMaxDays?: number;
   expiresAt: Date;
   id: string;
   lastErrorCode: string | null;
@@ -199,6 +201,7 @@ function createPlanningStore(
           createdAt: NOW,
           draft: null,
           draftRevision: 0,
+          draftMaxDays: data.draftMaxDays,
           expiresAt: data.expiresAt,
           id,
           lastErrorCode: null,
@@ -584,6 +587,9 @@ describe('planning-session reservations and recovery', () => {
       prisma: store.prisma,
     });
 
+    expect(store.sessions.get(first.id)?.draftMaxDays).toBe(
+      getPlanEntitlements('free').aiPlanner.maxItineraryDays,
+    );
     expect(retry.id).toBe(first.id);
     expect(retry.pendingRunId).toBe(first.pendingRunId);
     expect(store.sessions).toHaveLength(1);

@@ -62,6 +62,7 @@ export function AiPlanningComposer({
     briefSelections,
     canGenerate,
     cancel,
+    startOver,
     cancelled,
     composedPrompt,
     generate,
@@ -135,7 +136,7 @@ export function AiPlanningComposer({
                   <Button
                     className="-ml-3 text-brand hover:text-brand-strong"
                     disabled={operation === 'cancelling'}
-                    onClick={() => void cancel()}
+                    onClick={() => void startOver()}
                     type="button"
                     variant="ghost"
                   >

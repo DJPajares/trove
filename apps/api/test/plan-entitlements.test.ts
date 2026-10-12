@@ -416,3 +416,23 @@ test('existing monthly allocations retain their granted allowance until renewal'
     creditSnapshot(await resolveAiCreditPeriod(tx, ownerId, new Date('2026-02-28T12:34:56Z'))),
   ).toMatchObject({ allowance: 50, usedCredits: 0, availableCredits: 50 });
 });
+
+test('the supplied South Island wording identifies two weeks without an exact date range', () => {
+  expect(
+    explicitAiTripDays(
+      'This will be an adventure of a lifetime. Make this 2 weeks, the most memorable for the both of us.',
+    ),
+  ).toBe(14);
+  expect(() =>
+    checkAiPlannerPromptDays(
+      'Make this 2 weeks in New Zealand',
+      getPlanEntitlements('free').aiPlanner.maxItineraryDays,
+    ),
+  ).toThrow('itinerary_day_limit_exceeded');
+  expect(() =>
+    checkAiPlannerPromptDays(
+      'Make this 2 weeks in New Zealand',
+      getPlanEntitlements('paid').aiPlanner.maxItineraryDays,
+    ),
+  ).not.toThrow();
+});

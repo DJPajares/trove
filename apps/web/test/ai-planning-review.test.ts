@@ -309,3 +309,36 @@ test('an unchanged draft reports no changes', () => {
     items: [],
   });
 });
+
+test('multiple inferred destinations and country metadata retain separate identities', () => {
+  const draft = reviewDraft();
+  draft.assumptions = ['Christchurch', 'Queenstown'].map((value, index) => ({
+    code: 'destination_inferred',
+    id: `destination-assumption:${index}`,
+    fieldPath: 'trip.destinations',
+    value,
+    rationale: null,
+  }));
+  draft.trip.destinations = draft.assumptions.map((assumption, index) => ({
+    id: `destination:${index}`,
+    assumptionId: assumption.id,
+    destinationIntentId: null,
+    placeRefId: 'place:verified',
+    source: 'model',
+  }));
+  draft.assumptions.push({
+    code: 'country_inferred',
+    id: 'countries',
+    fieldPath: 'trip.countries',
+    value: ['NZ'],
+    rationale: null,
+  });
+  expect(activeAiPlanningAssumptions(draft).map((assumption) => assumption.id)).toEqual([
+    'destination-assumption:0',
+    'destination-assumption:1',
+    'countries',
+  ]);
+  expect(aiPlanningAssumptionMessageValues(draft.assumptions[2]!, draft, 'en').value).toBe(
+    'New Zealand',
+  );
+});

@@ -53,14 +53,7 @@ import {
   ItemTitle,
 } from '@/components/ui/item';
 import { Label } from '@/components/ui/label';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import {
   addToCollection,
   createCollection,
@@ -1026,10 +1019,7 @@ export function SavedPlacesManager() {
           className="w-full md:data-[side=right]:w-[min(34rem,calc(100%-0.5rem))]"
           closeLabel={t('close')}
         >
-          <SheetHeader className="border-b">
-            <SheetTitle>{t('addPlaceTitle')}</SheetTitle>
-            <SheetDescription>{t('addPlaceDescription')}</SheetDescription>
-          </SheetHeader>
+          <SheetHeading title={t('addPlaceTitle')} description={t('addPlaceDescription')} />
           <div className="min-h-0 overflow-y-auto p-5">
             {addMode === 'search' ? (
               <div className="space-y-5">
@@ -1139,18 +1129,18 @@ export function SavedPlacesManager() {
             className="flex min-h-0 flex-1 flex-col"
             onSubmit={(event) => void handleCollectionSave(event)}
           >
-            <SheetHeader className="border-b">
-              <SheetTitle>
-                {collectionEditor.mode === 'rename'
+            <SheetHeading
+              title={
+                collectionEditor.mode === 'rename'
                   ? t('renameCollectionTitle')
-                  : t('createCollectionTitle')}
-              </SheetTitle>
-              <SheetDescription>
-                {collectionEditor.mode === 'rename'
+                  : t('createCollectionTitle')
+              }
+              description={
+                collectionEditor.mode === 'rename'
                   ? t('renameCollectionDescription')
-                  : t('createCollectionDescription')}
-              </SheetDescription>
-            </SheetHeader>
+                  : t('createCollectionDescription')
+              }
+            />
             <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
               {collectionError ? (
                 <Alert role="alert" variant="destructive">
@@ -1223,14 +1213,12 @@ export function SavedPlacesManager() {
         open={Boolean(collectionPickerPlace)}
       >
         <SheetContent closeLabel={t('close')}>
-          <SheetHeader className="border-b">
-            <SheetTitle>{t('manageCollectionsTitle')}</SheetTitle>
-            <SheetDescription>
-              {t('manageCollectionsDescription', {
-                name: collectionPickerPlace ? getPlaceName(collectionPickerPlace) : '',
-              })}
-            </SheetDescription>
-          </SheetHeader>
+          <SheetHeading
+            title={t('manageCollectionsTitle')}
+            description={t('manageCollectionsDescription', {
+              name: collectionPickerPlace ? getPlaceName(collectionPickerPlace) : '',
+            })}
+          />
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
             {collectionError ? (
               <Alert role="alert" variant="destructive">
@@ -1289,14 +1277,12 @@ export function SavedPlacesManager() {
             className="flex min-h-0 flex-1 flex-col"
             onSubmit={(event) => void handleNoteSave(event)}
           >
-            <SheetHeader className="border-b">
-              <SheetTitle>{t('editNoteTitle')}</SheetTitle>
-              <SheetDescription>
-                {t('editNoteDescription', {
-                  name: noteEditorPlace ? getPlaceName(noteEditorPlace) : '',
-                })}
-              </SheetDescription>
-            </SheetHeader>
+            <SheetHeading
+              title={t('editNoteTitle')}
+              description={t('editNoteDescription', {
+                name: noteEditorPlace ? getPlaceName(noteEditorPlace) : '',
+              })}
+            />
             <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
               <div className="space-y-2">
                 <Label htmlFor="saved-place-note">{t('personalNote')}</Label>

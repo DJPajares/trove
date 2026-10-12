@@ -7,14 +7,7 @@ import { useMemo, useState } from 'react';
 import { localToday } from '@/components/saved/saved-ready-for-trip';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { applyTaskTemplate, type TaskTemplate } from '@/lib/tasks/api';
 import { formatTripDateRange } from '@/lib/trips/format';
 import type { Trip } from '@/lib/trips/api';
@@ -147,19 +140,12 @@ function ApplyForm({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <SheetHeader className="gap-1 border-b-0 px-5 pt-6 pb-0 sm:px-6">
-        <p className="text-xs font-semibold tracking-[0.08em] text-brand uppercase">
-          {t('applyEyebrow')}
-        </p>
-        <SheetTitle className="font-journal text-[2rem] leading-tight font-normal tracking-normal">
-          {template.name}
-        </SheetTitle>
-        <SheetDescription className="text-sm leading-6">
-          {t('applyDescription', { count })}
-        </SheetDescription>
-      </SheetHeader>
+      <SheetHeading
+        description={t('applyDescription', { count })}
+        title={t('addNamedToTrip', { name: template.name })}
+      />
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-4 pb-4 sm:px-6">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-4 pb-4">
         {error ? (
           <Alert className="mb-3" role="alert" variant="destructive">
             <CircleAlert aria-hidden="true" />
@@ -202,7 +188,7 @@ function ApplyForm({
         )}
       </div>
 
-      <SheetFooter className="gap-3 px-5 pt-4 sm:px-6">
+      <SheetFooter className="gap-3 px-5 pt-4">
         <p className="text-[0.8125rem] leading-5 text-muted-foreground">{t('applyNote')}</p>
         <Button
           className="h-12 rounded-full text-base"

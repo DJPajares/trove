@@ -15,14 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { TimeInput } from '@/components/time-input';
 
 export function DayPlanningContextSheet({
@@ -71,10 +64,7 @@ export function DayPlanningContextSheet({
       }}
     >
       <SheetContent closeLabel={t('cancel')}>
-        <SheetHeader className="border-b">
-          <SheetTitle>{t('title')}</SheetTitle>
-          <SheetDescription>{t('hint')}</SheetDescription>
-        </SheetHeader>
+        <SheetHeading title={t('title')} description={t('hint')} />
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={save}>
           <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-5">
             <Field>

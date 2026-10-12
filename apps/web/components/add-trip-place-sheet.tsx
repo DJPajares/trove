@@ -20,13 +20,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from '@/components/ui/item';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeading } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { useProviderPlaceSearch } from '@/hooks/use-provider-place-search';
 import {
@@ -271,10 +265,7 @@ export function AddTripPlaceSheet({
         className="w-full md:data-[side=right]:w-[min(34rem,calc(100%-0.5rem))]"
         closeLabel={t('close')}
       >
-        <SheetHeader className="border-b">
-          <SheetTitle>{t('addPlaceTitle')}</SheetTitle>
-          <SheetDescription>{t('addPlaceDescription')}</SheetDescription>
-        </SheetHeader>
+        <SheetHeading title={t('addPlaceTitle')} description={t('addPlaceDescription')} />
 
         <div className="min-h-0 space-y-5 overflow-y-auto p-5">
           <SearchField

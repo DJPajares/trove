@@ -5,15 +5,7 @@ import { useEffect, useState } from 'react';
 
 import { journalSerif } from '@/components/memories/journal-font';
 import { Button } from '@/components/ui/button';
-import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetClose, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import {
   EXPERIENCE_RATING_VALUES,
@@ -86,14 +78,9 @@ export function ExperienceRatingSheet({
   return (
     <Sheet onOpenChange={onOpenChange} open={open}>
       <SheetContent className={cn(journalSerif.variable, 'bg-paper')} closeLabel={t('close')}>
-        <SheetHeader className="border-b-0 pb-2">
-          <SheetTitle className="font-journal text-[length:var(--text-section-title)] font-normal tracking-normal">
-            {title}
-          </SheetTitle>
-          <SheetDescription>{description}</SheetDescription>
-        </SheetHeader>
+        <SheetHeading description={description} title={title} />
 
-        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-6">
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 pb-6">
           {/* Toggle buttons rather than radios: choosing the current value
               clears the rating, which a radio group cannot express. */}
           <div aria-label={title} className="-mx-2 flex items-center gap-1" role="group">

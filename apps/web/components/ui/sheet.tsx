@@ -5,7 +5,7 @@ import { Drawer as SheetPrimitive } from '@base-ui/react/drawer';
 
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { XIcon } from 'lucide-react';
+import { ArrowLeft, XIcon } from 'lucide-react';
 
 type SheetSide = 'top' | 'right' | 'bottom' | 'left';
 
@@ -150,7 +150,10 @@ function SheetHeader({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="sheet-header"
-      className={cn('flex flex-col gap-2 border-b border-border-subtle p-6 pr-16', className)}
+      className={cn(
+        'flex flex-col gap-1 border-b border-border-subtle px-5 pt-4 pr-14 pb-4',
+        className,
+      )}
       {...props}
     />
   );
@@ -171,7 +174,7 @@ function SheetTitle({ className, ...props }: SheetPrimitive.Title.Props) {
     <SheetPrimitive.Title
       data-slot="sheet-title"
       className={cn(
-        'text-[var(--text-section-title)] leading-tight font-semibold tracking-[-0.025em] text-foreground',
+        'text-xl leading-snug font-semibold tracking-[-0.015em] text-foreground',
         className,
       )}
       {...props}
@@ -183,9 +186,51 @@ function SheetDescription({ className, ...props }: SheetPrimitive.Description.Pr
   return (
     <SheetPrimitive.Description
       data-slot="sheet-description"
-      className={cn('text-sm text-muted-foreground', className)}
+      className={cn('text-sm leading-relaxed text-muted-foreground', className)}
       {...props}
     />
+  );
+}
+
+/**
+ * Every drawer's header, one design: a plain title, an optional muted line
+ * under it, an optional way back, and a hairline before the content. It takes
+ * no class names on purpose - a drawer that wants a different heading wants a
+ * different component, not a restyled one. `children` is for a context row
+ * that belongs to the heading, such as the day a drawer is working for.
+ */
+function SheetHeading({
+  back,
+  children,
+  description,
+  title,
+}: Readonly<{
+  back?: { label: string; onClick: () => void };
+  children?: React.ReactNode;
+  description?: React.ReactNode;
+  title: React.ReactNode;
+}>) {
+  return (
+    <SheetHeader>
+      <div className="flex items-center gap-1.5">
+        {back ? (
+          <Button
+            aria-label={back.label}
+            className="-my-1.5 -ml-2 shrink-0"
+            onClick={back.onClick}
+            size="icon-sm"
+            type="button"
+            variant="ghost"
+          >
+            <ArrowLeft aria-hidden="true" />
+          </Button>
+        ) : null}
+        <SheetTitle className="min-w-0">{title}</SheetTitle>
+      </div>
+      {description ? <SheetDescription>{description}</SheetDescription> : null}
+      {/* A context row spans the full width: only the title needs to clear the ×. */}
+      {children ? <div className="-mr-9">{children}</div> : null}
+    </SheetHeader>
   );
 }
 
@@ -197,6 +242,7 @@ export {
   SheetOverlay,
   SheetPortal,
   SheetHeader,
+  SheetHeading,
   SheetFooter,
   SheetTitle,
   SheetDescription,

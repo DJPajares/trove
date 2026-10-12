@@ -16,14 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import type { ItineraryItem } from '@/lib/itinerary/api';
@@ -159,10 +152,7 @@ export function TripModeMemorySheet({
         className="w-full md:data-[side=right]:w-[min(34rem,calc(100%-0.5rem))]"
         closeLabel={t('cancel')}
       >
-        <SheetHeader className="border-b">
-          <SheetTitle>{t('title')}</SheetTitle>
-          <SheetDescription>{t('description')}</SheetDescription>
-        </SheetHeader>
+        <SheetHeading title={t('title')} description={t('description')} />
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
           <p className="text-xs leading-5 text-text-subtle">

@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, useState, type ReactNode } from 'react';
 
 import { Input } from '@/components/ui/input';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeading } from '@/components/ui/sheet';
 import type { CurrencyMetadata } from '@/lib/currency/api';
 import { countriesUsingCurrency } from '@/lib/currency/country-currency';
 import { isCurrencyCode } from '@/lib/currency/recent-pairs';
@@ -112,12 +112,8 @@ export function CurrencyPickerSheet({
       open={open}
     >
       <SheetContent className="h-[min(44rem,90dvh)] w-full gap-0 md:h-full" closeLabel={t('close')}>
-        <SheetHeader className="border-b-0 pb-3">
-          <SheetTitle className="font-journal text-[2rem] leading-none font-normal tracking-normal">
-            {title}
-          </SheetTitle>
-        </SheetHeader>
-        <label className="relative mx-6 mb-1 block">
+        <SheetHeading title={title} />
+        <label className="relative mx-5 mt-4 mb-1 block">
           <span className="sr-only">{t('searchLabel')}</span>
           <Search
             aria-hidden="true"

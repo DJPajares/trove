@@ -6,9 +6,8 @@ import type { FormEvent } from 'react';
 
 import { AiPlanningAllowance } from '@/components/ai-planning-allowance';
 import { AiPlanningBriefField } from '@/components/ai-planning-brief-field';
-import { journalSerif } from '@/components/memories/journal-font';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeading } from '@/components/ui/sheet';
 import type { AiPlanningAvailability } from '@/lib/ai-planning/api';
 import {
   composeAiPlanningBrief,
@@ -17,7 +16,6 @@ import {
 } from '@/lib/ai-planning/brief';
 import { isAiPlanningPromptValid } from '@/lib/ai-planning/presentation';
 import * as Icons from '@/lib/icons';
-import { cn } from '@/lib/utils';
 
 const ADJUST_PROMPT_ID = 'ai-review-adjust-prompt';
 
@@ -65,37 +63,20 @@ export function AiPlanningAdjustSheet({
   return (
     <Sheet onOpenChange={onOpenChange} open={open}>
       <SheetContent
-        className={cn(
-          journalSerif.variable,
-          'h-[90dvh] w-full gap-3 bg-background md:h-full md:data-[side=right]:w-[min(36rem,calc(100%-0.5rem))]',
-        )}
+        className="h-[90dvh] w-full gap-3 bg-background md:h-full md:data-[side=right]:w-[min(36rem,calc(100%-0.5rem))]"
         closeLabel={t('close')}
       >
-        <div className="px-5 pt-5 pr-16">
-          <SheetTitle className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
-            {t('adjustEyebrow')}
-          </SheetTitle>
-          <SheetDescription className="sr-only">{t('adjustHint')}</SheetDescription>
-        </div>
+        <SheetHeading description={t('adjustHint')} title={t('adjustEyebrow')} />
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-          <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-6 sm:px-6">
+          <div className="flex-1 space-y-4 overflow-y-auto px-4 pt-2 pb-6 sm:px-6">
             <AiPlanningBriefField
-              describedBy={`${ADJUST_PROMPT_ID}-hint`}
               disabled={busy}
               id={ADJUST_PROMPT_ID}
               initialTray={initialTray}
               label={
-                <div className="space-y-1.5 px-1">
-                  <label
-                    className="block font-journal text-[2rem] leading-[1.04] font-normal tracking-[-0.01em] text-balance sm:text-[2.5rem]"
-                    htmlFor={ADJUST_PROMPT_ID}
-                  >
-                    {t('adjustLabel')}
-                  </label>
-                  <p className="text-sm text-muted-foreground" id={`${ADJUST_PROMPT_ID}-hint`}>
-                    {t('adjustHint')}
-                  </p>
-                </div>
+                <label className="sr-only" htmlFor={ADJUST_PROMPT_ID}>
+                  {t('adjustLabel')}
+                </label>
               }
               mode="nudges"
               onSelectionsChange={onSelectionsChange}

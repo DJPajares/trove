@@ -6,13 +6,7 @@ import { useState } from 'react';
 import { usePreferences } from '@/components/preferences-provider';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeading } from '@/components/ui/sheet';
 import { formatSuggestedClock } from '@/lib/itinerary/day-time-suggestions';
 export function TimingReviewNotice({
   outcome,
@@ -61,16 +55,14 @@ export function TimingReviewNotice({
       </Alert>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent closeLabel={t('close')}>
-          <SheetHeader>
-            <SheetTitle>{t('connectedTiming.review')}</SheetTitle>
-            <SheetDescription>
-              {t(
-                outcome?.changes.length
-                  ? 'connectedTiming.reviewHint'
-                  : 'connectedTiming.reviewUnresolvedHint',
-              )}
-            </SheetDescription>
-          </SheetHeader>
+          <SheetHeading
+            title={t('connectedTiming.review')}
+            description={t(
+              outcome?.changes.length
+                ? 'connectedTiming.reviewHint'
+                : 'connectedTiming.reviewUnresolvedHint',
+            )}
+          />
           <div className="min-h-0 flex-1 overflow-y-auto p-5">
             <ul className="divide-y">
               {outcome?.changes.map((change) => (

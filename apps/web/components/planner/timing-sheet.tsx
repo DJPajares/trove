@@ -9,14 +9,7 @@ import { useOnlineStatus } from '@/components/trip-sync-status';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { FieldGroup } from '@/components/ui/field';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { ItineraryApiError, type ItineraryItem, updateItineraryItem } from '@/lib/itinerary/api';
 import {
   acceptSuggestedSlot,
@@ -90,10 +83,7 @@ function TimingBody({
 
   return (
     <>
-      <SheetHeader className="border-b">
-        <SheetTitle>{timingT('title', { name })}</SheetTitle>
-        <SheetDescription>{timingT('description')}</SheetDescription>
-      </SheetHeader>
+      <SheetHeading title={timingT('title', { name })} description={timingT('description')} />
       <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
           <FieldGroup>

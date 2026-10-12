@@ -17,13 +17,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from '@/components/ui/item';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeading } from '@/components/ui/sheet';
 import { fetchPlaceLocationCandidates, type PlaceLocationCandidate } from '@/lib/saved/api';
 import { linkTripPlaceToProvider } from '@/lib/trip-places/api';
 import * as Icons from '@/lib/icons';
@@ -122,10 +116,7 @@ export function LocatePlaceSheet({
         className="w-full md:data-[side=right]:w-[min(34rem,calc(100%-0.5rem))]"
         closeLabel={t('locate.close')}
       >
-        <SheetHeader className="border-b">
-          <SheetTitle>{t('locate.title')}</SheetTitle>
-          <SheetDescription>{t('locate.description')}</SheetDescription>
-        </SheetHeader>
+        <SheetHeading title={t('locate.title')} description={t('locate.description')} />
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
           <form

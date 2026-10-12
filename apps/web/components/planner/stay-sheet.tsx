@@ -9,13 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeading } from '@/components/ui/sheet';
 import type { ItineraryDay, ItineraryTripPlace } from '@/lib/itinerary/api';
 import * as Icons from '@/lib/icons';
 
@@ -58,10 +52,7 @@ export function StaySheet({
         className="w-full md:data-[side=right]:w-[min(28rem,calc(100%-0.5rem))]"
         closeLabel={t('close')}
       >
-        <SheetHeader className="border-b">
-          <SheetTitle>{t('dailyBase')}</SheetTitle>
-          <SheetDescription>{t('dailyBaseHelp')}</SheetDescription>
-        </SheetHeader>
+        <SheetHeading title={t('dailyBase')} description={t('dailyBaseHelp')} />
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-[calc(var(--safe-bottom)+1.5rem)] sm:px-6">
           {booked ? (
             <p className="flex items-start gap-2 rounded-[var(--radius-lg)] bg-surface-tint/60 p-3 text-sm">

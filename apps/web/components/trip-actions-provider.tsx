@@ -21,13 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeading } from '@/components/ui/sheet';
 import { ITINERARY_EDIT_QUERY_ROOTS, invalidateTripQueries } from '@/lib/query/trip-invalidation';
 import { deleteTripAndClearCaches, tripEditMovesPlan } from '@/lib/trips/actions';
 import type { Trip } from '@/lib/trips/api';
@@ -154,10 +148,7 @@ export function TripActionsProvider({
           className="w-full md:data-[side=right]:w-[min(44rem,calc(100%-0.5rem))]"
           closeLabel={t('close')}
         >
-          <SheetHeader className="border-b">
-            <SheetTitle>{t('editTitle')}</SheetTitle>
-            <SheetDescription>{t('editDescription')}</SheetDescription>
-          </SheetHeader>
+          <SheetHeading title={t('editTitle')} description={t('editDescription')} />
           {editing ? (
             <TripForm
               key={trip.id}

@@ -11,14 +11,7 @@ import { useTripContext } from '@/components/trip-provider';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import {
   createItineraryItem,
@@ -299,12 +292,10 @@ function StopEditorBody({
 
   return (
     <>
-      <SheetHeader className="border-b">
-        <SheetTitle>{title}</SheetTitle>
-        <SheetDescription>
-          {request.kind === 'edit' ? t('editDescription') : t('createDescription')}
-        </SheetDescription>
-      </SheetHeader>
+      <SheetHeading
+        title={title}
+        description={request.kind === 'edit' ? t('editDescription') : t('createDescription')}
+      />
       <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
           <FieldGroup>

@@ -29,14 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import type { Expense, ExpenseCategory, ExpensePlace } from '@/lib/expenses/api';
 import { resolveExpenseCategory } from '@/lib/expenses/categories';
@@ -108,22 +101,22 @@ export function ExpenseEditorSheet({
           className="w-full md:data-[side=right]:w-[min(42rem,calc(100%-0.5rem))]"
           closeLabel={t('close')}
         >
-          <SheetHeader className="border-b">
-            <SheetTitle>
-              {editor.kind === 'budget'
+          <SheetHeading
+            title={
+              editor.kind === 'budget'
                 ? t('budgetTitle')
                 : editor.kind === 'edit'
                   ? t('editTitle')
-                  : t('createTitle')}
-            </SheetTitle>
-            <SheetDescription>
-              {editor.kind === 'budget'
+                  : t('createTitle')
+            }
+            description={
+              editor.kind === 'budget'
                 ? t('budgetDescriptionEditor')
                 : editor.kind === 'edit'
                   ? t('editDescription')
-                  : t('createDescription')}
-            </SheetDescription>
-          </SheetHeader>
+                  : t('createDescription')
+            }
+          />
 
           {editor.kind === 'budget' ? (
             <form className="flex min-h-0 flex-1 flex-col" onSubmit={onBudgetSubmit}>

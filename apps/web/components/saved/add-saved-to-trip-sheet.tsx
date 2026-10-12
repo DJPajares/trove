@@ -7,14 +7,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 
 import { localToday } from '@/components/saved/saved-ready-for-trip';
 import { Button } from '@/components/ui/button';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { queryKeys } from '@/lib/query/keys';
 import type { SavedPlace } from '@/lib/saved/api';
 import { tripsForSavedPlace } from '@/lib/saved/collection-view';
@@ -74,10 +67,7 @@ export function AddSavedToTripSheet({
   return (
     <Sheet onOpenChange={close} open={Boolean(savedPlace)}>
       <SheetContent className="gap-0" closeLabel={t('close')}>
-        <SheetHeader>
-          <SheetTitle>{t('title', { name })}</SheetTitle>
-          <SheetDescription>{t('description')}</SheetDescription>
-        </SheetHeader>
+        <SheetHeading title={t('title', { name })} description={t('description')} />
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={(event) => void submit(event)}>
           <div className="flex-1 space-y-2 overflow-y-auto p-5">
             {status === 'added' && selected ? (

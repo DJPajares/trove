@@ -341,7 +341,10 @@ export async function groundCandidates(
         candidate.localityHint ?? proposal.places.find((place) => place.id === destination)?.name,
       locationBias: context ? { ...context.location, radiusMeters: 50_000 } : undefined,
       countryCode: context?.countryCode,
-      contextConflict: association?.contextConflict,
+      destinationName: context?.localityName,
+      // A destination supplies its own identity context. Visiting it while
+      // transferring between other bases does not make the city ambiguous.
+      contextConflict: !destinationIds.has(candidate.id) && association?.contextConflict,
       requireExactName: destinationIds.has(candidate.id),
       signal,
     };

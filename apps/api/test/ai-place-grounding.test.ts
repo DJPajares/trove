@@ -654,7 +654,7 @@ test('relaxed matching cannot accept Old Airport Road as Old Airport Road Food C
   );
   expect(result.place.resolution).toBe('custom');
   expect(result.evidence.code).toBe('place_unresolved');
-  expect(searches()).toBe(1);
+  expect(searches()).toBe(2);
 });
 
 describe('grounding on a place the traveller saved', () => {

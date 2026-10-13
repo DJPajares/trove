@@ -1,5 +1,11 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
+import { useItineraryMovement } from '@/lib/itinerary/use-itinerary-movement';
+import { queuedMovement } from '@/lib/itinerary/queued-movement';
+import { queryKeys } from '@/lib/query/keys';
+import { invalidateTripQueries, ITINERARY_EDIT_QUERY_ROOTS } from '@/lib/query/trip-invalidation';
+import type { Itinerary } from '@/lib/itinerary/api';
 import { CloudUpload, RefreshCw, TriangleAlert, WifiOff } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
@@ -9,6 +15,8 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeading } from '@/components/ui/sheet';
 import {
   listUserMutations,
+  removeOfflineMutation,
+  isMovementOperation,
   isOfflineApiReachable,
   OFFLINE_CONNECTIVITY_EVENT,
   OFFLINE_DATA_REFRESH_EVENT,
@@ -60,6 +68,7 @@ const MISSING_ERROR_CODES = [
 ];
 
 const NAMED_REASONS = [
+  'itinerary_movement_review_required',
   'database_schema_outdated',
   'database_unavailable',
   'internal_error',
@@ -71,6 +80,9 @@ const NAMED_REASONS = [
 export function TripSyncStatus({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripMode.sync');
   const online = useOnlineStatus();
+  const client = useQueryClient();
+  const movementT = useTranslations('itinerary.movement');
+  const [movementError, setMovementError] = useState<string | null>(null);
   const [mutations, setMutations] = useState<OfflineMutation[]>([]);
   const [open, setOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -142,13 +154,45 @@ export function TripSyncStatus({ tripId }: Readonly<{ tripId: string }>) {
       : attentionCount
         ? t('attentionDescription')
         : t('pendingDescription');
+  const movement = useItineraryMovement({
+    tripId,
+    online,
+    nameFor: (id) => {
+      const itinerary = client.getQueryData<Itinerary>(queryKeys.itinerary(tripId));
+      const item = [
+        ...(itinerary?.days.flatMap((d) => d.items) ?? []),
+        ...(itinerary?.unscheduledItems ?? []),
+      ].find((i) => i.id === id);
+      return item?.customLabel || item?.tripPlace?.place.name || movementT('untimed');
+    },
+    onError: (key) => setMovementError(movementT(key)),
+    onCommitted: async () => {
+      await invalidateTripQueries(client, tripId, ITINERARY_EDIT_QUERY_ROOTS);
+    },
+  });
+  async function reviewMove(mutation: OfflineMutation) {
+    const operation = queuedMovement(mutation.operation);
+    if (!operation) return;
+    setOpen(false);
+    if (await movement.start(operation)) {
+      await removeOfflineMutation(mutation.id);
+      await refresh();
+    }
+  }
   const StatusIcon =
     !online || !apiAvailable ? WifiOff : attentionCount ? TriangleAlert : CloudUpload;
 
-  if (online && apiAvailable && mutations.length === 0) return null;
+  if (online && apiAvailable && mutations.length === 0 && !movement.busy && !movementError)
+    return null;
 
   return (
     <>
+      {movement.dialog}
+      {movementError ? (
+        <p role="alert" className="text-sm text-destructive">
+          {movementError}
+        </p>
+      ) : null}
       <Alert
         aria-live="polite"
         variant={!online || !apiAvailable ? 'warning' : attentionCount ? 'destructive' : 'default'}
@@ -202,7 +246,27 @@ export function TripSyncStatus({ tripId }: Readonly<{ tripId: string }>) {
                   </div>
 
                   <div className="mt-3 flex flex-wrap justify-end gap-2">
-                    {mutation.state === 'conflict' ? (
+                    {isMovementOperation(mutation.operation) ? (
+                      <>
+                        <Button
+                          disabled={!online || movement.busy}
+                          onClick={() =>
+                            void runAction(mutation.id, () => discardOfflineMutation(mutation.id))
+                          }
+                          variant="outline"
+                          size="sm"
+                        >
+                          {t('useCloud')}
+                        </Button>
+                        <Button
+                          disabled={!online || movement.busy}
+                          onClick={() => void reviewMove(mutation)}
+                          size="sm"
+                        >
+                          {t('reviewMove')}
+                        </Button>
+                      </>
+                    ) : mutation.state === 'conflict' ? (
                       <>
                         <Button
                           disabled={busyId === mutation.id || !online}

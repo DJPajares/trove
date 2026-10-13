@@ -882,7 +882,8 @@
         "memory_photo_upload_failed": "The photo could not be uploaded.",
         "memory_storage_full": "This device has no room left for more photos.",
         "trip_missing": "This trip is no longer in your account, so the change cannot be applied.",
-        "unknown": "Reported reason: {code}"
+        "unknown": "Reported reason: {code}",
+        "itinerary_movement_review_required": "This saved move needs a fresh timing review before it can be applied."
       },
       "operations": {
         "itinerary_item_create": "Add itinerary item",
@@ -909,7 +910,8 @@
       "discard": "Discard",
       "syncNow": "Sync now",
       "useCloud": "Use cloud version",
-      "keepMine": "Keep my change"
+      "keepMine": "Keep my change",
+      "reviewMove": "Review move"
     },
     "offlineReady": {
       "title": "Ready Offline",
@@ -1945,6 +1947,17 @@
       "append": "Add after existing items",
       "appendDescription": "Keep the {count, plural, one {existing item} other {# existing items}} first, then add this day’s plan.",
       "swap": "Swap the two day plans",
+      "before": "Before: {range}",
+      "after": "After: {range}",
+      "reason": {
+        "day": "Moved to a different day.",
+        "zone": "The destination uses a different time zone.",
+        "manual": "Uses the time you entered.",
+        "fit": "Adjusted to fit the new order and travel."
+      },
+      "recoveryTitle": "Check the saved itinerary",
+      "recoveryDescription": "The connection was lost while saving. Reconnect so Trove can check whether your move was saved before you try again.",
+      "retryRecovery": "Check saved itinerary",
       "swapDescription": "Move the destination’s {count, plural, one {item} other {# items}} back to this date.",
       "settingsStay": "Each day's stay moves with the plan. Day names, notes, ratings, and other date-specific details stay on their current dates.",
       "confirm": "Move plan",
@@ -2316,6 +2329,44 @@
         "conflict": "Timing conflict",
         "review": "Timing needs checking",
         "notice": "Connection notice"
+      }
+    },
+    "movement": {
+      "title": "Review this move",
+      "description": "Check the timing changes before moving your stops. Cancelling leaves your itinerary unchanged.",
+      "accept": "Accept changes",
+      "cancel": "Cancel move",
+      "working": "Checking…",
+      "preview": "Check these times",
+      "adjust": "Enter times manually",
+      "start": "Start time",
+      "duration": "Visit duration (minutes)",
+      "untimed": "No exact time",
+      "unscheduled": "Unscheduled",
+      "resolve": "This move needs attention. Enter times that fit, or cancel and keep your current plan.",
+      "offline": "Connect to the internet to check and move itinerary stops.",
+      "failed": "We could not verify this move. Your plan has not been replaced with the proposal. Reconnect and check your itinerary before trying again.",
+      "stale": "Your itinerary or its timing evidence changed. Review this updated proposal before accepting.",
+      "recovered": "The connection was interrupted. We have refreshed your saved itinerary; check it before trying another move.",
+      "swap": "Swap with another stop",
+      "before": "Before: {range}",
+      "after": "After: {range}",
+      "reason": {
+        "day": "Moved to a different day.",
+        "zone": "The destination uses a different time zone.",
+        "manual": "Uses the time you entered.",
+        "fit": "Adjusted to fit the new order and travel."
+      },
+      "recoveryTitle": "Check the saved itinerary",
+      "recoveryDescription": "The connection was lost while saving. Reconnect so Trove can check whether your move was saved before you try again.",
+      "retryRecovery": "Check saved itinerary",
+      "swapDescription": "Choose a stop to exchange positions with. Each stop keeps its duration and commitments.",
+      "limitation": {
+        "OPENING_HOURS_UNKNOWN": "Opening hours could not be checked.",
+        "TRAVEL_UNKNOWN": "Some travel times could not be checked.",
+        "TRAVEL_ESTIMATED": "Travel times are estimates.",
+        "DURATION_ESTIMATED": "Some visit durations are estimates.",
+        "TIGHT_TRANSITION": "There is little spare time before a fixed activity."
       }
     }
   },

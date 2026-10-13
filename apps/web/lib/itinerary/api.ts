@@ -957,58 +957,42 @@ export async function deleteItineraryItem(tripId: string, itemId: string) {
   }
 }
 
-export async function organizeItineraryItem(
+/** Movement is online-only. A failed request must never enter the offline queue. */
+export async function previewItineraryMovement(
   tripId: string,
-  itemId: string,
-  input: { itineraryDayId: string | null; position: number; timingPolicy?: TimingPolicy },
+  input: import('@trove/types').MovementInput,
+  signal?: AbortSignal,
 ) {
-  const auth = await getAuthContext();
-  const storedBaseItem = await baseItem(auth.userId, tripId, itemId).catch(() => null);
-  const operation: OfflineMutationOperation | null = storedBaseItem
-    ? {
-        baseItem: storedBaseItem,
-        input,
-        itemId,
-        kind: 'itinerary_item_organize',
-      }
-    : null;
-  try {
-    const result = await itineraryRequest<{ scheduling: SchedulingOutcome } | undefined>(
-      `/trips/${tripId}/itinerary/items/${itemId}/organization`,
-      { body: JSON.stringify(input), method: 'PATCH' },
-      auth,
-    );
-    if (operation) await applyOnlineMutation(auth.userId, tripId, operation);
-    publishTimingReview(auth.userId, tripId, result?.scheduling);
-    return result;
-  } catch (error) {
-    if (!operation) throw error;
-    await queueOrThrow(error, auth.userId, tripId, operation);
-  }
+  return itineraryRequest<import('@trove/types').MovementProposal>(
+    `/trips/${tripId}/itinerary/movements/preview`,
+    { method: 'POST', body: JSON.stringify(input), signal },
+  );
 }
-
-export async function moveItineraryDayPlan(
+export async function applyItineraryMovement(
   tripId: string,
-  sourceItineraryDayId: string,
-  input: ItineraryDayMoveInput,
+  input: import('@trove/types').MovementApplyInput,
 ) {
   const auth = await getAuthContext();
-  const operation: OfflineMutationOperation = {
-    input,
-    kind: 'itinerary_day_move',
-    sourceItineraryDayId,
-  };
-  try {
-    const result = await itineraryRequest<void>(
-      `/trips/${tripId}/itinerary/days/${sourceItineraryDayId}/move`,
-      { body: JSON.stringify(input), method: 'POST' },
-      auth,
-    );
-    await applyOnlineMutation(auth.userId, tripId, operation);
-    return result;
-  } catch (error) {
-    await queueOrThrow(error, auth.userId, tripId, operation);
-  }
+  const result = await itineraryRequest<{
+    itinerary: Itinerary;
+    proposal: import('@trove/types').MovementProposal;
+  }>(
+    `/trips/${tripId}/itinerary/movements/apply`,
+    { method: 'POST', body: JSON.stringify(input) },
+    auth,
+  );
+  await saveItinerarySnapshot(auth.userId, tripId, result.itinerary).catch(() => undefined);
+  return result;
+}
+export async function readMovementItinerary(tripId: string) {
+  const auth = await getAuthContext();
+  const result = await itineraryRequest<Itinerary>(
+    `/trips/${tripId}/itinerary?cachedOnly=1`,
+    {},
+    auth,
+  );
+  await saveItinerarySnapshot(auth.userId, tripId, result).catch(() => undefined);
+  return result;
 }
 
 export function duplicateItineraryItem(tripId: string, itemId: string, clientItemId: string) {

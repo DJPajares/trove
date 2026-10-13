@@ -10,8 +10,6 @@ import {
   ItineraryNotFoundError,
   ItineraryValidationError,
   listItinerary,
-  moveItineraryDayPlan,
-  organizeItineraryItem,
   setItineraryDayBase,
   updateItineraryDayExperienceRating,
   updateDatedExperienceRating,
@@ -195,17 +193,7 @@ export function createItineraryControllers() {
       if (!params.success || !body.success) {
         return reply.code(400).send({ code: 'invalid_itinerary_day_move' });
       }
-      try {
-        await moveItineraryDayPlan(
-          userId,
-          params.data.tripId,
-          params.data.itineraryDayId,
-          body.data,
-        );
-        return reply.code(204).send();
-      } catch (error) {
-        return handleError(reply, error);
-      }
+      return reply.code(409).send({ code: 'itinerary_movement_review_required' });
     },
 
     async duplicateItem(request: FastifyRequest, reply: FastifyReply) {
@@ -287,18 +275,7 @@ export function createItineraryControllers() {
       if (!userId) return;
       if (!params.success || !body.success)
         return reply.code(400).send({ code: 'invalid_itinerary_item' });
-      try {
-        const result = await organizeItineraryItem(
-          userId,
-          params.data.tripId,
-          params.data.itemId,
-          body.data,
-          getExpectedUpdatedAt(request),
-        );
-        return result ? reply.send(result) : reply.code(204).send();
-      } catch (error) {
-        return handleError(reply, error);
-      }
+      return reply.code(409).send({ code: 'itinerary_movement_review_required' });
     },
 
     async setDayBase(request: FastifyRequest, reply: FastifyReply) {

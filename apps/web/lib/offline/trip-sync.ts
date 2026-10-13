@@ -823,6 +823,13 @@ async function replayMemoryMutation(
 }
 
 async function replayMutation(mutation: OfflineMutation, accessToken: string, force: boolean) {
+  if (
+    mutation.operation.kind === 'itinerary_item_organize' ||
+    mutation.operation.kind === 'itinerary_day_move'
+  ) {
+    await updateMutationState(mutation, 'conflict', 'itinerary_movement_review_required');
+    return;
+  }
   if (mutation.operation.kind.startsWith('itinerary_')) {
     return replayItineraryMutation(
       mutation,

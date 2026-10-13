@@ -485,9 +485,9 @@ export async function listItinerary(
   userId: string,
   tripId: string,
   languageCode?: string,
-  readOptions: { cachedOnly?: boolean } = {},
+  readOptions: { cachedOnly?: boolean; client?: Prisma.TransactionClient } = {},
 ) {
-  const prisma = getPrismaClient();
+  const prisma = readOptions.client ?? getPrismaClient();
   const trip = await prisma.trip.findFirst({
     where: { id: tripId, ownerId: userId },
     select: {

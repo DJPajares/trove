@@ -26,6 +26,7 @@ import * as Icons from '@/lib/icons';
  */
 export function DayMenu({
   canCheckOrder,
+  movementDisabled,
   canSuggestTimes,
   compact,
   day,
@@ -40,6 +41,7 @@ export function DayMenu({
 }: Readonly<{
   /** Checking the order asks the server; offline it is not offered. */
   canCheckOrder: boolean;
+  movementDisabled?: boolean;
   canSuggestTimes: boolean;
   compact: boolean;
   day: ItineraryDay;
@@ -107,11 +109,11 @@ export function DayMenu({
         {day.items.length ? (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => onMoveDay('append')}>
+            <DropdownMenuItem disabled={movementDisabled} onClick={() => onMoveDay('append')}>
               <Icons.Itinerary aria-hidden="true" />
               {t('dayMove.action')}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onMoveDay('swap')}>
+            <DropdownMenuItem disabled={movementDisabled} onClick={() => onMoveDay('swap')}>
               <ArrowLeftRight aria-hidden="true" />
               {t('dayMove.swapAction')}
             </DropdownMenuItem>

@@ -4,7 +4,7 @@
   "version": "1.2.2",
   "summaries": {
     "en": [
-      "A dialog's buttons now stay at the bottom of the screen, even when there's a lot to read above them."
+      "Long dialogs keep their title and close button at the top and their buttons at the bottom while you scroll."
     ]
   }
 }

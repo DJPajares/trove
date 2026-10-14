@@ -1,0 +1,10 @@
+{
+  "id": "dialog-actions-in-reach",
+  "date": "2026-10-14",
+  "version": "1.2.2",
+  "summaries": {
+    "en": [
+      "Long dialogs keep their title and close button at the top and their buttons at the bottom while you scroll."
+    ]
+  }
+}

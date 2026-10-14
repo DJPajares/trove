@@ -109,12 +109,12 @@ function StripPrint({
 
   return (
     <span
-      className="block rotate-[var(--tilt)] rounded-[2px] bg-paper-print p-1 pb-2 shadow-[var(--shadow-print)] transition-transform duration-[var(--motion-standard)] ease-[var(--ease-standard)] group-hover/day:rotate-0 motion-reduce:transition-none"
+      className="block w-full rotate-[var(--tilt)] rounded-[2px] bg-paper-print p-1 pb-2 shadow-[var(--shadow-print)] transition-transform duration-[var(--motion-standard)] ease-[var(--ease-standard)] group-hover/day:rotate-0 motion-reduce:transition-none"
       style={{ '--tilt': `${(tilt ?? 0) * 1.5}deg` } as CSSProperties}
     >
       <MediaFrame
         alt=""
-        className="aspect-[4/5] rounded-[1px]"
+        className="aspect-[4/5] w-full rounded-[1px]"
         dataSlot="journal-strip-print"
         onUnreachable={() => onPhotoError(photo)}
         sizes="5rem"

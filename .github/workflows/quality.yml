@@ -43,3 +43,6 @@ jobs:
 
       - name: Build workspaces
         run: pnpm build
+
+      - name: Verify API startup
+        run: pnpm --filter @trove/api exec vitest run test/api-startup.test.ts

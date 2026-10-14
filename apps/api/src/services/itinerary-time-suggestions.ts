@@ -1,3 +1,4 @@
+import { PLAN_SCORE_TRIP_INCLUDE } from './plan-score-trip-query.js';
 import { createHash } from 'node:crypto';
 import { getPrismaClient, type Prisma } from '@trove/db';
 import type { ItineraryDayTimeSuggestions, SchedulingOutcome } from '@trove/types';
@@ -33,7 +34,6 @@ import {
   discardExpiredCurrentHours,
   loadPlaceEvidence,
   mergeScoringPlaceIdentity,
-  PLAN_SCORE_TRIP_INCLUDE,
   readPlanScoreInputs,
   type PlanScoreTripRecord,
 } from './plan-score.js';

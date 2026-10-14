@@ -1,0 +1,10 @@
+{
+  "id": "reliable-api-startup",
+  "date": "2026-10-14",
+  "version": "1.1.1",
+  "summaries": {
+    "en": [
+      "Fixed an issue that prevented trips and saved places from loading after the latest update."
+    ]
+  }
+}

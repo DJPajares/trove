@@ -83,3 +83,47 @@ export function rediscoverSaved<T extends { createdAt: string; id: string }>(
       .toSorted((left, right) => left.createdAt.localeCompare(right.createdAt))[0] ?? null
   );
 }
+
+type CoverCandidate = {
+  collections: readonly { id: string }[];
+  createdAt: string;
+  place: { kind: 'custom' | 'provider' };
+};
+
+/** A cover holds one lead photo and at most two beside it. */
+const COVER_TILES = 3;
+
+/**
+ * The places a collection's cover is made of. Only a provider place can carry
+ * a photograph, so the cover is drawn from those, newest first - up to three.
+ * A collection of personal places alone shows one of them as its tile rather
+ * than a row of placeholders standing in for photos that do not exist.
+ */
+export function collectionCoverTiles<T extends CoverCandidate>(
+  collectionId: string,
+  savedPlaces: readonly T[],
+): T[] {
+  const members = savedPlaces
+    .filter((savedPlace) => savedPlace.collections.some((item) => item.id === collectionId))
+    .toSorted((left, right) => right.createdAt.localeCompare(left.createdAt));
+  const photographic = members.filter((member) => member.place.kind === 'provider');
+  return photographic.length ? photographic.slice(0, COVER_TILES) : members.slice(0, 1);
+}
+
+/**
+ * The order cover photos are asked for: every cover's lead before any cover's
+ * second, so a capped request never leaves one collection without a photo
+ * while another fills its small tiles. A place in two collections is asked for
+ * once.
+ */
+export function coverRequestOrder<T>(covers: readonly (readonly T[])[]): T[] {
+  const ordered = new Set<T>();
+  const deepest = Math.max(0, ...covers.map((tiles) => tiles.length));
+  for (let index = 0; index < deepest; index += 1) {
+    for (const tiles of covers) {
+      const tile = tiles[index];
+      if (tile !== undefined) ordered.add(tile);
+    }
+  }
+  return [...ordered];
+}

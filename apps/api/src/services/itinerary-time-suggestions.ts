@@ -76,7 +76,18 @@ const protectedItem = (item: {
   ['COMPLETED', 'SKIPPED'].includes(item.travelStatus ?? '');
 
 /** Stored evidence only. Virtual chains are rebuilt, never borrowed from a different order. */
-async function assessDay(
+export const TIMING_TRIP_INCLUDE = {
+  ...PLAN_SCORE_TRIP_INCLUDE,
+  startingPlace: { include: { providerRefs: true } },
+  itineraryItems: {
+    where: { itineraryDayId: null },
+    include: { _count: { select: { reservations: true } } },
+    orderBy: { position: 'asc' },
+  },
+} satisfies Prisma.TripInclude;
+export type TimingTrip = Prisma.TripGetPayload<{ include: typeof TIMING_TRIP_INCLUDE }>;
+
+export async function assessDay(
   userId: string,
   tripId: string,
   dayId: string,
@@ -84,11 +95,14 @@ async function assessDay(
   prisma: Prisma.TransactionClient,
   now: Date,
   reconcile = false,
+  movement?: { trip: TimingTrip; targetIds?: ReadonlySet<string>; validateOnly?: boolean },
 ) {
-  const trip = await prisma.trip.findFirst({
-    where: { id: tripId, ownerId: userId },
-    include: { ...PLAN_SCORE_TRIP_INCLUDE, startingPlace: { include: { providerRefs: true } } },
-  });
+  const trip =
+    movement?.trip ??
+    (await prisma.trip.findFirst({
+      where: { id: tripId, ownerId: userId },
+      include: TIMING_TRIP_INCLUDE,
+    }));
   if (!trip) throw new ItineraryNotFoundError('trip_not_found');
   const dayRow = trip.itineraryDays.find((day) => day.id === dayId);
   const storedInputs = readPlanScoreInputs(trip, now);
@@ -389,11 +403,16 @@ async function assessDay(
         ),
       duration,
       startWindow,
-      protected: protectedItem(original),
+      protected: protectedItem(original) || Boolean(movement?.validateOnly && item.start),
       preferredWindows,
     };
   });
   const returnLeg = segments.find((s) => s.destination.kind === 'daily_base');
+  const returnTravel = {
+    required: Boolean(returnLeg && scoring.availability),
+    minutes: returnLeg?.durationSeconds == null ? null : returnLeg.durationSeconds / 60,
+    estimated: returnLeg?.estimated,
+  };
   const result = scheduleItinerary({
     items,
     commitments: scoring.commitments,
@@ -405,12 +424,8 @@ async function assessDay(
       scoring.origin,
     ),
     dayEndMinute: elapsedLocalMinute(day.date, day.timeZone, 1440, scoring.origin),
-    returnTravel: {
-      required: Boolean(returnLeg && scoring.availability),
-      minutes: returnLeg?.durationSeconds == null ? null : returnLeg.durationSeconds / 60,
-      estimated: returnLeg?.estimated,
-    },
-    targetIds: reconcile ? new Set(targetId ? [targetId] : []) : targets,
+    returnTravel,
+    targetIds: movement?.targetIds ?? (reconcile ? new Set(targetId ? [targetId] : []) : targets),
     allowDayPartAdjustment: reconcile,
   });
   for (const item of day.items) {
@@ -516,6 +531,7 @@ async function assessDay(
       issues: result.issues,
     } satisfies ItineraryDayTimeSuggestions,
     result,
+    returnTravel,
     day,
     scoring,
     items,

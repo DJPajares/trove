@@ -162,6 +162,10 @@ function hydrate(name: ModelName, row: Row): Row {
       },
       dayExperiences: store.dayExperience.filter((entry) => entry.tripId === row.id),
       destinations: [],
+      itineraryItems: store.itineraryItem
+        .filter((i) => i.tripId === row.id && i.itineraryDayId === null)
+        .sort((a, b) => Number(a.position) - Number(b.position))
+        .map(hydrateItem),
       itineraryDays: store.itineraryDay
         .filter((day) => day.tripId === row.id)
         .map((day) => hydrate('itineraryDay', day)),

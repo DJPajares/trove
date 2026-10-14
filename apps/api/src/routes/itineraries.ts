@@ -13,6 +13,17 @@ import { createTripPlaceHoursControllers } from '../controllers/trip-place-hours
 import { createTripModeContextControllers } from '../controllers/trip-mode-context.js';
 import { requireAuthenticatedUser } from '../services/request-auth.js';
 import { PROVIDER_FANOUT_RATE_LIMIT } from './rate-limits.js';
+import { movementInputSchema, movementApplySchema } from '@trove/types';
+import {
+  previewItineraryMovement,
+  applyItineraryMovement,
+} from '../services/itinerary-movements.js';
+import {
+  ItineraryConflictError,
+  ItineraryNotFoundError,
+  ItineraryValidationError,
+} from '../services/itineraries.js';
+import { z } from 'zod';
 
 export function registerItineraryRoutes(app: FastifyInstance) {
   const controllers = createItineraryControllers();
@@ -27,6 +38,39 @@ export function registerItineraryRoutes(app: FastifyInstance) {
   const hoursNoticesControllers = createPlaceHoursNoticesControllers();
   const rainAlternativesControllers = createRainAlternativesControllers();
   const authenticated = { preHandler: requireAuthenticatedUser };
+  for (const action of ['preview', 'apply'] as const) {
+    app.post(
+      `/trips/:tripId/itinerary/movements/${action}`,
+      authenticated,
+      async (request, reply) => {
+        const params = z.object({ tripId: z.uuid() }).safeParse(request.params);
+        if (!request.authUserId) return reply.code(401).send({ code: 'not_authenticated' });
+        if (!params.success) return reply.code(400).send({ code: 'invalid_trip_id' });
+        try {
+          if (action === 'apply') {
+            const body = movementApplySchema.safeParse(request.body);
+            if (!body.success) return reply.code(400).send({ code: 'invalid_itinerary_movement' });
+            return reply.send(
+              await applyItineraryMovement(request.authUserId, params.data.tripId, body.data),
+            );
+          }
+          const body = movementInputSchema.safeParse(request.body);
+          if (!body.success) return reply.code(400).send({ code: 'invalid_itinerary_movement' });
+          return reply.send(
+            await previewItineraryMovement(request.authUserId, params.data.tripId, body.data),
+          );
+        } catch (error) {
+          if (error instanceof ItineraryConflictError)
+            return reply.code(409).send({ code: error.message });
+          if (error instanceof ItineraryNotFoundError)
+            return reply.code(404).send({ code: error.message });
+          if (error instanceof ItineraryValidationError)
+            return reply.code(400).send({ code: error.code });
+          throw error;
+        }
+      },
+    );
+  }
   // These reach Google once per place and once per leg of the day.
   const providerBacked = { config: PROVIDER_FANOUT_RATE_LIMIT, ...authenticated };
 

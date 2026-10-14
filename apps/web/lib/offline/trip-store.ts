@@ -20,6 +20,7 @@ import { localPreviewInstant } from '@/lib/itinerary/local-instant';
 import { applyItineraryDayMove } from '@/lib/itinerary/day-move';
 import { itemSortMinute, reslotItemByTime } from '@/lib/itinerary/item-order';
 import { PRIVATE_MEDIA_CACHES } from '@/lib/media/storage-cache-key';
+import { clearPendingTimingReview } from '@/lib/itinerary/timing-review';
 
 const DATABASE_NAME = 'trove-offline';
 const DATABASE_VERSION = 5;
@@ -449,7 +450,7 @@ export async function mergeQueuedMutations(userId: string, tripId: string, itine
   const mutations = await listUserMutations(userId, tripId);
   return mutations.reduce(
     (current, mutation) =>
-      isItineraryOperation(mutation.operation)
+      isItineraryOperation(mutation.operation) && !isMovementOperation(mutation.operation)
         ? applyOfflineMutation(current, mutation.operation)
         : current,
     itinerary,
@@ -685,8 +686,23 @@ export async function queueOfflineMutation(mutation: OfflineMutation) {
 export async function removeOfflineMutation(id: string) {
   const database = await openDatabase();
   const transaction = database.transaction(MUTATION_STORE, 'readwrite');
-  transaction.objectStore(MUTATION_STORE).delete(id);
+  const mutations = transaction.objectStore(MUTATION_STORE);
+  const removed = await requestResult<OfflineMutation | undefined>(mutations.get(id));
+  mutations.delete(id);
   await transactionDone(transaction);
+  if (removed) {
+    const remaining = await listUserMutations(removed.userId, removed.tripId);
+    if (
+      !remaining.some(
+        ({ operation }) =>
+          isMovementOperation(operation) ||
+          ('input' in operation &&
+            'timingPolicy' in operation.input &&
+            operation.input.timingPolicy === 'reconcile_flexible'),
+      )
+    )
+      clearPendingTimingReview(removed.userId, removed.tripId);
+  }
   announceChange();
 }
 
@@ -1268,6 +1284,10 @@ function applyInput(item: ItineraryItem, input: ItineraryItemInput, itinerary?: 
   }
   if (input.timingFlexibility !== undefined) item.timingFlexibility = input.timingFlexibility;
   item.updatedAt = new Date().toISOString();
+}
+
+export function isMovementOperation(operation: OfflineMutationOperation) {
+  return operation.kind === 'itinerary_item_organize' || operation.kind === 'itinerary_day_move';
 }
 
 export function isItineraryOperation(

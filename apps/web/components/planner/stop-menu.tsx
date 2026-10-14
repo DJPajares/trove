@@ -2,6 +2,7 @@
 
 import {
   ArrowDown,
+  ArrowLeftRight,
   ArrowUp,
   Copy,
   Ellipsis,
@@ -30,6 +31,8 @@ import type { ItineraryItem, ItineraryPriority } from '@/lib/itinerary/api';
 import * as Icons from '@/lib/icons';
 
 export type StopMenuActions = {
+  onSwapItem?: (item: ItineraryItem) => void;
+  movementDisabled?: boolean;
   onDeleteItem: (item: ItineraryItem) => void;
   onDuplicateItem: (item: ItineraryItem) => void;
   onEditItem: (item: ItineraryItem) => void;
@@ -102,25 +105,34 @@ export function StopMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-48">
         <DropdownMenuItem
-          disabled={index === 0}
+          disabled={actions.movementDisabled || index === 0}
           onClick={() => onMoveItem(item, selectedDayId, index - 1)}
         >
           <ArrowUp aria-hidden="true" />
           {t('itemMenu.moveEarlier')}
         </DropdownMenuItem>
         <DropdownMenuItem
-          disabled={index === itemCount - 1}
+          disabled={actions.movementDisabled || index === itemCount - 1}
           onClick={() => onMoveItem(item, selectedDayId, index + 1)}
         >
           <ArrowDown aria-hidden="true" />
           {t('itemMenu.moveLater')}
         </DropdownMenuItem>
 
-        <DropdownMenuItem onClick={() => onMoveToDay(item)}>
+        <DropdownMenuItem disabled={actions.movementDisabled} onClick={() => onMoveToDay(item)}>
           <Icons.Itinerary aria-hidden="true" />
           {t('planner.move.menuItem')}
         </DropdownMenuItem>
 
+        {actions.onSwapItem && item.itineraryDayId ? (
+          <DropdownMenuItem
+            disabled={actions.movementDisabled}
+            onClick={() => actions.onSwapItem?.(item)}
+          >
+            <ArrowLeftRight aria-hidden="true" />
+            {t('movement.swap')}
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuSeparator />
 
         {item.tripPlace && onPlacePriorityChange ? (

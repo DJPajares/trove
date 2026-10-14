@@ -7,7 +7,7 @@ import {
   readItineraryTimingPending,
   readItineraryTimingReview,
 } from '@/lib/itinerary/api';
-import { isItineraryEditing, withItineraryEdit } from '@/lib/itinerary/edit-lifecycle';
+import { useItineraryMovement } from '@/lib/itinerary/use-itinerary-movement';
 import { useItineraryEditing } from '@/lib/itinerary/use-itinerary-editing';
 import { DayPlanningContextSheet } from '@/components/day-planning-context';
 
@@ -90,8 +90,6 @@ import {
   type ItineraryTripPlace,
   localDateInTimeZone,
   type RouteTravelMode,
-  organizeItineraryItem,
-  moveItineraryDayPlan,
   setItineraryDayBase,
   updateItineraryDayNote,
   updateItineraryDayName,
@@ -122,7 +120,6 @@ import {
   placeVisitDate,
   scheduledPlaceUse,
 } from '@/lib/itinerary/places';
-import { optimisticItineraryEdit } from '@/lib/itinerary/optimistic';
 import { itineraryDayRouteRevision } from '@/lib/itinerary/routes';
 import { itineraryViewHref, resolveItineraryView } from '@/lib/itinerary/view';
 import {
@@ -345,6 +342,7 @@ export function ItineraryManager({
   const [organizingItemId, setOrganizingItemId] = useState<string | null>(null);
   const itineraryEditing = useItineraryEditing(tripId);
   // A stop on its way to another day, or out of Unscheduled onto one.
+  const [swapTarget, setSwapTarget] = useState<ItineraryItem | null>(null);
   const [moveTarget, setMoveTarget] = useState<{
     allowUnscheduled: boolean;
     item: ItineraryItem;
@@ -1119,43 +1117,31 @@ export function ItineraryManager({
     }
   }
 
+  const movement = useItineraryMovement({
+    tripId,
+    online,
+    fallbackFocus: () => document.getElementById(`itinerary-workspace-${tripId}`),
+    nameFor: (id) => {
+      const item = [
+        ...(itinerary?.days.flatMap((d) => d.items) ?? []),
+        ...(itinerary?.unscheduledItems ?? []),
+      ].find((i) => i.id === id);
+      return item ? itemName(item) : t('connectedTiming.stop');
+    },
+    onCommitted: refresh,
+    onError: (key) => setError(t(`movement.${key}`)),
+  });
   async function handleOrganize(
     item: ItineraryItem,
     itineraryDayId: string | null,
     position: number,
   ) {
-    // A second drop must start from the canonical result of the first one.
-    if (isItineraryEditing(queryClient, tripId)) return;
-    await withItineraryEdit(queryClient, tripId, async () => {
-      setOrganizingItemId(item.id);
-      setError(null);
-      try {
-        // Shown at once - dropped, moved earlier, sent to another day - through the
-        // same replay the offline queue uses, and put back if the server says no.
-        await optimisticItineraryEdit({
-          commit: () =>
-            organizeItineraryItem(tripId, item.id, {
-              itineraryDayId,
-              position,
-              timingPolicy: 'reconcile_flexible',
-            }),
-          operation: {
-            baseItem: item,
-            input: { itineraryDayId, position, timingPolicy: 'reconcile_flexible' },
-            itemId: item.id,
-            kind: 'itinerary_item_organize',
-          },
-          queryClient,
-          tripId,
-        });
-        if (!online) setTimingPending(true);
-        await refresh();
-      } catch {
-        setError(t('organizeError'));
-      } finally {
-        setOrganizingItemId(null);
-      }
-    });
+    setOrganizingItemId(item.id);
+    try {
+      await movement.start({ kind: 'move', itemId: item.id, itineraryDayId, position });
+    } finally {
+      setOrganizingItemId(null);
+    }
   }
 
   async function handleDuplicate(item: ItineraryItem) {
@@ -1341,34 +1327,16 @@ export function ItineraryManager({
   async function handleDayMove(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!dayMoveSource || !dayMoveTarget) return;
+    const operation = {
+      kind: 'day' as const,
+      sourceDayId: dayMoveSource.id,
+      targetDayId: dayMoveTarget.id,
+      strategy: dayMoveTarget.items.length ? dayMoveStrategy : ('append' as const),
+    };
+    setDayMoveSourceId(null);
     setMovingDay(true);
-    setDayMoveError(null);
-    const targetId = dayMoveTarget.id;
     try {
-      await moveItineraryDayPlan(tripId, dayMoveSource.id, {
-        expectedSourceBase: {
-          dailyBaseDepartureTripPlaceId: dayMoveSource.dailyBaseDepartureTripPlaceId,
-          dailyBaseTripPlaceId: dayMoveSource.dailyBaseTripPlaceId,
-        },
-        expectedSourceItemIds: dayMoveSource.items.map(({ id }) => id),
-        expectedTargetBase: {
-          dailyBaseDepartureTripPlaceId: dayMoveTarget.dailyBaseDepartureTripPlaceId,
-          dailyBaseTripPlaceId: dayMoveTarget.dailyBaseTripPlaceId,
-        },
-        expectedTargetItemIds: dayMoveTarget.items.map(({ id }) => id),
-        strategy: dayMoveTarget.items.length ? dayMoveStrategy : 'append',
-        targetItineraryDayId: targetId,
-      });
-      setDayMoveSourceId(null);
-      setSelectedDayId(targetId);
-      await refresh();
-    } catch (error) {
-      if (error instanceof ItineraryApiError && error.code === 'itinerary_day_conflict') {
-        await refresh();
-        setDayMoveError(t('dayMove.conflictError'));
-      } else {
-        setDayMoveError(t('dayMove.saveError'));
-      }
+      if (await movement.start(operation)) setSelectedDayId(operation.targetDayId);
     } finally {
       setMovingDay(false);
     }
@@ -1451,11 +1419,58 @@ export function ItineraryManager({
     // `gap` rather than `space-y`: the Day view can sit in a `contents` wrapper,
     // and its children still need to be spaced as this section's own.
     <section
+      id={`itinerary-workspace-${tripId}`}
+      tabIndex={-1}
       // The height of the sticky stack the day scrolls under - the trip's tab
       // row on a phone, and the ribbon everywhere - so the map and a scrolled-to
       // stop can land just below it.
       className="flex flex-col gap-7 [--planner-sticky:calc(var(--safe-top)+var(--header-offset)+9.5rem)] md:[--planner-sticky:calc(var(--safe-top)+var(--header-offset)+6.25rem)]"
     >
+      {movement.dialog}
+      {movement.busy && !movement.dialog ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          {t('movement.working')}
+        </p>
+      ) : null}
+      <Sheet
+        open={swapTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setSwapTarget(null);
+        }}
+      >
+        <SheetContent closeLabel={t('close')}>
+          <SheetHeading title={t('movement.swap')} description={t('movement.swapDescription')} />
+          <div className="space-y-4 overflow-y-auto p-5">
+            {itinerary?.days.map((day) => (
+              <section key={day.id} className="space-y-2">
+                <h3 className="text-sm font-semibold">
+                  {day.date}
+                  {day.name ? ` · ${day.name}` : ''}
+                </h3>
+                {day.items
+                  .filter((i) => i.id !== swapTarget?.id)
+                  .map((item) => (
+                    <Button
+                      className="w-full justify-start"
+                      variant="outline"
+                      type="button"
+                      key={item.id}
+                      onClick={() => {
+                        if (!swapTarget) return;
+                        const itemId = swapTarget.id;
+                        setSwapTarget(null);
+                        void movement.start({ kind: 'swap', itemId, otherItemId: item.id });
+                      }}
+                    >
+                      {itemName(item)}
+                    </Button>
+                  ))}
+              </section>
+            ))}
+          </div>
+        </SheetContent>
+      </Sheet>
+      {!online ? <p className="text-sm text-muted-foreground">{t('movement.offline')}</p> : null}
       <PlannerRibbon
         days={ribbonDays}
         onSelectDay={(dayId) => (activeView === 'day' ? setSelectedDayId(dayId) : openDay(dayId))}
@@ -1647,7 +1662,8 @@ export function ItineraryManager({
                     </Button>
                   ) : null}
                   <DayMenu
-                    canCheckOrder={online && selectedDay.items.length > 1}
+                    movementDisabled={!online || itineraryEditing}
+                    canCheckOrder={online && !itineraryEditing && selectedDay.items.length > 1}
                     canSuggestTimes={online && untimedItems(selectedDay).length > 0}
                     compact={compact}
                     day={selectedDay}
@@ -1850,6 +1866,8 @@ export function ItineraryManager({
                   onEditItem: openEdit,
                   onMoveItem: (item, dayId, position) => void handleOrganize(item, dayId, position),
                   onMoveToDay: (item) => setMoveTarget({ allowUnscheduled: true, item }),
+                  onSwapItem: setSwapTarget,
+                  movementDisabled: !online || itineraryEditing,
                   onPlacePriorityChange: (item, priority) =>
                     void changePlacePriority(item, priority),
                   onSelectItem: selectItemOnMap,
@@ -1861,7 +1879,7 @@ export function ItineraryManager({
                 onEditTiming={setTimingItem}
                 onModeChange={(segment, mode) => void handleRouteModeChange(segment, mode)}
                 onReorder={
-                  itineraryEditing
+                  !online || itineraryEditing
                     ? undefined
                     : (item, position) => void handleOrganize(item, selectedDay.id, position)
                 }
@@ -1969,6 +1987,7 @@ export function ItineraryManager({
       ) : null}
 
       <UnscheduledTray
+        movementDisabled={!online || itineraryEditing}
         items={itinerary.unscheduledItems}
         onDelete={setItemToDelete}
         onDuplicate={(item) => void handleDuplicate(item)}
@@ -2098,7 +2117,7 @@ export function ItineraryManager({
       <ItineraryBetterOrder
         day={betterOrderDay}
         itemName={itemName}
-        onApplied={refresh}
+        onMove={(operation) => movement.start(operation)}
         onOpenChange={(open) => !open && setBetterOrderDay(null)}
         tripId={tripId}
       />

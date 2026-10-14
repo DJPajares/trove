@@ -26,6 +26,7 @@ import type { TrovePlaceCategory } from '@/lib/place-categories';
  */
 export function UnscheduledTray({
   items,
+  movementDisabled,
   onDelete,
   onDuplicate,
   onSchedule,
@@ -34,6 +35,7 @@ export function UnscheduledTray({
   resolveItem,
 }: Readonly<{
   items: readonly ItineraryItem[];
+  movementDisabled?: boolean;
   onDelete: (item: ItineraryItem) => void;
   onDuplicate: (item: ItineraryItem) => void;
   onSchedule: (item: ItineraryItem) => void;
@@ -88,7 +90,7 @@ export function UnscheduledTray({
               <span className="relative z-10 flex shrink-0 items-center gap-1">
                 <Button
                   aria-label={t('scheduleItem', { name: view.name })}
-                  disabled={organizingItemId === item.id}
+                  disabled={movementDisabled || organizingItemId === item.id}
                   onClick={() => onSchedule(item)}
                   size="sm"
                   type="button"

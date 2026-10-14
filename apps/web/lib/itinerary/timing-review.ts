@@ -36,3 +36,15 @@ export function storedTimingPending(userId: string, tripId: string) {
     return false;
   }
 }
+
+export function clearPendingTimingReview(userId: string, tripId: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.removeItem(`${key(userId, tripId)}:pending`);
+  } catch {
+    /* Still release the live pending state. */
+  }
+  window.dispatchEvent(
+    new CustomEvent(TIMING_REVIEW_EVENT, { detail: { tripId, pending: false } }),
+  );
+}

@@ -1,0 +1,10 @@
+{
+  "id": "dialog-actions-in-reach",
+  "date": "2026-10-14",
+  "version": "1.2.2",
+  "summaries": {
+    "en": [
+      "A dialog's buttons now stay at the bottom of the screen, even when there's a lot to read above them."
+    ]
+  }
+}

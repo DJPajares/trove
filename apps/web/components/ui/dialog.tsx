@@ -78,12 +78,18 @@ function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
   );
 }
 
+/**
+ * The dialog's actions. The whole dialog scrolls when its content is taller
+ * than the screen, so the footer sticks to the bottom of that scroll: what the
+ * dialog asks for stays in reach however long the explanation above it runs.
+ * It sticks past the dialog's own padding, so nothing scrolls by beneath it.
+ */
 function DialogFooter({ className, children, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="dialog-footer"
       className={cn(
-        '-mx-6 -mb-6 flex flex-col-reverse gap-2 border-t border-border-subtle bg-transparent p-6 sm:-mx-8 sm:-mb-8 sm:flex-row sm:justify-end sm:p-8',
+        'sticky -bottom-6 z-10 -mx-6 -mb-6 flex flex-col-reverse gap-2 border-t border-border-subtle bg-popover p-6 sm:-bottom-8 sm:-mx-8 sm:-mb-8 sm:flex-row sm:justify-end sm:p-8',
         className,
       )}
       {...props}

@@ -1271,7 +1271,9 @@ Resolve each endpoint using:
 
 Day settings distinguish inheriting the automatic stay from explicitly choosing no stay. The return endpoint may follow the start or be configured independently. Changing a trip default preserves day exceptions and ranges unless the traveller explicitly resets the day exceptions. Every day shows its effective stay and source. Adjacent manual ranges do not silently create a transfer-day override.
 
-Stay selection can use existing Trip Places, contextual place search, or a Custom Place; it does not create a booking. Overlapping range edits replace the selected coverage and preserve unaffected fragments, with a preview before save. Stay writes require connectivity; prepared snapshots retain the plan and resolved day endpoints for offline reading.
+Stay means where the traveller is staying, whether a hotel, rental, friend's or family's home, or their own place. All use the same flow, with no accommodation category or booking required. Selection can use existing Trip Places, contextual place search, or a Custom Place such as “Mum's house”; it does not create a booking.
+
+Overlapping range edits replace the selected coverage and preserve unaffected fragments, with a preview before save. Stay writes require connectivity; prepared snapshots retain the plan and resolved day endpoints for offline reading.
 
 Planning ranges follow itinerary days when the trip is rescheduled, clip when shortened with range losses shown in shrink review, and stay bounded when lengthened. The default covers new days. Reservation dates remain independent. Historical per-day stays preserve their resolved endpoints as overrides. AI Apply groups supplied stays into defaults/ranges without inventing lodging, preserving exceptional or unknown endpoints.
 
@@ -1377,6 +1379,8 @@ Possible data:
 - applicable trip days.
 
 Accommodation may supply Daily Base context for the days on which it applies, subject to the precedence rules in Section 18.4. Booking data remains separate from planning Stays: editing or removing one does not edit or remove the other.
+
+Check-in and check-out retain the existing optional date fields in Reservations. Arrival instructions and specific time details can use reservation notes; they are not required to set a Stay. Arrival, departure, or moving days can use the day's Different start and end controls when a manual Stay range needs an exception.
 
 ---
 

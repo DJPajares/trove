@@ -2427,7 +2427,7 @@
     },
     "stays": {
       "title": "Stay",
-      "description": "Choose where your trip days start and end. One place can cover the whole trip.",
+      "description": "Choose a hotel, a home, or anywhere you’re staying. Use it for your whole trip or selected days.",
       "dayTitle": "Stay · Day {number}",
       "dayDescription": "Use your trip’s automatic stay or make an exception for this day.",
       "wholeTrip": "Whole trip",
@@ -2443,7 +2443,7 @@
       "from": "From",
       "through": "Through",
       "rangeLabel": "Days {first}–{last} · {from}–{through}",
-      "fullDays": "Applies to the start and end of each selected day. Adjust a hotel-change day separately if needed.",
+      "fullDays": "Applies to the start and end of each selected day. Adjust individual days if you arrive, leave, or change stays.",
       "preview": "Stay coverage after saving",
       "cancelRange": "Cancel range change",
       "removeRange": "Remove {name} for these days",

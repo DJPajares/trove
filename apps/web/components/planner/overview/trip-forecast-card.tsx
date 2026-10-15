@@ -99,7 +99,17 @@ export function TripForecastCard({
   }
 
   return (
-    <section aria-labelledby="trip-forecast-heading" className={frameClassName}>
+    <a
+      aria-labelledby="trip-forecast-heading"
+      className={cn(
+        frameClassName,
+        'block outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none',
+      )}
+      href={weather.attribution.url}
+      rel="noreferrer"
+      target="_blank"
+      title={weather.attribution.label}
+    >
       <h3 className="text-sm font-semibold" id="trip-forecast-heading">
         {planner('tripTitle')}
       </h3>
@@ -186,20 +196,12 @@ export function TripForecastCard({
           );
         })}
       </ol>
-      <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+      <div className="mt-2 space-y-1 text-xs text-muted-foreground empty:hidden">
         {gapText && shown.length < columns.length ? <p>{gapText}</p> : null}
         {shown.some(({ forecast: entry }) => entry?.state === 'archived') ? (
           <p>{planner('archivedNote')}</p>
         ) : null}
-        <a
-          className="inline-block rounded-[var(--radius-sm)] outline-none hover:text-foreground hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
-          href={weather.attribution.url}
-          rel="noreferrer"
-          target="_blank"
-        >
-          {weather.attribution.label}
-        </a>
       </div>
-    </section>
+    </a>
   );
 }

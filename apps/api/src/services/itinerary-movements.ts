@@ -1,3 +1,4 @@
+import { resolveDayStay, toStayAccommodations } from './day-stay.js';
 import { movementConnectionConflicts } from './itinerary-movement-constraints.js';
 import { createHash } from 'node:crypto';
 import { getPrismaClient, type Prisma } from '@trove/db';
@@ -145,6 +146,11 @@ function project(trip: TimingTrip, input: MovementInput) {
     if (op.strategy === 'swap') b.forEach((i) => targets.add(i.id));
     const sd = trip.itineraryDays.find((d) => d.id === op.sourceDayId)!;
     const td = trip.itineraryDays.find((d) => d.id === op.targetDayId)!;
+    for (const key of ['stayStartMode', 'stayEndMode'] as const) {
+      const old = sd[key];
+      sd[key] = op.strategy === 'swap' ? td[key] : 'INHERIT';
+      td[key] = old;
+    }
     for (const key of ['dailyBaseTripPlaceId', 'dailyBaseDepartureTripPlaceId'] as const) {
       const old = sd[key];
       sd[key] = op.strategy === 'swap' ? td[key] : null;
@@ -168,6 +174,8 @@ function timingScope(
   for (const day of next.itineraryDays.filter((d) => affected.has(d.id))) {
     const before = original.itineraryDays.find((d) => d.id === day.id)!;
     const all =
+      before.stayStartMode !== day.stayStartMode ||
+      before.stayEndMode !== day.stayEndMode ||
       before.defaultTimeZone !== day.defaultTimeZone ||
       before.dailyBaseTripPlaceId !== day.dailyBaseTripPlaceId ||
       before.dailyBaseDepartureTripPlaceId !== day.dailyBaseDepartureTripPlaceId;
@@ -202,16 +210,25 @@ function resolveZones(
     return place ? resolvedPlaceTimeZone(place) : null;
   };
   for (const day of trip.itineraryDays.filter((d) => affected.has(d.id))) {
+    const stay = resolveDayStay(
+      {
+        ...day,
+        dailyBaseTripPlace: day.dailyBaseTripPlaceId ? { id: day.dailyBaseTripPlaceId } : null,
+        dailyBaseDepartureTripPlace: day.dailyBaseDepartureTripPlaceId
+          ? { id: day.dailyBaseDepartureTripPlaceId }
+          : null,
+      },
+      toStayAccommodations(
+        trip.reservations
+          .filter((r) => r.type === 'ACCOMMODATION')
+          .map((r) => ({ ...r, tripPlace: r.tripPlaceId ? { id: r.tripPlaceId } : null })),
+      ),
+      trip,
+    );
     const zone = resolveDayTimeZone({
-      accommodations: trip.reservations
-        .filter(
-          (r) =>
-            r.type === 'ACCOMMODATION' &&
-            (r.accommodationDays ?? []).some((d) => d.itineraryDayId === day.id),
-        )
-        .map((r) => ({ timeZone: placeZone(r.tripPlaceId), tripPlaceId: r.tripPlaceId })),
-      dailyBase: day.dailyBaseTripPlaceId
-        ? { timeZone: placeZone(day.dailyBaseTripPlaceId), tripPlaceId: day.dailyBaseTripPlaceId }
+      accommodations: [],
+      dailyBase: stay.start
+        ? { timeZone: placeZone(stay.start.place.id), tripPlaceId: stay.start.place.id }
         : null,
       items: day.items.map((i) => ({
         id: i.id,
@@ -221,6 +238,11 @@ function resolveZones(
       })),
       tripTimeZone: trip.referenceTimeZone,
     });
+    if (stay.start && zone.source === 'EXPLICIT_DAILY_BASE') {
+      if (stay.start.source === 'accommodation') zone.source = 'ACCOMMODATION';
+      if (stay.start.source === 'trip_default' || stay.start.source === 'stay_range')
+        zone.source = 'STAY_PLAN';
+    }
     day.defaultTimeZone = zone.timeZone;
     day.defaultTimeZoneSource = zone.source;
     day.defaultTimeZoneSourceItemId = zone.sourceItemId;
@@ -255,7 +277,13 @@ function issueKey(trip: TimingTrip, issue: TimingIssue) {
       id: d.id,
       date: d.date,
       availability: d.planningContext,
-      base: [d.dailyBaseTripPlaceId, d.dailyBaseDepartureTripPlaceId],
+      base: [
+        d.dailyBaseTripPlaceId,
+        d.dailyBaseDepartureTripPlaceId,
+        d.stayStartMode,
+        d.stayEndMode,
+        trip.stayPlanRevision,
+      ],
       rows: d.items
         .slice(
           Math.max(0, d.items.findIndex((i) => ids.has(i.id)) - 1),
@@ -542,6 +570,11 @@ export async function applyItineraryMovement(
           result.proposal.changes.length > 0 ||
           input.overrides.length > 0;
         if (changed) {
+          if (input.operation.kind === 'day')
+            await client.trip.update({
+              where: { id: tripId },
+              data: { stayPlanRevision: { increment: 1 } },
+            });
           const park =
             Math.max(0, ...allItems(result.original).map((i) => i.position)) + rows.length + 1;
           for (const [n, i] of rows.entries())
@@ -571,6 +604,8 @@ export async function applyItineraryMovement(
             await client.itineraryDay.update({
               where: { id: d.id },
               data: {
+                stayStartMode: d.stayStartMode,
+                stayEndMode: d.stayEndMode,
                 dailyBaseTripPlaceId: d.dailyBaseTripPlaceId,
                 dailyBaseDepartureTripPlaceId: d.dailyBaseDepartureTripPlaceId,
                 defaultTimeZone: d.defaultTimeZone,

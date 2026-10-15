@@ -217,6 +217,7 @@ export async function assessDay(
           tripPlace: trip.tripPlaces.find((p) => p.id === r.tripPlaceId) ?? null,
         })),
     ),
+    trip,
   );
   const routeContext = {
     arrivalBase: stay.start ? point(stay.start.place.id, 'daily_base', stay.start.place.id) : null,

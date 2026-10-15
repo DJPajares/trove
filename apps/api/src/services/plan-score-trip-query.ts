@@ -1,3 +1,4 @@
+import { tripStayInclude } from './day-stay.js';
 // Keep this query definition independent of scoring and itinerary services.
 // Scheduling extends it during module initialization, before those services may be ready.
 /**
@@ -7,6 +8,7 @@
  * revision computed from a drifted one silently serves a stale score.
  */
 export const PLAN_SCORE_TRIP_INCLUDE = {
+  ...tripStayInclude({ select: { id: true } }),
   itineraryDays: {
     orderBy: { date: 'asc' },
     include: {

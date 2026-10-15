@@ -1,0 +1,10 @@
+{
+  "id": "trip-stays",
+  "date": "2026-10-15",
+  "version": "1.4.0",
+  "summaries": {
+    "en": [
+      "Set one stay for your whole trip, add different stays for selected days, and make day-by-day exceptions when you need them."
+    ]
+  }
+}

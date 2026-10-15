@@ -1,3 +1,4 @@
+import { resolveDailyBases } from './day-sequence';
 import type { TripPlace } from '@/lib/trip-places/api';
 import type { Itinerary, ItineraryTripPlace } from './api';
 
@@ -70,7 +71,8 @@ export function scheduledPlaceUse(itinerary: Itinerary): Record<string, Schedule
       return use;
     };
     // Explicit daily bases are scheduled visits even without a separate item.
-    for (const tripPlaceId of [day.dailyBaseTripPlaceId, day.dailyBaseDepartureTripPlaceId]) {
+    const bases = resolveDailyBases({ day });
+    for (const tripPlaceId of [bases.arrivalTripPlaceId, bases.departureTripPlaceId]) {
       if (tripPlaceId) recordDay(tripPlaceId);
     }
     for (const item of day.items) {

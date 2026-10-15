@@ -6,18 +6,24 @@
  * Insights, time zones, scoring) so they cannot disagree. A stay only ever adds
  * to a plan: with none known, each caller behaves exactly as it did before.
  *
- * Precedence, per end of the day:
- * 1. What the traveller set on the day.
- * 2. An accommodation they linked to the day by hand.
- * 3. An accommodation whose check-in and check-out dates span the day: a
- *    stay is where the day starts from the morning after check-in through
- *    check-out, and where it ends from check-in until the night before
- *    check-out. A transfer day therefore starts at one stay and ends at the
- *    next, with nothing picked by hand.
- * Anything ambiguous - two stays that could both be the answer - resolves to
- * no stay on that end rather than a guess.
+ * Day overrides (including none) win, then a full-day planning range,
+ * accommodation inference, and the trip default. Booking dates retain their
+ * check-in/check-out meaning; manual ranges cover both ends of inclusive days.
+ * Ambiguous bookings never silently fall back to the trip default.
  */
-export type DayStaySource = 'explicit' | 'accommodation';
+export type DayStaySource = import('@trove/types').StaySource;
+type EndpointMode = 'INHERIT' | 'NONE' | 'PLACE' | 'SAME_AS_START';
+export type TripStayPlan<Place> = {
+  defaultStayTripPlace?: Place | null;
+  stayRanges?: readonly { startDate: Date; endDate: Date; tripPlace: Place }[];
+};
+
+export function tripStayInclude<Include>(tripPlace: Include) {
+  return {
+    defaultStayTripPlace: tripPlace,
+    stayRanges: { include: { tripPlace }, orderBy: { startDate: 'asc' as const } },
+  };
+}
 export type DayStayEnd<Place> = { place: Place; source: DayStaySource } | null;
 
 export type StayAccommodation<Place> = {
@@ -31,6 +37,8 @@ export type StayAccommodation<Place> = {
 export type StayDay<Place> = {
   id: string;
   date: Date;
+  stayStartMode?: EndpointMode | null;
+  stayEndMode?: EndpointMode | null;
   dailyBaseTripPlace: Place | null;
   dailyBaseDepartureTripPlace: Place | null;
 };
@@ -96,21 +104,63 @@ export function accommodationStay<Place extends { id: string }>(
 export function resolveDayStay<Place extends { id: string }>(
   day: StayDay<Place>,
   accommodations: readonly StayAccommodation<Place>[],
+  plan: TripStayPlan<Place> = {},
 ): { start: DayStayEnd<Place>; end: DayStayEnd<Place> } {
   const booked = accommodationStay(day, accommodations);
-  const explicitEnd = day.dailyBaseDepartureTripPlace ?? day.dailyBaseTripPlace;
-  return {
-    start: day.dailyBaseTripPlace
-      ? { place: day.dailyBaseTripPlace, source: 'explicit' }
-      : booked.start
-        ? { place: booked.start, source: 'accommodation' }
-        : null,
-    end: explicitEnd
-      ? { place: explicitEnd, source: 'explicit' }
-      : booked.end
-        ? { place: booked.end, source: 'accommodation' }
-        : null,
+  const range = plan.stayRanges?.find(
+    (range) => range.startDate <= day.date && day.date <= range.endDate,
+  );
+  const automatic = (end: 'start' | 'end'): DayStayEnd<Place> => {
+    if (range) return { place: range.tripPlace, source: 'stay_range' };
+    if (booked[end]) return { place: booked[end], source: 'accommodation' };
+    // A conflicting booking is not permission to guess the trip default.
+    const located = accommodations.filter((entry) => entry.tripPlace);
+    const linked = located.filter((entry) => entry.linkedDayIds.includes(day.id));
+    const candidates = linked.length
+      ? linked
+      : located.filter(
+          (entry) =>
+            !entry.linkedDayIds.length &&
+            entry.checkInDate &&
+            entry.checkOutDate &&
+            (end === 'start'
+              ? entry.checkInDate < day.date && day.date <= entry.checkOutDate
+              : entry.checkInDate <= day.date && day.date < entry.checkOutDate),
+        );
+    if (candidates.length) return null;
+    return plan.defaultStayTripPlace
+      ? { place: plan.defaultStayTripPlace, source: 'trip_default' }
+      : null;
   };
+  const startMode = day.stayStartMode ?? (day.dailyBaseTripPlace ? 'PLACE' : 'INHERIT');
+  const endMode =
+    day.stayEndMode ??
+    (day.dailyBaseDepartureTripPlace
+      ? 'PLACE'
+      : day.dailyBaseTripPlace
+        ? 'SAME_AS_START'
+        : 'INHERIT');
+  const start: DayStayEnd<Place> =
+    startMode === 'NONE'
+      ? null
+      : startMode === 'PLACE'
+        ? day.dailyBaseTripPlace
+          ? { place: day.dailyBaseTripPlace, source: 'explicit' }
+          : null
+        : automatic('start');
+  const end: DayStayEnd<Place> =
+    endMode === 'NONE'
+      ? null
+      : endMode === 'SAME_AS_START'
+        ? start
+          ? { ...start, source: 'explicit' }
+          : null
+        : endMode === 'PLACE'
+          ? day.dailyBaseDepartureTripPlace
+            ? { place: day.dailyBaseDepartureTripPlace, source: 'explicit' }
+            : null
+          : automatic('end');
+  return { start, end };
 }
 
 /** The Prisma selection every caller uses to feed `resolveDayStay`. */

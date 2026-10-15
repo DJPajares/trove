@@ -24,11 +24,12 @@ export function resolveDailyBases(input: {
   if (!input.day) return { arrivalTripPlaceId: null, departureTripPlaceId: null };
   const segments = input.routeSegments ?? [];
   const stay = input.day.stay;
+  if (stay)
+    return { arrivalTripPlaceId: stay.startTripPlaceId, departureTripPlaceId: stay.endTripPlaceId };
 
   return {
     arrivalTripPlaceId:
       input.day.dailyBaseTripPlaceId ??
-      stay?.startTripPlaceId ??
       segments.find(
         (segment) => segment.modeOwner.kind === 'day_start' && segment.origin.kind === 'daily_base',
       )?.origin.id ??
@@ -36,7 +37,6 @@ export function resolveDailyBases(input: {
     departureTripPlaceId:
       input.day.dailyBaseDepartureTripPlaceId ??
       input.day.dailyBaseTripPlaceId ??
-      stay?.endTripPlaceId ??
       segments.find((segment) => segment.destination.kind === 'daily_base')?.destination.id ??
       null,
   };

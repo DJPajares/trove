@@ -1,3 +1,5 @@
+import { tripStayInclude } from './day-stay.js';
+import { refreshDayDefaultTimeZone } from './itineraries.js';
 import {
   readTripPlanningPreferences,
   effectiveTripPace,
@@ -112,6 +114,7 @@ export class TripDateMoveInvalidLocalTimeError extends Error {
 }
 
 const tripInclude = {
+  ...tripStayInclude({ select: { id: true } }),
   // Lets completed-trip surfaces offer Memories only when there are some to open.
   _count: { select: { memories: true, dayExperiences: true } },
   destinations: {
@@ -128,6 +131,8 @@ const tripInclude = {
       _count: { select: { accommodationReservations: true, items: true } },
       dailyBaseDepartureTripPlaceId: true,
       dailyBaseTripPlaceId: true,
+      stayStartMode: true,
+      stayEndMode: true,
       date: true,
     },
   },
@@ -248,17 +253,23 @@ async function serializeTrip(
   const itineraryDays = (trip.itineraryDays ?? []).map((day) => ({
     date: day.date,
     hasStay:
-      day.dailyBaseTripPlaceId !== null ||
-      day.dailyBaseDepartureTripPlaceId !== null ||
-      day._count.accommodationReservations > 0 ||
-      // A dated booking covers the nights from check-in until check-out.
-      (trip.reservations ?? []).some(
-        (stay) =>
-          stay.checkInDate !== null &&
-          stay.checkOutDate !== null &&
-          stay.checkInDate.getTime() <= day.date.getTime() &&
-          day.date.getTime() < stay.checkOutDate.getTime(),
-      ),
+      day.stayStartMode === 'NONE' && day.stayEndMode === 'NONE'
+        ? false
+        : trip.defaultStayTripPlaceId !== null ||
+          trip.stayRanges.some(
+            (range) => range.startDate <= day.date && day.date <= range.endDate,
+          ) ||
+          day.dailyBaseTripPlaceId !== null ||
+          day.dailyBaseDepartureTripPlaceId !== null ||
+          day._count.accommodationReservations > 0 ||
+          // A dated booking covers the nights from check-in until check-out.
+          (trip.reservations ?? []).some(
+            (stay) =>
+              stay.checkInDate !== null &&
+              stay.checkOutDate !== null &&
+              stay.checkInDate.getTime() <= day.date.getTime() &&
+              day.date.getTime() < stay.checkOutDate.getTime(),
+          ),
     scheduledItemCount: day._count.items,
   }));
   const itineraryCoverage = calculateItineraryCoverage(startDate, endDate, itineraryDays);
@@ -650,6 +661,8 @@ export async function updateTrip(
             notes: true,
             updatedAt: true,
             dailyBaseTripPlaceId: true,
+            stayStartMode: true,
+            stayEndMode: true,
             dailyBaseDepartureTripPlaceId: true,
             _count: { select: { items: true } },
           },
@@ -880,6 +893,25 @@ export async function updateTrip(
           });
         }
 
+        const datesChanged =
+          startDate !== formatDateOnly(current.startDate) ||
+          endDate !== formatDateOnly(current.endDate);
+        if (datesChanged) {
+          for (const range of current.stayRanges) {
+            const from = shiftDateOnly(formatDateOnly(range.startDate), offsetDays);
+            const through = shiftDateOnly(formatDateOnly(range.endDate), offsetDays);
+            if (from > endDate || through < startDate)
+              await transaction.tripStayRange.delete({ where: { id: range.id } });
+            else
+              await transaction.tripStayRange.update({
+                where: { id: range.id },
+                data: {
+                  startDate: parseDateOnly(from < startDate ? startDate : from),
+                  endDate: parseDateOnly(through > endDate ? endDate : through),
+                },
+              });
+          }
+        }
         await transaction.trip.update({
           where: { id: tripId },
           data: {
@@ -891,6 +923,7 @@ export async function updateTrip(
             ...(input.description !== undefined
               ? { description: input.description?.trim() || null }
               : {}),
+            ...(datesChanged ? { stayPlanRevision: { increment: 1 } } : {}),
             endDate: end,
             ...(input.name !== undefined ? { name: input.name.trim() } : {}),
             ...(input.partySize !== undefined ? { partySize: input.partySize } : {}),
@@ -911,6 +944,13 @@ export async function updateTrip(
               : {}),
           },
         });
+        if (datesChanged || shouldResolveTimeZone) {
+          const days = await transaction.itineraryDay.findMany({
+            where: { tripId },
+            select: { id: true },
+          });
+          for (const day of days) await refreshDayDefaultTimeZone(transaction, tripId, day.id);
+        }
       },
       { isolationLevel: 'Serializable' },
     )

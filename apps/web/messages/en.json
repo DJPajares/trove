@@ -272,8 +272,14 @@
         },
         "picks": {
           "when": {
-            "thisWeekend": { "label": "This weekend", "sentence": "We're going this weekend." },
-            "nextMonth": { "label": "Next month", "sentence": "We're going next month." },
+            "thisWeekend": {
+              "label": "This weekend",
+              "sentence": "We're going this weekend."
+            },
+            "nextMonth": {
+              "label": "Next month",
+              "sentence": "We're going next month."
+            },
             "flexibleShort": {
               "label": "Flexible, about 5 days",
               "sentence": "Dates are flexible, about five days."
@@ -284,16 +290,40 @@
             }
           },
           "who": {
-            "solo": { "label": "Just me", "sentence": "It's just me." },
-            "couple": { "label": "Two of us", "sentence": "There are two of us." },
-            "family": { "label": "Family with kids", "sentence": "We're a family with kids." },
-            "friends": { "label": "Group of friends", "sentence": "We're a group of friends." }
+            "solo": {
+              "label": "Just me",
+              "sentence": "It's just me."
+            },
+            "couple": {
+              "label": "Two of us",
+              "sentence": "There are two of us."
+            },
+            "family": {
+              "label": "Family with kids",
+              "sentence": "We're a family with kids."
+            },
+            "friends": {
+              "label": "Group of friends",
+              "sentence": "We're a group of friends."
+            }
           },
           "pace": {
-            "slow": { "label": "Slow", "sentence": "We'd like a slow pace." },
-            "balanced": { "label": "Balanced", "sentence": "A balanced pace suits us." },
-            "full": { "label": "Full days", "sentence": "We're happy with full days." },
-            "early": { "label": "Early starts", "sentence": "We don't mind early starts." }
+            "slow": {
+              "label": "Slow",
+              "sentence": "We'd like a slow pace."
+            },
+            "balanced": {
+              "label": "Balanced",
+              "sentence": "A balanced pace suits us."
+            },
+            "full": {
+              "label": "Full days",
+              "sentence": "We're happy with full days."
+            },
+            "early": {
+              "label": "Early starts",
+              "sentence": "We don't mind early starts."
+            }
           },
           "work": {
             "dailyHours": {
@@ -308,12 +338,24 @@
               "label": "A day for meetings",
               "sentence": "Keep one day free for meetings."
             },
-            "offline": { "label": "Fully off work", "sentence": "This trip is fully off work." }
+            "offline": {
+              "label": "Fully off work",
+              "sentence": "This trip is fully off work."
+            }
           },
           "travel": {
-            "flying": { "label": "Flying in", "sentence": "We're flying in and out." },
-            "train": { "label": "By train", "sentence": "We're arriving by train." },
-            "car": { "label": "With a car", "sentence": "We'll have a car." },
+            "flying": {
+              "label": "Flying in",
+              "sentence": "We're flying in and out."
+            },
+            "train": {
+              "label": "By train",
+              "sentence": "We're arriving by train."
+            },
+            "car": {
+              "label": "With a car",
+              "sentence": "We'll have a car."
+            },
             "transit": {
               "label": "Public transport only",
               "sentence": "We'll get around by public transport only."
@@ -331,7 +373,10 @@
         "mustSeeSentence": "Must see {places}.",
         "addMustSee": "Add to brief",
         "nudges": {
-          "moreFood": { "label": "More food", "sentence": "More food stops, especially markets." },
+          "moreFood": {
+            "label": "More food",
+            "sentence": "More food stops, especially markets."
+          },
           "slower": {
             "label": "Slower pace",
             "sentence": "Make it slower, with fewer stops each day."
@@ -344,7 +389,10 @@
             "label": "Fewer big sights",
             "sentence": "Fewer big sights and more time in neighbourhoods."
           },
-          "shorter": { "label": "Shorter trip", "sentence": "Make the trip a day or two shorter." }
+          "shorter": {
+            "label": "Shorter trip",
+            "sentence": "Make the trip a day or two shorter."
+          }
         }
       },
       "credits": {
@@ -742,7 +790,8 @@
       "confirm": "Save shorter trip",
       "saving": "Saving…",
       "changed": "The trip changed while this review was open. Review the updated details and choose note destinations again.",
-      "conflict": "The trip changed while saving. Close this review and try again to see the latest details."
+      "conflict": "The trip changed while saving. Close this review and try again to see the latest details.",
+      "stayRanges": "{count, plural, one {# stay range will be shortened or removed.} other {# stay ranges will be shortened or removed.}}"
     },
     "hub": {
       "chapter": {
@@ -1832,7 +1881,10 @@
         "preview": "Preview",
         "previewLabel": "Preview day {number} in Trip Mode",
         "scoreLabel": "Plan Score for day {number}",
-        "memories": "Memories"
+        "memories": "Memories",
+        "startStay": "Start at {name}",
+        "endStay": "End at {name}",
+        "noStaySet": "No stay for this day"
       },
       "stop": {
         "midnight": "midnight",
@@ -2372,6 +2424,51 @@
         "DURATION_ESTIMATED": "Some visit durations are estimates.",
         "TIGHT_TRANSITION": "There is little spare time before a fixed activity."
       }
+    },
+    "stays": {
+      "title": "Stay",
+      "description": "Choose where your trip days start and end. One place can cover the whole trip.",
+      "dayTitle": "Stay · Day {number}",
+      "dayDescription": "Use your trip’s automatic stay or make an exception for this day.",
+      "wholeTrip": "Whole trip",
+      "specificDays": "Different stays",
+      "choosePlace": "Choose a place",
+      "findPlace": "Find or add a place",
+      "none": "No stay",
+      "automatic": "Use automatic stay",
+      "sameAsStart": "Same as start",
+      "unnamed": "Place",
+      "addRange": "Different stay for some days",
+      "rangePlace": "Stay for these days",
+      "from": "From",
+      "through": "Through",
+      "rangeLabel": "Days {first}–{last} · {from}–{through}",
+      "fullDays": "Applies to the start and end of each selected day. Adjust a hotel-change day separately if needed.",
+      "preview": "Stay coverage after saving",
+      "cancelRange": "Cancel range change",
+      "removeRange": "Remove {name} for these days",
+      "exceptions": "{count, plural, one {# day has its own stay setting.} other {# days have their own stay settings.}}",
+      "resetExceptions": "Reset day exceptions to automatic stays",
+      "editTrip": "Edit trip stays",
+      "dayStay": "This day’s stay",
+      "start": "Start the day at",
+      "end": "End the day at",
+      "differentEnds": "Different start and end",
+      "resolved": "Start: {start} · End: {end}",
+      "close": "Close",
+      "save": "Save stay",
+      "saving": "Saving…",
+      "saveError": "Your stay could not be saved. Please try again.",
+      "conflict": "Stays changed elsewhere. Close and reopen this sheet to load the latest settings.",
+      "offline": "Connect to the internet to change stays. Your prepared stays remain available offline.",
+      "sources": {
+        "trip_default": "Trip default",
+        "stay_range": "Date range",
+        "accommodation": "From booking",
+        "explicit": "Day override",
+        "none": "Not set"
+      },
+      "noDefault": "No trip default"
     }
   },
   "tasks": {

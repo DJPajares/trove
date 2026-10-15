@@ -1,4 +1,9 @@
-import { resolveDayStay, stayAccommodationsInclude, toStayAccommodations } from './day-stay.js';
+import {
+  resolveDayStay,
+  tripStayInclude,
+  stayAccommodationsInclude,
+  toStayAccommodations,
+} from './day-stay.js';
 import {
   reconcileItineraryTiming,
   getItineraryDayTimeSuggestions,
@@ -66,6 +71,8 @@ export type ItineraryDayMoveInput = {
 };
 
 export type ItineraryDayBase = {
+  stayStartMode?: import('@trove/db').Prisma.ItineraryDayGetPayload<object>['stayStartMode'];
+  stayEndMode?: import('@trove/db').Prisma.ItineraryDayGetPayload<object>['stayEndMode'];
   dailyBaseDepartureTripPlaceId: string | null;
   dailyBaseTripPlaceId: string | null;
 };
@@ -93,6 +100,7 @@ export class ItineraryValidationError extends Error {
       | 'invalid_experience_rating'
       | 'invalid_itinerary_item'
       | 'invalid_itinerary_day_move'
+      | 'invalid_stay_plan'
       | 'invalid_local_end_time'
       | 'invalid_local_time'
       | 'invalid_time_zone'
@@ -184,6 +192,7 @@ function mapDayTimeZoneSource(value: string) {
   const values: Record<string, string> = {
     ACCOMMODATION: 'accommodation',
     EXPLICIT_DAILY_BASE: 'explicit_daily_base',
+    STAY_PLAN: 'stay_plan',
     FIRST_LOCATED_ITEM: 'first_located_item',
     TRIP_REFERENCE: 'trip_reference',
   };
@@ -435,22 +444,30 @@ export async function refreshDayDefaultTimeZone(
           },
         },
       },
-      trip: { select: { referenceTimeZone: true } },
+      trip: {
+        select: {
+          referenceTimeZone: true,
+          ...tripStayInclude({ include: { place: { include: placeProviderRefInclude } } }),
+          reservations: stayAccommodationsInclude({
+            include: { place: { include: placeProviderRefInclude } },
+          }),
+        },
+      },
     },
   });
   if (!day) throw new ItineraryNotFoundError('itinerary_day_not_found');
 
+  const stay = resolveDayStay(
+    { ...day, dailyBaseDepartureTripPlace: null },
+    toStayAccommodations(day.trip.reservations),
+    day.trip,
+  );
   const resolution = resolveDayTimeZone({
-    accommodations: day.accommodationReservations.map(({ reservation }) => ({
-      timeZone: reservation.tripPlace?.place
-        ? resolvedPlaceTimeZone(reservation.tripPlace.place)
-        : null,
-      tripPlaceId: reservation.tripPlaceId,
-    })),
-    dailyBase: day.dailyBaseTripPlace
+    accommodations: [],
+    dailyBase: stay.start?.place
       ? {
-          timeZone: resolvedPlaceTimeZone(day.dailyBaseTripPlace.place),
-          tripPlaceId: day.dailyBaseTripPlace.id,
+          timeZone: resolvedPlaceTimeZone(stay.start.place.place),
+          tripPlaceId: stay.start.place.id,
         }
       : null,
     items: day.items.map((item) => ({
@@ -461,6 +478,12 @@ export async function refreshDayDefaultTimeZone(
     })),
     tripTimeZone: day.trip.referenceTimeZone,
   });
+
+  if (stay.start && resolution.source === 'EXPLICIT_DAILY_BASE') {
+    if (stay.start.source === 'accommodation') resolution.source = 'ACCOMMODATION';
+    if (stay.start.source === 'trip_default' || stay.start.source === 'stay_range')
+      resolution.source = 'STAY_PLAN';
+  }
 
   if (
     day.defaultTimeZone !== resolution.timeZone ||
@@ -491,6 +514,9 @@ export async function listItinerary(
   const trip = await prisma.trip.findFirst({
     where: { id: tripId, ownerId: userId },
     select: {
+      ...tripStayInclude({ select: { id: true } }),
+      stayPlanRevision: true,
+      defaultStayTripPlaceId: true,
       endDate: true,
       id: true,
       name: true,
@@ -518,17 +544,22 @@ export async function listItinerary(
   });
   if (!trip) throw new ItineraryNotFoundError('trip_not_found');
   const accommodations = toStayAccommodations(trip.reservations);
-  const serializeStay = (day: (typeof trip.itineraryDays)[number]) => {
+  const serializeStay = (day: (typeof trip.itineraryDays)[number], automatic = false) => {
     const stay = resolveDayStay(
       {
-        id: day.id,
-        date: day.date,
-        dailyBaseTripPlace: day.dailyBaseTripPlaceId ? { id: day.dailyBaseTripPlaceId } : null,
-        dailyBaseDepartureTripPlace: day.dailyBaseDepartureTripPlaceId
-          ? { id: day.dailyBaseDepartureTripPlaceId }
-          : null,
+        ...day,
+        ...(automatic
+          ? { stayStartMode: 'INHERIT' as const, stayEndMode: 'INHERIT' as const }
+          : {}),
+        dailyBaseTripPlace:
+          !automatic && day.dailyBaseTripPlaceId ? { id: day.dailyBaseTripPlaceId } : null,
+        dailyBaseDepartureTripPlace:
+          !automatic && day.dailyBaseDepartureTripPlaceId
+            ? { id: day.dailyBaseDepartureTripPlaceId }
+            : null,
       },
       accommodations,
+      trip,
     );
     // The stay every surface routes from and back to, so none has to guess.
     return {
@@ -563,6 +594,8 @@ export async function listItinerary(
       defaultTimeZoneSourceTripPlaceId: day.defaultTimeZoneSourceTripPlaceId,
       dailyBaseDepartureTripPlaceId: day.dailyBaseDepartureTripPlaceId,
       dailyBaseTripPlaceId: day.dailyBaseTripPlaceId,
+      stayStartMode: day.stayStartMode as 'INHERIT' | 'NONE' | 'PLACE' | 'SAME_AS_START' | null,
+      stayEndMode: day.stayEndMode as 'INHERIT' | 'NONE' | 'PLACE' | 'SAME_AS_START' | null,
       experienceNote:
         trip.dayExperiences.find((entry) => formatDateOnly(entry.date) === formatDateOnly(day.date))
           ?.note ?? null,
@@ -576,7 +609,17 @@ export async function listItinerary(
       routeStartTravelMode: mapTravelMode(day.routeStartTravelMode),
       planningContext: readDayPlanningContext(day.planningContext),
       stay: serializeStay(day),
+      automaticStay: serializeStay(day, true),
     })),
+    stayPlan: {
+      defaultTripPlaceId: trip.defaultStayTripPlaceId,
+      revision: trip.stayPlanRevision,
+      ranges: trip.stayRanges.map((range) => ({
+        tripPlaceId: range.tripPlace.id,
+        startDate: formatDateOnly(range.startDate),
+        endDate: formatDateOnly(range.endDate),
+      })),
+    },
     trip: {
       endDate: formatDateOnly(trip.endDate),
       id: trip.id,
@@ -741,6 +784,8 @@ function sameIds(actual: Array<{ id: string }>, expected: string[]) {
 
 function dayBase(day: ItineraryDayBase): ItineraryDayBase {
   return {
+    stayStartMode: day.stayStartMode,
+    stayEndMode: day.stayEndMode,
     dailyBaseDepartureTripPlaceId: day.dailyBaseDepartureTripPlaceId,
     dailyBaseTripPlaceId: day.dailyBaseTripPlaceId,
   };
@@ -748,6 +793,8 @@ function dayBase(day: ItineraryDayBase): ItineraryDayBase {
 
 function sameDayBase(day: ItineraryDayBase, expected: ItineraryDayBase) {
   return (
+    (expected.stayStartMode === undefined || day.stayStartMode === expected.stayStartMode) &&
+    (expected.stayEndMode === undefined || day.stayEndMode === expected.stayEndMode) &&
     day.dailyBaseTripPlaceId === expected.dailyBaseTripPlaceId &&
     day.dailyBaseDepartureTripPlaceId === expected.dailyBaseDepartureTripPlaceId
   );
@@ -796,6 +843,10 @@ export async function moveItineraryDayPlan(
           throw new ItineraryConflictError('itinerary_day_conflict');
         }
 
+        await transaction.trip.update({
+          where: { id: tripId },
+          data: { stayPlanRevision: { increment: 1 } },
+        });
         const writes = planItineraryDayMoveWrites(
           sourceDay.id,
           sourceItems.map(({ id }) => id),
@@ -809,12 +860,30 @@ export async function moveItineraryDayPlan(
           where: { id: sourceDay.id },
           data:
             input.strategy === 'swap'
-              ? targetBase
-              : { dailyBaseDepartureTripPlaceId: null, dailyBaseTripPlaceId: null },
+              ? {
+                  ...targetBase,
+                  defaultTimeZoneSource: 'TRIP_REFERENCE',
+                  defaultTimeZoneSourceTripPlaceId: null,
+                  defaultTimeZoneSourceItemId: null,
+                }
+              : {
+                  defaultTimeZoneSource: 'TRIP_REFERENCE',
+                  defaultTimeZoneSourceTripPlaceId: null,
+                  defaultTimeZoneSourceItemId: null,
+                  dailyBaseDepartureTripPlaceId: null,
+                  dailyBaseTripPlaceId: null,
+                  stayStartMode: 'INHERIT',
+                  stayEndMode: 'INHERIT',
+                },
         });
         await transaction.itineraryDay.update({
           where: { id: targetDay.id },
-          data: sourceBase,
+          data: {
+            ...sourceBase,
+            defaultTimeZoneSource: 'TRIP_REFERENCE',
+            defaultTimeZoneSourceTripPlaceId: null,
+            defaultTimeZoneSourceItemId: null,
+          },
         });
         await refreshDayDefaultTimeZone(transaction, tripId, sourceDay.id);
         await refreshDayDefaultTimeZone(transaction, tripId, targetDay.id);
@@ -1079,11 +1148,27 @@ export async function setItineraryDayBase(
     await transaction.itineraryDay.update({
       where: { id: itineraryDayId },
       data: {
+        defaultTimeZoneSource: 'TRIP_REFERENCE',
+        defaultTimeZoneSourceTripPlaceId: null,
+        defaultTimeZoneSourceItemId: null,
         dailyBaseTripPlaceId: tripPlaceId,
+        stayStartMode: tripPlaceId ? 'PLACE' : 'INHERIT',
+        stayEndMode:
+          departureTripPlaceId === undefined
+            ? null
+            : departureTripPlaceId
+              ? 'PLACE'
+              : tripPlaceId
+                ? 'SAME_AS_START'
+                : 'INHERIT',
         ...(departureTripPlaceId !== undefined
           ? { dailyBaseDepartureTripPlaceId: departureTripPlaceId }
           : {}),
       },
+    });
+    await transaction.trip.update({
+      where: { id: tripId },
+      data: { stayPlanRevision: { increment: 1 } },
     });
     await refreshDayDefaultTimeZone(transaction, tripId, itineraryDayId);
   });

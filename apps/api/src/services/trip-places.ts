@@ -242,29 +242,45 @@ export async function removeTripPlace(userId: string, tripId: string, tripPlaceI
     // A day that leaned on this Place for its Daily Base or timezone falls back to
     // whatever else it holds, rather than keeping the Place alive to serve a default.
     const affectedDays = await transaction.itineraryDay.findMany({
-      where: {
-        tripId,
-        OR: [
-          { dailyBaseTripPlaceId: tripPlaceId },
-          { dailyBaseDepartureTripPlaceId: tripPlaceId },
-          { defaultTimeZoneSourceTripPlaceId: tripPlaceId },
-        ],
-      },
+      where: { tripId },
       select: { id: true },
     });
     await transaction.itineraryDay.updateMany({
+      where: { tripId, dailyBaseTripPlaceId: tripPlaceId, stayEndMode: 'SAME_AS_START' },
+      data: { stayEndMode: 'INHERIT' },
+    });
+    await transaction.itineraryDay.updateMany({
       where: { tripId, dailyBaseTripPlaceId: tripPlaceId },
-      data: { dailyBaseTripPlaceId: null },
+      data: {
+        defaultTimeZoneSource: 'TRIP_REFERENCE',
+        defaultTimeZoneSourceTripPlaceId: null,
+        defaultTimeZoneSourceItemId: null,
+        dailyBaseTripPlaceId: null,
+        stayStartMode: 'INHERIT',
+      },
     });
     await transaction.itineraryDay.updateMany({
       where: { tripId, dailyBaseDepartureTripPlaceId: tripPlaceId },
-      data: { dailyBaseDepartureTripPlaceId: null },
+      data: { dailyBaseDepartureTripPlaceId: null, stayEndMode: 'INHERIT' },
     });
     await transaction.itineraryDay.updateMany({
       where: { tripId, defaultTimeZoneSourceTripPlaceId: tripPlaceId },
-      data: { defaultTimeZoneSourceTripPlaceId: null },
+      data: {
+        defaultTimeZoneSource: 'TRIP_REFERENCE',
+        defaultTimeZoneSourceTripPlaceId: null,
+        defaultTimeZoneSourceItemId: null,
+      },
     });
 
+    await transaction.trip.updateMany({
+      where: { id: tripId, defaultStayTripPlaceId: tripPlaceId },
+      data: { defaultStayTripPlaceId: null },
+    });
+    await transaction.tripStayRange.deleteMany({ where: { tripId, tripPlaceId } });
+    await transaction.trip.update({
+      where: { id: tripId },
+      data: { stayPlanRevision: { increment: 1 } },
+    });
     await transaction.tripPlace.delete({ where: { id: tripPlaceId } });
 
     for (const day of affectedDays) {
@@ -272,16 +288,6 @@ export async function removeTripPlace(userId: string, tripId: string, tripPlaceI
     }
   });
 }
-
-/** Days whose default timezone can rest on this Trip Place, directly or through a stop. */
-const tripPlaceChildDays = (tripPlaceId: string) => ({
-  OR: [
-    { dailyBaseTripPlaceId: tripPlaceId },
-    { dailyBaseDepartureTripPlaceId: tripPlaceId },
-    { defaultTimeZoneSourceTripPlaceId: tripPlaceId },
-    { items: { some: { tripPlaceId } } },
-  ],
-});
 
 /**
  * Links a Custom Place on this trip to the Google Place the traveller picked
@@ -331,7 +337,7 @@ export async function linkTripPlaceToProvider(
       select: { id: true, note: true },
     });
     const affectedDays = await transaction.itineraryDay.findMany({
-      where: { tripId, ...tripPlaceChildDays(tripPlaceId) },
+      where: { tripId },
       select: { id: true },
     });
     // A note the traveller wrote on the Custom Place itself would otherwise
@@ -350,7 +356,12 @@ export async function linkTripPlaceToProvider(
       await transaction.reservation.updateMany(moved);
       await transaction.itineraryDay.updateMany({
         where: { tripId, dailyBaseTripPlaceId: tripPlaceId },
-        data: { dailyBaseTripPlaceId: existing.id },
+        data: {
+          defaultTimeZoneSource: 'TRIP_REFERENCE',
+          defaultTimeZoneSourceTripPlaceId: null,
+          defaultTimeZoneSourceItemId: null,
+          dailyBaseTripPlaceId: existing.id,
+        },
       });
       await transaction.itineraryDay.updateMany({
         where: { tripId, dailyBaseDepartureTripPlaceId: tripPlaceId },
@@ -364,6 +375,18 @@ export async function linkTripPlaceToProvider(
       if (note !== existing.note) {
         await transaction.tripPlace.update({ where: { id: existing.id }, data: { note } });
       }
+      await transaction.trip.updateMany({
+        where: { id: tripId, defaultStayTripPlaceId: tripPlaceId },
+        data: { defaultStayTripPlaceId: existing.id },
+      });
+      await transaction.tripStayRange.updateMany({
+        where: { tripId, tripPlaceId },
+        data: { tripPlaceId: existing.id },
+      });
+      await transaction.trip.update({
+        where: { id: tripId },
+        data: { stayPlanRevision: { increment: 1 } },
+      });
       await transaction.tripPlace.delete({ where: { id: tripPlaceId } });
     } else {
       await transaction.tripPlace.update({

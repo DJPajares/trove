@@ -76,6 +76,11 @@ export function TripShrinkReview({
               {feedback}
             </p>
           ) : null}
+          {impact.affectedStayRanges ? (
+            <p className="text-sm text-muted-foreground">
+              {t('stayRanges', { count: impact.affectedStayRanges })}
+            </p>
+          ) : null}
           {impact.removedDays.map((day) => (
             <section
               aria-labelledby={`shrink-day-${day.id}`}

@@ -52,7 +52,9 @@ const client = {
   trip: {
     findFirst: () => Promise.resolve({ id: TRIP_ID, name: 'Da Nang' }),
     updateMany: record('trip', 'updateMany'),
+    update: record('trip', 'update'),
   },
+  tripStayRange: { updateMany: record('tripStayRange', 'updateMany') },
   tripDestination: {
     findFirst: () => Promise.resolve(null),
     updateMany: record('tripDestination', 'updateMany'),

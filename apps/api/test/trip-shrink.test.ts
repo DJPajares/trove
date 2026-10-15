@@ -285,3 +285,50 @@ test('a DST gap after shrink review rolls back notes, days and dated reflections
   ).rejects.toMatchObject({ itemId: 'gap', targetDate: '2026-09-27', localTime: '02:30' });
   expect(store).toStrictEqual(before);
 });
+
+test('a stay range alone requires shrink review before its coverage is removed', async () => {
+  store.tripStayRange.push({
+    id: 'range',
+    tripId: 'trip',
+    tripPlaceId: 'hotel',
+    startDate: new Date('2026-09-02'),
+    endDate: new Date('2026-09-03'),
+  });
+  const impact = await review();
+  expect(impact.affectedStayRanges).toBe(1);
+  expect(store.tripStayRange).toHaveLength(1);
+  await updateTrip('owner', '', 'trip', {
+    ...input,
+    confirmDateShrink: true,
+    shrinkRevision: impact.revision,
+  });
+  expect(store.tripStayRange).toHaveLength(0);
+});
+
+test('planning ranges move with the itinerary while booking dates remain fixed', async () => {
+  store.place.push({
+    id: 'hotel',
+    kind: 'CUSTOM',
+    customName: 'Hotel',
+    customTimeZone: 'Asia/Singapore',
+  });
+  store.tripPlace.push({ id: 'hotel', tripId: 'trip', placeId: 'hotel' });
+  store.tripStayRange.push({
+    id: 'range',
+    tripId: 'trip',
+    tripPlaceId: 'hotel',
+    startDate: new Date('2026-09-02'),
+    endDate: new Date('2026-09-03'),
+  });
+  store.reservation.push({
+    id: 'booking',
+    tripId: 'trip',
+    type: 'ACCOMMODATION',
+    checkInDate: new Date('2026-09-02'),
+    checkOutDate: new Date('2026-09-03'),
+  });
+  await updateTrip('owner', '', 'trip', { startDate: '2026-10-01', endDate: '2026-10-03' });
+  expect(store.tripStayRange[0]?.startDate).toEqual(new Date('2026-10-02'));
+  expect(store.tripStayRange[0]?.endDate).toEqual(new Date('2026-10-03'));
+  expect(store.reservation[0]?.checkInDate).toEqual(new Date('2026-09-02'));
+});

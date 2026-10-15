@@ -1,5 +1,10 @@
 import { weatherDayLocations, WEATHER_MAX_LOCATIONS, type WeatherLocations } from '@trove/types';
-import { resolveDayStay, stayAccommodationsInclude, toStayAccommodations } from './day-stay.js';
+import {
+  resolveDayStay,
+  tripStayInclude,
+  stayAccommodationsInclude,
+  toStayAccommodations,
+} from './day-stay.js';
 import { getPrismaClient } from '@trove/db';
 
 import {
@@ -107,6 +112,7 @@ const tripInclude = {
     },
     orderBy: { date: 'asc' as const },
   },
+  ...tripStayInclude({ include: { place: { include: placeProviderRefInclude } } }),
   reservations: stayAccommodationsInclude({
     include: { place: { include: placeProviderRefInclude } },
   }),
@@ -318,7 +324,7 @@ export class TripWeatherService {
       trip.itineraryDays.map((day) => ({
         ...day,
         dailyBaseTripPlace:
-          resolveDayStay({ ...day, dailyBaseDepartureTripPlace: null }, accommodations).start
+          resolveDayStay({ ...day, dailyBaseDepartureTripPlace: null }, accommodations, trip).start
             ?.place ?? null,
       })),
       destination,

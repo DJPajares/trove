@@ -43,7 +43,9 @@ type AddTripPlaceSheetProps = {
   onAdded: (tripPlace: TripPlace) => void;
   onOpenChange: (open: boolean) => void;
   /** Places already on the trip, so this never offers to add one twice. */
-  tripPlaces: TripPlace[];
+  tripPlaces: ReadonlyArray<{
+    place: { id: string; providerRefs: Array<{ provider: 'google'; externalPlaceId: string }> };
+  }>;
   tripId: string;
 };
 

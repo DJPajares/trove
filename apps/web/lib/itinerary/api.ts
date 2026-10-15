@@ -93,13 +93,16 @@ export type ItineraryItem = {
 };
 
 export type ItineraryDay = {
+  automaticStay?: ItineraryDay['stay'];
+  stayStartMode?: 'INHERIT' | 'PLACE' | 'NONE' | 'SAME_AS_START' | null;
+  stayEndMode?: 'INHERIT' | 'PLACE' | 'NONE' | 'SAME_AS_START' | null;
   planningContext?: DayPlanningContext;
   dailyBaseDepartureTripPlaceId: string | null;
   dailyBaseTripPlaceId: string | null;
   date: string;
   defaultTimeZone: string;
   defaultTimeZoneSource:
-    'accommodation' | 'explicit_daily_base' | 'first_located_item' | 'trip_reference';
+    'stay_plan' | 'accommodation' | 'explicit_daily_base' | 'first_located_item' | 'trip_reference';
   defaultTimeZoneSourceTripPlaceId: string | null;
   experienceNote: string | null;
   experienceRating: number | null;
@@ -115,9 +118,9 @@ export type ItineraryDay = {
    * the server sent it do not carry it.
    */
   stay?: {
-    endSource: 'accommodation' | 'explicit' | null;
+    endSource: import('@trove/types').StaySource | null;
     endTripPlaceId: string | null;
-    startSource: 'accommodation' | 'explicit' | null;
+    startSource: import('@trove/types').StaySource | null;
     startTripPlaceId: string | null;
   };
 };
@@ -204,6 +207,7 @@ export type RequestedSchedule = 'afternoon' | 'anytime' | 'evening' | 'exact' | 
 export type { ItineraryDayTimeSuggestion, ItineraryDayTimeSuggestions } from '@trove/types';
 
 export type Itinerary = {
+  stayPlan?: import('@trove/types').StayPlan;
   days: ItineraryDay[];
   trip: {
     endDate: string;
@@ -217,9 +221,15 @@ export type Itinerary = {
 };
 
 export type ItineraryDayMoveInput = {
-  expectedSourceBase: Pick<ItineraryDay, 'dailyBaseDepartureTripPlaceId' | 'dailyBaseTripPlaceId'>;
+  expectedSourceBase: Pick<
+    ItineraryDay,
+    'stayStartMode' | 'stayEndMode' | 'dailyBaseDepartureTripPlaceId' | 'dailyBaseTripPlaceId'
+  >;
   expectedSourceItemIds: string[];
-  expectedTargetBase: Pick<ItineraryDay, 'dailyBaseDepartureTripPlaceId' | 'dailyBaseTripPlaceId'>;
+  expectedTargetBase: Pick<
+    ItineraryDay,
+    'stayStartMode' | 'stayEndMode' | 'dailyBaseDepartureTripPlaceId' | 'dailyBaseTripPlaceId'
+  >;
   expectedTargetItemIds: string[];
   strategy: 'append' | 'swap';
   targetItineraryDayId: string;
@@ -1003,6 +1013,23 @@ export function duplicateItineraryItem(tripId: string, itemId: string, clientIte
       method: 'POST',
     },
   );
+}
+
+export function updateTripStayPlan(tripId: string, input: import('@trove/types').StayPlanUpdate) {
+  return itineraryRequest<{ revision: number }>(`/trips/${tripId}/itinerary/stays`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+export function updateDayStay(
+  tripId: string,
+  dayId: string,
+  input: import('@trove/types').DayStayUpdate,
+) {
+  return itineraryRequest<{ revision: number }>(`/trips/${tripId}/itinerary/days/${dayId}/stay`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
 }
 
 export function setItineraryDayBase(

@@ -7,7 +7,12 @@ import {
   type TripOverviewStop,
 } from '@trove/types';
 
-import { resolveDayStay, stayAccommodationsInclude, toStayAccommodations } from './day-stay.js';
+import {
+  resolveDayStay,
+  tripStayInclude,
+  stayAccommodationsInclude,
+  toStayAccommodations,
+} from './day-stay.js';
 
 import { formatLocalTime, floatingLocalTimeToInstant } from './itinerary-rules.js';
 import { placeProviderRefInclude, serializeCanonicalPlace } from './place-serializer.js';
@@ -88,12 +93,15 @@ export async function getTripOverview(
           name: true,
           date: true,
           dailyBaseTripPlaceId: true,
+          stayStartMode: true,
+          stayEndMode: true,
           dailyBaseDepartureTripPlaceId: true,
           items: { orderBy: { position: 'asc' }, select: { tripPlaceId: true } },
           _count: { select: { items: true } },
         },
       },
       tripPlaces: { select: { id: true, place: { include: placeProviderRefInclude } } },
+      ...tripStayInclude({ select: { id: true } }),
       reservations: stayAccommodationsInclude({ select: { id: true } }),
       _count: { select: { tripPlaces: true } },
       tripInfoEntries: {
@@ -124,14 +132,14 @@ export async function getTripOverview(
   const dayTown = (day: (typeof trip.itineraryDays)[number]) => {
     const stay = resolveDayStay(
       {
-        id: day.id,
-        date: day.date,
+        ...day,
         dailyBaseTripPlace: day.dailyBaseTripPlaceId ? { id: day.dailyBaseTripPlaceId } : null,
         dailyBaseDepartureTripPlace: day.dailyBaseDepartureTripPlaceId
           ? { id: day.dailyBaseDepartureTripPlaceId }
           : null,
       },
       accommodations,
+      trip,
     );
     const stayId = stay.end?.place.id ?? stay.start?.place.id ?? day.dailyBaseTripPlaceId;
     return (

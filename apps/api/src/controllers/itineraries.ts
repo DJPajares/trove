@@ -1,4 +1,5 @@
-import { dayPlanningContextSchema } from '@trove/types';
+import { updateDayStay, updateTripStayPlan } from '../services/stay-plan.js';
+import { dayStayUpdateSchema, stayPlanUpdateSchema, dayPlanningContextSchema } from '@trove/types';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
@@ -33,6 +34,8 @@ const moveDaySchema = z
   .object({
     expectedSourceBase: z
       .object({
+        stayStartMode: z.enum(['INHERIT', 'NONE', 'PLACE', 'SAME_AS_START']).nullable().optional(),
+        stayEndMode: z.enum(['INHERIT', 'NONE', 'PLACE', 'SAME_AS_START']).nullable().optional(),
         dailyBaseDepartureTripPlaceId: z.uuid().nullable(),
         dailyBaseTripPlaceId: z.uuid().nullable(),
       })
@@ -40,6 +43,8 @@ const moveDaySchema = z
     expectedSourceItemIds: z.array(z.uuid()),
     expectedTargetBase: z
       .object({
+        stayStartMode: z.enum(['INHERIT', 'NONE', 'PLACE', 'SAME_AS_START']).nullable().optional(),
+        stayEndMode: z.enum(['INHERIT', 'NONE', 'PLACE', 'SAME_AS_START']).nullable().optional(),
         dailyBaseDepartureTripPlaceId: z.uuid().nullable(),
         dailyBaseTripPlaceId: z.uuid().nullable(),
       })
@@ -276,6 +281,35 @@ export function createItineraryControllers() {
       if (!params.success || !body.success)
         return reply.code(400).send({ code: 'invalid_itinerary_item' });
       return reply.code(409).send({ code: 'itinerary_movement_review_required' });
+    },
+
+    async setStayPlan(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      const params = tripParamsSchema.safeParse(request.params);
+      const body = stayPlanUpdateSchema.safeParse(request.body);
+      if (!userId) return;
+      if (!params.success || !body.success)
+        return reply.code(400).send({ code: 'invalid_itinerary_day' });
+      try {
+        return reply.send(await updateTripStayPlan(userId, params.data.tripId, body.data));
+      } catch (error) {
+        return handleError(reply, error);
+      }
+    },
+    async setDayStay(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      const params = dayParamsSchema.safeParse(request.params);
+      const body = dayStayUpdateSchema.safeParse(request.body);
+      if (!userId) return;
+      if (!params.success || !body.success)
+        return reply.code(400).send({ code: 'invalid_itinerary_day' });
+      try {
+        return reply.send(
+          await updateDayStay(userId, params.data.tripId, params.data.itineraryDayId, body.data),
+        );
+      } catch (error) {
+        return handleError(reply, error);
+      }
     },
 
     async setDayBase(request: FastifyRequest, reply: FastifyReply) {

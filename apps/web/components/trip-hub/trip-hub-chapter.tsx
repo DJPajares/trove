@@ -1,19 +1,17 @@
 'use client';
 
-import type { TripOverviewData, TripOverviewDay, TripOverviewStop } from '@trove/types';
+import type { TripOverviewData, TripOverviewStop } from '@trove/types';
 import { ArrowRight, ArrowUpRight, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useRef, type ComponentType } from 'react';
 
 import { MediaFrame } from '@/components/media-frame';
-import { TripAllDaysCard, TripDayCard } from '@/components/trip-day-card';
 import { TripInsights } from '@/components/trip-insights';
 import { TripReadinessPrompt } from '@/components/trip-readiness-prompt';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import * as Icons from '@/lib/icons';
-import { itineraryViewHref } from '@/lib/itinerary/view';
 import { forgetCachedMediaUrls } from '@/lib/media/storage-cache-key';
 import {
   canDecodeHeic,
@@ -81,37 +79,6 @@ function StopLine({ clockTimeZone, stop }: { clockTimeZone: string; stop: TripOv
  * first, then each day - so opening the planner from here lands on the same
  * strip, with the day this page pointed to already the open one.
  */
-function DayTiles({
-  days,
-  focusDayId,
-  tripId,
-}: Readonly<{ days: readonly TripOverviewDay[]; focusDayId: string | null; tripId: string }>) {
-  const t = useTranslations('itinerary.planner.ribbon');
-  return (
-    <ol
-      aria-label={t('label')}
-      className="interaction-scrollbar -mx-1 flex snap-x gap-1.5 overflow-x-auto px-1 py-1"
-    >
-      <li className="snap-start">
-        <TripAllDaysCard
-          count={days.length}
-          current={false}
-          href={itineraryViewHref(`/trips/${tripId}/itinerary`, '', null)}
-        />
-      </li>
-      {days.map((day) => (
-        <li className="snap-start" key={day.id}>
-          <TripDayCard
-            current={day.id === focusDayId}
-            day={day}
-            href={overviewPlannerHref(tripId, day.id)}
-          />
-        </li>
-      ))}
-    </ol>
-  );
-}
-
 /** The day the plan most needs next, or the one about to begin. */
 function FocusDay({
   clockTimeZone,
@@ -462,9 +429,6 @@ export function TripHubChapter({
           >
             {t(stage === 'soon' ? 'reviewTitle' : 'planTitle')}
           </h2>
-          {days.length > 1 ? (
-            <DayTiles days={days} focusDayId={day?.id ?? null} tripId={trip.id} />
-          ) : null}
           {loading ? (
             <ChapterSkeleton label={t('loading')} />
           ) : day && overview ? (

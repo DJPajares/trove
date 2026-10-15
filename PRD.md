@@ -1259,15 +1259,25 @@ Travellers see the Daily Base as their **Stay**. "Daily Base" and "Departure Bas
 
 Daily Base is distinct from trip Starting Location.
 
-For normal per-day base context, use this precedence:
+A trip may have a default Stay and non-overlapping inclusive date-range Stays, independent of accommodation Reservations. Manual stay ranges cover full itinerary days, so the same place governs both ends unless a day exception says otherwise. The common flow is one place for the whole trip; date ranges and different start/end locations are progressively disclosed.
 
-1. explicit Daily Base,
-2. applicable Accommodation,
-3. no daily base.
+Resolve each endpoint using:
+
+1. an explicit day override (a place, or intentionally no stay),
+2. an explicit date-range Stay,
+3. an applicable Accommodation,
+4. the trip default Stay,
+5. no stay.
+
+Day settings distinguish inheriting the automatic stay from explicitly choosing no stay. The return endpoint may follow the start or be configured independently. Changing a trip default preserves day exceptions and ranges unless the traveller explicitly resets the day exceptions. Every day shows its effective stay and source. Adjacent manual ranges do not silently create a transfer-day override.
+
+Stay selection can use existing Trip Places, contextual place search, or a Custom Place; it does not create a booking. Overlapping range edits replace the selected coverage and preserve unaffected fragments, with a preview before save. Stay writes require connectivity; prepared snapshots retain the plan and resolved day endpoints for offline reading.
+
+Planning ranges follow itinerary days when the trip is rescheduled, clip when shortened with range losses shown in shrink review, and stay bounded when lengthened. The default covers new days. Reservation dates remain independent. Historical per-day stays preserve their resolved endpoints as overrides. AI Apply groups supplied stays into defaults/ranges without inventing lodging, preserving exceptional or unknown endpoints.
 
 Starting Location is **not** a fallback daily base. Its first-day route-origin behavior is defined in Section 7.4 and must not add an implicit route leg when a Daily Base already governs the start of the day.
 
-An applicable Accommodation may provide the day's base automatically unless the user explicitly overrides the day with a Daily Base.
+An applicable Accommodation may provide the day's base automatically unless a day exception or date-range Stay overrides it.
 
 If multiple accommodations could apply and Trove cannot determine the appropriate base safely from their dates/times, it must not guess; the day may remain without an inferred base until clarified.
 
@@ -1299,7 +1309,7 @@ another).
   its Departure Base. Anything more ambiguous (more than two applicable
   Accommodations, or dates that do not cleanly disambiguate) must not guess,
   per the rule above.
-- Departure Base does not affect day timezone resolution (Section 32.1);
+- The resolved start Stay supplies the day timezone before the existing item/trip fallbacks. Departure Base does not affect day timezone resolution (Section 32.1);
   timezone continues to resolve from the day's base only.
 - Route rows must visually distinguish a start-of-day or return-to-base leg
   from an ordinary between-item leg, so the traveller can tell why the leg
@@ -1366,7 +1376,7 @@ Possible data:
 - booking information,
 - applicable trip days.
 
-Accommodation may supply Daily Base context for the days on which it applies, subject to the precedence rules in Section 18.4.
+Accommodation may supply Daily Base context for the days on which it applies, subject to the precedence rules in Section 18.4. Booking data remains separate from planning Stays: editing or removing one does not edit or remove the other.
 
 ---
 
@@ -2248,7 +2258,7 @@ A country may contain multiple timezones. Its configured default is an explicit 
 ### Day and Item Timezones
 
 - A dated/timed itinerary item, reservation, or logistics record must use its applicable local timezone when it can be resolved from its Place/location.
-- A trip day resolves its default local timezone in this order: explicit Daily Base, applicable Accommodation, first ordered located itinerary item with a resolvable timezone, then the trip reference timezone.
+- A trip day resolves its default local timezone from its resolved start Stay (using Section 18.4 precedence), then the first ordered located itinerary item with a resolvable timezone, then the trip reference timezone. An end-only Stay does not change it.
 - Exact-time items without a more specific timezone use the applicable day timezone.
 - Cross-timezone transport must preserve separate local departure and arrival times/timezones.
 - Home, notifications, and date-driven lifecycle behavior must not rely on device timezone alone when a more authoritative trip/day/item timezone exists. Trip lifecycle in particular stays on the trip reference timezone, so a trip does not change phase because its owner boarded a plane.

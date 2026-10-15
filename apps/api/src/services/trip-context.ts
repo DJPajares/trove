@@ -2,7 +2,12 @@ import { getPrismaClient } from '@trove/db';
 import { TRIP_CONTEXT_VERSION, type AiPlannerDraft, type TripContext } from '@trove/types';
 
 import { tripClimate, type ClimateOptions } from './climate-norms.js';
-import { resolveDayStay, stayAccommodationsInclude, toStayAccommodations } from './day-stay.js';
+import {
+  resolveDayStay,
+  tripStayInclude,
+  stayAccommodationsInclude,
+  toStayAccommodations,
+} from './day-stay.js';
 import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
 import { ItineraryNotFoundError } from './itineraries.js';
 import { contextPlaceFromOwnedData } from './owned-place-location.js';
@@ -40,6 +45,7 @@ export async function readTripContext(
         select: { place: { include: placeProviderRefInclude } },
       },
       tripPlaces: { select: { id: true, place: { include: placeProviderRefInclude } } },
+      ...tripStayInclude({ select: { id: true } }),
       reservations: stayAccommodationsInclude({ select: { id: true } }),
       itineraryDays: {
         orderBy: { date: 'asc' },
@@ -48,6 +54,8 @@ export async function readTripContext(
           date: true,
           defaultTimeZone: true,
           dailyBaseTripPlaceId: true,
+          stayStartMode: true,
+          stayEndMode: true,
           items: { orderBy: { position: 'asc' }, select: { tripPlaceId: true } },
         },
       },
@@ -63,12 +71,12 @@ export async function readTripContext(
   const days = trip.itineraryDays.map((day) => {
     const stay = resolveDayStay(
       {
-        id: day.id,
-        date: day.date,
+        ...day,
         dailyBaseTripPlace: day.dailyBaseTripPlaceId ? { id: day.dailyBaseTripPlaceId } : null,
         dailyBaseDepartureTripPlace: null,
       },
       accommodations,
+      trip,
     );
     return {
       id: day.id,

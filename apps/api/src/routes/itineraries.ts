@@ -154,6 +154,12 @@ export function registerItineraryRoutes(app: FastifyInstance) {
     authenticated,
     controllers.organizeItem,
   );
+  app.put('/trips/:tripId/itinerary/stays', authenticated, controllers.setStayPlan);
+  app.patch(
+    '/trips/:tripId/itinerary/days/:itineraryDayId/stay',
+    authenticated,
+    controllers.setDayStay,
+  );
   app.patch(
     '/trips/:tripId/itinerary/days/:itineraryDayId/base',
     authenticated,

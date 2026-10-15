@@ -277,15 +277,15 @@ test('a Stay the server inferred numbers the day before its legs arrive', () => 
   });
 });
 
-test('a base set by hand still outranks the Stay the server inferred', () => {
+test('server resolution preserves an explicit day choice', () => {
   const day = {
     dailyBaseDepartureTripPlaceId: null,
     dailyBaseTripPlaceId: 'chosen',
     stay: {
-      endSource: 'accommodation' as const,
-      endTripPlaceId: 'booked',
-      startSource: 'accommodation' as const,
-      startTripPlaceId: 'booked',
+      endSource: 'explicit' as const,
+      endTripPlaceId: 'chosen',
+      startSource: 'explicit' as const,
+      startTripPlaceId: 'chosen',
     },
   };
 
@@ -293,4 +293,29 @@ test('a base set by hand still outranks the Stay the server inferred', () => {
     arrivalTripPlaceId: 'chosen',
     departureTripPlaceId: 'chosen',
   });
+});
+
+test('resolved stay endpoints are authoritative over legacy symmetry and cached legs', () => {
+  const day = {
+    dailyBaseTripPlaceId: 'old-hotel',
+    dailyBaseDepartureTripPlaceId: null,
+    stay: {
+      startTripPlaceId: 'old-hotel',
+      endTripPlaceId: 'new-hotel',
+      startSource: 'explicit' as const,
+      endSource: 'stay_range' as const,
+    },
+  };
+  expect(resolveDailyBases({ day })).toEqual({
+    arrivalTripPlaceId: 'old-hotel',
+    departureTripPlaceId: 'new-hotel',
+  });
+  expect(
+    resolveDailyBases({
+      day: {
+        ...day,
+        stay: { startTripPlaceId: null, endTripPlaceId: null, startSource: null, endSource: null },
+      },
+    }),
+  ).toEqual({ arrivalTripPlaceId: null, departureTripPlaceId: null });
 });

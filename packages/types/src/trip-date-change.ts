@@ -21,6 +21,7 @@ export type ShrinkDay = {
 };
 
 export type TripShrinkImpact = {
+  affectedStayRanges?: number;
   revision: string;
   removedDays: ShrinkDay[];
   retainedDays: Array<{ id: string; date: string; name: string | null; notes: string | null }>;

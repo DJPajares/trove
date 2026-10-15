@@ -14,6 +14,8 @@ beforeEach(() => {
   owned = true;
   vi.clearAllMocks();
   const transaction = {
+    trip: { updateMany: detach, update: detach },
+    tripStayRange: { deleteMany: detach },
     expense: { updateMany: detach },
     memory: { updateMany: detach },
     reservation: { updateMany: detach },

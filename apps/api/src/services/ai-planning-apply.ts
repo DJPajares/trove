@@ -1,3 +1,4 @@
+import { groupAppliedStays } from './stay-plan-rules.js';
 import { getPrismaClient, Prisma } from '@trove/db';
 import { planningPreferencesFromAi } from '@trove/types';
 import type { AiPlannerDraft, AiPlannerDraftItem, AiPlannerDraftPlace } from '@trove/types';
@@ -369,6 +370,30 @@ export async function applyAiPlanningSession(
     const dayIdByDate = new Map<string, string>();
     const itemIdByDraftId = new Map<string, string>();
 
+    const stayPlan = groupAppliedStays(
+      draft.days.map((day) => ({
+        date: day.date,
+        start: day.dailyBasePlaceRefId ? (tripPlaceIds.get(day.dailyBasePlaceRefId) ?? null) : null,
+        end:
+          (day.dailyBaseDeparturePlaceRefId ?? day.dailyBasePlaceRefId)
+            ? (tripPlaceIds.get((day.dailyBaseDeparturePlaceRefId ?? day.dailyBasePlaceRefId)!) ??
+              null)
+            : null,
+      })),
+    );
+    await transaction.trip.update({
+      where: { id: trip.id },
+      data: { defaultStayTripPlaceId: stayPlan.defaultTripPlaceId },
+    });
+    if (stayPlan.ranges.length)
+      await transaction.tripStayRange.createMany({
+        data: stayPlan.ranges.map((range) => ({
+          tripId: trip.id,
+          tripPlaceId: range.tripPlaceId,
+          startDate: parseDateOnly(range.startDate),
+          endDate: parseDateOnly(range.endDate),
+        })),
+      });
     const draftDays = new Map(draft.days.map((day) => [day.date, day]));
     for (const date of enumerateDateRange(draft.trip.startDate, draft.trip.endDate)) {
       const day = draftDays.get(date);
@@ -385,7 +410,9 @@ export async function applyAiPlanningSession(
       const defaultTimeZone =
         dailyBase?.timeZone ?? firstItemPlace?.timeZone ?? tripTimeZone.timeZone;
       const defaultSource = dailyBase?.timeZone
-        ? ('EXPLICIT_DAILY_BASE' as const)
+        ? stayPlan.overrides.get(date)?.stayStartMode === 'INHERIT'
+          ? ('STAY_PLAN' as const)
+          : ('EXPLICIT_DAILY_BASE' as const)
         : firstItemPlace?.timeZone
           ? ('FIRST_LOCATED_ITEM' as const)
           : ('TRIP_REFERENCE' as const);
@@ -399,12 +426,7 @@ export async function applyAiPlanningSession(
         defaultSource === 'FIRST_LOCATED_ITEM' ? ('TRIP_REFERENCE' as const) : defaultSource;
       const created = await transaction.itineraryDay.create({
         data: {
-          dailyBaseDepartureTripPlaceId: day.dailyBaseDeparturePlaceRefId
-            ? (tripPlaceIds.get(day.dailyBaseDeparturePlaceRefId) ?? null)
-            : null,
-          dailyBaseTripPlaceId: day.dailyBasePlaceRefId
-            ? (tripPlaceIds.get(day.dailyBasePlaceRefId) ?? null)
-            : null,
+          ...stayPlan.overrides.get(date)!,
           date: parseDateOnly(date),
           name: day.name ?? null,
           routeStartTravelMode: draftLegMode(day.routeStartTravelMode),
@@ -412,7 +434,8 @@ export async function applyAiPlanningSession(
           defaultTimeZoneResolvedAt: now,
           defaultTimeZoneSource: insertedSource,
           defaultTimeZoneSourceTripPlaceId:
-            defaultSource === 'EXPLICIT_DAILY_BASE' && day.dailyBasePlaceRefId
+            (defaultSource === 'EXPLICIT_DAILY_BASE' || defaultSource === 'STAY_PLAN') &&
+            day.dailyBasePlaceRefId
               ? (tripPlaceIds.get(day.dailyBasePlaceRefId) ?? null)
               : null,
           tripId: trip.id,

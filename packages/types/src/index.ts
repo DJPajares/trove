@@ -12,3 +12,4 @@ export * from './day-place.js';
 export * from './itinerary-timing.js';
 export * from './itinerary-movement.js';
 export * from './health.js';
+export * from './stays.js';

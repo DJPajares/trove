@@ -1,7 +1,12 @@
 import { getPrismaClient, type Prisma } from '@trove/db';
 import { mapWithConcurrency, PROVIDER_CONCURRENCY_LIMIT } from './concurrency.js';
 import { placeProviderRefInclude } from './place-serializer.js';
-import { resolveDayStay, stayAccommodationsInclude, toStayAccommodations } from './day-stay.js';
+import {
+  resolveDayStay,
+  tripStayInclude,
+  stayAccommodationsInclude,
+  toStayAccommodations,
+} from './day-stay.js';
 import { ItineraryNotFoundError } from './itineraries.js';
 import {
   isRoutableTravelMode,
@@ -332,6 +337,7 @@ export async function readItineraryDayRoutes(
     where: { id: tripId, ownerId: userId },
     include: {
       startingPlace: { include: placeInclude },
+      ...tripStayInclude({ include: tripPlaceInclude }),
       reservations: stayAccommodationsInclude({ include: tripPlaceInclude }),
       itineraryDays: {
         where: { id: itineraryDayId },
@@ -387,7 +393,7 @@ export async function readItineraryDayRoutes(
   }));
 
   const wholeDay = options.legs !== 'between_items';
-  const stay = wholeDay ? resolveDayStay(day, toStayAccommodations(trip.reservations)) : null;
+  const stay = wholeDay ? resolveDayStay(day, toStayAccommodations(trip.reservations), trip) : null;
   const arrivalBaseTripPlace = stay?.start?.place ?? null;
   const departureBaseTripPlace = stay?.end?.place ?? null;
   const arrivalBase = arrivalBaseTripPlace

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Prisma } from '@trove/db';
 import type { TripShrinkImpact } from '@trove/types';
-import { formatDateOnly } from './trip-rules.js';
+import { dayOffset, shiftDateOnly, formatDateOnly } from './trip-rules.js';
 
 type PlanningDay = {
   id: string;
@@ -11,6 +11,8 @@ type PlanningDay = {
   dailyBaseTripPlaceId: string | null;
   dailyBaseDepartureTripPlaceId: string | null;
   updatedAt: Date;
+  stayStartMode?: string | null;
+  stayEndMode?: string | null;
 };
 
 export async function tripShrinkImpact(
@@ -56,6 +58,18 @@ export async function tripShrinkImpact(
     }),
     transaction.dayExperience.findMany({ where: { tripId }, orderBy: { date: 'asc' } }),
   ]);
+  const stayRanges = await transaction.tripStayRange.findMany({
+    where: { tripId },
+    orderBy: { startDate: 'asc' },
+  });
+  const offset = days.length
+    ? dayOffset(formatDateOnly(days[0]!.date), targetDates.get(days[0]!.id) ?? startDate)
+    : 0;
+  const affectedStayRanges = stayRanges.filter(
+    (range) =>
+      shiftDateOnly(formatDateOnly(range.startDate), offset) < startDate ||
+      shiftDateOnly(formatDateOnly(range.endDate), offset) > endDate,
+  ).length;
   const sortedDays = [...days].sort((a, b) => a.date.getTime() - b.date.getTime());
   const removedDays = sortedDays
     .filter((day) => removedIds.includes(day.id))
@@ -78,8 +92,8 @@ export async function tripShrinkImpact(
         rating: experience?.rating ?? null,
         reflectionNote: experience?.note ?? null,
         bases:
-          Number(Boolean(day.dailyBaseTripPlaceId)) +
-          Number(Boolean(day.dailyBaseDepartureTripPlaceId)),
+          Number(day.stayStartMode === 'NONE' || Boolean(day.dailyBaseTripPlaceId)) +
+          Number(day.stayEndMode === 'NONE' || Boolean(day.dailyBaseDepartureTripPlaceId)),
         items: itemIds.size,
         tasks: tasks.filter(linked).length,
         expenses: expenses.filter(linked).length,
@@ -103,6 +117,7 @@ export async function tripShrinkImpact(
     .update(
       JSON.stringify({
         tripId,
+        stayRanges,
         tripUpdatedAt,
         startDate,
         endDate,
@@ -116,20 +131,23 @@ export async function tripShrinkImpact(
       }),
     )
     .digest('hex');
-  return { revision, removedDays, retainedDays };
+  return { revision, removedDays, retainedDays, affectedStayRanges };
 }
 
 export function hasShrinkContent(impact: TripShrinkImpact) {
-  return impact.removedDays.some(
-    (day) =>
-      day.notes?.trim() ||
-      day.rating !== null ||
-      day.reflectionNote ||
-      day.bases ||
-      day.items ||
-      day.tasks ||
-      day.reservations ||
-      day.expenses ||
-      day.memories,
+  return (
+    Boolean(impact.affectedStayRanges) ||
+    impact.removedDays.some(
+      (day) =>
+        day.notes?.trim() ||
+        day.rating !== null ||
+        day.reflectionNote ||
+        day.bases ||
+        day.items ||
+        day.tasks ||
+        day.reservations ||
+        day.expenses ||
+        day.memories,
+    )
   );
 }

@@ -21,8 +21,10 @@ const SWIPE_DISTANCE = 64;
 const SWIPE_VELOCITY = 420;
 
 export type DayStay =
-  | { kind: 'none' }
+  | { kind: 'none'; intentional?: boolean }
   | { kind: 'same'; name: string }
+  | { kind: 'start_only'; name: string }
+  | { kind: 'end_only'; name: string }
   | { from: string; kind: 'transition'; to: string };
 
 function FactsLine({ children }: Readonly<{ children: ReactNode[] }>) {
@@ -78,6 +80,7 @@ export function DayMasthead({
   scoreChip,
   sketch,
   stay,
+  staySource,
   weather,
 }: Readonly<{
   actions: ReactNode;
@@ -104,6 +107,7 @@ export function DayMasthead({
   /** The drawn route, when the day has enough located places to draw one. */
   sketch: ReactNode | null;
   stay: DayStay;
+  staySource?: string;
   /** The day's own weather, under its photograph. */
   weather: ReactNode;
 }>) {
@@ -243,11 +247,16 @@ export function DayMasthead({
               )}
             >
               {stay.kind === 'none'
-                ? t('noStay')
+                ? t(stay.intentional ? 'noStaySet' : 'noStay')
                 : stay.kind === 'same'
                   ? t('stay', { name: stay.name })
-                  : t('stayTransition', { from: stay.from, to: stay.to })}
+                  : stay.kind === 'start_only' || stay.kind === 'end_only'
+                    ? t(stay.kind === 'start_only' ? 'startStay' : 'endStay', { name: stay.name })
+                    : t('stayTransition', { from: stay.from, to: stay.to })}
             </span>
+            {staySource ? (
+              <span className="text-xs text-muted-foreground">· {staySource}</span>
+            ) : null}
           </button>
           {routeNotes}
         </div>

@@ -15,7 +15,8 @@ export type ModelName =
   | 'task'
   | 'trip'
   | 'tripMediaCleanup'
-  | 'tripPlace';
+  | 'tripPlace'
+  | 'tripStayRange';
 
 const MODELS: ModelName[] = [
   'dayExperience',
@@ -32,6 +33,7 @@ const MODELS: ModelName[] = [
   'trip',
   'tripMediaCleanup',
   'tripPlace',
+  'tripStayRange',
 ];
 
 export const store: Record<ModelName, Row[]> = Object.fromEntries(
@@ -108,6 +110,40 @@ function hydrateItem(row: Row) {
   };
 }
 
+function hydrateStayTrip(row: Row | undefined) {
+  if (!row) return null;
+  return {
+    defaultStayTripPlaceId: null,
+    stayPlanRevision: 0,
+    ...row,
+    defaultStayTripPlace: hydrateTripPlace(
+      store.tripPlace.find((p) => p.id === row.defaultStayTripPlaceId),
+    ),
+    stayRanges: store.tripStayRange
+      .filter((range) => range.tripId === row.id)
+      .map((range) => ({
+        ...range,
+        tripPlace: hydrateTripPlace(store.tripPlace.find((p) => p.id === range.tripPlaceId)),
+      })),
+    reservations: store.reservation
+      .filter((r) => r.tripId === row.id)
+      .map((r) => ({
+        ...r,
+        checkInDate: r.checkInDate ?? null,
+        checkOutDate: r.checkOutDate ?? null,
+        accommodationDays: r.accommodationDays ?? [],
+        tripPlace: hydrateTripPlace(store.tripPlace.find((p) => p.id === r.tripPlaceId)),
+      })),
+  };
+}
+function applyData(row: Row, data: Row) {
+  for (const [key, value] of Object.entries(data))
+    row[key] =
+      value && typeof value === 'object' && 'increment' in value
+        ? Number(row[key] ?? 0) + Number(value.increment)
+        : value;
+}
+
 /** Returns rows with their relations attached, which covers every include and select in use. */
 function hydrate(name: ModelName, row: Row): Row {
   if (name === 'itineraryItem') return hydrateItem(row);
@@ -122,7 +158,7 @@ function hydrate(name: ModelName, row: Row): Row {
         .filter((item) => item.itineraryDayId === row.id)
         .sort((left, right) => Number(left.position) - Number(right.position))
         .map(hydrateItem),
-      trip: store.trip.find((trip) => trip.id === row.tripId) ?? null,
+      trip: hydrateStayTrip(store.trip.find((trip) => trip.id === row.tripId)),
       _count: {
         items: store.itineraryItem.filter((item) => item.itineraryDayId === row.id).length,
       },
@@ -155,7 +191,7 @@ function hydrate(name: ModelName, row: Row): Row {
   if (name === 'tripPlace') return hydrateTripPlace(row) as Row;
   if (name === 'trip') {
     return {
-      ...row,
+      ...hydrateStayTrip(row),
       _count: {
         memories: store.memory.filter((memory) => memory.tripId === row.id).length,
         dayExperiences: store.dayExperience.filter((entry) => entry.tripId === row.id).length,
@@ -387,12 +423,13 @@ function createModel(name: ModelName) {
       const row = store[name].find((candidate) => candidate.id === args.where.id);
       if (!row) throw new Error(`${name}_not_found`);
       if (name === 'itineraryDay') assertUniqueDayDate(row, args.data);
-      Object.assign(row, args.data, { updatedAt: new Date() });
+      applyData(row, args.data);
+      row.updatedAt = new Date();
       return hydrate(name, row);
     },
     updateMany: async (args: { data: Row; where?: Where }) => {
       const rows = store[name].filter((row) => matches(row, args.where));
-      for (const row of rows) Object.assign(row, args.data);
+      for (const row of rows) applyData(row, args.data);
       return { count: rows.length };
     },
   };

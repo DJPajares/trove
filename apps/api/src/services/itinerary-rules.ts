@@ -6,7 +6,8 @@ export type ItemTimeZoneResolution = {
 };
 
 export type DayTimeZoneResolution = {
-  source: 'ACCOMMODATION' | 'EXPLICIT_DAILY_BASE' | 'FIRST_LOCATED_ITEM' | 'TRIP_REFERENCE';
+  source:
+    'STAY_PLAN' | 'ACCOMMODATION' | 'EXPLICIT_DAILY_BASE' | 'FIRST_LOCATED_ITEM' | 'TRIP_REFERENCE';
   sourceItemId: string | null;
   sourceTripPlaceId: string | null;
   timeZone: string;

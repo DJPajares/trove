@@ -9,6 +9,8 @@ function matchesBase(
   expected: ItineraryDayMoveInput['expectedSourceBase'],
 ) {
   return (
+    (expected.stayStartMode === undefined || day.stayStartMode === expected.stayStartMode) &&
+    (expected.stayEndMode === undefined || day.stayEndMode === expected.stayEndMode) &&
     day.dailyBaseTripPlaceId === expected.dailyBaseTripPlaceId &&
     day.dailyBaseDepartureTripPlaceId === expected.dailyBaseDepartureTripPlaceId
   );
@@ -18,8 +20,56 @@ function setBase(
   day: Itinerary['days'][number],
   base: ItineraryDayMoveInput['expectedSourceBase'],
 ) {
+  day.stayStartMode = base.stayStartMode;
+  day.stayEndMode = base.stayEndMode;
   day.dailyBaseTripPlaceId = base.dailyBaseTripPlaceId;
   day.dailyBaseDepartureTripPlaceId = base.dailyBaseDepartureTripPlaceId;
+  if (!day.automaticStay) {
+    delete day.stay;
+    return;
+  }
+  const startMode = day.stayStartMode ?? (day.dailyBaseTripPlaceId ? 'PLACE' : 'INHERIT');
+  const endMode =
+    day.stayEndMode ??
+    (day.dailyBaseDepartureTripPlaceId
+      ? 'PLACE'
+      : day.dailyBaseTripPlaceId
+        ? 'SAME_AS_START'
+        : 'INHERIT');
+  const startId =
+    startMode === 'NONE'
+      ? null
+      : startMode === 'PLACE'
+        ? day.dailyBaseTripPlaceId
+        : day.automaticStay.startTripPlaceId;
+  const startSource =
+    startMode === 'NONE'
+      ? null
+      : startMode === 'PLACE'
+        ? 'explicit'
+        : day.automaticStay.startSource;
+  day.stay = {
+    startTripPlaceId: startId,
+    startSource,
+    endTripPlaceId:
+      endMode === 'NONE'
+        ? null
+        : endMode === 'SAME_AS_START'
+          ? startId
+          : endMode === 'PLACE'
+            ? day.dailyBaseDepartureTripPlaceId
+            : day.automaticStay.endTripPlaceId,
+    endSource:
+      endMode === 'NONE'
+        ? null
+        : endMode === 'SAME_AS_START'
+          ? startId
+            ? 'explicit'
+            : null
+          : endMode === 'PLACE'
+            ? 'explicit'
+            : day.automaticStay.endSource,
+  };
 }
 
 /** Applies one idempotent whole-day move to an already-cloned itinerary snapshot. */

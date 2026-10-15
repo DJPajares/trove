@@ -543,11 +543,15 @@ async function replayItineraryMutation(
           input: {
             ...operation.input,
             expectedSourceBase: {
+              stayStartMode: source?.stayStartMode,
+              stayEndMode: source?.stayEndMode,
               dailyBaseDepartureTripPlaceId: source?.dailyBaseDepartureTripPlaceId ?? null,
               dailyBaseTripPlaceId: source?.dailyBaseTripPlaceId ?? null,
             },
             expectedSourceItemIds: sourceIds,
             expectedTargetBase: {
+              stayStartMode: target?.stayStartMode,
+              stayEndMode: target?.stayEndMode,
               dailyBaseDepartureTripPlaceId: target?.dailyBaseDepartureTripPlaceId ?? null,
               dailyBaseTripPlaceId: target?.dailyBaseTripPlaceId ?? null,
             },

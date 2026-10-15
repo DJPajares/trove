@@ -1,3 +1,4 @@
+import { resolveDayStay, toStayAccommodations, type TripStayPlan } from './day-stay.js';
 import { PLAN_SCORE_TRIP_INCLUDE } from './plan-score-trip-query.js';
 export { PLAN_SCORE_TRIP_INCLUDE } from './plan-score-trip-query.js';
 
@@ -836,13 +837,17 @@ function toPlanScoreDayRecord(
   };
 }
 
-export type PlanScoreTripRows = {
+export type PlanScoreTripRows = TripStayPlan<{ id: string }> & {
+  defaultStayTripPlaceId?: string | null;
+  stayPlanRevision?: number;
   startDate?: Date;
   planningPreferences?: unknown;
   endDate?: Date;
   destinations?: unknown;
   startingPlaceId?: string | null;
   itineraryDays: Array<{
+    stayStartMode?: import('@trove/db').Prisma.ItineraryDayGetPayload<object>['stayStartMode'];
+    stayEndMode?: import('@trove/db').Prisma.ItineraryDayGetPayload<object>['stayEndMode'];
     dailyBaseDepartureTripPlaceId: string | null;
     dailyBaseTripPlaceId: string | null;
     date: Date;
@@ -922,12 +927,33 @@ export function readPlanScoreInputs(trip: PlanScoreTripRows, now = new Date()) {
       scoringCommitments(reservations, toLocalDate(day.date), day.defaultTimeZone),
     ),
   );
+  const resolvedStays = trip.itineraryDays.map((day) =>
+    resolveDayStay(
+      {
+        ...day,
+        dailyBaseTripPlace: day.dailyBaseTripPlaceId ? { id: day.dailyBaseTripPlaceId } : null,
+        dailyBaseDepartureTripPlace: day.dailyBaseDepartureTripPlaceId
+          ? { id: day.dailyBaseDepartureTripPlaceId }
+          : null,
+      },
+      toStayAccommodations(
+        trip.reservations
+          .filter((r) => r.type === 'ACCOMMODATION')
+          .map((r) => ({
+            ...r,
+            checkInDate: r.checkInDate ?? null,
+            checkOutDate: r.checkOutDate ?? null,
+            accommodationDays: r.accommodationDays ?? [],
+            tripPlace: r.tripPlaceId ? { id: r.tripPlaceId } : null,
+          })),
+      ),
+      trip,
+    ),
+  );
   const scoredPlaceIds = new Set([
     ...mustGoTripPlaceIds,
-    ...trip.itineraryDays.flatMap((day) =>
-      [day.dailyBaseTripPlaceId, day.dailyBaseDepartureTripPlaceId].filter((id): id is string =>
-        Boolean(id),
-      ),
+    ...resolvedStays.flatMap((stay) =>
+      [stay.start?.place.id, stay.end?.place.id].filter((id): id is string => Boolean(id)),
     ),
     ...days.flatMap((day) =>
       day.items.flatMap((item) => (item.tripPlaceId ? [item.tripPlaceId] : [])),
@@ -968,8 +994,8 @@ export function readPlanScoreInputs(trip: PlanScoreTripRows, now = new Date()) {
     days: trip.itineraryDays.map((day, index) => ({
       record: days[index]!,
       routing: {
-        dailyBaseDepartureTripPlaceId: day.dailyBaseDepartureTripPlaceId,
-        dailyBaseTripPlaceId: day.dailyBaseTripPlaceId,
+        dailyBaseDepartureTripPlaceId: resolvedStays[index]?.end?.place.id ?? null,
+        dailyBaseTripPlaceId: resolvedStays[index]?.start?.place.id ?? null,
         items: day.items.map((item) => ({
           id: item.id,
           position: item.position,

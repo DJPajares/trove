@@ -85,6 +85,7 @@ type ApplyState = {
   sessions: SessionState[];
   tripPlaces: Array<Record<string, any>>;
   trips: Array<Record<string, any>>;
+  stayRanges: Array<Record<string, any>>;
 };
 
 function makeSession(draft: AiPlannerDraft, overrides: Partial<SessionState> = {}): SessionState {
@@ -187,6 +188,7 @@ function createApplyStore(
     sessions: [makeSession(draft, options.session)],
     tripPlaces: [],
     trips: [],
+    stayRanges: [],
   };
   let transactionTail = Promise.resolve();
   let idCounter = 100;
@@ -306,6 +308,10 @@ function createApplyStore(
         if (!trip) throw new Error('trip_not_found');
         const rows = {
           ...trip,
+          defaultStayTripPlace: trip.defaultStayTripPlaceId
+            ? { id: trip.defaultStayTripPlaceId }
+            : null,
+          stayRanges: working.stayRanges.map((r) => ({ ...r, tripPlace: { id: r.tripPlaceId } })),
           itineraryDays: working.days.map((day) => ({
             ...day,
             items: working.items
@@ -327,6 +333,12 @@ function createApplyStore(
         if (!trip) throw new Error('trip_not_found');
         Object.assign(trip, data);
         return trip;
+      },
+    },
+    tripStayRange: {
+      async createMany({ data }: any) {
+        working.stayRanges.push(...data);
+        return { count: data.length };
       },
     },
     tripDestination: {
@@ -554,7 +566,11 @@ describe('AI planning Apply', () => {
     const customTripPlace = store.state.tripPlaces.find(
       (tripPlace) => tripPlace.placeId === customPlace?.id,
     );
-    expect(store.state.days[0]).toMatchObject({ dailyBaseTripPlaceId: customTripPlace?.id });
+    expect(store.state.trips[0]).toMatchObject({ defaultStayTripPlaceId: customTripPlace?.id });
+    expect(store.state.days[0]).toMatchObject({
+      dailyBaseTripPlaceId: null,
+      stayStartMode: 'INHERIT',
+    });
     expect(store.state.savedPlaces).toHaveLength(0);
     expect(store.state.runs).toHaveLength(0);
     expect(store.state.sessions[0]).toMatchObject({
@@ -712,6 +728,7 @@ describe('AI planning Apply', () => {
       items: [],
       tripPlaces: [],
       trips: [],
+      stayRanges: [],
     });
     expect(failed.state.places.filter((place) => place.kind === 'CUSTOM')).toHaveLength(0);
     expect(failed.state.sessions[0]).toMatchObject({

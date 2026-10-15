@@ -27,6 +27,48 @@ test('the screenshot example previews a Ritz-to-Marina arrival and a Marina depa
   });
 });
 
+test('day-one preview keeps the morning empty and respects known bookings and day overrides', () => {
+  expect(previewStayEndpoints(day('2026-10-19'), plan, '2026-10-19')).toEqual({
+    start: null,
+    end: 'marina',
+  });
+  expect(
+    previewStayEndpoints(
+      day('2026-10-19', {
+        stayFallback: {
+          startTripPlaceId: 'old-default',
+          startSource: 'trip_default',
+          endTripPlaceId: 'old-default',
+          endSource: 'trip_default',
+        },
+      }),
+      plan,
+      '2026-10-19',
+    ),
+  ).toEqual({ start: null, end: 'marina' });
+  expect(
+    previewStayEndpoints(
+      day('2026-10-19', {
+        stayFallback: {
+          startTripPlaceId: 'booking',
+          startSource: 'accommodation',
+          endTripPlaceId: null,
+          endSource: null,
+        },
+      }),
+      plan,
+      '2026-10-19',
+    ),
+  ).toEqual({ start: 'booking', end: 'marina' });
+  expect(
+    previewStayEndpoints(
+      day('2026-10-19', { stayStartMode: 'PLACE', dailyBaseTripPlaceId: 'home' }),
+      plan,
+      '2026-10-19',
+    ),
+  ).toEqual({ start: 'home', end: 'marina' });
+});
+
 test('previews preserve independent day overrides, no stay, bookings and ambiguous fallbacks', () => {
   expect(
     previewStayEndpoints(

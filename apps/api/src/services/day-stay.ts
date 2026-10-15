@@ -15,6 +15,7 @@ import { stayRangeForEndpoint } from '@trove/types';
 export type DayStaySource = import('@trove/types').StaySource;
 type EndpointMode = 'INHERIT' | 'NONE' | 'PLACE' | 'SAME_AS_START';
 export type TripStayPlan<Place> = {
+  startDate?: Date;
   defaultStayTripPlace?: Place | null;
   stayRanges?: readonly { startDate: Date; endDate: Date; tripPlace: Place }[];
 };
@@ -132,6 +133,8 @@ export function resolveDayStay<Place extends { id: string }>(
               : entry.checkInDate <= day.date && day.date < entry.checkOutDate),
         );
     if (candidates.length) return null;
+    // A trip default plans this trip's nights, not the night before arrival.
+    if (end === 'start' && day.date.getTime() === plan.startDate?.getTime()) return null;
     return plan.defaultStayTripPlace
       ? { place: plan.defaultStayTripPlace, source: 'trip_default' }
       : null;

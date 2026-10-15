@@ -1269,13 +1269,15 @@ Resolve each endpoint using:
 4. the trip default Stay,
 5. no stay.
 
+The trip default does not establish a stay for the night before the trip begins. The first morning stays empty unless a day override or applicable booking supplies a known stay. A different stay arriving on day one therefore supplies that evening's endpoint, without inventing a morning stay at the trip default. Existing Starting Location routing rules still apply when there is no starting stay.
+
 Day settings distinguish inheriting the automatic stay from explicitly choosing no stay. The return endpoint may follow the start or be configured independently. Changing a trip default preserves day exceptions and ranges unless the traveller explicitly resets the day exceptions. Every day shows its effective stay and source. Adjacent ranges automatically resolve a transfer day from the previous stay to the next; day overrides remain available for exceptions rather than being required for an ordinary change of stay.
 
 Stay means where the traveller is staying, whether a hotel, rental, friend's or family's home, or their own place. All use the same flow, with no accommodation category or booking required. Selection can use existing Trip Places, contextual place search, or a Custom Place such as “Mum's house”; it does not create a booking.
 
 Overlapping range edits replace the selected coverage and preserve unaffected fragments, with a preview before save. Stay writes require connectivity; prepared snapshots retain the plan and resolved day endpoints for offline reading.
 
-Planning ranges follow itinerary days when the trip is rescheduled, clip when shortened with range losses shown in shrink review, and stay bounded when lengthened. Arrival must fall within the trip; departure can be the day after its final day so that the final night can be planned. The default covers new days. Reservation dates remain independent. Existing range dates adopt Arrive/Leave meaning; a legacy range with identical start/end dates is read as one night and normalized on the next save. Historical explicit per-day stays remain unchanged. AI Apply groups supplied nights into defaults/ranges without inventing lodging, retaining day exceptions wherever needed to preserve every draft endpoint and score.
+Planning ranges follow itinerary days when the trip is rescheduled, clip when shortened with range losses shown in shrink review, and stay bounded when lengthened. Both Arrive and Leave must stay within the travel dates, with at least one night between them. A one-day trip uses the trip default and day exceptions without a date-range action. The default covers new days. Reservation dates remain independent. Existing range dates adopt Arrive/Leave meaning; a legacy range with identical start/end dates is read as one night and normalized on the next save. Historical explicit per-day stays remain unchanged. AI Apply groups supplied nights into defaults/ranges without inventing lodging, retaining day exceptions wherever needed to preserve every draft endpoint and score, including a known first-morning stay or final-evening endpoint.
 
 Starting Location is **not** a fallback daily base. Its first-day route-origin behavior is defined in Section 7.4 and must not add an implicit route leg when a Daily Base already governs the start of the day.
 

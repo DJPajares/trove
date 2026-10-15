@@ -50,8 +50,8 @@ test('trip stays update atomically, retain exceptions, and reset only when reque
   });
   await updateTripStayPlan('owner', 'trip', plan);
   expect(store.itineraryDay[0]).toMatchObject({
-    defaultTimeZoneSource: 'STAY_PLAN',
-    defaultTimeZoneSourceTripPlaceId: 'a',
+    defaultTimeZoneSource: 'TRIP_REFERENCE',
+    defaultTimeZoneSourceTripPlaceId: null,
   });
   expect(store.itineraryDay[1]?.dailyBaseTripPlaceId).toBe('b');
   await updateTripStayPlan('owner', 'trip', {
@@ -101,8 +101,8 @@ test('a no-stay day removes stay timezone context and can restore automatic inhe
     end: { mode: 'inherit' },
   });
   expect(store.itineraryDay[0]).toMatchObject({
-    defaultTimeZoneSource: 'STAY_PLAN',
-    defaultTimeZoneSourceTripPlaceId: 'a',
+    defaultTimeZoneSource: 'TRIP_REFERENCE',
+    defaultTimeZoneSourceTripPlaceId: null,
   });
 });
 
@@ -113,7 +113,7 @@ test('a return-only change never changes the day timezone', async () => {
     start: { mode: 'inherit' },
     end: { mode: 'place', tripPlaceId: 'b' },
   });
-  expect(store.itineraryDay[0]?.defaultTimeZoneSourceTripPlaceId).toBe('a');
+  expect(store.itineraryDay[0]?.defaultTimeZoneSourceTripPlaceId).toBeNull();
   await expect(
     updateDayStay('owner', 'trip', 'foreign-day', {
       expectedRevision: 2,
@@ -135,15 +135,18 @@ test('a night range changes timezone only on the following morning, including de
     'Asia/Tokyo',
     'America/New_York',
   ]);
-  await updateTripStayPlan('owner', 'trip', {
-    ...plan,
-    expectedRevision: 1,
-    ranges: [{ tripPlaceId: 'b', startDate: '2026-11-03', endDate: '2026-11-04' }],
-  });
+  await expect(
+    updateTripStayPlan('owner', 'trip', {
+      ...plan,
+      expectedRevision: 1,
+      ranges: [{ tripPlaceId: 'b', startDate: '2026-11-03', endDate: '2026-11-04' }],
+    }),
+  ).rejects.toThrow('invalid_stay_plan');
+  expect(store.trip[0]?.stayPlanRevision).toBe(1);
   expect(store.itineraryDay.map((d) => d.defaultTimeZone)).toEqual([
     'Asia/Tokyo',
     'Asia/Tokyo',
-    'Asia/Tokyo',
+    'America/New_York',
   ]);
 });
 
@@ -155,7 +158,7 @@ test('scoring hashes effective stay endpoints rather than their storage represen
     itineraryDays: [
       {
         id: 'd1',
-        date: new Date('2026-11-01'),
+        date: new Date('2026-11-02'),
         dailyBaseTripPlaceId: 'a',
         dailyBaseDepartureTripPlaceId: null,
         defaultTimeZone: 'Asia/Tokyo',
@@ -185,7 +188,7 @@ test('scoring hashes effective stay endpoints rather than their storage represen
     resolveDayStay(
       {
         id: 'd1',
-        date: base.startDate,
+        date: base.itineraryDays[0]!.date,
         dailyBaseTripPlace: null,
         dailyBaseDepartureTripPlace: null,
       },

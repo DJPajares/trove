@@ -448,6 +448,7 @@ export async function refreshDayDefaultTimeZone(
       },
       trip: {
         select: {
+          startDate: true,
           referenceTimeZone: true,
           ...tripStayInclude({ include: { place: { include: placeProviderRefInclude } } }),
           reservations: stayAccommodationsInclude({
@@ -600,8 +601,8 @@ export async function listItinerary(
   );
   const options = { snapshots };
   // Old saved ranges used full days. Derive their current morning zone from owned data.
-  if (trip.stayRanges.length)
-    for (const day of trip.itineraryDays) {
+  for (const day of trip.itineraryDays) {
+    if (trip.stayRanges.length || day.date.getTime() === trip.startDate.getTime()) {
       const { startTripPlaceId: startId, startSource: source } = serializeStay(day);
       const zone = stayDayTimeZone({
         start: startId && source ? { place: { id: startId }, source } : null,
@@ -614,6 +615,7 @@ export async function listItinerary(
       day.defaultTimeZoneSourceTripPlaceId = zone.sourceTripPlaceId;
       day.defaultTimeZoneSourceItemId = zone.sourceItemId;
     }
+  }
 
   return {
     days: trip.itineraryDays.map((day) => ({

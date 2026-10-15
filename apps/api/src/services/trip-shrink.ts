@@ -74,7 +74,7 @@ export async function tripShrinkImpact(
           endDate: formatDateOnly(range.endDate),
         }),
         offset,
-      ) > shiftDateOnly(endDate, 1),
+      ) > endDate,
   ).length;
   const sortedDays = [...days].sort((a, b) => a.date.getTime() - b.date.getTime());
   const removedDays = sortedDays

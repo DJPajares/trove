@@ -949,7 +949,8 @@ export function readPlanScoreInputs(trip: PlanScoreTripRows, now = new Date()) {
   );
   const days = trip.itineraryDays.map((day, index) => {
     const defaultTimeZone =
-      trip.stayRanges?.length && trip.referenceTimeZone
+      (trip.stayRanges?.length || day.date.getTime() === trip.startDate?.getTime()) &&
+      trip.referenceTimeZone
         ? stayDayTimeZone({
             start: resolvedStays[index]!.start,
             places: trip.tripPlaces,

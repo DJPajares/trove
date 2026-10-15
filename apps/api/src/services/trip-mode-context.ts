@@ -618,14 +618,15 @@ export async function resolveTripModeContext(
       : null,
     day: {
       date: dayDate,
-      defaultTimeZone: trip.stayRanges?.length
-        ? stayDayTimeZone({
-            start: stay.start,
-            places: stayPlaces,
-            items: day.items,
-            tripTimeZone: trip.referenceTimeZone,
-          }).timeZone
-        : day.defaultTimeZone,
+      defaultTimeZone:
+        trip.stayRanges?.length || day.date.getTime() === trip.startDate?.getTime()
+          ? stayDayTimeZone({
+              start: stay.start,
+              places: stayPlaces,
+              items: day.items,
+              tripTimeZone: trip.referenceTimeZone,
+            }).timeZone
+          : day.defaultTimeZone,
       id: day.id,
       items: day.items.map((item) => serializeItineraryItem(item, { snapshots })),
       name: day.name,

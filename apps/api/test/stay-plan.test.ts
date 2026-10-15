@@ -37,6 +37,24 @@ const endpoints = (resolved: ReturnType<typeof resolveDayStay>) => [
 ];
 
 describe('a single stay decision across surfaces', () => {
+  test('day one has no invented previous stay, while explicit and booked starts remain known', () => {
+    const firstDayPlan = { ...plan, startDate: day.date };
+    expect(endpoints(resolveDayStay(day, [], firstDayPlan))).toEqual([null, 'c']);
+    expect(
+      endpoints(resolveDayStay(day, [], { startDate: day.date, defaultStayTripPlace: a })),
+    ).toEqual([null, 'a']);
+    expect(endpoints(resolveDayStay(day, [booking], firstDayPlan))).toEqual(['b', 'c']);
+    expect(
+      endpoints(resolveDayStay(day, [{ ...booking, checkInDate: day.date }], firstDayPlan)),
+    ).toEqual([null, 'c']);
+    expect(endpoints(resolveDayStay({ ...day, dailyBaseTripPlace: b }, [], firstDayPlan))).toEqual([
+      'b',
+      'b',
+    ]);
+    expect(
+      endpoints(resolveDayStay({ ...day, date: new Date('2026-10-16') }, [], firstDayPlan)),
+    ).toEqual(['c', 'a']);
+  });
   test('arrival keeps the previous stay in the morning and departure starts at the new stay', () => {
     expect(endpoints(resolveDayStay(day, [], plan))).toEqual(['a', 'c']);
     expect(endpoints(resolveDayStay({ ...day, date: new Date('2026-10-16') }, [], plan))).toEqual([
@@ -184,7 +202,7 @@ test('legacy single-day ranges remain a usable one-night stay', () => {
   ]);
 });
 
-test('adjacent ranges and the final night are valid, but empty nights are rejected', () => {
+test('adjacent ranges can leave on the last travel day, but never after it or on arrival', () => {
   const input = {
     expectedRevision: 0,
     defaultTripPlaceId: null,
@@ -193,8 +211,8 @@ test('adjacent ranges and the final night are valid, but empty nights are reject
       { startDate: '2026-10-20', endDate: '2026-10-22', tripPlaceId: 'b' },
     ],
   };
-  expect(validateStayRanges(input, '2026-10-18', '2026-10-21')).toHaveLength(2);
-  expect(() => validateStayRanges(input, '2026-10-18', '2026-10-20')).toThrow('invalid_stay_plan');
+  expect(validateStayRanges(input, '2026-10-18', '2026-10-22')).toHaveLength(2);
+  expect(() => validateStayRanges(input, '2026-10-18', '2026-10-21')).toThrow('invalid_stay_plan');
   expect(() =>
     validateStayRanges(
       { ...input, ranges: [{ startDate: '2026-10-19', endDate: '2026-10-19', tripPlaceId: 'a' }] },
@@ -246,6 +264,7 @@ test('AI grouping preserves every resolved endpoint, including empty boundaries'
     [{ date: '2026-10-01', start: null, end: null }],
   ]) {
     const grouped = groupAppliedStays(days);
+    expect(grouped.ranges.every((range) => range.endDate <= days.at(-1)!.date)).toBe(true);
     for (const input of days) {
       const override = grouped.overrides.get(input.date)!;
       // Empty draft boundaries remain empty even if a default is added later.
@@ -267,6 +286,7 @@ test('AI grouping preserves every resolved endpoint, including empty boundaries'
             },
             [],
             {
+              startDate: new Date(days[0]!.date),
               defaultStayTripPlace: grouped.defaultTripPlaceId
                 ? { id: grouped.defaultTripPlaceId }
                 : null,

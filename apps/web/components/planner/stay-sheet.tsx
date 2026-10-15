@@ -98,7 +98,11 @@ export function StaySheet({
       through: date(range.endDate),
     });
   const validRange =
-    editingRange && editingRange.tripPlaceId && editingRange.startDate < editingRange.endDate;
+    editingRange &&
+    editingRange.tripPlaceId &&
+    editingRange.startDate >= itinerary.trip.startDate &&
+    editingRange.startDate < editingRange.endDate &&
+    editingRange.endDate <= itinerary.trip.endDate;
   const preview = validRange
     ? replaceStayRange(
         ranges.filter((_, i) => i !== originalRange),
@@ -294,21 +298,26 @@ export function StaySheet({
                     </div>
                   ))}
                   {!editingRange ? (
-                    <Button
-                      variant="outline"
-                      disabled={busy || !online}
-                      onClick={() => {
-                        setOriginalRange(null);
-                        setEditingRange({
-                          tripPlaceId: '',
-                          startDate: day?.date ?? itinerary.trip.startDate,
-                          endDate: shiftStayDate(itinerary.trip.endDate, 1),
-                        });
-                      }}
-                    >
-                      <Plus aria-hidden="true" />
-                      {t('addRange')}
-                    </Button>
+                    itinerary.trip.startDate < itinerary.trip.endDate ? (
+                      <Button
+                        variant="outline"
+                        disabled={busy || !online}
+                        onClick={() => {
+                          setOriginalRange(null);
+                          setEditingRange({
+                            tripPlaceId: '',
+                            startDate:
+                              day && day.date < itinerary.trip.endDate
+                                ? day.date
+                                : itinerary.trip.startDate,
+                            endDate: itinerary.trip.endDate,
+                          });
+                        }}
+                      >
+                        <Plus aria-hidden="true" />
+                        {t('addRange')}
+                      </Button>
+                    ) : null
                   ) : (
                     <section className="space-y-4 rounded-[var(--radius-lg)] border border-border p-4">
                       <Field>
@@ -332,7 +341,12 @@ export function StaySheet({
                             label={t('from')}
                             value={editingRange.startDate}
                             min={itinerary.trip.startDate}
-                            max={shiftStayDate(editingRange.endDate, -1)}
+                            max={shiftStayDate(
+                              editingRange.endDate < itinerary.trip.endDate
+                                ? editingRange.endDate
+                                : itinerary.trip.endDate,
+                              -1,
+                            )}
                             clearable={false}
                             disabled={busy}
                             onChange={(startDate) =>
@@ -347,7 +361,7 @@ export function StaySheet({
                             label={t('through')}
                             value={editingRange.endDate}
                             min={shiftStayDate(editingRange.startDate, 1)}
-                            max={shiftStayDate(itinerary.trip.endDate, 1)}
+                            max={itinerary.trip.endDate}
                             clearable={false}
                             disabled={busy}
                             onChange={(endDate) => setEditingRange({ ...editingRange, endDate })}
@@ -384,6 +398,7 @@ export function StaySheet({
                                   ranges: preview,
                                   revision,
                                 },
+                                itinerary.trip.startDate,
                               );
                               return (
                                 <p key={d.id} className="text-sm text-muted-foreground">

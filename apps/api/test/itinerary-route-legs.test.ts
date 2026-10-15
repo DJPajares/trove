@@ -110,6 +110,53 @@ test('the whole day buys the legs out of the base and back to it', async () => {
   expect(resolved, 'both stops and the base').toContain('tp-base');
 });
 
+test.each([false, true])(
+  'a first-day range never routes from the default stay; starting location present: %s',
+  async (hasStartingLocation) => {
+    const date = new Date('2026-09-10');
+    (globalThis as { trovePrismaClient?: unknown }).trovePrismaClient = {
+      trip: {
+        async findFirst() {
+          return {
+            id: 'trip',
+            startDate: date,
+            startingPlace: hasStartingLocation ? place('airport') : null,
+            defaultStayTripPlace: { id: 'tp-default', place: place('default') },
+            stayRanges: [
+              {
+                startDate: date,
+                endDate: new Date('2026-09-11'),
+                tripPlace: { id: 'tp-marina', place: place('marina') },
+              },
+            ],
+            reservations: [],
+            itineraryDays: [
+              {
+                id: 'day-1',
+                date,
+                dailyBaseTripPlace: null,
+                dailyBaseDepartureTripPlace: null,
+                items: [item('museum', 0), item('lunch', 1)],
+                routeStartTravelMode: 'DRIVE',
+              },
+            ],
+          };
+        },
+      },
+    };
+    const { getItineraryDayRoutes } = await import('../src/services/itinerary-routes.js');
+    const { resolved, resolvePlace, routed, routesService } = createSpies();
+    const routes = await getItineraryDayRoutes('owner', 'trip', 'day-1', {}, {
+      resolvePlace,
+      routesService,
+    } as never);
+    expect(resolved).not.toContain('tp-default');
+    expect(routes.segments.at(-1)?.destination.id).toBe('tp-marina');
+    expect(routes.segments[0]?.origin.id).toBe(hasStartingLocation ? 'place-airport' : 'museum');
+    expect(routed).toHaveLength(hasStartingLocation ? 3 : 2);
+  },
+);
+
 test('a caller reading one leg does not pay for the day it did not ask about', async () => {
   const { getItineraryDayRoutes } = await import('../src/services/itinerary-routes.js');
   stubPrisma();

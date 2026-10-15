@@ -334,14 +334,15 @@ export class TripWeatherService {
         return {
           ...day,
           dailyBaseTripPlace: stay.start?.place ?? null,
-          defaultTimeZone: trip.stayRanges?.length
-            ? stayDayTimeZone({
-                start: stay.start,
-                places,
-                items: day.items,
-                tripTimeZone: trip.referenceTimeZone,
-              }).timeZone
-            : day.defaultTimeZone,
+          defaultTimeZone:
+            trip.stayRanges?.length || day.date.getTime() === trip.startDate?.getTime()
+              ? stayDayTimeZone({
+                  start: stay.start,
+                  places,
+                  items: day.items,
+                  tripTimeZone: trip.referenceTimeZone,
+                }).timeZone
+              : day.defaultTimeZone,
         };
       }),
       destination,

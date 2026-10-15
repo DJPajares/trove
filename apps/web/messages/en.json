@@ -2443,7 +2443,7 @@
       "from": "Arrive",
       "through": "Leave",
       "rangeLabel": "Arrive {from} (Day {first}) · Leave {through} (Day {last})",
-      "nightsHelp": "Your arrival day starts at your previous stay and ends here. Your departure day starts here. These dates work the same for hotels and homes.",
+      "nightsHelp": "Your arrival day starts at your previous stay, if known, and ends here. Your departure day starts here. These dates work the same for hotels and homes.",
       "dayCoverage": "Day {number} · {date}: {start} → {end}",
       "sourcesMixed": "{start} → {end}",
       "preview": "Stay coverage after saving",

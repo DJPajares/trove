@@ -913,8 +913,8 @@ export async function updateTrip(
               }),
               offsetDays,
             );
-            const lastLeave = shiftDateOnly(endDate, 1);
-            if (from > endDate || through <= startDate)
+            const lastLeave = endDate;
+            if (from >= endDate || through <= startDate)
               await transaction.tripStayRange.delete({ where: { id: range.id } });
             else
               await transaction.tripStayRange.update({

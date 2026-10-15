@@ -8,6 +8,9 @@ export function groupAppliedStays(days: readonly Day[]) {
   );
   const defaultTripPlaceId = places.size === 1 ? [...places][0]! : null;
   const ranges: StayRange[] = [];
+  const orderedDays = [...days].sort((a, b) => a.date.localeCompare(b.date));
+  const firstDate = orderedDays.at(0)?.date;
+  const lastDate = orderedDays.at(-1)?.date;
   const overrides = new Map<
     string,
     {
@@ -17,8 +20,9 @@ export function groupAppliedStays(days: readonly Day[]) {
       dailyBaseDepartureTripPlaceId: string | null;
     }
   >();
-  for (const day of [...days].sort((a, b) => a.date.localeCompare(b.date))) {
-    if (!defaultTripPlaceId && day.end) {
+  for (const day of orderedDays) {
+    // Keep any final-day evening endpoint as a day exception, within the trip.
+    if (!defaultTripPlaceId && day.end && day.date !== lastDate) {
       const previous = ranges.at(-1);
       if (previous && previous.tripPlaceId === day.end && previous.endDate === day.date)
         previous.endDate = shiftStayDate(day.date, 1);
@@ -32,7 +36,9 @@ export function groupAppliedStays(days: readonly Day[]) {
   }
   for (const day of days) {
     const automaticStart =
-      defaultTripPlaceId ?? stayRangeForEndpoint(ranges, day.date, 'start')?.tripPlaceId ?? null;
+      (day.date === firstDate ? null : defaultTripPlaceId) ??
+      stayRangeForEndpoint(ranges, day.date, 'start')?.tripPlaceId ??
+      null;
     const automaticEnd =
       defaultTripPlaceId ?? stayRangeForEndpoint(ranges, day.date, 'end')?.tripPlaceId ?? null;
     overrides.set(day.date, {

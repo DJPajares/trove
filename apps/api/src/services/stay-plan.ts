@@ -1,5 +1,5 @@
 import { getPrismaClient, type Prisma } from '@trove/db';
-import { shiftStayDate, type DayStayUpdate, type StayPlanUpdate } from '@trove/types';
+import type { DayStayUpdate, StayPlanUpdate } from '@trove/types';
 import {
   refreshDayDefaultTimeZone,
   ItineraryConflictError,
@@ -38,7 +38,7 @@ export function validateStayRanges(input: StayPlanUpdate, startDate: string, end
       range.startDate >= range.endDate ||
       range.startDate < startDate ||
       range.startDate > endDate ||
-      range.endDate > shiftStayDate(endDate, 1) ||
+      range.endDate > endDate ||
       (index > 0 && ranges[index - 1]!.endDate > range.startDate)
     ) {
       throw new ItineraryValidationError('invalid_stay_plan');

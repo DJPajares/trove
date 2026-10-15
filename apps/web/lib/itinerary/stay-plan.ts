@@ -2,18 +2,20 @@ import { stayRangeForEndpoint, type StayPlan } from '@trove/types';
 import type { ItineraryDay } from './api';
 
 /** The save preview uses booking/default fallbacks supplied by the shared server resolver. */
-export function previewStayEndpoints(day: ItineraryDay, plan: StayPlan) {
+export function previewStayEndpoints(day: ItineraryDay, plan: StayPlan, tripStartDate?: string) {
   const automatic = (end: 'start' | 'end') => {
     const range = stayRangeForEndpoint(plan.ranges, day.date, end);
     if (range) return range.tripPlaceId;
+    const defaultId =
+      end === 'start' && day.date === tripStartDate ? null : plan.defaultTripPlaceId;
     const fallback = day.stayFallback;
     if ((end === 'start' ? fallback?.startSource : fallback?.endSource) === 'trip_default')
-      return plan.defaultTripPlaceId;
+      return defaultId;
     return fallback
       ? end === 'start'
         ? fallback.startTripPlaceId
         : fallback.endTripPlaceId
-      : plan.defaultTripPlaceId;
+      : defaultId;
   };
   const startMode = day.stayStartMode ?? (day.dailyBaseTripPlaceId ? 'PLACE' : 'INHERIT');
   const endMode =

@@ -3,12 +3,10 @@
 import { useLocale, useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 
-import { TripDayWeather } from '@/components/trip-day-weather';
 import type { ItineraryDay, ItineraryItem } from '@/lib/itinerary/api';
 import { formatSuggestedClock } from '@/lib/itinerary/day-time-suggestions';
 import type { PlannerDay } from '@/lib/itinerary/planner-days';
 import { cn } from '@/lib/utils';
-import type { TripWeatherDay } from '@/lib/weather/api';
 
 import { paddedDayNumber } from '../planner-ribbon';
 
@@ -17,7 +15,7 @@ const STOPS_SHOWN = 3;
 
 /**
  * One day of the whole trip, at a glance: its number and date, what it is
- * called or where it happens, its weather, the first few stops with their
+ * called or where it happens, the first few stops with their
  * times, how many there are in all, the shape of its route, and a dot when its
  * plan has a problem worth a look. The card opens the day; a stop opens itself.
  */
@@ -29,7 +27,6 @@ export function BoardDayCard({
   plannerDay,
   sketch,
   timeFormat,
-  weather,
 }: Readonly<{
   day: ItineraryDay;
   itemName: (item: ItineraryItem) => string;
@@ -39,7 +36,6 @@ export function BoardDayCard({
   /** The day's route, drawn from stored coordinates; nothing when it has no shape. */
   sketch: ReactNode | null;
   timeFormat: '12h' | '24h';
-  weather: TripWeatherDay | null;
 }>) {
   const t = useTranslations('itinerary');
   const boardT = useTranslations('itinerary.planner.board');
@@ -90,7 +86,6 @@ export function BoardDayCard({
           </h3>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <TripDayWeather forecast={weather} />
           {plannerDay.attention ? (
             <span
               className="size-2 rounded-full bg-status-warning"

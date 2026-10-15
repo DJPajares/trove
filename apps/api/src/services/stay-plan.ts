@@ -35,10 +35,11 @@ export function validateStayRanges(input: StayPlanUpdate, startDate: string, end
   const ranges = [...input.ranges].sort((a, b) => a.startDate.localeCompare(b.startDate));
   for (const [index, range] of ranges.entries()) {
     if (
-      range.startDate > range.endDate ||
+      range.startDate >= range.endDate ||
       range.startDate < startDate ||
+      range.startDate > endDate ||
       range.endDate > endDate ||
-      (index > 0 && ranges[index - 1]!.endDate >= range.startDate)
+      (index > 0 && ranges[index - 1]!.endDate > range.startDate)
     ) {
       throw new ItineraryValidationError('invalid_stay_plan');
     }

@@ -6,6 +6,7 @@ import {
   toStayAccommodations,
 } from './day-stay.js';
 import { getPrismaClient } from '@trove/db';
+import { stayDayTimeZone } from './stay-time-zone.js';
 
 import {
   CachedWeatherService,
@@ -321,12 +322,29 @@ export class TripWeatherService {
     );
     const accommodations = toStayAccommodations(trip.reservations);
     const locations = resolveDayWeatherLocations(
-      trip.itineraryDays.map((day) => ({
-        ...day,
-        dailyBaseTripPlace:
-          resolveDayStay({ ...day, dailyBaseDepartureTripPlace: null }, accommodations, trip).start
-            ?.place ?? null,
-      })),
+      trip.itineraryDays.map((day) => {
+        const stay = resolveDayStay(
+          { ...day, dailyBaseDepartureTripPlace: null },
+          accommodations,
+          trip,
+        );
+        const places = [stay.start?.place, ...day.items.map((i) => i.tripPlace)].filter(
+          (p): p is NonNullable<typeof p> => Boolean(p),
+        );
+        return {
+          ...day,
+          dailyBaseTripPlace: stay.start?.place ?? null,
+          defaultTimeZone:
+            trip.stayRanges?.length || day.date.getTime() === trip.startDate?.getTime()
+              ? stayDayTimeZone({
+                  start: stay.start,
+                  places,
+                  items: day.items,
+                  tripTimeZone: trip.referenceTimeZone,
+                }).timeZone
+              : day.defaultTimeZone,
+        };
+      }),
       destination,
     );
     return {

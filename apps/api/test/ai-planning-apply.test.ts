@@ -568,8 +568,10 @@ describe('AI planning Apply', () => {
     );
     expect(store.state.trips[0]).toMatchObject({ defaultStayTripPlaceId: customTripPlace?.id });
     expect(store.state.days[0]).toMatchObject({
-      dailyBaseTripPlaceId: null,
-      stayStartMode: 'INHERIT',
+      // The draft supplied a known first-morning stay; a trip default alone
+      // would leave that morning empty, so Apply retains it explicitly.
+      dailyBaseTripPlaceId: customTripPlace?.id,
+      stayStartMode: 'PLACE',
     });
     expect(store.state.savedPlaces).toHaveLength(0);
     expect(store.state.runs).toHaveLength(0);

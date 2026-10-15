@@ -3,7 +3,8 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { replaceStayRange, type DayStayUpdate, type StayRange } from '@trove/types';
+import { replaceStayRange, shiftStayDate, type DayStayUpdate, type StayRange } from '@trove/types';
+import { previewStayEndpoints } from '@/lib/itinerary/stay-plan';
 import { AddTripPlaceSheet } from '@/components/add-trip-place-sheet';
 import { DatePicker } from '@/components/date-picker';
 import { Button } from '@/components/ui/button';
@@ -89,12 +90,19 @@ export function StaySheet({
   const label = (range: StayRange) =>
     t('rangeLabel', {
       first: itinerary.days.findIndex((d) => d.date === range.startDate) + 1,
-      last: itinerary.days.findIndex((d) => d.date === range.endDate) + 1,
+      last:
+        Math.round(
+          (Date.parse(range.endDate) - Date.parse(itinerary.trip.startDate)) / 86_400_000,
+        ) + 1,
       from: date(range.startDate),
       through: date(range.endDate),
     });
   const validRange =
-    editingRange && editingRange.tripPlaceId && editingRange.startDate <= editingRange.endDate;
+    editingRange &&
+    editingRange.tripPlaceId &&
+    editingRange.startDate >= itinerary.trip.startDate &&
+    editingRange.startDate < editingRange.endDate &&
+    editingRange.endDate <= itinerary.trip.endDate;
   const preview = validRange
     ? replaceStayRange(
         ranges.filter((_, i) => i !== originalRange),
@@ -290,21 +298,26 @@ export function StaySheet({
                     </div>
                   ))}
                   {!editingRange ? (
-                    <Button
-                      variant="outline"
-                      disabled={busy || !online}
-                      onClick={() => {
-                        setOriginalRange(null);
-                        setEditingRange({
-                          tripPlaceId: '',
-                          startDate: day?.date ?? itinerary.trip.startDate,
-                          endDate: itinerary.trip.endDate,
-                        });
-                      }}
-                    >
-                      <Plus aria-hidden="true" />
-                      {t('addRange')}
-                    </Button>
+                    itinerary.trip.startDate < itinerary.trip.endDate ? (
+                      <Button
+                        variant="outline"
+                        disabled={busy || !online}
+                        onClick={() => {
+                          setOriginalRange(null);
+                          setEditingRange({
+                            tripPlaceId: '',
+                            startDate:
+                              day && day.date < itinerary.trip.endDate
+                                ? day.date
+                                : itinerary.trip.startDate,
+                            endDate: itinerary.trip.endDate,
+                          });
+                        }}
+                      >
+                        <Plus aria-hidden="true" />
+                        {t('addRange')}
+                      </Button>
+                    ) : null
                   ) : (
                     <section className="space-y-4 rounded-[var(--radius-lg)] border border-border p-4">
                       <Field>
@@ -328,7 +341,12 @@ export function StaySheet({
                             label={t('from')}
                             value={editingRange.startDate}
                             min={itinerary.trip.startDate}
-                            max={editingRange.endDate}
+                            max={shiftStayDate(
+                              editingRange.endDate < itinerary.trip.endDate
+                                ? editingRange.endDate
+                                : itinerary.trip.endDate,
+                              -1,
+                            )}
                             clearable={false}
                             disabled={busy}
                             onChange={(startDate) =>
@@ -342,7 +360,7 @@ export function StaySheet({
                             id="stay-range-end"
                             label={t('through')}
                             value={editingRange.endDate}
-                            min={editingRange.startDate}
+                            min={shiftStayDate(editingRange.startDate, 1)}
                             max={itinerary.trip.endDate}
                             clearable={false}
                             disabled={busy}
@@ -350,7 +368,7 @@ export function StaySheet({
                           />
                         </Field>
                       </div>
-                      <p className="text-sm text-muted-foreground">{t('fullDays')}</p>
+                      <p className="text-sm text-muted-foreground">{t('nightsHelp')}</p>
                       {validRange ? (
                         <div className="space-y-2" role="status">
                           <p className="text-sm font-medium">{t('preview')}</p>
@@ -359,6 +377,40 @@ export function StaySheet({
                               {name(range.tripPlaceId)} · {label(range)}
                             </p>
                           ))}
+                          {itinerary.days
+                            .filter(
+                              (d) =>
+                                d.date >= editingRange.startDate && d.date <= editingRange.endDate,
+                            )
+                            .map((d) => {
+                              const ends = previewStayEndpoints(
+                                reset
+                                  ? {
+                                      ...d,
+                                      stayStartMode: 'INHERIT',
+                                      stayEndMode: 'INHERIT',
+                                      dailyBaseTripPlaceId: null,
+                                      dailyBaseDepartureTripPlaceId: null,
+                                    }
+                                  : d,
+                                {
+                                  defaultTripPlaceId: defaultId === 'none' ? null : defaultId,
+                                  ranges: preview,
+                                  revision,
+                                },
+                                itinerary.trip.startDate,
+                              );
+                              return (
+                                <p key={d.id} className="text-sm text-muted-foreground">
+                                  {t('dayCoverage', {
+                                    number: itinerary.days.findIndex((day) => day.id === d.id) + 1,
+                                    date: date(d.date),
+                                    start: inherited(ends.start),
+                                    end: inherited(ends.end),
+                                  })}
+                                </p>
+                              );
+                            })}
                         </div>
                       ) : null}
                       <Button

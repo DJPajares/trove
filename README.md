@@ -2,459 +2,77 @@
 
 **Plan it. Live it. Remember it.**
 
-Trove is a personal travel companion for collecting places, planning trips, using those plans while travelling, and preserving the journey afterward.
-
-## Project Status
-
-Trove is in active implementation, with AI-assisted itinerary planning now part
-of the Plan experience alongside manual trip creation.
-
-The current approved scope is defined in `PRD.md`, including AI creation and read-only itinerary sharing. Scope is not a claim that every requirement or launch gate is complete. Linear tracks implementation and known gaps; changes are delivered through human-reviewed GitHub pull requests.
-
-## Source of Truth
-
-- `PRD.md` — approved product requirements and implementation direction
-- `AGENTS.md` — AI execution and delivery rules
-- `CLAUDE.md` — Claude Code adapter that follows `AGENTS.md`
-- Linear — implementation tasks, dependencies, and acceptance criteria
-
-## Stack
-
-### Frontend
-
-- Next.js
-- React
-- TypeScript
-- Tailwind CSS
-- shadcn/ui
-- Base UI
-- next-intl
-- Serwist
-
-### Backend
-
-- Fastify
-- TypeScript
-- Prisma
-- Vertex AI (AI itinerary planning)
-
-### Platform
-
-- Supabase PostgreSQL
-- Supabase Auth
-- Supabase Storage
-- Vercel
-
-### Tooling
-
-- pnpm
-- Turborepo
-
-## Repository Structure
-
-```text
-trove/
-├── apps/
-│   ├── web/
-│   └── api/
-├── packages/
-│   ├── db/
-│   ├── types/
-│   └── config/
-├── AGENTS.md
-├── CLAUDE.md
-├── PRD.md
-└── README.md
-```
-
-The web/API monorepo is established. Feature work and follow-up corrections are tracked in Linear.
-
-## Development Workflow
-
-1. Select the next unblocked Linear task.
-2. Read the task, `AGENTS.md`, and only the relevant `PRD.md` sections.
-3. Implement only the approved scope.
-4. Run the required validation.
-5. Push a feature branch.
-6. Open a GitHub Pull Request.
-7. Stop for manual review and approval.
-8. Merge only after human approval.
-9. Continue with the next unblocked Linear task.
-
-## Pull Request Quality Gates
-
-Every pull request runs the root validation commands through GitHub Actions:
-
-```bash
-pnpm install --frozen-lockfile
-pnpm format:check
-pnpm lint
-pnpm typecheck
-pnpm build
-```
-
-These checks intentionally do not include unit-test or E2E jobs during the initial implementation phase. PR summaries should report each command and its result.
-
-## Environment variables
-
-Copy the relevant example file before starting a local service. The examples are
-safe templates and contain no credentials:
-
-| Runtime | File | Used by |
-| --- | --- | --- |
-| API, Prisma, and local shared services | [`.env.example`](.env.example) → `.env` | `apps/api` and `packages/db` |
-| Next.js browser app | [`apps/web/.env.example`](apps/web/.env.example) → `apps/web/.env.local` | `apps/web` |
-| Production database operations | [`.env.production.example`](.env.production.example) → `.env.production` | `pnpm db:migrate:prod` and production reconciliation |
-| Local Docker PostgreSQL | [`docker/local.env.example`](docker/local.env.example) → `docker/local.env` | Prisma commands against Docker |
-
-The API loads the repository-root `.env`. Next.js values belong in
-`apps/web/.env.local`; do not assume a root value is available to the browser.
-After changing environment variables, restart the affected dev server.
-
-### Supabase
-
-Create or select the project in the [Supabase Dashboard](https://supabase.com/dashboard),
-then open the project's **Connect** dialog. The same values are also available
-under **Project Settings → API Keys** (for API keys) and **Project Settings →
-Database** (for connection strings). Supabase's [API key guide](https://supabase.com/docs/guides/getting-started/api-keys)
-explains the current publishable/secret key model.
-
-- `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` go in the root `.env` for the
-  server API.
-- `NEXT_PUBLIC_SUPABASE_URL` and
-  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` go in `apps/web/.env.local` for the
-  browser. A publishable key is intended to be public; never put a secret or
-  legacy `service_role` key in a `NEXT_PUBLIC_` variable.
-- Configure production Site URL, scoped development/preview callbacks, and custom
-  SMTP using the [email auth rollout guide](docs/auth/email-auth-rollout.md).
-  Keep other applications' redirects; deploy Trove's callbacks before its templates.
-- Copy the exact database strings from **Connect** rather than constructing
-  them. `DATABASE_URL` is the Supavisor transaction pooler URL on port `6543`
-  with `pgbouncer=true` for runtime access. `DIRECT_URL` is the session/direct
-  URL on port `5432` for Prisma CLI commands. URL-encode special characters in
-  passwords and keep `schema=trove` on both values.
-- `SHADOW_DATABASE_URL` is only for an isolated `prisma migrate dev` shadow
-  database. It must never point at the shared production database. For a fully
-  local database, use `docker/local.env` instead.
-
-The `trove` schema is private and is accessed through the server-side Prisma
-client. Do not expose it through Supabase's Data API or add client grants.
-For private Storage bucket and policy setup, see
-[`ops/supabase/README.md`](ops/supabase/README.md).
-
-### AI planning (Vertex AI)
-
-AI planning runs only in the API. Set these values in the root `.env` or in the
-API deployment's environment, never in `apps/web/.env.local`.
-
-#### First-time Google Cloud setup
-
-All four steps are required. Each one fails differently, and the next problem
-only becomes visible once the previous step is done, so work through them in
-order.
-
-1. **Create or pick a Google Cloud project** and copy its ID from the
-   [project selector](https://console.cloud.google.com/projectselector/home/dashboard)
-   into `GOOGLE_VERTEX_PROJECT`.
-2. **Enable the Vertex AI API** (`aiplatform.googleapis.com`) for that project
-   from [APIs & Services → Library](https://console.cloud.google.com/apis/library/aiplatform.googleapis.com).
-   Skipping this returns `403 … Agent Platform API has not been used in project
-   … or it is disabled`. Enabling takes a few minutes to propagate.
-3. **Create a service account** under
-   [IAM & Admin → Service Accounts](https://console.cloud.google.com/iam-admin/serviceaccounts),
-   then grant it the **Vertex AI User** role (`roles/aiplatform.user`) from
-   [IAM & Admin → IAM](https://console.cloud.google.com/iam-admin/iam).
-   Without the role, authentication succeeds but every request returns
-   `403 Permission 'aiplatform.endpoints.predict' denied`. Role grants also
-   take a few minutes to propagate.
-4. **Create a JSON key** for that service account (**Keys → Add key → Create new
-   key → JSON**) and copy two fields *out of the downloaded file*:
-
-   | JSON field | Environment key |
-   | --- | --- |
-   | `client_email` | `GOOGLE_VERTEX_CLIENT_EMAIL` |
-   | `private_key` | `GOOGLE_VERTEX_PRIVATE_KEY` |
-
-   `private_key` is the long value beginning `-----BEGIN PRIVATE KEY-----`.
-   **It is not `private_key_id`**, the short hex string the console's Keys tab
-   displays; pasting that instead fails with
-   `error:1E08010C:DECODER routines::unsupported`. Keep the escaped `\n`
-   sequences and the surrounding double quotes exactly as they appear in the
-   JSON, and never commit the key.
-
-Then restart the API — `tsx watch` does not watch `.env`, so saving the file is
-not enough. Verify with `pnpm --filter @trove/api ai:verify`, or check that
-`GET /ai/planning-sessions/availability` reports `available`.
-
-#### Troubleshooting
-
-| Symptom | Cause | Fix |
-| --- | --- | --- |
-| `configuration_missing`, AI planning disabled in the UI | No resolvable credentials | Set the credential pair, or provide an ADC source (step 4) |
-| `error:1E08010C:DECODER routines::unsupported` | `private_key_id` pasted instead of `private_key` | Copy `private_key` from the JSON key file (step 4) |
-| `403 … API has not been used in project … or it is disabled` | Vertex AI API not enabled | Enable `aiplatform.googleapis.com` (step 2), then wait a few minutes |
-| `403 Permission 'aiplatform.endpoints.predict' denied` | Service account has no role | Grant **Vertex AI User** (step 3), then wait a few minutes |
-| `configuration_invalid` | Credentials load but Vertex rejects them | Usually step 2 or 3 above; check the API logs for the underlying 403 |
-
-#### Environment keys
-
-| Environment key | Description | Sample values |
-| --- | --- | --- |
-| `AI_PROVIDER` | Provider adapter. Only `vertex` is currently supported. | `vertex` |
-| `AI_MODEL` | Vertex model ID. Gemini 2.5 overrides are no longer supported. Use an available model from [Vertex AI Model Garden](https://cloud.google.com/vertex-ai/generative-ai/docs/model-garden/explore-models). | `gemini-3.8-flash` (default), `gemini-<supported-model>` |
-| `GOOGLE_VERTEX_PROJECT` | Required Google Cloud project ID with Vertex AI enabled. Find it in the [Google Cloud project selector](https://console.cloud.google.com/projectselector/home/dashboard). | `trove-prod`, `my-gcp-project` |
-| `GOOGLE_VERTEX_LOCATION` | Vertex AI location/endpoint. `global` is the default; regional support depends on the selected model. | `global`, `us-central1`, `<supported-region>` |
-| `AI_TIMEOUT_MS` | Per-request timeout in milliseconds. Valid range: `1,000–300,000`. | `120000` (default), `60000`, `300000` |
-| `AI_MAX_OUTPUT_TOKENS` | Maximum generated tokens. Reasoning tokens count against this same allowance. Valid range: `1–65,536`. | `16384` (default), `8192`, `65536` |
-| `AI_THINKING_LEVEL` | Gemini 3.8 Flash reasoning level. Valid values: `low`, `medium`, `high`; `minimal` is unsupported. | `medium` (default), `low`, `high` |
-| `GOOGLE_VERTEX_CLIENT_EMAIL` | Service-account email. Set it together with the private key. Both may be left blank only when a Google ADC source is discoverable on the host. | `vertex-runtime@my-gcp-project.iam.gserviceaccount.com`, *(blank)* |
-| `GOOGLE_VERTEX_PRIVATE_KEY` | Service-account private key. Preserve escaped `\\n` line breaks and never commit it. | `"<private-key-with-escaped-newlines>"`, *(blank)* |
-| `AI_DISABLED` | Emergency global AI stop. | *(blank)*, `1`, `true` |
-| `AI_BUDGET_DISABLED` | Budget kill switch that prevents AI provider usage. | *(blank)*, `1`, `true` |
-
-Leaving the credential pair blank is only valid when the host exposes
-Application Default Credentials — `GOOGLE_APPLICATION_CREDENTIALS`, or a
-`gcloud auth application-default login` on a development machine. Vercel exposes
-neither, so deployments must set the pair. Without a resolvable source the API
-reports `configuration_missing` and disables AI planning rather than spending a
-dispatch on a request that cannot authenticate.
-
-Model IDs and locations are provider-controlled and can change; verify the
-selected combination in Google's [supported models and regions](https://cloud.google.com/vertex-ai/generative-ai/docs/supported-models)
-before deploying. Keep the example defaults unless the task explicitly approves
-a change.
-
-- For local development, prefer [Google Application Default Credentials](https://cloud.google.com/docs/authentication/provide-credentials-adc):
-
-  ```bash
-  gcloud auth application-default login
-  pnpm --filter @trove/api ai:verify
-  ```
-
-- For a server that cannot use ADC, obtain a dedicated service account from
-  **Google Cloud Console → IAM & Admin → Service Accounts**, create a key under
-  **Keys**, and set both `GOOGLE_VERTEX_CLIENT_EMAIL` and
-  `GOOGLE_VERTEX_PRIVATE_KEY`. Preserve escaped newlines in the private key and
-  never commit it.
-- `AI_DISABLED=1` is the emergency global AI stop. Use
-  `AI_BUDGET_DISABLED=1` when provider spend must be halted without
-  changing the rest of the app.
-
-### Google Maps Platform and Places
-
-Create separate restricted keys in [Google Cloud Console → APIs & Services →
-Credentials](https://console.cloud.google.com/apis/credentials), and enable the
-APIs named in the example comments:
-
-- `GOOGLE_PLACES_API_KEY` and `GOOGLE_ROUTES_API_KEY` are server-only keys for
-  the API. Restrict each key to its API and the deployed API's server egress.
-- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` is a separate browser key restricted by HTTP
-  referrer and limited to Maps JavaScript API. It belongs in
-  `apps/web/.env.local`.
-- `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID` comes from [Google Maps Platform → Map
-  Management](https://console.cloud.google.com/google/maps-apis/studio/maps),
-  where the JavaScript vector map ID is created. It is safe to expose with the
-  browser key.
-
-Set `GOOGLE_PROVIDERS_DISABLED=1` in the API environment to stop outbound
-Places and Routes requests while keeping manual planning available.
-
-Set API-only `GOOGLE_PLACE_PHOTO_LIMIT` to `0`, `1`, `2`, or `3` to control new
-Google Places Photo API requests per place. Unset or blank defaults to `3`;
-invalid or out-of-range values disable new photo requests with a warning.
-`1` allows only the first photo to be fetched, and `0` uses cached Google images
-or the existing Pexels editorial fallback. Previously resolved photos remain
-usable until their existing expiry, even above the new limit. Photo references
-stay in the rich metadata cache; lowering or raising the limit never clears
-caches or refreshes evidence just for photos. Opening details still resolves
-only the eligible cover; other eligible photos require selection. Restart or
-redeploy the API after changing the value. Place search, planning, hours, and
-scoring remain available at `0`; unavailable editorial imagery falls back to
-Trove's branded artwork.
-
-### Editorial imagery
-
-Create `PEXELS_API_KEY` in the [Pexels API dashboard](https://www.pexels.com/api/)
-and keep it server-only in the root `.env` or API deployment. It is used for
-decorative editorial imagery, not Google Places data. Use
-`EDITORIAL_IMAGES_DISABLED=1` for an emergency stop or set
-`EDITORIAL_IMAGE_HOURLY_BUDGET` to a lower request ceiling.
-
-### App and deployment values
-
-- In Vercel, set deployment values under **Project Settings → Environment
-  Variables**. Configure browser values on `trove` and server values on
-  `trove-api`; choose Preview and Production explicitly rather than sharing a
-  secret with the web project. See [`ops/vercel/README.md`](ops/vercel/README.md)
-  for the deployment-specific list.
-- `NEXT_PUBLIC_API_URL` belongs in `apps/web/.env.local`. Use
-  `http://localhost:3001` locally; for a deployment, copy the public API URL
-  from the `trove-api` Vercel project. `NEXT_PUBLIC_` values are bundled into
-  the browser and must not contain secrets.
-- `WEB_ORIGINS` belongs in the API environment and is a comma-separated
-  allow list of web origins, including the local origin and the deployed web
-  origin.
-- `ENVIRONMENT=production` belongs only in the gitignored
-  `.env.production` used by production database operations.
-- `PLAN_SCORE_DISABLED=1` is the server-side Plan Score kill switch. Keep
-  the API and web values aligned when disabling that feature.
-- `SUPABASE_SECRET_KEY` belongs only in the API environment. It has broad
-  Supabase Storage access and is used to remove queued private trip covers,
-  Memory photos, and reservation documents after trip deletion. Never expose it
-  through the web app or a `NEXT_PUBLIC_` variable.
-- `CRON_SECRET` belongs in the API environment and authenticates both daily
-  maintenance routes: AI-planning retention and private trip-media cleanup.
-  Without it the routes refuse every caller, so retries stop running.
-- The API `PORT` is optional and defaults to `3001`.
-
-Never commit `.env`, `.env.local`, `.env.production`, or any provider key. If a
-secret is exposed, revoke or rotate it in the provider dashboard immediately.
-
-## Authentication Configuration
-
-Trove uses the existing Supabase Auth user pool with email/password as its initial sign-in method. Verification and password recovery return to the requesting environment and establish the SSR session through an explicit in-app confirmation. Follow the [email auth rollout guide](docs/auth/email-auth-rollout.md) for the shared project's redirect, Resend SMTP and template configuration. Configure the environment values in [`.env.example`](.env.example) and [`apps/web/.env.example`](apps/web/.env.example); do not commit credentials.
-
-Prepared offline trip data is reserved for the last authenticated Trove user on that device. Offline access never authorizes server operations. Future offline storage must register a local-data clearer with `signOutFromTrove`, and Settings must warn about unsynced changes before invoking it.
-
-## Local PostgreSQL with Docker
-
-For local Prisma and API development, start the repository's PostgreSQL container and load the local connection values before running database commands:
-
-```bash
-docker compose up -d postgres
-cp docker/local.env.example docker/local.env
-set -a; source docker/local.env; set +a
-pnpm --filter @trove/db db:migrate:deploy
-```
-
-The database is available at `localhost:54329`. See [`packages/db/README.md`](packages/db/README.md) for health checks, shadow database setup, and reset behavior. This container provides PostgreSQL only; hosted Supabase remains the Auth, Storage, and production platform.
-
-## Verify local Vertex AI
-
-The API's AI gateway uses Vertex AI and Google Application Default Credentials
-for local development. Follow the [AI planning environment guide](#ai-planning-vertex-ai),
-authenticate once with the Google Cloud CLI, then run:
-
-```bash
-gcloud auth application-default login
-pnpm --filter @trove/api ai:verify
-```
-
-The verification command makes one bounded structured-output request and prints
-only its result classification, model/provider metadata, timing, and token
-counts. It never prints the prompt or generated object.
-
-## Production Database Migrations
-
-Copy `.env.production.example` to the gitignored `.env.production` and fill in
-the exact connection strings from Supabase Dashboard > Connect. Prisma uses
-`DIRECT_URL` on port `5432`; runtime database access uses `DATABASE_URL` on port
-`6543` with `pgbouncer=true`. Keep `ENVIRONMENT="production"` in that file.
-
-Deploy committed migrations after validating the production target:
-
-```bash
-pnpm db:migrate:prod
-```
-
-Never commit credentials or place a production connection string in shell history.
-
-For the private trip-media cleanup rollout, apply the committed migration first.
-Then configure `SUPABASE_SECRET_KEY` and `CRON_SECRET` on `trove-api`, deploy the
-API with its daily cron, and verify the guarded
-`/maintenance/trip-media-cleanup` response reports a healthy `pending` count and
-`oldestPendingAgeSeconds`. The route accepts `Authorization: Bearer <CRON_SECRET>`
-and returns 503 while the Storage key is missing; queued paths remain intact.
-The immediate post-delete attempt is best effort, and daily cron execution is
-not an exact-time guarantee. Production migration and deployment require human
-approval.
-
-## Editorial Image Reconciliation
-
-Editorial image maintenance is an operator utility, separate from trip and
-itinerary requests. Its default mode only reports outdated image collections:
-
-```bash
-pnpm editorial-images:reconcile
-pnpm editorial-images:reconcile:prod
-```
-
-Add `--apply` to invalidate selected collections without calling Pexels, or
-explicitly add `--refresh --apply` for serial, paced, capped active refresh:
-
-```bash
-pnpm editorial-images:reconcile -- --apply
-pnpm editorial-images:reconcile:prod -- --refresh --apply --limit 5
-pnpm editorial-images:reconcile -- --help
-```
-
-Use `--category`, `--place-id`, `--cursor`, or `--all` to narrow or resume a run.
-Production reconciliation loads `.env.production`; active refresh also requires
-`PEXELS_API_KEY` in that file.
-
-## Brand Assets
-
-The Keepsake symbol, outlined Trove wordmark and lockup share their geometry in
-`apps/web/lib/brand/identity.ts`; fixed export colours come from the
-`--brand-mark-*` CSS tokens. Run `pnpm --filter @trove/web brand:generate` after
-changing either, and commit the generated SVGs, PNGs, favicon and asset
-revision. `brand:check` verifies them without writing and runs before every web
-build.
-
-Construction, variants, colours, clear space and the icon rules live in
-[`docs/brand/README.md`](docs/brand/README.md), with every variant and
-actual-size favicon on [`docs/brand/keepsake.svg`](docs/brand/keepsake.svg).
-Asset URLs carry a content revision so installed browsers can detect new icons.
-Native launcher and splash updates follow the platform's update flow; the web
-app does not force an identity change or clear offline data.
-
-## PWA and Offline Support
-
-Trove registers its Serwist service worker in production builds. Offline preparation caches trip pages and stores the full itinerary and supporting snapshots locally, with durable queues for supported travel edits and Memory uploads. Selected reservation documents are downloaded explicitly. The service worker also handles shell/media caching; live maps and fresh provider data are not guaranteed offline. See `PRD.md` section 28 for the required read/write and readiness contract.
-
-Offline readiness is per user and device. Loading one screen is not proof the whole trip is prepared, and the implementation's presence is not a substitute for validating its full offline contract. During `next dev`, Trove removes prior Trove service-worker registrations and its `trove-pwa-*` caches for the current origin to avoid stale-cache confusion; use a production build for service-worker validation.
-
-## Dev Server Cache
-
-Next 16 runs Turbopack, which keeps a persistent filesystem cache under
-`apps/web/.next/dev/cache/turbopack`. That cache is keyed on the Turbopack version
-alone, so a dependency bump does not invalidate it, and a stale entry can trip an
-upstream `turbo-tasks` panic (`inner_of_upper_lost_followers`) that aborts the dev
-server mid-request. Turbopack usually detects this and deletes the cache itself.
-When it does not:
-
-```bash
-pnpm --filter web dev:reset
-```
-
-That clears only the Turbopack dev cache, leaving the rest of `.next` intact.
-
-## Original Delivery Sequence
-
-1. Foundation
-2. Plan
-3. Travel
-4. Supporting
-5. Polish
-6. Plan Score
-7. Memories
-8. AI-assisted trip creation
-
-This sequence records dependency intent rather than current progress. Plan Score, Memories, and AI creation build on the shared planning/travel foundation.
-
-## Current Work
-
-Trove has planning, travel, supporting, scoring, Memories, and AI surfaces. Use the Trove Linear project for the next unblocked task and known gaps, and the PRD for expected behavior. Historical validation notes do not establish that current production launch gates have passed.
-
-PRD Section 29 defines the approved Plan Score redesign: five daily categories,
-trip-wide pacing and destination use, and read-only reuse of permitted itinerary
-evidence. The redesign is being delivered incrementally; existing scores still
-use the prior rubric until the evaluator and its consumers migrate together.
-Shared score response types live in `@trove/types`; implementation progress is
-tracked in Linear rather than inferred from the product contract.
-
-## Repository
-
-https://github.com/DJPajares/trove
-
-Plan Score evaluates stored trips and retained AI drafts using owned data and existing caches only. Explicit itinerary Place selections request reusable identity, coordinates, types, ratings, review counts and hours in one rich Details acquisition (Google Enterprise tier); autocomplete, decorative and routing-only paths remain lightweight. AI Text Search evidence is reused without another Details call when sufficient. Necessary Google place and route evidence has a 30-day maximum retention; date-specific hours and weather retain shorter deadlines (current/hourly and today: one hour; upcoming forecasts: six hours; seasonal context: 30 days). Weather reads memory and private IndexedDB before shared database/provider acquisition, preserves original source age, shares canonical Celsius evidence across surfaces and tabs, and skips out-of-horizon acquisitions. The generic 24-hour query cache does not own weather persistence. A five-minute cooldown bounds failed refreshes. A 24-hour local score recheck never refreshes providers. Apply the additive `preserve_itinerary_block_type` migration before deploying these APIs. Set `PLAN_SCORE_DISABLED=false` on the API and web servers and restart them to enable scoring on existing trips. Unknown locations or transfer details may still require traveler repair before a holistic number is available.
+Trove is a personal travel companion for collecting places, planning trips,
+following your itinerary while travelling, and keeping the memories afterward.
+
+## What you can do
+
+- **Plan it:** save places, build day-by-day itineraries manually or with AI,
+  organise reservations and tasks, and assess your plans with Plan Score.
+- **Live it:** follow your day in Trip Mode, check routes and maps, track expenses,
+  and prepare trips for offline access.
+- **Remember it:** capture photos, notes, and highlights, rate your experiences,
+  and revisit your journey through Memories and Trip Story.
+
+Trove is in active development. [PRD.md](PRD.md) defines the approved product;
+Linear tracks implementation and known gaps.
+
+## Get started
+
+You need **Node.js 24+**, the pnpm version pinned in [package.json](package.json),
+and access to a development Supabase project for authentication and storage.
+Choose a development Supabase database or [local Docker PostgreSQL](packages/db/README.md#local-docker-postgresql).
+
+1. Install dependencies and copy the environment templates, if you do not already
+   have local configuration:
+
+   ```bash
+   pnpm install --frozen-lockfile
+   cp .env.example .env
+   cp apps/web/.env.example apps/web/.env.local
+   ```
+
+2. Fill in your Supabase and database values in `.env`, and the matching browser
+   values in `apps/web/.env.local`. Follow the
+   [environment guide](docs/environment.md) for required app values and optional
+   provider setup. Keep credentials out of Git.
+
+3. [Prepare your development database](docs/development.md#database-setup), then start:
+
+   ```bash
+   pnpm dev
+   ```
+
+Open the web app at [localhost:3000](http://localhost:3000). The API runs at
+[localhost:3001](http://localhost:3001).
+
+See the [development guide](docs/development.md) for validation commands, seed
+data, offline testing, and troubleshooting.
+
+## Stack and layout
+
+The Next.js web app calls a Fastify API, which accesses PostgreSQL through Prisma.
+Supabase provides Auth and private Storage alongside the database.
+
+| Area                | Location                                           | Main technologies                                                                 |
+| ------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Web app             | `apps/web`                                         | Next.js, React, TypeScript, Tailwind CSS, shadcn/ui + Base UI, next-intl, Serwist |
+| API                 | `apps/api`                                         | Fastify, TypeScript, Vertex AI                                                    |
+| Shared packages     | `packages/db`, `packages/types`, `packages/config` | Prisma, shared contracts and configuration                                        |
+| Tooling and hosting | Repository root, `ops/`                            | pnpm, Turborepo, Vercel, Supabase                                                 |
+
+## Documentation
+
+| Read about                                             | Guide                                                                                         |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| Product requirements, feature behavior, and Plan Score | [PRD](PRD.md)                                                                                 |
+| Contribution and AI delivery rules                     | [AGENTS.md](AGENTS.md)                                                                        |
+| Local development, checks, and troubleshooting         | [Development](docs/development.md)                                                            |
+| Environment variables and provider credentials         | [Environment setup](docs/environment.md)                                                      |
+| Database, migrations, and sample data                  | [Database package](packages/db/README.md)                                                     |
+| Deployment and maintenance                             | [Vercel operations](ops/vercel/README.md)                                                     |
+| Private file storage setup                             | [Supabase operations](ops/supabase/README.md)                                                 |
+| Authentication redirects, SMTP, and email templates    | [Email auth rollout](docs/auth/email-auth-rollout.md)                                         |
+| AI launch checks and operator tools                    | [Launch runbook](docs/ai/launch-runbook.md) · [Entitlements](docs/ai/entitlements-runbook.md) |
+| Background reminders and push notifications            | [Dispatch runbook](docs/notifications/dispatch-runbook.md)                                    |
+| Brand assets and usage                                 | [Brand guide](docs/brand/README.md)                                                           |

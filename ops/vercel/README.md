@@ -144,3 +144,39 @@ In Supabase Auth URL Configuration, preserve all existing entries and add:
 - `https://*-djpajares-projects.vercel.app/**`
 
 Set the production Site URL to `https://trove.wndrhive.com`. Do not add API URLs as Auth callback URLs.
+
+## Database migrations and private media cleanup
+
+Use the [database guide](../../packages/db/README.md#workflow) for production
+migrations. For the private trip-media cleanup rollout, apply the committed migration first.
+Then configure `SUPABASE_SECRET_KEY` and `CRON_SECRET` on `trove-api`, deploy the
+API with its daily cron, and verify the guarded
+`/maintenance/trip-media-cleanup` response reports a healthy `pending` count and
+`oldestPendingAgeSeconds`. The route accepts `Authorization: Bearer <CRON_SECRET>`
+and returns 503 while the Storage key is missing; queued paths remain intact.
+The immediate post-delete attempt is best effort, and daily cron execution is
+not an exact-time guarantee. Production migration and deployment require human
+approval.
+
+## Editorial image reconciliation
+
+Editorial image maintenance is an operator utility, separate from trip and
+itinerary requests. Its default mode only reports outdated image collections:
+
+```bash
+pnpm editorial-images:reconcile
+pnpm editorial-images:reconcile:prod
+```
+
+Add `--apply` to invalidate selected collections without calling Pexels, or
+explicitly add `--refresh --apply` for serial, paced, capped active refresh:
+
+```bash
+pnpm editorial-images:reconcile -- --apply
+pnpm editorial-images:reconcile:prod -- --refresh --apply --limit 5
+pnpm editorial-images:reconcile -- --help
+```
+
+Use `--category`, `--place-id`, `--cursor`, or `--all` to narrow or resume a run.
+Production reconciliation loads `.env.production`; active refresh also requires
+`PEXELS_API_KEY` in that file.

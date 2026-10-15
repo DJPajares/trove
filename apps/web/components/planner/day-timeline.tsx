@@ -32,7 +32,7 @@ import type { BandedEntry } from '@/lib/itinerary/day-bands';
 import { formatSuggestedClock } from '@/lib/itinerary/day-time-suggestions';
 import { dropPosition } from '@/lib/itinerary/optimistic';
 
-import { InsertGap } from './insert-gap';
+import { InsertButton, InsertGap } from './insert-gap';
 import { LegConnector } from './leg-connector';
 import { SortableStopCard, StopDragPreview, useStopReorderSpeech } from './sortable-stop';
 import { SpineRow, type SpineLine } from './spine';
@@ -170,6 +170,18 @@ export function DayTimeline({
     onInsert: () => onInsert(stops.length, names.at(-1) ?? null),
   };
 
+  // With no Stay to come back to, the day ends at its last stop: the spine runs
+  // on past it into the "+" that adds one more, rather than stopping short and
+  // leaving the "+" on its own.
+  const endsAtLastStop =
+    stops.length > 0 &&
+    !returnsToStay &&
+    !entries.some((entry) => entry.kind === 'base' && entry.role === 'departure');
+  // A stop no leg reaches has its "+" on the label just above it when there is
+  // one, so "Morning" and the way to add to it share a row instead of leaving
+  // a gap between the label and the stop.
+  const insertOnBand = new Set<string>();
+
   const rows: ReactNode[] = [];
   let endOffered = false;
   entries.forEach((entry, index) => {
@@ -177,6 +189,12 @@ export function DayTimeline({
     const below = lineBetween(entry, entries[index + 1]);
 
     if (entry.kind === 'band') {
+      const next = entries[index + 1];
+      const insertHere =
+        next?.kind === 'stop' && !legInto.has(next.item.id)
+          ? insertBefore(stopIndex.get(next.item.id) ?? 0)
+          : null;
+      if (insertHere && next?.kind === 'stop') insertOnBand.add(next.item.id);
       rows.push(
         <SpineRow
           above={above}
@@ -184,6 +202,12 @@ export function DayTimeline({
           below={below}
           className={reorderingHidden}
           key={`band-${entry.band}-${index}`}
+          marker={
+            insertHere ? (
+              // Level with the label, which sits low in its row.
+              <InsertButton className="mt-1.5" {...insertHere} />
+            ) : undefined
+          }
         >
           <p className="pt-3 pb-1 text-[length:var(--text-metadata)] font-semibold tracking-[0.14em] text-brand uppercase">
             {t(`schedule.${entry.band}`)}
@@ -253,10 +277,15 @@ export function DayTimeline({
     const { item } = entry;
     const position = stopIndex.get(item.id) ?? 0;
     const view = resolveItem(item);
-    if (!legInto.has(item.id)) {
+    // A "+" with nothing before it starts the spine, and the line runs from it
+    // into the stop.
+    const gapped = !legInto.has(item.id) && !insertOnBand.has(item.id);
+    const stopAbove = gapped && above === 'none' ? 'solid' : above;
+    if (gapped) {
       rows.push(
         <InsertGap
           above={above}
+          below={stopAbove}
           className={reorderingHidden}
           key={`insert-${item.id}`}
           {...insertBefore(position)}
@@ -265,9 +294,9 @@ export function DayTimeline({
     }
     rows.push(
       <SortableStopCard
-        above={above}
+        above={stopAbove}
         attention={attentionFor(item)}
-        below={below}
+        below={endsAtLastStop && item.id === stops.at(-1)?.id ? 'solid' : below}
         defaultTimeZone={defaultTimeZone}
         dragDisabled={dragDisabled}
         dragLabel={reorderT('handle', { name: view.name })}
@@ -296,9 +325,15 @@ export function DayTimeline({
     );
   });
   if (stops.length && !endOffered) {
-    // The day ends at its last stop, so this "+" stands on its own below it.
+    // The day ends at its last stop, so this "+" ends the spine below it.
     rows.push(
-      <InsertGap above="none" className={reorderingHidden} key="insert-end" {...insertAtEnd} />,
+      <InsertGap
+        above={endsAtLastStop ? 'solid' : 'none'}
+        below="none"
+        className={reorderingHidden}
+        key="insert-end"
+        {...insertAtEnd}
+      />,
     );
   }
 

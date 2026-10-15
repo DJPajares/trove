@@ -1,7 +1,6 @@
 'use client';
 
 import { CalendarRange } from 'lucide-react';
-import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 
@@ -26,64 +25,54 @@ export type TripDayCardDay = {
   town: string | null;
 };
 
-/** A card navigates (`href`) on pages it leaves, and selects (`onSelect`) where it stays. */
-type CardTarget = { href: string; onSelect?: never } | { href?: never; onSelect: () => void };
-
-type CardProps = CardTarget & {
-  /** The day open in the planner, or the one the trip's next step leads to. */
+type CardProps = {
+  /** The day open in the planner, or the whole trip when All days is. */
   current: boolean;
-  /** Marks a card for the planner ribbon's keyboard and scroll handling. */
-  ribbonTile?: boolean;
-  tabIndex?: number;
+  onSelect: () => void;
+  /** The ribbon keeps one tile in the tab order and moves between them with arrows. */
+  tabIndex: number;
 };
 
 const cardClassName =
   'relative flex h-[5.5rem] w-[5rem] shrink-0 flex-col justify-between rounded-[var(--radius-lg)] border px-2.5 py-2.5 text-left outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none';
 
+/** A tile of the planner ribbon, marked for its keyboard and scroll handling. */
 function CardShell({
   ariaCurrent,
   children,
   className,
-  href,
   label,
   onSelect,
-  ribbonTile,
   tabIndex,
   title,
-}: Readonly<
-  CardTarget & {
-    ariaCurrent: 'date' | 'page' | undefined;
-    children: ReactNode;
-    className: string;
-    label?: string;
-    ribbonTile?: boolean;
-    tabIndex?: number;
-    title?: string;
-  }
->) {
-  const shared = {
-    'aria-current': ariaCurrent,
-    'aria-label': label,
-    className,
-    title,
-    ...(ribbonTile
-      ? { 'data-ribbon-active': String(Boolean(ariaCurrent)), 'data-ribbon-tile': '' }
-      : {}),
-  };
-  return href ? (
-    <Link href={href} {...shared}>
-      {children}
-    </Link>
-  ) : (
-    <button onClick={onSelect} tabIndex={tabIndex} type="button" {...shared}>
+}: Readonly<{
+  ariaCurrent: 'date' | 'page' | undefined;
+  children: ReactNode;
+  className: string;
+  label?: string;
+  onSelect: () => void;
+  tabIndex: number;
+  title?: string;
+}>) {
+  return (
+    <button
+      aria-current={ariaCurrent}
+      aria-label={label}
+      className={className}
+      data-ribbon-active={String(Boolean(ariaCurrent))}
+      data-ribbon-tile=""
+      onClick={onSelect}
+      tabIndex={tabIndex}
+      title={title}
+      type="button"
+    >
       {children}
     </button>
   );
 }
 
 /**
- * One day of a trip, as the trip overview and the planner both show it - the
- * same card in the same place, so moving between them reads as one strip.
+ * One day of a trip, as the planner ribbon shows it.
  *
  * Enough to choose by and nothing to decode: when it is, which day it is,
  * where it happens, and how much is on it. Weather lives on the day itself,
@@ -92,9 +81,8 @@ function CardShell({
 export function TripDayCard({
   current,
   day,
-  ribbonTile,
+  onSelect,
   tabIndex,
-  ...target
 }: Readonly<CardProps & { day: TripDayCardDay }>) {
   const t = useTranslations('itinerary.planner.ribbon');
   const locale = useLocale();
@@ -125,7 +113,6 @@ export function TripDayCard({
 
   return (
     <CardShell
-      {...target}
       ariaCurrent={current ? 'date' : undefined}
       className={cn(
         cardClassName,
@@ -136,7 +123,7 @@ export function TripDayCard({
             : 'border-dashed border-border-strong bg-transparent text-muted-foreground hover:bg-surface-hover',
       )}
       label={label}
-      ribbonTile={ribbonTile}
+      onSelect={onSelect}
       tabIndex={tabIndex}
       title={day.name ?? day.town ?? undefined}
     >
@@ -201,14 +188,12 @@ export function TripDayCard({
 export function TripAllDaysCard({
   count,
   current,
-  ribbonTile,
+  onSelect,
   tabIndex,
-  ...target
 }: Readonly<CardProps & { count: number }>) {
   const t = useTranslations('itinerary.planner.ribbon');
   return (
     <CardShell
-      {...target}
       ariaCurrent={current ? 'page' : undefined}
       className={cn(
         cardClassName,
@@ -216,7 +201,7 @@ export function TripAllDaysCard({
           ? 'border-primary bg-primary text-primary-foreground shadow-[var(--shadow-control)]'
           : 'border-border-subtle bg-card text-foreground hover:bg-surface-hover',
       )}
-      ribbonTile={ribbonTile}
+      onSelect={onSelect}
       tabIndex={tabIndex}
     >
       <CalendarRange aria-hidden="true" className="size-4" />

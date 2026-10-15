@@ -826,6 +826,21 @@ export function ItineraryManager({
   const tripContext = useTripContext();
   const tripDestinations = tripContext?.trip?.destinations;
   const tripLifecycle = tripContext?.trip?.lifecycle;
+  // A day that has been lived has its memories; the journal opens on it.
+  const dayLived = Boolean(
+    selectedDay &&
+    (tripLifecycle === 'active' || tripLifecycle === 'completed') &&
+    (!today || selectedDay.date <= today),
+  );
+  const selectedDayPreviewHref = selectedDay
+    ? dayPreviewHref(
+        tripId,
+        selectedDay.date,
+        selectedDay.items
+          .flatMap((item) => (item.localStartTime ? [item.localStartTime] : []))
+          .toSorted()[0],
+      )
+    : '';
   const editorLocationBias = useMemo(
     () =>
       destinationLocationBias([
@@ -1402,7 +1417,7 @@ export function ItineraryManager({
       // The height of the sticky stack the day scrolls under - the trip's tab
       // row on a phone, and the ribbon everywhere - so the map and a scrolled-to
       // stop can land just below it.
-      className="flex flex-col gap-7 [--planner-sticky:calc(var(--safe-top)+var(--header-offset)+9.75rem)] md:[--planner-sticky:calc(var(--safe-top)+var(--header-offset)+6.5rem)]"
+      className="flex flex-col gap-5 md:gap-7 [--planner-sticky:calc(var(--safe-top)+var(--header-offset)+9.75rem)] md:[--planner-sticky:calc(var(--safe-top)+var(--header-offset)+6.5rem)]"
     >
       {movement.dialog}
       {movement.busy && !movement.dialog ? (
@@ -1449,19 +1464,6 @@ export function ItineraryManager({
         </SheetContent>
       </Sheet>
       {!online ? <p className="text-sm text-muted-foreground">{t('movement.offline')}</p> : null}
-      <div className="flex justify-end">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setStayView('trip');
-            setStayOpen(true);
-          }}
-        >
-          <Icons.DailyBase aria-hidden="true" />
-          {t('stays.title')}
-        </Button>
-      </div>
       <PlannerRibbon
         days={ribbonDays}
         onSelectDay={(dayId) => (activeView === 'day' ? setSelectedDayId(dayId) : openDay(dayId))}
@@ -1497,16 +1499,32 @@ export function ItineraryManager({
         <div className={activeView === 'overview' ? 'contents' : 'hidden'}>
           <TripBoard
             actions={
-              <Button
-                aria-haspopup="dialog"
-                data-trip-places-trigger
-                onClick={openPlaces}
-                size="sm"
-                variant="outline"
-              >
-                <Icons.Places aria-hidden="true" data-icon="inline-start" />
-                {tripPlacesTranslations('openPlaces')}
-              </Button>
+              <>
+                <Button
+                  aria-haspopup="dialog"
+                  data-trip-places-trigger
+                  onClick={openPlaces}
+                  size="sm"
+                  variant="outline"
+                >
+                  <Icons.Places aria-hidden="true" data-icon="inline-start" />
+                  {tripPlacesTranslations('openPlaces')}
+                </Button>
+                {/* Where the trip sleeps is a whole-trip choice, so it is made
+                    here; a day's own Stay line edits that day. */}
+                <Button
+                  aria-haspopup="dialog"
+                  onClick={() => {
+                    setStayView('trip');
+                    setStayOpen(true);
+                  }}
+                  size="sm"
+                  variant="outline"
+                >
+                  <Icons.DailyBase aria-hidden="true" data-icon="inline-start" />
+                  {t('stays.title')}
+                </Button>
+              </>
             }
             chapters={chapters}
             days={itinerary.days}
@@ -1619,31 +1637,9 @@ export function ItineraryManager({
                     <Icons.Places aria-hidden="true" data-icon="inline-start" />
                     {tripPlacesTranslations('openPlaces')}
                   </Button>
-                  <Button
-                    aria-label={plannerT('masthead.previewLabel', {
-                      number: selectedIndex + 1,
-                    })}
-                    nativeButton={false}
-                    render={
-                      <Link
-                        href={dayPreviewHref(
-                          tripId,
-                          selectedDay.date,
-                          selectedDay.items
-                            .flatMap((item) => (item.localStartTime ? [item.localStartTime] : []))
-                            .toSorted()[0],
-                        )}
-                      />
-                    }
-                    size="sm"
-                    variant="outline"
-                  >
-                    <Icons.Preview aria-hidden="true" data-icon="inline-start" />
-                    {plannerT('masthead.preview')}
-                  </Button>
-                  {/* A day that has been lived has its memories; the journal opens on it. */}
-                  {(tripLifecycle === 'active' || tripLifecycle === 'completed') &&
-                  (!today || selectedDay.date <= today) ? (
+                  {/* One way out of the plan at a time: a day still ahead
+                      previews, a day already lived opens its memories. */}
+                  {dayLived ? (
                     <Button
                       nativeButton={false}
                       render={
@@ -1652,13 +1648,27 @@ export function ItineraryManager({
                         />
                       }
                       size="sm"
-                      variant="outline"
+                      variant="ghost"
                     >
                       <Icons.Memories aria-hidden="true" data-icon="inline-start" />
                       {plannerT('masthead.memories')}
                     </Button>
-                  ) : null}
+                  ) : (
+                    <Button
+                      aria-label={plannerT('masthead.previewLabel', {
+                        number: selectedIndex + 1,
+                      })}
+                      nativeButton={false}
+                      render={<Link href={selectedDayPreviewHref} />}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      <Icons.Preview aria-hidden="true" data-icon="inline-start" />
+                      {plannerT('masthead.preview')}
+                    </Button>
+                  )}
                   <DayMenu
+                    className="ml-auto"
                     movementDisabled={!online || itineraryEditing}
                     canCheckOrder={online && !itineraryEditing && selectedDay.items.length > 1}
                     canSuggestTimes={online && untimedItems(selectedDay).length > 0}
@@ -1682,6 +1692,7 @@ export function ItineraryManager({
                     }}
                     onMoveDay={(strategy) => openDayMove(selectedDay, strategy)}
                     onSuggestTimes={() => setDayTimesOpen(true)}
+                    previewHref={dayLived ? selectedDayPreviewHref : undefined}
                   />
                 </>
               }

@@ -52,8 +52,10 @@ function FactsLine({ children }: Readonly<{ children: ReactNode[] }>) {
  *
  * It opens on the shared content-aware day photograph, with a trip secondary
  * image and bundled photographic artwork reserved for genuine failures,
- * with the day's number and name set over it. Beneath, one line of facts, the
- * Stay it runs from, and the day's route as a sketch that opens the real map.
+ * with the day's number and name set over it. Beneath, its weather, then one
+ * block that says what the day is - its facts, the Stay it runs from, and its
+ * route as a sketch that opens the real map - with what can be done with it
+ * directly under: add, Places, one way out of the plan, and the day's options.
  *
  * The date is said once (PRD 17.2.1): under the title, or as the title when the
  * day has nothing better to be called. Swiping the photograph turns to the next
@@ -192,101 +194,105 @@ export function DayMasthead({
 
       {weather}
 
-      <div className="flex items-start gap-4">
-        <div className="min-w-0 flex-1 space-y-2">
-          <FactsLine>
-            {[
-              <span key="stops">{t('stops', { count: facts.stopCount })}</span>,
-              facts.planned ? (
-                <span key="planned">
-                  {t(facts.planned.approximate ? 'plannedApproximate' : 'planned', {
-                    duration: formatPlannedDuration(facts.planned.minutes, locale),
-                  })}
-                </span>
-              ) : null,
-              compactTravel ? null : routesLoading && !travel ? (
-                <span className="animate-pulse motion-reduce:animate-none" key="travel">
-                  {t('measuringTravel')}
-                </span>
-              ) : travel?.kind === 'known' ? (
-                <span key="travel">
-                  {routesT(travel.partial ? 'knownDuration' : 'duration', {
-                    value: formatTravelDuration(travel.durationSeconds, locale),
-                  })}
-                </span>
-              ) : travel?.kind === 'unavailable' ? (
-                <span key="travel">{routesT('travelTimeUnavailable')}</span>
-              ) : travel?.kind === 'long_distance_only' ? (
-                <span key="travel">{routesT('noLocalTravel')}</span>
-              ) : null,
-              travel?.kind === 'known' && travel.distanceMeters !== null ? (
-                <span key="distance">
-                  {routesT(travel.partial ? 'knownDistance' : 'distance', {
-                    unit,
-                    value: formatDistanceValue(
-                      travel.distanceMeters,
-                      preferences.distanceUnit,
-                      locale,
-                    ),
-                  })}
-                </span>
-              ) : null,
-            ]}
-          </FactsLine>
+      {/* What the day is, and what can be done with it, read as one block. */}
+      <div className="space-y-3">
+        <div className="flex items-start gap-4">
+          <div className="min-w-0 flex-1 space-y-2">
+            <FactsLine>
+              {[
+                <span key="stops">{t('stops', { count: facts.stopCount })}</span>,
+                facts.planned ? (
+                  <span key="planned">
+                    {t(facts.planned.approximate ? 'plannedApproximate' : 'planned', {
+                      duration: formatPlannedDuration(facts.planned.minutes, locale),
+                    })}
+                  </span>
+                ) : null,
+                compactTravel ? null : routesLoading && !travel ? (
+                  <span className="animate-pulse motion-reduce:animate-none" key="travel">
+                    {t('measuringTravel')}
+                  </span>
+                ) : travel?.kind === 'known' ? (
+                  <span key="travel">
+                    {routesT(travel.partial ? 'knownDuration' : 'duration', {
+                      value: formatTravelDuration(travel.durationSeconds, locale),
+                    })}
+                  </span>
+                ) : travel?.kind === 'unavailable' ? (
+                  <span key="travel">{routesT('travelTimeUnavailable')}</span>
+                ) : travel?.kind === 'long_distance_only' ? (
+                  <span key="travel">{routesT('noLocalTravel')}</span>
+                ) : null,
+                travel?.kind === 'known' && travel.distanceMeters !== null ? (
+                  <span key="distance">
+                    {routesT(travel.partial ? 'knownDistance' : 'distance', {
+                      unit,
+                      value: formatDistanceValue(
+                        travel.distanceMeters,
+                        preferences.distanceUnit,
+                        locale,
+                      ),
+                    })}
+                  </span>
+                ) : null,
+              ]}
+            </FactsLine>
+
+            <button
+              className="-mx-1.5 flex min-h-9 max-w-full items-center gap-2 rounded-[var(--radius-md)] px-1.5 text-left text-sm outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none"
+              onClick={onStayClick}
+              type="button"
+            >
+              <Icons.DailyBase aria-hidden="true" className="size-4 shrink-0 text-primary" />
+              <span
+                className={cn(
+                  'min-w-0 truncate',
+                  stay.kind === 'none' ? 'text-muted-foreground' : 'font-medium text-foreground',
+                )}
+              >
+                {stay.kind === 'none'
+                  ? t(stay.intentional ? 'noStaySet' : 'noStay')
+                  : stay.kind === 'same'
+                    ? t('stay', { name: stay.name })
+                    : stay.kind === 'start_only' || stay.kind === 'end_only'
+                      ? t(stay.kind === 'start_only' ? 'startStay' : 'endStay', { name: stay.name })
+                      : t('stayTransition', { from: stay.from, to: stay.to })}
+              </span>
+              {/* "Where are you staying?" already says nothing is set. */}
+              {staySource && stay.kind !== 'none' ? (
+                <span className="shrink-0 text-xs text-muted-foreground">· {staySource}</span>
+              ) : null}
+            </button>
+            {routeNotes}
+          </div>
 
           <button
-            className="-mx-1.5 flex min-h-9 max-w-full items-center gap-2 rounded-[var(--radius-md)] px-1.5 text-left text-sm outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none"
-            onClick={onStayClick}
+            aria-label={t('openMapLabel', { number: dayNumber })}
+            className="group flex w-28 shrink-0 flex-col items-stretch gap-1 rounded-[var(--radius-lg)] border border-border-subtle bg-card p-1.5 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none sm:w-32 lg:hidden"
+            // Where focus returns when the map is closed by its own way back.
+            data-planner-open-map=""
+            onClick={onOpenMap}
             type="button"
           >
-            <Icons.DailyBase aria-hidden="true" className="size-4 shrink-0 text-primary" />
-            <span
-              className={cn(
-                'min-w-0 truncate',
-                stay.kind === 'none' ? 'text-muted-foreground' : 'font-medium text-foreground',
-              )}
-            >
-              {stay.kind === 'none'
-                ? t(stay.intentional ? 'noStaySet' : 'noStay')
-                : stay.kind === 'same'
-                  ? t('stay', { name: stay.name })
-                  : stay.kind === 'start_only' || stay.kind === 'end_only'
-                    ? t(stay.kind === 'start_only' ? 'startStay' : 'endStay', { name: stay.name })
-                    : t('stayTransition', { from: stay.from, to: stay.to })}
+            {sketch ?? (
+              <span
+                aria-hidden="true"
+                className="grid aspect-[8/5] place-items-center rounded-[var(--radius-md)] bg-surface-tint/60 text-muted-foreground"
+              >
+                <Icons.MapView className="size-5" />
+              </span>
+            )}
+            <span className="flex items-center justify-between px-1 pb-0.5 text-xs font-medium text-foreground">
+              {t('openMap')}
+              <ArrowUpRight aria-hidden="true" className="size-3.5 text-muted-foreground" />
             </span>
-            {staySource ? (
-              <span className="text-xs text-muted-foreground">· {staySource}</span>
-            ) : null}
           </button>
-          {routeNotes}
         </div>
 
-        <button
-          aria-label={t('openMapLabel', { number: dayNumber })}
-          className="group flex w-28 shrink-0 flex-col items-stretch gap-1 rounded-[var(--radius-lg)] border border-border-subtle bg-card p-1.5 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none sm:w-32 lg:hidden"
-          // Where focus returns when the map is closed by its own way back.
-          data-planner-open-map=""
-          onClick={onOpenMap}
-          type="button"
-        >
-          {sketch ?? (
-            <span
-              aria-hidden="true"
-              className="grid aspect-[8/5] place-items-center rounded-[var(--radius-md)] bg-surface-tint/60 text-muted-foreground"
-            >
-              <Icons.MapView className="size-5" />
-            </span>
-          )}
-          <span className="flex items-center justify-between px-1 pb-0.5 text-xs font-medium text-foreground">
-            {t('openMap')}
-            <ArrowUpRight aria-hidden="true" className="size-3.5 text-muted-foreground" />
-          </span>
-        </button>
+        <div className="flex items-center gap-2">{actions}</div>
       </div>
 
       {attention}
-
-      <div className="flex flex-wrap items-center gap-2">{actions}</div>
 
       {note ? (
         <p className="flex max-w-2xl gap-2 text-sm leading-6 whitespace-pre-wrap text-text-subtle">

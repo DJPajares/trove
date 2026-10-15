@@ -1,0 +1,11 @@
+{
+  "id": "itinerary-day-layout",
+  "date": "2026-10-16",
+  "version": "1.5.1",
+  "summaries": {
+    "en": [
+      "Each itinerary day is more compact, with its actions grouped in one place and its options tucked behind the “more” button.",
+      "Trip-wide stays now live in All days, and the trip overview focuses on the trip rather than repeating the days."
+    ]
+  }
+}

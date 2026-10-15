@@ -1952,6 +1952,7 @@
       "dayMenu": {
         "stay": "Where we’re staying…",
         "checkOrder": "Check the order",
+        "preview": "Preview this day",
         "travel": "Show travel between stops"
       },
       "staySheet": {
@@ -1988,7 +1989,7 @@
       "emptyDay": "No plans yet"
     },
     "stopNumber": "Stop {number}",
-    "daySettings": "Day settings",
+    "daySettings": "Day options",
     "dayMove": {
       "action": "Move day plan",
       "swapAction": "Swap with another day",

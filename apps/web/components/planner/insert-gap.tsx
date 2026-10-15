@@ -53,7 +53,7 @@ export function InsertGap({
       above={above}
       align="center"
       below={below}
-      className={cn('min-h-8', className)}
+      className={cn('min-h-7', className)}
       marker={<InsertButton label={label} onInsert={onInsert} />}
     >
       {null}

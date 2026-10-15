@@ -4,7 +4,6 @@ import { useTranslations } from 'next-intl';
 import { useEffect, useRef, type KeyboardEvent } from 'react';
 
 import { TripAllDaysCard, TripDayCard, type TripDayCardDay } from '@/components/trip-day-card';
-import { cn } from '@/lib/utils';
 
 export { paddedDayNumber } from '@/components/trip-day-card';
 
@@ -17,40 +16,23 @@ export { paddedDayNumber } from '@/components/trip-day-card';
  * day that needs fixing" takes a glance. The first tile is the whole trip.
  * Weather lives on each day's own page, not on its tile.
  *
- * In the planner it behaves like a tab list with manual activation: arrow keys
- * move focus along the strip, and Enter or Space opens a day. Opening a day
- * fetches its travel legs, so moving focus must never do that on its own. On
- * the trip's overview the same strip links into the planner (`hrefs`), sitting
- * in the same place under the trip's tabs.
+ * It behaves like a tab list with manual activation: arrow keys move focus
+ * along the strip, and Enter or Space opens a day. Opening a day fetches its
+ * travel legs, so moving focus must never do that on its own.
  */
 export function PlannerRibbon({
-  className,
   days,
-  hrefs,
   onSelectDay,
   onSelectOverview,
   overviewActive,
   selectedDayId,
-}: Readonly<
-  (
-    | {
-        hrefs?: never;
-        onSelectDay: (dayId: string) => void;
-        onSelectOverview: () => void;
-      }
-    | {
-        hrefs: { day: (dayId: string) => string; overview: string };
-        onSelectDay?: never;
-        onSelectOverview?: never;
-      }
-  ) & {
-    /** Placement only: the page the strip sits on decides its spacing. */
-    className?: string;
-    days: readonly TripDayCardDay[];
-    overviewActive: boolean;
-    selectedDayId: string | null;
-  }
->) {
+}: Readonly<{
+  days: readonly TripDayCardDay[];
+  onSelectDay: (dayId: string) => void;
+  onSelectOverview: () => void;
+  overviewActive: boolean;
+  selectedDayId: string | null;
+}>) {
   const t = useTranslations('itinerary.planner.ribbon');
   const listRef = useRef<HTMLOListElement>(null);
   const activeKey = overviewActive ? 'overview' : selectedDayId;
@@ -90,10 +72,7 @@ export function PlannerRibbon({
   return (
     <nav
       aria-label={t('label')}
-      className={cn(
-        `relative sticky top-[calc(var(--safe-top)+var(--header-offset)+3.25rem)] z-[calc(var(--layer-sticky)-1)] -mx-[var(--gutter-inline-start)] -mt-2 bg-background/95 backdrop-blur before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4 before:bg-background before:content-[''] md:top-[calc(var(--safe-top)+var(--header-offset))] md:mx-0 md:mt-0 md:rounded-[var(--radius-xl)] md:before:hidden`,
-        className,
-      )}
+      className="relative sticky top-[calc(var(--safe-top)+var(--header-offset)+3.25rem)] z-[calc(var(--layer-sticky)-1)] -mx-[var(--gutter-inline-start)] -mt-2 bg-background/95 backdrop-blur before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4 before:bg-background before:content-[''] md:top-[calc(var(--safe-top)+var(--header-offset))] md:mx-0 md:mt-0 md:rounded-[var(--radius-xl)] md:before:hidden"
       data-slot="planner-ribbon"
     >
       <ol
@@ -102,39 +81,24 @@ export function PlannerRibbon({
         ref={listRef}
       >
         <li className="snap-start">
-          {hrefs ? (
-            <TripAllDaysCard
-              count={days.length}
-              current={overviewActive}
-              href={hrefs.overview}
-              ribbonTile
-            />
-          ) : (
-            <TripAllDaysCard
-              count={days.length}
-              current={overviewActive}
-              onSelect={onSelectOverview}
-              ribbonTile
-              tabIndex={activeKey === 'overview' || activeKey === null ? 0 : -1}
-            />
-          )}
+          <TripAllDaysCard
+            count={days.length}
+            current={overviewActive}
+            onSelect={onSelectOverview}
+            tabIndex={activeKey === 'overview' || activeKey === null ? 0 : -1}
+          />
         </li>
 
         {days.map((day) => {
           const active = !overviewActive && day.id === selectedDayId;
           return (
             <li className="snap-start" key={day.id}>
-              {hrefs ? (
-                <TripDayCard current={active} day={day} href={hrefs.day(day.id)} ribbonTile />
-              ) : (
-                <TripDayCard
-                  current={active}
-                  day={day}
-                  onSelect={() => onSelectDay(day.id)}
-                  ribbonTile
-                  tabIndex={active ? 0 : -1}
-                />
-              )}
+              <TripDayCard
+                current={active}
+                day={day}
+                onSelect={() => onSelectDay(day.id)}
+                tabIndex={active ? 0 : -1}
+              />
             </li>
           );
         })}

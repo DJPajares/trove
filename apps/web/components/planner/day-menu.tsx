@@ -1,6 +1,7 @@
 'use client';
 
-import { ArrowLeftRight, ListOrdered, Pencil, Settings2 } from 'lucide-react';
+import { ArrowLeftRight, Ellipsis, ListOrdered, Pencil } from 'lucide-react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLinkItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -22,10 +24,12 @@ import * as Icons from '@/lib/icons';
  *
  * One menu rather than the panel it replaces: each choice opens the one thing
  * it is about, so the day's setup never stands on the page asking for
- * attention it does not need.
+ * attention it does not need. Its trigger is the same quiet "more" the trip
+ * and each stop use: easy to find, never competing with the day's actions.
  */
 export function DayMenu({
   canCheckOrder,
+  className,
   movementDisabled,
   canSuggestTimes,
   compact,
@@ -38,9 +42,12 @@ export function DayMenu({
   onEditStay,
   onMoveDay,
   onSuggestTimes,
+  previewHref,
 }: Readonly<{
   /** Checking the order asks the server; offline it is not offered. */
   canCheckOrder: boolean;
+  /** Placement only. */
+  className?: string;
   movementDisabled?: boolean;
   canSuggestTimes: boolean;
   compact: boolean;
@@ -53,6 +60,8 @@ export function DayMenu({
   onEditStay: () => void;
   onMoveDay: (strategy: 'append' | 'swap') => void;
   onSuggestTimes: () => void;
+  /** Previewing a day already lived is offered here rather than beside Memories. */
+  previewHref?: string;
 }>) {
   const t = useTranslations('itinerary');
   const menuT = useTranslations('itinerary.planner.dayMenu');
@@ -61,10 +70,18 @@ export function DayMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<Button aria-label={t('daySettings')} size="sm" type="button" variant="outline" />}
+        render={
+          <Button
+            aria-label={t('daySettings')}
+            className={className}
+            size="icon-sm"
+            title={t('daySettings')}
+            type="button"
+            variant="ghost"
+          />
+        }
       >
-        <Settings2 aria-hidden="true" data-icon="inline-start" />
-        <span className="hidden sm:inline">{t('daySettings')}</span>
+        <Ellipsis aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-56">
         <DropdownMenuItem onClick={onEditName}>
@@ -83,6 +100,12 @@ export function DayMenu({
           <Icons.DailyBase aria-hidden="true" />
           {menuT('stay')}
         </DropdownMenuItem>
+        {previewHref ? (
+          <DropdownMenuLinkItem render={<Link href={previewHref} />}>
+            <Icons.Preview aria-hidden="true" />
+            {menuT('preview')}
+          </DropdownMenuLinkItem>
+        ) : null}
 
         {canCheckOrder || canSuggestTimes ? <DropdownMenuSeparator /> : null}
         {canSuggestTimes ? (

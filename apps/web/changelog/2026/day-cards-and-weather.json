@@ -1,0 +1,11 @@
+{
+  "id": "day-cards-and-weather",
+  "date": "2026-10-15",
+  "version": "1.3.0",
+  "summaries": {
+    "en": [
+      "Your trip page and planner now share the same day cards, so moving between them feels like one place.",
+      "Each day shows its own forecast under its photo, and All days shows the weather across the whole trip."
+    ]
+  }
+}

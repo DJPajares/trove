@@ -7,13 +7,11 @@ import { Fragment, type ReactNode } from 'react';
 
 import { DayHeaderMedia } from '@/components/day-header-media';
 import { usePreferences } from '@/components/preferences-provider';
-import { TripDayWeather } from '@/components/trip-day-weather';
 import type { DayFacts, dayHeading } from '@/lib/itinerary/day-facts';
 import { formatDistanceValue } from '@/lib/itinerary/format-distance';
 import { formatPlannedDuration, formatTravelDuration } from '@/lib/itinerary/route-format';
 import type { DayHeaderPhotoResolution } from '@/lib/media/day-header-photos';
 import { cn } from '@/lib/utils';
-import type { TripWeatherDay } from '@/lib/weather/api';
 import * as Icons from '@/lib/icons';
 
 import { paddedDayNumber } from './planner-ribbon';
@@ -106,7 +104,8 @@ export function DayMasthead({
   /** The drawn route, when the day has enough located places to draw one. */
   sketch: ReactNode | null;
   stay: DayStay;
-  weather: TripWeatherDay | null;
+  /** The day's own weather, under its photograph. */
+  weather: ReactNode;
 }>) {
   const t = useTranslations('itinerary.planner.masthead');
   const routesT = useTranslations('itinerary.routes');
@@ -187,11 +186,12 @@ export function DayMasthead({
         </div>
       </motion.div>
 
+      {weather}
+
       <div className="flex items-start gap-4">
         <div className="min-w-0 flex-1 space-y-2">
           <FactsLine>
             {[
-              weather ? <TripDayWeather forecast={weather} key="weather" /> : null,
               <span key="stops">{t('stops', { count: facts.stopCount })}</span>,
               facts.planned ? (
                 <span key="planned">

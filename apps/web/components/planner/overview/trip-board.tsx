@@ -7,7 +7,6 @@ import type { ReactNode } from 'react';
 import { Tabs, TabsIndicator, TabsList, TabsTab } from '@/components/ui/tabs';
 import type { ItineraryDay, ItineraryItem } from '@/lib/itinerary/api';
 import type { StayChapter } from '@/lib/itinerary/stay-chapters';
-import type { TripWeatherDay } from '@/lib/weather/api';
 import * as Icons from '@/lib/icons';
 
 import { BoardDayCard } from './board-day-card';
@@ -29,6 +28,7 @@ export function TripBoard({
   chapters,
   days,
   display,
+  forecast,
   itemName,
   mapPanel,
   onDisplayChange,
@@ -37,12 +37,13 @@ export function TripBoard({
   sketchFor,
   stayName,
   timeFormat,
-  weatherFor,
 }: Readonly<{
   actions?: ReactNode;
   chapters: readonly StayChapter[];
   days: readonly ItineraryDay[];
   display: TripBoardDisplay;
+  /** The whole trip's weather, above its days. */
+  forecast?: ReactNode;
   itemName: (item: ItineraryItem) => string;
   /** The whole trip's map, once asked for; kept, hidden, behind the board after. */
   mapPanel: ReactNode;
@@ -52,7 +53,6 @@ export function TripBoard({
   sketchFor: (day: ItineraryDay) => ReactNode | null;
   stayName: (tripPlaceId: string) => string | null;
   timeFormat: '12h' | '24h';
-  weatherFor: (date: string) => TripWeatherDay | null;
 }>) {
   const t = useTranslations('itinerary');
   const boardT = useTranslations('itinerary.planner.board');
@@ -102,6 +102,8 @@ export function TripBoard({
           </Tabs>
         </div>
       </header>
+
+      {forecast}
 
       <div
         aria-labelledby="trip-board-map-tab"
@@ -183,7 +185,6 @@ export function TripBoard({
                       plannerDay={plannerDay}
                       sketch={sketchFor(day)}
                       timeFormat={timeFormat}
-                      weather={weatherFor(day.date)}
                     />
                   );
                 })}

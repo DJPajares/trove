@@ -793,11 +793,6 @@
       "countdownLabel": "{count, plural, =0 {You leave today} one {day to go} other {days to go}}",
       "departs": "Departs",
       "reviewTitle": "Look over the plan before you go",
-      "daysLabel": "Days of the trip",
-      "dayTilePlanned": "Day {number}, {date}, planned",
-      "dayTileOpen": "Day {number}, {date}, nothing planned yet",
-      "plannedShort": "Planned",
-      "openShort": "Open",
       "dayKicker": "Day {number} · {date}",
       "dayKickerTown": "Day {number} · {date} · {town}",
       "openDayTitle": "Nothing planned yet",
@@ -1809,7 +1804,16 @@
         "today": "Today",
         "day": "Day {number}",
         "stops": "{count, plural, =0 {nothing planned yet} one {# stop} other {# stops}}",
-        "attention": "something here is worth a look"
+        "attention": "something here is worth a look",
+        "open": "Open"
+      },
+      "weather": {
+        "tripTitle": "Weather across the trip",
+        "rainChance": "{probability}% rain",
+        "archivedNote": "Outlined days show the forecast they were given, not the weather that happened.",
+        "tripLater": "Days further out get their forecast as your trip comes closer.",
+        "tripPast": "No forecast was saved for some past days.",
+        "tripMissing": "Some days don’t have a place to forecast yet."
       },
       "masthead": {
         "kicker": "Day",

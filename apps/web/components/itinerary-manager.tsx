@@ -32,6 +32,7 @@ import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-deta
 import { PlanScoreChip, PlanScorePanel } from '@/components/plan-score-panel';
 import { ScoreProblemNote, AttentionNote } from '@/components/planner/attention-note';
 import { DayMasthead, type DayStay } from '@/components/planner/day-masthead';
+import { DayWeatherCard } from '@/components/planner/day-weather-card';
 import { DAY_SKETCH_BOX, DayRouteSketch } from '@/components/planner/day-route-sketch';
 import { DayEmpty } from '@/components/planner/day-empty';
 import { DayMenu } from '@/components/planner/day-menu';
@@ -41,6 +42,7 @@ import { PlannerDayView } from '@/components/planner/planner-day-view';
 import { PlannerMapPane } from '@/components/planner/planner-map-pane';
 import { MoveToDaySheet } from '@/components/planner/move-to-day-sheet';
 import { TripBoard, type TripBoardDisplay } from '@/components/planner/overview/trip-board';
+import { TripForecastCard } from '@/components/planner/overview/trip-forecast-card';
 import { PlannerRibbon } from '@/components/planner/planner-ribbon';
 import { StaySheet } from '@/components/planner/stay-sheet';
 import { TimingSheet } from '@/components/planner/timing-sheet';
@@ -143,7 +145,7 @@ import { setTripPlacePriority } from '@/lib/trip-places/priority';
 import { sortTripPlaces } from '@/lib/trip-places/sort';
 import { destinationLocationBias } from '@/lib/saved/provider-search-session';
 import { dayPreviewHref } from '@/lib/trips/navigation';
-import { tripWeatherForDate, useTripWeather } from '@/lib/weather/use-trip-weather';
+import { useTripWeather } from '@/lib/weather/use-trip-weather';
 import { queryKeys } from '@/lib/query/keys';
 import {
   ITINERARY_EDIT_QUERY_ROOTS,
@@ -247,10 +249,10 @@ export function ItineraryManager({
     queryKey: queryKeys.itinerary(tripId),
   });
   const itinerary = itineraryQuery.data ?? null;
-  // One answer for the whole trip. The day rail, the day header and the overview
-  // each read a day out of it rather than asking per day - that fan-out is the
-  // thing this endpoint exists to avoid.
-  const { data: weather } = useTripWeather(tripId);
+  // One answer for the whole trip. Each day's card and the whole trip's
+  // forecast read a day out of it rather than asking per day - that fan-out is
+  // the thing this endpoint exists to avoid.
+  const { data: weather, refetch: refetchWeather, status: weatherStatus } = useTripWeather(tripId);
   const itineraryView = useMemo(
     () =>
       resolveItineraryView(
@@ -1424,7 +1426,7 @@ export function ItineraryManager({
       // The height of the sticky stack the day scrolls under - the trip's tab
       // row on a phone, and the ribbon everywhere - so the map and a scrolled-to
       // stop can land just below it.
-      className="flex flex-col gap-7 [--planner-sticky:calc(var(--safe-top)+var(--header-offset)+9.5rem)] md:[--planner-sticky:calc(var(--safe-top)+var(--header-offset)+6.25rem)]"
+      className="flex flex-col gap-7 [--planner-sticky:calc(var(--safe-top)+var(--header-offset)+9.75rem)] md:[--planner-sticky:calc(var(--safe-top)+var(--header-offset)+6.5rem)]"
     >
       {movement.dialog}
       {movement.busy && !movement.dialog ? (
@@ -1480,7 +1482,6 @@ export function ItineraryManager({
         }}
         overviewActive={activeView === 'overview'}
         selectedDayId={selectedDayId}
-        weatherFor={(date) => tripWeatherForDate(weather ?? null, date)}
       />
 
       {error ? (
@@ -1521,6 +1522,14 @@ export function ItineraryManager({
             chapters={chapters}
             days={itinerary.days}
             display={overviewDisplay}
+            forecast={
+              <TripForecastCard
+                days={ribbonDays}
+                onRetry={refetchWeather}
+                status={weatherStatus}
+                weather={weather}
+              />
+            }
             itemName={itemName}
             mapPanel={
               shouldMountTripMap ? (
@@ -1559,7 +1568,6 @@ export function ItineraryManager({
             }}
             stayName={(tripPlaceId) => placeName(tripPlaceById(tripPlaceId))}
             timeFormat={preferences.timeFormat}
-            weatherFor={(date) => tripWeatherForDate(weather ?? null, date)}
           />
         </div>
       ) : null}
@@ -1767,7 +1775,14 @@ export function ItineraryManager({
                     } satisfies DayStay)
                   : ({ kind: 'none' } satisfies DayStay);
               })()}
-              weather={tripWeatherForDate(weather ?? null, selectedDay.date)}
+              weather={
+                <DayWeatherCard
+                  date={selectedDay.date}
+                  onRetry={refetchWeather}
+                  status={weatherStatus}
+                  weather={weather}
+                />
+              }
             />
 
             {selectedDay.items.length ? (

@@ -7,11 +7,13 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useRef, type ComponentType } from 'react';
 
 import { MediaFrame } from '@/components/media-frame';
+import { TripAllDaysCard, TripDayCard } from '@/components/trip-day-card';
 import { TripInsights } from '@/components/trip-insights';
 import { TripReadinessPrompt } from '@/components/trip-readiness-prompt';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import * as Icons from '@/lib/icons';
+import { itineraryViewHref } from '@/lib/itinerary/view';
 import { forgetCachedMediaUrls } from '@/lib/media/storage-cache-key';
 import {
   canDecodeHeic,
@@ -74,67 +76,38 @@ function StopLine({ clockTimeZone, stop }: { clockTimeZone: string; stop: TripOv
   );
 }
 
-/** Every day at a glance while the plan is being made: the open ones drawn open. */
+/**
+ * The trip's days as the planner's own ribbon shows them - the whole trip
+ * first, then each day - so opening the planner from here lands on the same
+ * strip, with the day this page pointed to already the open one.
+ */
 function DayTiles({
   days,
   focusDayId,
   tripId,
 }: Readonly<{ days: readonly TripOverviewDay[]; focusDayId: string | null; tripId: string }>) {
-  const t = useTranslations('trips.hub');
-  const locale = useLocale();
+  const t = useTranslations('itinerary.planner.ribbon');
   return (
     <ol
-      aria-label={t('daysLabel')}
-      className="interaction-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 py-1"
+      aria-label={t('label')}
+      className="interaction-scrollbar -mx-1 flex snap-x gap-1.5 overflow-x-auto px-1 py-1"
     >
-      {days.map((day) => {
-        const planned = day.stopCount > 0;
-        const focused = day.id === focusDayId;
-        return (
-          <li className="min-w-[4.25rem] flex-1" key={day.id}>
-            <Link
-              aria-current={focused ? 'true' : undefined}
-              aria-label={t(planned ? 'dayTilePlanned' : 'dayTileOpen', {
-                date: formatDay(day.date, locale, {
-                  weekday: 'long',
-                  month: 'long',
-                  day: 'numeric',
-                }),
-                number: day.number,
-              })}
-              className={cn(
-                'flex h-[5.25rem] flex-col items-center justify-center gap-0.5 rounded-[var(--radius-lg)] px-1 text-center outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none',
-                planned
-                  ? 'border border-border-subtle bg-card hover:bg-surface-hover'
-                  : 'border-[1.5px] border-dashed border-border-strong text-muted-foreground hover:bg-surface-hover',
-                focused &&
-                  'border-transparent bg-surface-tint text-foreground ring-2 ring-brand ring-inset',
-              )}
-              href={overviewPlannerHref(tripId, day.id)}
-            >
-              <span
-                className={cn(
-                  'text-[0.625rem] font-semibold tracking-[0.1em] uppercase',
-                  focused ? 'text-brand' : 'text-muted-foreground',
-                )}
-              >
-                {formatDay(day.date, locale, { weekday: 'short' })}
-              </span>
-              <span className="text-[1.375rem] leading-tight font-semibold tracking-[-0.04em] tabular-nums">
-                {pad(day.number)}
-              </span>
-              <span
-                className={cn(
-                  'max-w-full truncate text-[0.6875rem]',
-                  planned ? 'text-muted-foreground' : 'font-semibold text-accent-strong',
-                )}
-              >
-                {planned ? (day.town ?? t('plannedShort')) : t('openShort')}
-              </span>
-            </Link>
-          </li>
-        );
-      })}
+      <li className="snap-start">
+        <TripAllDaysCard
+          count={days.length}
+          current={false}
+          href={itineraryViewHref(`/trips/${tripId}/itinerary`, '', null)}
+        />
+      </li>
+      {days.map((day) => (
+        <li className="snap-start" key={day.id}>
+          <TripDayCard
+            current={day.id === focusDayId}
+            day={day}
+            href={overviewPlannerHref(tripId, day.id)}
+          />
+        </li>
+      ))}
     </ol>
   );
 }

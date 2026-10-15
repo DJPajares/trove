@@ -1,4 +1,5 @@
 import { getPrismaClient } from '@trove/db';
+import { stayDayTimeZone } from './stay-time-zone.js';
 import { TRIP_CONTEXT_VERSION, type AiPlannerDraft, type TripContext } from '@trove/types';
 
 import { tripClimate, type ClimateOptions } from './climate-norms.js';
@@ -56,7 +57,10 @@ export async function readTripContext(
           dailyBaseTripPlaceId: true,
           stayStartMode: true,
           stayEndMode: true,
-          items: { orderBy: { position: 'asc' }, select: { tripPlaceId: true } },
+          items: {
+            orderBy: { position: 'asc' },
+            select: { id: true, tripPlaceId: true, customLocationTimeZone: true },
+          },
         },
       },
     },
@@ -81,7 +85,14 @@ export async function readTripContext(
     return {
       id: day.id,
       date: formatDateOnly(day.date),
-      timeZone: day.defaultTimeZone ?? trip.referenceTimeZone,
+      timeZone: trip.stayRanges?.length
+        ? stayDayTimeZone({
+            start: stay.start,
+            places: trip.tripPlaces,
+            items: day.items,
+            tripTimeZone: trip.referenceTimeZone,
+          }).timeZone
+        : (day.defaultTimeZone ?? trip.referenceTimeZone),
       // Where the day is spent: its stay, else its first placed stop, else the
       // trip's first destination.
       coordinates:

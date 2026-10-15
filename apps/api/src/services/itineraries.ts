@@ -9,6 +9,7 @@ import {
   getItineraryDayTimeSuggestions,
 } from './itinerary-time-suggestions.js';
 import {
+  stayLeaveDate,
   readDayPlanningContext,
   type DayPlanningContext,
   type SchedulingOutcome,
@@ -17,6 +18,7 @@ import {
   type TimingProvenance,
 } from '@trove/types';
 import { getPrismaClient, type Prisma } from '@trove/db';
+import { stayDayTimeZone } from './stay-time-zone.js';
 
 import { DAY_PART_WINDOWS } from './day-part-windows.js';
 import {
@@ -544,7 +546,11 @@ export async function listItinerary(
   });
   if (!trip) throw new ItineraryNotFoundError('trip_not_found');
   const accommodations = toStayAccommodations(trip.reservations);
-  const serializeStay = (day: (typeof trip.itineraryDays)[number], automatic = false) => {
+  const serializeStay = (
+    day: (typeof trip.itineraryDays)[number],
+    automatic = false,
+    ranges = true,
+  ) => {
     const stay = resolveDayStay(
       {
         ...day,
@@ -559,14 +565,22 @@ export async function listItinerary(
             : null,
       },
       accommodations,
-      trip,
+      ranges
+        ? trip
+        : {
+            ...trip,
+            stayRanges: [],
+            // Keep the default source even when empty so a preview can use a newly
+            // selected default, while ambiguous bookings still resolve to null.
+            defaultStayTripPlace: { id: trip.defaultStayTripPlaceId ?? '' },
+          },
     );
     // The stay every surface routes from and back to, so none has to guess.
     return {
       endSource: stay.end?.source ?? null,
-      endTripPlaceId: stay.end?.place.id ?? null,
+      endTripPlaceId: stay.end?.place.id || null,
       startSource: stay.start?.source ?? null,
-      startTripPlaceId: stay.start?.place.id ?? null,
+      startTripPlaceId: stay.start?.place.id || null,
     };
   };
 
@@ -585,6 +599,21 @@ export async function listItinerary(
     },
   );
   const options = { snapshots };
+  // Old saved ranges used full days. Derive their current morning zone from owned data.
+  if (trip.stayRanges.length)
+    for (const day of trip.itineraryDays) {
+      const { startTripPlaceId: startId, startSource: source } = serializeStay(day);
+      const zone = stayDayTimeZone({
+        start: startId && source ? { place: { id: startId }, source } : null,
+        places: trip.tripPlaces,
+        items: day.items,
+        tripTimeZone: trip.referenceTimeZone,
+      });
+      day.defaultTimeZone = zone.timeZone;
+      day.defaultTimeZoneSource = zone.source;
+      day.defaultTimeZoneSourceTripPlaceId = zone.sourceTripPlaceId;
+      day.defaultTimeZoneSourceItemId = zone.sourceItemId;
+    }
 
   return {
     days: trip.itineraryDays.map((day) => ({
@@ -610,6 +639,7 @@ export async function listItinerary(
       planningContext: readDayPlanningContext(day.planningContext),
       stay: serializeStay(day),
       automaticStay: serializeStay(day, true),
+      stayFallback: serializeStay(day, true, false),
     })),
     stayPlan: {
       defaultTripPlaceId: trip.defaultStayTripPlaceId,
@@ -617,7 +647,10 @@ export async function listItinerary(
       ranges: trip.stayRanges.map((range) => ({
         tripPlaceId: range.tripPlace.id,
         startDate: formatDateOnly(range.startDate),
-        endDate: formatDateOnly(range.endDate),
+        endDate: stayLeaveDate({
+          startDate: formatDateOnly(range.startDate),
+          endDate: formatDateOnly(range.endDate),
+        }),
       })),
     },
     trip: {

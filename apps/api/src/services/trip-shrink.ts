@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { Prisma } from '@trove/db';
-import type { TripShrinkImpact } from '@trove/types';
+import { stayLeaveDate, type TripShrinkImpact } from '@trove/types';
 import { dayOffset, shiftDateOnly, formatDateOnly } from './trip-rules.js';
 
 type PlanningDay = {
@@ -68,7 +68,13 @@ export async function tripShrinkImpact(
   const affectedStayRanges = stayRanges.filter(
     (range) =>
       shiftDateOnly(formatDateOnly(range.startDate), offset) < startDate ||
-      shiftDateOnly(formatDateOnly(range.endDate), offset) > endDate,
+      shiftDateOnly(
+        stayLeaveDate({
+          startDate: formatDateOnly(range.startDate),
+          endDate: formatDateOnly(range.endDate),
+        }),
+        offset,
+      ) > shiftDateOnly(endDate, 1),
   ).length;
   const sortedDays = [...days].sort((a, b) => a.date.getTime() - b.date.getTime());
   const removedDays = sortedDays

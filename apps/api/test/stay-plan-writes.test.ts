@@ -124,6 +124,29 @@ test('a return-only change never changes the day timezone', async () => {
   expect(store.trip[0]?.stayPlanRevision).toBe(2);
 });
 
+test('a night range changes timezone only on the following morning, including departure', async () => {
+  store.place.find((p) => p.id === 'b')!.customTimeZone = 'America/New_York';
+  await updateTripStayPlan('owner', 'trip', {
+    ...plan,
+    ranges: [{ tripPlaceId: 'b', startDate: '2026-11-02', endDate: '2026-11-03' }],
+  });
+  expect(store.itineraryDay.map((d) => d.defaultTimeZone)).toEqual([
+    'Asia/Tokyo',
+    'Asia/Tokyo',
+    'America/New_York',
+  ]);
+  await updateTripStayPlan('owner', 'trip', {
+    ...plan,
+    expectedRevision: 1,
+    ranges: [{ tripPlaceId: 'b', startDate: '2026-11-03', endDate: '2026-11-04' }],
+  });
+  expect(store.itineraryDay.map((d) => d.defaultTimeZone)).toEqual([
+    'Asia/Tokyo',
+    'Asia/Tokyo',
+    'Asia/Tokyo',
+  ]);
+});
+
 test('scoring hashes effective stay endpoints rather than their storage representation', () => {
   const base = {
     startDate: new Date('2026-11-01'),

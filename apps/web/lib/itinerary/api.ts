@@ -94,6 +94,8 @@ export type ItineraryItem = {
 
 export type ItineraryDay = {
   automaticStay?: ItineraryDay['stay'];
+  /** Booking/default answer before manual ranges, for accurate online edit previews. */
+  stayFallback?: ItineraryDay['stay'];
   stayStartMode?: 'INHERIT' | 'PLACE' | 'NONE' | 'SAME_AS_START' | null;
   stayEndMode?: 'INHERIT' | 'PLACE' | 'NONE' | 'SAME_AS_START' | null;
   planningContext?: DayPlanningContext;

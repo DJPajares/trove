@@ -5,6 +5,7 @@ import {
   toStayAccommodations,
 } from './day-stay.js';
 import { getPrismaClient, type Prisma } from '@trove/db';
+import { stayDayTimeZone } from './stay-time-zone.js';
 
 import { DAY_PART_ORDER, dayPartIndexForHour } from './day-part-windows.js';
 import {
@@ -598,6 +599,13 @@ export async function resolveTripModeContext(
     ),
   ]);
   const stay = resolveDayStay(day, toStayAccommodations(trip.reservations), trip);
+  const stayPlaces = [
+    day.dailyBaseTripPlace,
+    trip.defaultStayTripPlace,
+    ...(trip.stayRanges ?? []).map((r) => r.tripPlace),
+    ...trip.reservations.map((r) => r.tripPlace),
+    ...day.items.map((i) => i.tripPlace),
+  ].filter((p): p is NonNullable<typeof p> => Boolean(p));
 
   return {
     ...base,
@@ -610,7 +618,14 @@ export async function resolveTripModeContext(
       : null,
     day: {
       date: dayDate,
-      defaultTimeZone: day.defaultTimeZone,
+      defaultTimeZone: trip.stayRanges?.length
+        ? stayDayTimeZone({
+            start: stay.start,
+            places: stayPlaces,
+            items: day.items,
+            tripTimeZone: trip.referenceTimeZone,
+          }).timeZone
+        : day.defaultTimeZone,
       id: day.id,
       items: day.items.map((item) => serializeItineraryItem(item, { snapshots })),
       name: day.name,

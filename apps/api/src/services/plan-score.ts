@@ -1,4 +1,5 @@
 import { resolveDayStay, toStayAccommodations, type TripStayPlan } from './day-stay.js';
+import { stayDayTimeZone } from './stay-time-zone.js';
 import { PLAN_SCORE_TRIP_INCLUDE } from './plan-score-trip-query.js';
 export { PLAN_SCORE_TRIP_INCLUDE } from './plan-score-trip-query.js';
 
@@ -838,6 +839,7 @@ function toPlanScoreDayRecord(
 }
 
 export type PlanScoreTripRows = TripStayPlan<{ id: string }> & {
+  referenceTimeZone?: string;
   defaultStayTripPlaceId?: string | null;
   stayPlanRevision?: number;
   startDate?: Date;
@@ -870,6 +872,7 @@ export type PlanScoreTripRows = TripStayPlan<{ id: string }> & {
       timeZone: string | null;
       travelModeToNext: string | null;
       tripPlaceId: string | null;
+      customLocationTimeZone?: string | null;
     }>;
     routeStartTravelMode: string;
     planningContext?: unknown;
@@ -921,12 +924,6 @@ export function readPlanScoreInputs(trip: PlanScoreTripRows, now = new Date()) {
   const mustGoTripPlaceIds = trip.tripPlaces
     .filter((tripPlace) => tripPlace.priority === 'MUST_GO')
     .map((tripPlace) => tripPlace.id);
-  const days = trip.itineraryDays.map((day) =>
-    toPlanScoreDayRecord(
-      day,
-      scoringCommitments(reservations, toLocalDate(day.date), day.defaultTimeZone),
-    ),
-  );
   const resolvedStays = trip.itineraryDays.map((day) =>
     resolveDayStay(
       {
@@ -950,6 +947,21 @@ export function readPlanScoreInputs(trip: PlanScoreTripRows, now = new Date()) {
       trip,
     ),
   );
+  const days = trip.itineraryDays.map((day, index) => {
+    const defaultTimeZone =
+      trip.stayRanges?.length && trip.referenceTimeZone
+        ? stayDayTimeZone({
+            start: resolvedStays[index]!.start,
+            places: trip.tripPlaces,
+            items: day.items,
+            tripTimeZone: trip.referenceTimeZone,
+          }).timeZone
+        : day.defaultTimeZone;
+    return toPlanScoreDayRecord(
+      { ...day, defaultTimeZone },
+      scoringCommitments(reservations, toLocalDate(day.date), defaultTimeZone),
+    );
+  });
   const scoredPlaceIds = new Set([
     ...mustGoTripPlaceIds,
     ...resolvedStays.flatMap((stay) =>

@@ -1259,23 +1259,23 @@ Travellers see the Daily Base as their **Stay**. "Daily Base" and "Departure Bas
 
 Daily Base is distinct from trip Starting Location.
 
-A trip may have a default Stay and non-overlapping inclusive date-range Stays, independent of accommodation Reservations. Manual stay ranges cover full itinerary days, so the same place governs both ends unless a day exception says otherwise. The common flow is one place for the whole trip; date ranges and different start/end locations are progressively disclosed.
+A trip may have a default Stay and non-overlapping date-range Stays, independent of accommodation Reservations. Ranges describe nights using **Arrive** (inclusive) and **Leave** (exclusive), for every kind of accommodation. Arriving October 19 and leaving October 20 means one night: October 19 starts at the previous stay and ends at the new stay; October 20 starts at the new stay. No check-in/out times or accommodation categories are needed. The common flow is one place for the whole trip; date ranges and different start/end locations are progressively disclosed.
 
 Resolve each endpoint using:
 
 1. an explicit day override (a place, or intentionally no stay),
-2. an explicit date-range Stay,
+2. an explicit date-range Stay covering the previous night for the start, or the current night for the end,
 3. an applicable Accommodation,
 4. the trip default Stay,
 5. no stay.
 
-Day settings distinguish inheriting the automatic stay from explicitly choosing no stay. The return endpoint may follow the start or be configured independently. Changing a trip default preserves day exceptions and ranges unless the traveller explicitly resets the day exceptions. Every day shows its effective stay and source. Adjacent manual ranges do not silently create a transfer-day override.
+Day settings distinguish inheriting the automatic stay from explicitly choosing no stay. The return endpoint may follow the start or be configured independently. Changing a trip default preserves day exceptions and ranges unless the traveller explicitly resets the day exceptions. Every day shows its effective stay and source. Adjacent ranges automatically resolve a transfer day from the previous stay to the next; day overrides remain available for exceptions rather than being required for an ordinary change of stay.
 
 Stay means where the traveller is staying, whether a hotel, rental, friend's or family's home, or their own place. All use the same flow, with no accommodation category or booking required. Selection can use existing Trip Places, contextual place search, or a Custom Place such as “Mum's house”; it does not create a booking.
 
 Overlapping range edits replace the selected coverage and preserve unaffected fragments, with a preview before save. Stay writes require connectivity; prepared snapshots retain the plan and resolved day endpoints for offline reading.
 
-Planning ranges follow itinerary days when the trip is rescheduled, clip when shortened with range losses shown in shrink review, and stay bounded when lengthened. The default covers new days. Reservation dates remain independent. Historical per-day stays preserve their resolved endpoints as overrides. AI Apply groups supplied stays into defaults/ranges without inventing lodging, preserving exceptional or unknown endpoints.
+Planning ranges follow itinerary days when the trip is rescheduled, clip when shortened with range losses shown in shrink review, and stay bounded when lengthened. Arrival must fall within the trip; departure can be the day after its final day so that the final night can be planned. The default covers new days. Reservation dates remain independent. Existing range dates adopt Arrive/Leave meaning; a legacy range with identical start/end dates is read as one night and normalized on the next save. Historical explicit per-day stays remain unchanged. AI Apply groups supplied nights into defaults/ranges without inventing lodging, retaining day exceptions wherever needed to preserve every draft endpoint and score.
 
 Starting Location is **not** a fallback daily base. Its first-day route-origin behavior is defined in Section 7.4 and must not add an implicit route leg when a Daily Base already governs the start of the day.
 
@@ -1291,16 +1291,17 @@ Daily Base may affect:
 
 ### 18.4.1 Departure Base
 
-A day's base is normally symmetric: the same place governs both the
-morning-origin leg and the evening-return leg. A day may instead set a
+A day's base is normally symmetric except on an arrival, departure, or change
+of stay. A day may also set a
 separate **Departure Base** to override the return leg only, for the case
 where the traveller leaves from one place and returns to a different one
 (most commonly, a day spent checking out of one accommodation and into
 another).
 
-- Setting a Departure Base is optional. When unset, the day's base (explicit
-  or inferred) governs both ends, unchanged from the single-base behavior
-  above.
+- Setting a Departure Base is optional. Automatic endpoints follow the previous
+  and current nights independently, so an ordinary transfer needs no day override.
+  An explicit start place can still use Same as start for its return, preserving
+  existing manual day settings.
 - When set, the Departure Base overrides only the end-of-day return leg; the
   day's base (explicit or inferred) continues to govern the start-of-day leg.
 - Accommodation inference may resolve Departure Base independently of the
@@ -1380,7 +1381,7 @@ Possible data:
 
 Accommodation may supply Daily Base context for the days on which it applies, subject to the precedence rules in Section 18.4. Booking data remains separate from planning Stays: editing or removing one does not edit or remove the other.
 
-Check-in and check-out retain the existing optional date fields in Reservations. Arrival instructions and specific time details can use reservation notes; they are not required to set a Stay. Arrival, departure, or moving days can use the day's Different start and end controls when a manual Stay range needs an exception.
+Check-in and check-out retain the existing optional date fields in Reservations. Arrival instructions and specific time details can use reservation notes; they are not required to set a Stay. The day's Different start and end controls handle exceptional plans; normal transitions follow the Arrive/Leave dates automatically for hotels, friends' or family homes, and the traveller's own place.
 
 ---
 

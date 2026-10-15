@@ -332,3 +332,40 @@ test('planning ranges move with the itinerary while booking dates remain fixed',
   expect(store.tripStayRange[0]?.endDate).toEqual(new Date('2026-10-03'));
   expect(store.reservation[0]?.checkInDate).toEqual(new Date('2026-09-02'));
 });
+
+test('shortening clips a stay after the final retained night and extending keeps its departure', async () => {
+  store.place.push({ id: 'hotel', kind: 'CUSTOM', customTimeZone: 'Asia/Singapore' });
+  store.tripPlace.push({ id: 'hotel', tripId: 'trip', placeId: 'hotel' });
+  store.tripStayRange.push({
+    id: 'range',
+    tripId: 'trip',
+    tripPlaceId: 'hotel',
+    startDate: new Date('2026-09-01'),
+    endDate: new Date('2026-09-04'),
+  });
+  const change = { endDate: '2026-09-02' };
+  const impact = await review(change);
+  expect(impact.affectedStayRanges).toBe(1);
+  await updateTrip('owner', '', 'trip', {
+    ...change,
+    confirmDateShrink: true,
+    shrinkRevision: impact.revision,
+  });
+  expect(store.tripStayRange[0]?.endDate).toEqual(new Date('2026-09-03'));
+  await updateTrip('owner', '', 'trip', { endDate: '2026-09-05' });
+  expect(store.tripStayRange[0]?.endDate).toEqual(new Date('2026-09-03'));
+});
+
+test('a departure the morning after the last retained day does not lose any stay nights', async () => {
+  store.place.push({ id: 'hotel', kind: 'CUSTOM', customTimeZone: 'Asia/Singapore' });
+  store.tripPlace.push({ id: 'hotel', tripId: 'trip', placeId: 'hotel' });
+  store.tripStayRange.push({
+    id: 'range',
+    tripId: 'trip',
+    tripPlaceId: 'hotel',
+    startDate: new Date('2026-09-01'),
+    endDate: new Date('2026-09-03'),
+  });
+  await updateTrip('owner', '', 'trip', { endDate: '2026-09-02' });
+  expect(store.tripStayRange[0]?.endDate).toEqual(new Date('2026-09-03'));
+});

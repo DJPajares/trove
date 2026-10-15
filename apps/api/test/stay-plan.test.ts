@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'vitest';
-import { dayStayUpdateSchema, replaceStayRange, stayPlanUpdateSchema } from '@trove/types';
+import {
+  dayStayUpdateSchema,
+  replaceStayRange,
+  stayPlanUpdateSchema,
+  stayLeaveDate,
+} from '@trove/types';
+import { stayDayTimeZone } from '../src/services/stay-time-zone.js';
 import { resolveDayStay, type StayDay, type StayAccommodation } from '../src/services/day-stay.js';
 import { groupAppliedStays } from '../src/services/stay-plan-rules.js';
 import { validateStayRanges } from '../src/services/stay-plan.js';
@@ -31,11 +37,11 @@ const endpoints = (resolved: ReturnType<typeof resolveDayStay>) => [
 ];
 
 describe('a single stay decision across surfaces', () => {
-  test('ranges cover both inclusive boundary days and otherwise fall back to booking/default', () => {
-    expect(endpoints(resolveDayStay(day, [], plan))).toEqual(['c', 'c']);
+  test('arrival keeps the previous stay in the morning and departure starts at the new stay', () => {
+    expect(endpoints(resolveDayStay(day, [], plan))).toEqual(['a', 'c']);
     expect(endpoints(resolveDayStay({ ...day, date: new Date('2026-10-16') }, [], plan))).toEqual([
       'c',
-      'c',
+      'a',
     ]);
     expect(endpoints(resolveDayStay({ ...day, date: new Date('2026-10-18') }, [], plan))).toEqual([
       'a',
@@ -54,7 +60,7 @@ describe('a single stay decision across surfaces', () => {
     ]);
     expect(
       endpoints(resolveDayStay({ ...day, dailyBaseDepartureTripPlace: a }, [booking], plan)),
-    ).toEqual(['c', 'a']);
+    ).toEqual(['b', 'a']);
     expect(
       endpoints(
         resolveDayStay(
@@ -82,11 +88,11 @@ describe('a single stay decision across surfaces', () => {
       ),
     ).toEqual([null, null]);
   });
-  test('automatic restores inference and adjacent full-day ranges do not invent transfers', () => {
+  test('adjacent stays automatically split the transition day without a day override', () => {
     const adjacent = {
       stayRanges: [
         ...plan.stayRanges,
-        { startDate: new Date('2026-10-17'), endDate: new Date('2026-10-18'), tripPlace: b },
+        { startDate: new Date('2026-10-16'), endDate: new Date('2026-10-18'), tripPlace: b },
       ],
     };
     expect(
@@ -94,7 +100,7 @@ describe('a single stay decision across surfaces', () => {
         resolveDayStay(
           {
             ...day,
-            date: new Date('2026-10-17'),
+            date: new Date('2026-10-16'),
             stayStartMode: 'INHERIT',
             stayEndMode: 'INHERIT',
           },
@@ -102,7 +108,7 @@ describe('a single stay decision across surfaces', () => {
           adjacent,
         ),
       ),
-    ).toEqual(['b', 'b']);
+    ).toEqual(['c', 'b']);
   });
   test('ambiguous bookings do not guess or quietly use the default', () => {
     expect(
@@ -111,7 +117,7 @@ describe('a single stay decision across surfaces', () => {
       ),
     ).toEqual([null, null]);
     expect(endpoints(resolveDayStay(day, [booking, { ...booking, tripPlace: c }], plan))).toEqual([
-      'c',
+      null,
       'c',
     ]);
   });
@@ -122,11 +128,106 @@ test('overlapping range replacement retains both fragments without mutating inpu
   expect(
     replaceStayRange(old, { startDate: '2026-10-04', endDate: '2026-10-06', tripPlaceId: 'b' }),
   ).toEqual([
-    { startDate: '2026-10-01', endDate: '2026-10-03', tripPlaceId: 'a' },
+    { startDate: '2026-10-01', endDate: '2026-10-04', tripPlaceId: 'a' },
     { startDate: '2026-10-04', endDate: '2026-10-06', tripPlaceId: 'b' },
-    { startDate: '2026-10-07', endDate: '2026-10-10', tripPlaceId: 'a' },
+    { startDate: '2026-10-06', endDate: '2026-10-10', tripPlaceId: 'a' },
   ]);
   expect(old[0]!.endDate).toBe('2026-10-10');
+});
+
+test('the Ritz-to-Marina example applies identically to a hotel and a friend’s home', () => {
+  for (const next of [{ id: 'Marina Bay Sands' }, { id: 'Friend’s home' }]) {
+    const stays = {
+      defaultStayTripPlace: { id: 'Ritz-Carlton' },
+      stayRanges: [
+        { startDate: new Date('2026-10-19'), endDate: new Date('2026-10-20'), tripPlace: next },
+      ],
+    };
+    expect(endpoints(resolveDayStay({ ...day, date: new Date('2026-10-19') }, [], stays))).toEqual([
+      'Ritz-Carlton',
+      next.id,
+    ]);
+    expect(endpoints(resolveDayStay({ ...day, date: new Date('2026-10-20') }, [], stays))).toEqual([
+      next.id,
+      'Ritz-Carlton',
+    ]);
+    expect(endpoints(resolveDayStay({ ...day, date: new Date('2026-10-21') }, [], stays))).toEqual([
+      'Ritz-Carlton',
+      'Ritz-Carlton',
+    ]);
+  }
+  expect(
+    endpoints(
+      resolveDayStay({ ...day, date: new Date('2026-10-19') }, [], {
+        stayRanges: [
+          { startDate: new Date('2026-10-19'), endDate: new Date('2026-10-20'), tripPlace: b },
+        ],
+      }),
+    ),
+  ).toEqual([null, 'b']);
+});
+
+test('legacy single-day ranges remain a usable one-night stay', () => {
+  expect(stayLeaveDate({ startDate: '2026-10-19', endDate: '2026-10-19' })).toBe('2026-10-20');
+  const legacy = {
+    stayRanges: [
+      { startDate: new Date('2026-10-19'), endDate: new Date('2026-10-19'), tripPlace: b },
+    ],
+  };
+  expect(endpoints(resolveDayStay({ ...day, date: new Date('2026-10-19') }, [], legacy))).toEqual([
+    null,
+    'b',
+  ]);
+  expect(endpoints(resolveDayStay({ ...day, date: new Date('2026-10-20') }, [], legacy))).toEqual([
+    'b',
+    null,
+  ]);
+});
+
+test('adjacent ranges and the final night are valid, but empty nights are rejected', () => {
+  const input = {
+    expectedRevision: 0,
+    defaultTripPlaceId: null,
+    ranges: [
+      { startDate: '2026-10-19', endDate: '2026-10-20', tripPlaceId: 'a' },
+      { startDate: '2026-10-20', endDate: '2026-10-22', tripPlaceId: 'b' },
+    ],
+  };
+  expect(validateStayRanges(input, '2026-10-18', '2026-10-21')).toHaveLength(2);
+  expect(() => validateStayRanges(input, '2026-10-18', '2026-10-20')).toThrow('invalid_stay_plan');
+  expect(() =>
+    validateStayRanges(
+      { ...input, ranges: [{ startDate: '2026-10-19', endDate: '2026-10-19', tripPlaceId: 'a' }] },
+      '2026-10-18',
+      '2026-10-21',
+    ),
+  ).toThrow('invalid_stay_plan');
+});
+
+test('current morning location determines the timezone, with item and trip fallbacks', () => {
+  const places = [
+    { id: 'a', place: { kind: 'CUSTOM' as const, customTimeZone: 'Asia/Singapore' } },
+    { id: 'b', place: { kind: 'CUSTOM' as const, customTimeZone: 'Asia/Tokyo' } },
+  ];
+  expect(
+    stayDayTimeZone({
+      start: { place: a, source: 'trip_default' },
+      places,
+      items: [],
+      tripTimeZone: 'UTC',
+    }),
+  ).toMatchObject({ timeZone: 'Asia/Singapore', sourceTripPlaceId: 'a' });
+  expect(
+    stayDayTimeZone({
+      start: null,
+      places,
+      items: [{ id: 'stop', tripPlaceId: 'b' }],
+      tripTimeZone: 'UTC',
+    }),
+  ).toMatchObject({ timeZone: 'Asia/Tokyo', source: 'FIRST_LOCATED_ITEM' });
+  expect(stayDayTimeZone({ start: null, places, items: [], tripTimeZone: 'UTC' }).timeZone).toBe(
+    'UTC',
+  );
 });
 
 test('AI grouping preserves every resolved endpoint, including empty boundaries', () => {
@@ -215,7 +316,7 @@ test('contracts reject impossible dates, end-only start modes, overlapping and o
         ...input,
         ranges: [
           ...input.ranges,
-          { startDate: '2026-10-10', endDate: '2026-10-11', tripPlaceId: 'b' },
+          { startDate: '2026-10-09', endDate: '2026-10-11', tripPlaceId: 'b' },
         ],
       },
       '2026-10-01',

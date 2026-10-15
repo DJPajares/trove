@@ -1,6 +1,7 @@
 import { tripStayInclude } from './day-stay.js';
 import { refreshDayDefaultTimeZone } from './itineraries.js';
 import {
+  stayLeaveDate,
   readTripPlanningPreferences,
   effectiveTripPace,
   type TripPlanningPreferences,
@@ -257,7 +258,13 @@ async function serializeTrip(
         ? false
         : trip.defaultStayTripPlaceId !== null ||
           trip.stayRanges.some(
-            (range) => range.startDate <= day.date && day.date <= range.endDate,
+            (range) =>
+              range.startDate <= day.date &&
+              formatDateOnly(day.date) <=
+                stayLeaveDate({
+                  startDate: formatDateOnly(range.startDate),
+                  endDate: formatDateOnly(range.endDate),
+                }),
           ) ||
           day.dailyBaseTripPlaceId !== null ||
           day.dailyBaseDepartureTripPlaceId !== null ||
@@ -899,15 +906,22 @@ export async function updateTrip(
         if (datesChanged) {
           for (const range of current.stayRanges) {
             const from = shiftDateOnly(formatDateOnly(range.startDate), offsetDays);
-            const through = shiftDateOnly(formatDateOnly(range.endDate), offsetDays);
-            if (from > endDate || through < startDate)
+            const through = shiftDateOnly(
+              stayLeaveDate({
+                startDate: formatDateOnly(range.startDate),
+                endDate: formatDateOnly(range.endDate),
+              }),
+              offsetDays,
+            );
+            const lastLeave = shiftDateOnly(endDate, 1);
+            if (from > endDate || through <= startDate)
               await transaction.tripStayRange.delete({ where: { id: range.id } });
             else
               await transaction.tripStayRange.update({
                 where: { id: range.id },
                 data: {
                   startDate: parseDateOnly(from < startDate ? startDate : from),
-                  endDate: parseDateOnly(through > endDate ? endDate : through),
+                  endDate: parseDateOnly(through > lastLeave ? lastLeave : through),
                 },
               });
           }

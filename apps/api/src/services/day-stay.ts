@@ -6,11 +6,12 @@
  * Insights, time zones, scoring) so they cannot disagree. A stay only ever adds
  * to a plan: with none known, each caller behaves exactly as it did before.
  *
- * Day overrides (including none) win, then a full-day planning range,
- * accommodation inference, and the trip default. Booking dates retain their
- * check-in/check-out meaning; manual ranges cover both ends of inclusive days.
+ * Day overrides (including none) win, then a night in a planning range,
+ * accommodation inference, and the trip default. Arrive/Leave dates govern
+ * nights for every kind of stay, including friends' and family homes.
  * Ambiguous bookings never silently fall back to the trip default.
  */
+import { stayRangeForEndpoint } from '@trove/types';
 export type DayStaySource = import('@trove/types').StaySource;
 type EndpointMode = 'INHERIT' | 'NONE' | 'PLACE' | 'SAME_AS_START';
 export type TripStayPlan<Place> = {
@@ -107,10 +108,13 @@ export function resolveDayStay<Place extends { id: string }>(
   plan: TripStayPlan<Place> = {},
 ): { start: DayStayEnd<Place>; end: DayStayEnd<Place> } {
   const booked = accommodationStay(day, accommodations);
-  const range = plan.stayRanges?.find(
-    (range) => range.startDate <= day.date && day.date <= range.endDate,
-  );
+  const ranges = (plan.stayRanges ?? []).map((range) => ({
+    ...range,
+    startDate: range.startDate.toISOString().slice(0, 10),
+    endDate: range.endDate.toISOString().slice(0, 10),
+  }));
   const automatic = (end: 'start' | 'end'): DayStayEnd<Place> => {
+    const range = stayRangeForEndpoint(ranges, day.date.toISOString().slice(0, 10), end);
     if (range) return { place: range.tripPlace, source: 'stay_range' };
     if (booked[end]) return { place: booked[end], source: 'accommodation' };
     // A conflicting booking is not permission to guess the trip default.

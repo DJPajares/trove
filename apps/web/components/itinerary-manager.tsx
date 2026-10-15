@@ -1752,9 +1752,24 @@ export function ItineraryManager({
               sketch={
                 daySketch ? <DayRouteSketch places={sketchPlaces} sketch={daySketch} /> : null
               }
-              staySource={t(
-                `stays.sources.${selectedDay.dailyBaseTripPlaceId || selectedDay.dailyBaseDepartureTripPlaceId || selectedDay.stayStartMode === 'NONE' || selectedDay.stayEndMode === 'NONE' || selectedDay.stayEndMode === 'SAME_AS_START' ? 'explicit' : (selectedDay.stay?.startSource ?? selectedDay.stay?.endSource ?? 'none')}`,
-              )}
+              staySource={(() => {
+                if (
+                  selectedDay.dailyBaseTripPlaceId ||
+                  selectedDay.dailyBaseDepartureTripPlaceId ||
+                  selectedDay.stayStartMode === 'NONE' ||
+                  selectedDay.stayEndMode === 'NONE' ||
+                  selectedDay.stayEndMode === 'SAME_AS_START'
+                )
+                  return t('stays.sources.explicit');
+                const start = selectedDay.stay?.startSource;
+                const end = selectedDay.stay?.endSource;
+                return start && end && start !== end
+                  ? t('stays.sourcesMixed', {
+                      start: t(`stays.sources.${start}`),
+                      end: t(`stays.sources.${end}`),
+                    })
+                  : t(`stays.sources.${start ?? end ?? 'none'}`);
+              })()}
               stay={(() => {
                 const start = tripPlaceById(dailyBases.arrivalTripPlaceId);
                 const end = tripPlaceById(dailyBases.departureTripPlaceId);

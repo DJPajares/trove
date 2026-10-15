@@ -31,7 +31,7 @@ import { LocatePlaceSheet } from '@/components/locate-place-sheet';
 import { PlaceDetailsSheet, type PlaceDetailsRow } from '@/components/place-details-sheet';
 import { PlanScoreChip, PlanScorePanel } from '@/components/plan-score-panel';
 import { ScoreProblemNote, AttentionNote } from '@/components/planner/attention-note';
-import { DayMasthead, type DayStay } from '@/components/planner/day-masthead';
+import { DayMasthead } from '@/components/planner/day-masthead';
 import { DayWeatherCard } from '@/components/planner/day-weather-card';
 import { DAY_SKETCH_BOX, DayRouteSketch } from '@/components/planner/day-route-sketch';
 import { DayEmpty } from '@/components/planner/day-empty';
@@ -1500,29 +1500,35 @@ export function ItineraryManager({
           <TripBoard
             actions={
               <>
+                {/* On a phone the two sit beside the view switch as icons,
+                    named for assistive tech and on hover. */}
                 <Button
                   aria-haspopup="dialog"
+                  className="max-sm:w-9 max-sm:px-0"
                   data-trip-places-trigger
                   onClick={openPlaces}
                   size="sm"
+                  title={tripPlacesTranslations('openPlaces')}
                   variant="outline"
                 >
-                  <Icons.Places aria-hidden="true" data-icon="inline-start" />
-                  {tripPlacesTranslations('openPlaces')}
+                  <Icons.Places aria-hidden="true" />
+                  <span className="max-sm:sr-only">{tripPlacesTranslations('openPlaces')}</span>
                 </Button>
                 {/* Where the trip sleeps is a whole-trip choice, so it is made
-                    here; a day's own Stay line edits that day. */}
+                    here; a single day's exceptions live in its options. */}
                 <Button
                   aria-haspopup="dialog"
+                  className="max-sm:w-9 max-sm:px-0"
                   onClick={() => {
                     setStayView('trip');
                     setStayOpen(true);
                   }}
                   size="sm"
+                  title={t('stays.title')}
                   variant="outline"
                 >
-                  <Icons.DailyBase aria-hidden="true" data-icon="inline-start" />
-                  {t('stays.title')}
+                  <Icons.DailyBase aria-hidden="true" />
+                  <span className="max-sm:sr-only">{t('stays.title')}</span>
                 </Button>
               </>
             }
@@ -1718,10 +1724,6 @@ export function ItineraryManager({
               }
               onOpenMap={openPhoneMap}
               onPreviousDay={selectedIndex > 0 ? () => selectAdjacentDay(-1) : undefined}
-              onStayClick={() => {
-                setStayView('day');
-                setStayOpen(true);
-              }}
               routeNotes={
                 !compact &&
                 (routes?.source === 'cache' ||
@@ -1763,48 +1765,6 @@ export function ItineraryManager({
               sketch={
                 daySketch ? <DayRouteSketch places={sketchPlaces} sketch={daySketch} /> : null
               }
-              staySource={(() => {
-                if (
-                  selectedDay.dailyBaseTripPlaceId ||
-                  selectedDay.dailyBaseDepartureTripPlaceId ||
-                  selectedDay.stayStartMode === 'NONE' ||
-                  selectedDay.stayEndMode === 'NONE' ||
-                  selectedDay.stayEndMode === 'SAME_AS_START'
-                )
-                  return t('stays.sources.explicit');
-                const start = selectedDay.stay?.startSource;
-                const end = selectedDay.stay?.endSource;
-                return start && end && start !== end
-                  ? t('stays.sourcesMixed', {
-                      start: t(`stays.sources.${start}`),
-                      end: t(`stays.sources.${end}`),
-                    })
-                  : t(`stays.sources.${start ?? end ?? 'none'}`);
-              })()}
-              stay={(() => {
-                const start = tripPlaceById(dailyBases.arrivalTripPlaceId);
-                const end = tripPlaceById(dailyBases.departureTripPlaceId);
-                if (start && end && start.id !== end.id) {
-                  return {
-                    from: placeName(start) ?? t('providerPlace'),
-                    kind: 'transition',
-                    to: placeName(end) ?? t('providerPlace'),
-                  } satisfies DayStay;
-                }
-                const stay = start ?? end;
-                return stay
-                  ? ({
-                      kind: start && end ? 'same' : start ? 'start_only' : 'end_only',
-                      name: placeName(stay) ?? t('providerPlace'),
-                    } satisfies DayStay)
-                  : ({
-                      kind: 'none',
-                      intentional:
-                        selectedDay.stayStartMode === 'NONE' &&
-                        (selectedDay.stayEndMode === 'NONE' ||
-                          selectedDay.stayEndMode === 'SAME_AS_START'),
-                    } satisfies DayStay);
-              })()}
               weather={
                 <DayWeatherCard
                   date={selectedDay.date}

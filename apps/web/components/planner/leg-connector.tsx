@@ -52,17 +52,16 @@ export function LegConnector({
   const t = useTranslations('itinerary.routes');
   const locale = useLocale();
   const originLabel = segment.origin.label ?? t(`point.${segment.origin.kind}`);
-  const destinationLabel = segment.destination.label ?? t(`point.${segment.destination.kind}`);
   const leavesStay = segment.modeOwner.kind === 'day_start' && segment.origin.kind === 'daily_base';
   const returnsToStay = segment.destination.kind === 'daily_base';
+  // The Stay at either end of the day already says where the day starts and
+  // ends, so a leg to or from it does not say so again.
   const context = [
-    ...(segment.modeOwner.kind === 'day_start'
-      ? [t('dayStartLabel'), t('segmentOrigin', { origin: originLabel })]
-      : returnsToStay
-        ? [t('returnToBaseLabel'), t('segmentDestination', { destination: destinationLabel })]
-        : segment.origin.kind === 'starting_location'
-          ? [t('segmentOrigin', { origin: originLabel })]
-          : []),
+    ...(segment.modeOwner.kind !== 'day_start' &&
+    !returnsToStay &&
+    segment.origin.kind === 'starting_location'
+      ? [t('segmentOrigin', { origin: originLabel })]
+      : []),
     ...(segment.scope === 'long_distance' ? [t('segmentLongDistance')] : []),
   ].join(' · ');
   const available =

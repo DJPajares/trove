@@ -2143,8 +2143,6 @@
         "not-estimated": "Not estimated",
         "unavailable": "Route unavailable"
       },
-      "dayStartLabel": "Start of day",
-      "returnToBaseLabel": "Back to your stay",
       "changeMode": "Change travel mode from {origin}",
       "modeSaveError": "We couldn't update that travel mode. Try again.",
       "mode": {

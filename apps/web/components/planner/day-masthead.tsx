@@ -3,7 +3,7 @@
 import { ArrowUpRight } from 'lucide-react';
 import { motion, useReducedMotion, type PanInfo } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
-import { Fragment, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 import { DayHeaderMedia } from '@/components/day-header-media';
 import { usePreferences } from '@/components/preferences-provider';
@@ -20,30 +20,25 @@ import { paddedDayNumber } from './planner-ribbon';
 const SWIPE_DISTANCE = 64;
 const SWIPE_VELOCITY = 420;
 
-export type DayStay =
-  | { kind: 'none'; intentional?: boolean }
-  | { kind: 'same'; name: string }
-  | { kind: 'start_only'; name: string }
-  | { kind: 'end_only'; name: string }
-  | { from: string; kind: 'transition'; to: string };
-
-function FactsLine({ children }: Readonly<{ children: ReactNode[] }>) {
-  const parts = children.filter(Boolean);
-  if (!parts.length) return null;
-
+/** One measure of the day: its value large, what it measures beneath. */
+function Fact({
+  label,
+  pending,
+  title,
+  value,
+}: Readonly<{ label: string; pending?: boolean; title?: string; value: string }>) {
   return (
-    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground tabular-nums">
-      {parts.map((part, index) => (
-        <Fragment key={index}>
-          {index ? (
-            <span aria-hidden="true" className="text-text-subtle">
-              ·
-            </span>
-          ) : null}
-          {part}
-        </Fragment>
-      ))}
-    </p>
+    <div className="flex min-w-0 flex-col-reverse gap-0.5" title={title}>
+      <dt className="truncate text-xs text-muted-foreground">{label}</dt>
+      <dd
+        className={cn(
+          'truncate text-base leading-tight font-semibold tracking-[-0.01em] tabular-nums',
+          pending && 'animate-pulse text-muted-foreground motion-reduce:animate-none',
+        )}
+      >
+        {value}
+      </dd>
+    </div>
   );
 }
 
@@ -53,9 +48,10 @@ function FactsLine({ children }: Readonly<{ children: ReactNode[] }>) {
  * It opens on the shared content-aware day photograph, with a trip secondary
  * image and bundled photographic artwork reserved for genuine failures,
  * with the day's number and name set over it. Beneath, its weather, then one
- * block that says what the day is - its facts, the Stay it runs from, and its
- * route as a sketch that opens the real map - with what can be done with it
- * directly under: add, Places, one way out of the plan, and the day's options.
+ * block that says what the day is - its measures side by side with its route
+ * as a sketch that opens the real map - with what can be done with it directly
+ * under: add, Places, one way out of the plan, and the day's options. Where
+ * the day starts and ends is shown once, on the timeline itself.
  *
  * The date is said once (PRD 17.2.1): under the title, or as the title when the
  * day has nothing better to be called. Swiping the photograph turns to the next
@@ -76,13 +72,10 @@ export function DayMasthead({
   onNextDay,
   onOpenMap,
   onPreviousDay,
-  onStayClick,
   routeNotes,
   routesLoading,
   scoreChip,
   sketch,
-  stay,
-  staySource,
   weather,
 }: Readonly<{
   actions: ReactNode;
@@ -101,15 +94,12 @@ export function DayMasthead({
   onNextDay?: () => void;
   onOpenMap: () => void;
   onPreviousDay?: () => void;
-  onStayClick: () => void;
   /** What the day's travel estimate is obliged to say about itself. */
   routeNotes?: ReactNode;
   routesLoading: boolean;
   scoreChip?: ReactNode;
   /** The drawn route, when the day has enough located places to draw one. */
   sketch: ReactNode | null;
-  stay: DayStay;
-  staySource?: string;
   /** The day's own weather, under its photograph. */
   weather: ReactNode;
 }>) {
@@ -196,73 +186,55 @@ export function DayMasthead({
 
       {/* What the day is, and what can be done with it, read as one block. */}
       <div className="space-y-3">
-        <div className="flex items-start gap-4">
+        <div className="flex items-stretch gap-3">
           <div className="min-w-0 flex-1 space-y-2">
-            <FactsLine>
-              {[
-                <span key="stops">{t('stops', { count: facts.stopCount })}</span>,
-                facts.planned ? (
-                  <span key="planned">
-                    {t(facts.planned.approximate ? 'plannedApproximate' : 'planned', {
-                      duration: formatPlannedDuration(facts.planned.minutes, locale),
-                    })}
-                  </span>
-                ) : null,
-                compactTravel ? null : routesLoading && !travel ? (
-                  <span className="animate-pulse motion-reduce:animate-none" key="travel">
-                    {t('measuringTravel')}
-                  </span>
+            {facts.stopCount ? (
+              <dl className="grid h-full grid-cols-2 content-center gap-x-4 gap-y-3 rounded-[var(--radius-lg)] border border-border-subtle bg-card px-3.5 py-3 sm:grid-cols-4">
+                <Fact
+                  label={t('facts.stops', { count: facts.stopCount })}
+                  value={String(facts.stopCount)}
+                />
+                {facts.planned ? (
+                  <Fact
+                    label={t('facts.planned')}
+                    value={`${facts.planned.approximate ? '≈' : ''}${formatPlannedDuration(
+                      facts.planned.minutes,
+                      locale,
+                    )}`}
+                  />
+                ) : null}
+                {compactTravel ? null : routesLoading && !travel ? (
+                  <Fact label={t('facts.travel')} pending value="…" />
                 ) : travel?.kind === 'known' ? (
-                  <span key="travel">
-                    {routesT(travel.partial ? 'knownDuration' : 'duration', {
-                      value: formatTravelDuration(travel.durationSeconds, locale),
-                    })}
-                  </span>
-                ) : travel?.kind === 'unavailable' ? (
-                  <span key="travel">{routesT('travelTimeUnavailable')}</span>
-                ) : travel?.kind === 'long_distance_only' ? (
-                  <span key="travel">{routesT('noLocalTravel')}</span>
-                ) : null,
-                travel?.kind === 'known' && travel.distanceMeters !== null ? (
-                  <span key="distance">
-                    {routesT(travel.partial ? 'knownDistance' : 'distance', {
-                      unit,
-                      value: formatDistanceValue(
-                        travel.distanceMeters,
-                        preferences.distanceUnit,
-                        locale,
-                      ),
-                    })}
-                  </span>
-                ) : null,
-              ]}
-            </FactsLine>
-
-            <button
-              className="-mx-1.5 flex min-h-9 max-w-full items-center gap-2 rounded-[var(--radius-md)] px-1.5 text-left text-sm outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none"
-              onClick={onStayClick}
-              type="button"
-            >
-              <Icons.DailyBase aria-hidden="true" className="size-4 shrink-0 text-primary" />
-              <span
-                className={cn(
-                  'min-w-0 truncate',
-                  stay.kind === 'none' ? 'text-muted-foreground' : 'font-medium text-foreground',
-                )}
-              >
-                {stay.kind === 'none'
-                  ? t(stay.intentional ? 'noStaySet' : 'noStay')
-                  : stay.kind === 'same'
-                    ? t('stay', { name: stay.name })
-                    : stay.kind === 'start_only' || stay.kind === 'end_only'
-                      ? t(stay.kind === 'start_only' ? 'startStay' : 'endStay', { name: stay.name })
-                      : t('stayTransition', { from: stay.from, to: stay.to })}
-              </span>
-              {/* "Where are you staying?" already says nothing is set. */}
-              {staySource && stay.kind !== 'none' ? (
-                <span className="shrink-0 text-xs text-muted-foreground">· {staySource}</span>
-              ) : null}
-            </button>
+                  <Fact
+                    label={t(travel.partial ? 'facts.knownTravel' : 'facts.travel')}
+                    value={formatTravelDuration(travel.durationSeconds, locale)}
+                  />
+                ) : travel ? (
+                  <Fact
+                    label={t('facts.travel')}
+                    title={routesT(
+                      travel.kind === 'unavailable' ? 'travelTimeUnavailable' : 'noLocalTravel',
+                    )}
+                    value="—"
+                  />
+                ) : null}
+                {travel?.kind === 'known' && travel.distanceMeters !== null ? (
+                  <Fact
+                    label={t(travel.partial ? 'facts.knownDistance' : 'facts.distance')}
+                    value={`${formatDistanceValue(
+                      travel.distanceMeters,
+                      preferences.distanceUnit,
+                      locale,
+                    )} ${unit}`}
+                  />
+                ) : null}
+              </dl>
+            ) : (
+              <p className="flex h-full items-center rounded-[var(--radius-lg)] border border-dashed border-border px-3.5 py-3 text-sm text-muted-foreground">
+                {t('stops', { count: 0 })}
+              </p>
+            )}
             {routeNotes}
           </div>
 

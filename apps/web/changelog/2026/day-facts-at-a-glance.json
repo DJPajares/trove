@@ -1,0 +1,11 @@
+{
+  "id": "day-facts-at-a-glance",
+  "date": "2026-10-16",
+  "version": "1.5.2",
+  "summaries": {
+    "en": [
+      "Each day shows its stops, planned time, travel and distance at a glance, next to its map.",
+      "All days keeps its view switch, Places and Stay in one tidy row."
+    ]
+  }
+}

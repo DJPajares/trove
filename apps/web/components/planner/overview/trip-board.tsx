@@ -60,7 +60,7 @@ export function TripBoard({
 
   return (
     <section aria-labelledby="trip-board-heading" className="space-y-5" data-slot="trip-board">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+      <header className="space-y-4">
         <div>
           <h2
             className="text-[length:var(--text-section-title)] leading-tight font-semibold tracking-[-0.015em]"
@@ -72,16 +72,18 @@ export function TripBoard({
             {t('overview.description', { count: days.length })}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {actions}
+        {/* One toolbar: how to see the trip on the left, what to bring into
+            it on the right, all at the same height. */}
+        <div className="flex items-center gap-2">
           <Tabs
+            className="min-w-0 flex-1 sm:flex-none"
             onValueChange={(value) => onDisplayChange(value as TripBoardDisplay)}
             value={display}
           >
-            <TabsList aria-label={t('map.viewNavigation')}>
+            <TabsList aria-label={t('map.viewNavigation')} className="flex h-9 w-full sm:w-auto">
               <TabsTab
                 aria-controls="trip-board-days"
-                className="gap-2"
+                className="h-7 flex-1 gap-2 py-0"
                 id="trip-board-days-tab"
                 value="list"
               >
@@ -90,7 +92,7 @@ export function TripBoard({
               </TabsTab>
               <TabsTab
                 aria-controls="trip-board-map"
-                className="gap-2"
+                className="h-7 flex-1 gap-2 py-0"
                 id="trip-board-map-tab"
                 value="map"
               >
@@ -100,6 +102,9 @@ export function TripBoard({
               <TabsIndicator />
             </TabsList>
           </Tabs>
+          {actions ? (
+            <div className="flex shrink-0 items-center gap-2 sm:ml-auto">{actions}</div>
+          ) : null}
         </div>
       </header>
 

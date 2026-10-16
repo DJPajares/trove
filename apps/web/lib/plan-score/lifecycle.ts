@@ -70,7 +70,7 @@ export function refreshExpiredAssessment(
   });
 }
 
-/** Ordinary acquisition can supply scoring evidence. Only existing score queries are refreshed. */
+/** Ordinary acquisition supplies evidence for cache-only score and timing assessments. */
 export function watchScoringAcquisition(client: QueryClient) {
   return client.getQueryCache().subscribe((event) => {
     if (
@@ -103,7 +103,7 @@ export function watchScoringAcquisition(client: QueryClient) {
       return;
     for (const query of client.getQueryCache().findAll({
       predicate: (query) =>
-        query.queryKey[0] === 'plan-score' &&
+        (query.queryKey[0] === 'plan-score' || query.queryKey[0] === 'itinerary-timing') &&
         (root === 'place-rich-details' || query.queryKey[1] === tripId),
     }))
       refreshAfterAcquisition(client, query);

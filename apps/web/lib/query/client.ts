@@ -115,6 +115,14 @@ export function createQueryClient() {
   // stricter automatic-refetch policy on all provider-billable reads.
   client.setQueryDefaults(['trips'], { staleTime: STALE_TIME_BY_ROOT.trips, refetchOnMount: true });
 
+  // Booking or Place changes may happen while these surfaces are unmounted.
+  // Revisit invalidated assessments rather than retaining the old warnings or
+  // candidates. These endpoints only read stored evidence; provider-billable
+  // queries keep their explicit acquisition policy above.
+  for (const root of ['itinerary-timing', 'gap-suggestions', 'rain-alternatives']) {
+    client.setQueryDefaults([root], { refetchOnMount: true });
+  }
+
   watchScoringAcquisition(client);
   return client;
 }

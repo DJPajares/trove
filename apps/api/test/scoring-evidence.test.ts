@@ -100,6 +100,8 @@ beforeEach(() => {
     startingPlace: null,
     startingPlaceId: null,
     itineraryDays: [day],
+    defaultStayTripPlaceId: null,
+    stayRanges: [],
     tripPlaces: [tripPlace],
     reservations: [],
     destinations: [],
@@ -711,7 +713,13 @@ test('gap suggestions offer the traveller’s own unplanned places, from stored 
   });
   const evening = placeAt('evening', 2.01);
   const unplanned = placeAt('unplanned', 2.005);
-  trip.tripPlaces.push(evening, unplanned);
+  const hotel = placeAt('hotel', 2.003);
+  const home = placeAt('home', 2.004);
+  trip.tripPlaces.push(evening, unplanned, hotel, home);
+  trip.defaultStayTripPlaceId = hotel.id;
+  trip.defaultStayTripPlace = hotel;
+  trip.endDate = new Date('2026-09-29');
+  trip.stayRanges = [{ startDate: trip.startDate, endDate: trip.endDate, tripPlace: home }];
   const template = trip.itineraryDays[0].items[0];
   trip.itineraryDays[0].items = [
     {
@@ -805,13 +813,23 @@ test('a rainy outdoor stop is offered indoor places from the traveller’s own l
   });
   const park = placeAt('park', 2);
   const museum = placeAt('museum', 2.01);
-  trip.tripPlaces.push(park, museum);
+  const hotel = placeAt('hotel', 2.001);
+  trip.tripPlaces.push(park, museum, hotel);
+  trip.defaultStayTripPlaceId = hotel.id;
+  trip.defaultStayTripPlace = hotel;
   trip.itineraryDays[0].items = [
     { ...trip.itineraryDays[0].items[0], id: 'item-park', tripPlace: park, tripPlaceId: 'tp-park' },
   ];
   const evidenceFor: Record<string, unknown> = {
     'ext-park': { ...place, externalPlaceId: 'ext-park', name: 'Park', rawTypes: ['park'] },
     'ext-museum': { ...place, externalPlaceId: 'ext-museum', name: 'Museum', rawTypes: ['museum'] },
+    // A Stay is excluded even when its provider types also describe an indoor attraction.
+    'ext-hotel': {
+      ...place,
+      externalPlaceId: 'ext-hotel',
+      name: 'Hotel',
+      rawTypes: ['museum', 'lodging'],
+    },
   };
   (
     globalThis as unknown as {

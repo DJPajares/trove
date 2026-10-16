@@ -1,0 +1,11 @@
+{
+  "id": "located-stops-and-stay-suggestions",
+  "date": "2026-10-16",
+  "version": "1.5.3",
+  "summaries": {
+    "en": [
+      "Link a stop to its location and see travel warnings update without saving it again.",
+      "Fill a gap and rainy-day suggestions now leave out places you’re staying."
+    ]
+  }
+}

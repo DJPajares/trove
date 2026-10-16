@@ -223,6 +223,9 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
     await invalidateTripQueries(queryClient, tripId, [
       ...PLAN_SCORE_INPUT_QUERY_ROOTS,
       'itinerary',
+      'itinerary-timing',
+      'gap-suggestions',
+      'rain-alternatives',
     ]);
   };
   const [error, setError] = useState<string | null>(null);

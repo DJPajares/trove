@@ -1883,22 +1883,17 @@ export function ItineraryManager({
                 hoursFor={(item) =>
                   item.tripPlace ? dayPlaceSignals[item.tripPlace.id]?.hours : undefined
                 }
-                itemCount={selectedDay.items.length}
                 label={t('itemListLabel')}
                 menuActions={{
                   onDeleteItem: setItemToDelete,
-                  onDuplicateItem: (item) => void handleDuplicate(item),
                   onEditItem: openEdit,
-                  onMoveItem: (item, dayId, position) => void handleOrganize(item, dayId, position),
                   onMoveToDay: (item) => setMoveTarget({ allowUnscheduled: true, item }),
                   onSwapItem: setSwapTarget,
                   movementDisabled: !online || itineraryEditing,
                   onPlacePriorityChange: (item, priority) =>
                     void changePlacePriority(item, priority),
-                  onSelectItem: selectItemOnMap,
                   organizingItemId,
                   savingPriorityIds,
-                  selectedDayId: selectedDay.id,
                 }}
                 onInsert={(position, afterName) => openInsert(selectedDay, position, afterName)}
                 onEditTiming={setTimingItem}

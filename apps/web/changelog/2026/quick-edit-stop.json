@@ -1,0 +1,11 @@
+{
+  "id": "quick-edit-stop",
+  "date": "2026-10-16",
+  "version": "1.7.2",
+  "summaries": {
+    "en": [
+      "Editing a stop is quicker: its time, duration and note show as a short list, and each opens only when you change it.",
+      "Delete now sits apart from Save, so it is harder to tap by mistake."
+    ]
+  }
+}

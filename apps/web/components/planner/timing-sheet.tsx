@@ -21,6 +21,7 @@ import {
 } from '@/lib/itinerary/item-editor';
 
 import type { StopEditorSaved } from './stop-editor/stop-editor-sheet';
+import { EditRows } from './stop-editor/edit-row';
 import { TimingField } from './stop-editor/timing-field';
 
 function TimingBody({
@@ -93,52 +94,54 @@ function TimingBody({
                 <AlertDescription>{formError}</AlertDescription>
               </Alert>
             ) : null}
-            <TimingField
-              customDuration={customDuration}
-              expanded
-              form={form}
-              onChange={(patch) => {
-                suggestedTime.reset();
-                setForm((current) => manualTimingPatch(current, patch));
-                setFormError(null);
-              }}
-              onCustomDurationChange={setCustomDuration}
-              onExpand={() => undefined}
-              onRemove={() => {
-                setForm((current) => ({
-                  ...current,
-                  durationMinutes: current.timingMode === 'end_time' ? '' : current.durationMinutes,
-                  exactTime: '',
-                  localEndTime: '',
-                  schedule: 'none',
-                  scheduleRevision: undefined,
-                  timingMode: 'duration',
-                }));
-                suggestedTime.reset();
-              }}
-              protectedTiming={item.timingProtected}
-              suggest={
-                online && !item.timingProtected
-                  ? {
-                      loading: suggestedTime.loading,
-                      message: suggestedTime.message,
-                      suggestion: suggestedTime.suggestion,
-                      onApply: suggestedTime.apply,
-                      onRequest: () =>
-                        void suggestedTime.request({
-                          dayId,
-                          itemId: item.id,
-                          schedule: form.schedule,
-                          durationMinutes: form.durationMinutes
-                            ? Number(form.durationMinutes)
-                            : undefined,
-                          localTime: form.exactTime || undefined,
-                          localEndTime: form.localEndTime || undefined,
-                        }),
-                    }
-                  : null
-              }
-            />
+            <EditRows>
+              <TimingField
+                customDuration={customDuration}
+                form={form}
+                open
+                onChange={(patch) => {
+                  suggestedTime.reset();
+                  setForm((current) => manualTimingPatch(current, patch));
+                  setFormError(null);
+                }}
+                onCustomDurationChange={setCustomDuration}
+                onRemove={() => {
+                  setForm((current) => ({
+                    ...current,
+                    durationMinutes:
+                      current.timingMode === 'end_time' ? '' : current.durationMinutes,
+                    exactTime: '',
+                    localEndTime: '',
+                    schedule: 'none',
+                    scheduleRevision: undefined,
+                    timingMode: 'duration',
+                  }));
+                  suggestedTime.reset();
+                }}
+                protectedTiming={item.timingProtected}
+                suggest={
+                  online && !item.timingProtected
+                    ? {
+                        loading: suggestedTime.loading,
+                        message: suggestedTime.message,
+                        suggestion: suggestedTime.suggestion,
+                        onApply: suggestedTime.apply,
+                        onRequest: () =>
+                          void suggestedTime.request({
+                            dayId,
+                            itemId: item.id,
+                            schedule: form.schedule,
+                            durationMinutes: form.durationMinutes
+                              ? Number(form.durationMinutes)
+                              : undefined,
+                            localTime: form.exactTime || undefined,
+                            localEndTime: form.localEndTime || undefined,
+                          }),
+                      }
+                    : null
+                }
+              />
+            </EditRows>
           </FieldGroup>
         </div>
         <SheetFooter className="sm:flex-row sm:justify-end">

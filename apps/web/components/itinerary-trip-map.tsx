@@ -4,7 +4,9 @@ import { skipToken, useQueries, type UseQueryResult } from '@tanstack/react-quer
 import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useMemo, useState } from 'react';
 
-import { ItineraryPlanningMap, type RouteLine } from '@/components/itinerary-planning-map';
+import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
+import { buildMapRouteLegs } from '@/lib/maps/map-route-selection';
+import { useMapSelection } from '@/hooks/use-map-selection';
 import { Chip, ChipGroup } from '@/components/ui/chip';
 import type {
   ItineraryDay,
@@ -22,7 +24,6 @@ import { mapDayTint } from '@/lib/maps/map-day-tints';
 import { queryKeys } from '@/lib/query/keys';
 import { cn } from '@/lib/utils';
 
-const NO_ROUTE_LINES: RouteLine[] = [];
 const ALL_DAYS = 'all';
 
 // Held outside the component so the combined answer only changes when one of
@@ -69,7 +70,6 @@ export function ItineraryTripMap({
   const t = useTranslations('itinerary');
   const locale = useLocale();
   const [requestedFocusDayId, setRequestedFocusDayId] = useState<string | null>(null);
-  const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
 
   // Watches the entries the Day view fills; `skipToken` means none of these
   // ever fetches. Either variant names a day's stay, and only the one asked for
@@ -123,16 +123,17 @@ export function ItineraryTripMap({
   const focusDay = focusDayIndex >= 0 ? days[focusDayIndex]! : null;
 
   const routeLines = useMemo(() => {
-    const segments = focusDay ? routesByDayId.get(focusDay.id)?.polylines?.segments : undefined;
-    const lines = segments?.flatMap((segment) =>
-      segment.encodedPolyline
-        ? [{ encodedPolyline: segment.encodedPolyline, mode: segment.mode }]
-        : [],
+    const cached = focusDay ? routesByDayId.get(focusDay.id) : undefined;
+    return buildMapRouteLegs(
+      focusDay,
+      (cached?.polylines ?? cached?.plain)?.segments ?? [],
+      tripMap.points,
+      (cached?.polylines ?? cached?.plain)?.source === 'cache' ||
+        (cached?.polylines ?? cached?.plain)?.stale === true,
     );
-    return lines?.length ? lines : NO_ROUTE_LINES;
-  }, [focusDay, routesByDayId]);
-
-  const clearSelection = useCallback(() => setSelectedPointId(null), []);
+  }, [focusDay, routesByDayId, tripMap.points]);
+  const { selectedPointId, selectedRouteId, setSelectedPointId, selectRoute, clearSelection } =
+    useMapSelection(`${tripId}:${focusDay?.id}:${itineraryDayRouteRevision(focusDay)}`);
 
   const describeSelection = useCallback(
     (point: ItineraryMapPoint) => {
@@ -205,6 +206,8 @@ export function ItineraryTripMap({
         ariaLabel={t('map.tripRegionLabel')}
         describeSelection={describeSelection}
         onClearSelection={clearSelection}
+        selectedRouteId={selectedRouteId}
+        onSelectRoute={selectRoute}
         onSelectPoint={(point) => setSelectedPointId(point.id)}
         onViewItem={onOpenItem}
         onViewPlaceDetails={(point) => onViewPlaceDetails(point, focusDay?.date ?? null)}

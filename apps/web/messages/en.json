@@ -2106,7 +2106,7 @@
       "baseArrivalSelection": "Stay · day starts here",
       "baseDepartureSelection": "Stay · day ends here",
       "baseRoundTripSelection": "Stay · day starts and ends here",
-      "dismissSelection": "Dismiss selected place",
+      "dismissSelection": "Clear map selection",
       "addToDay": "Add to this day",
       "addedToDay": "{name} added to this day.",
       "addToDayError": "That place could not be added to this day.",
@@ -2129,7 +2129,14 @@
       "tripStaySelection": "{count, plural, one {Stay · day {days}} other {Stay · days {days}}}",
       "tripConsideredSelection": "Not on a day yet",
       "openInDay": "Open in day",
-      "unlocatedStops": "{count, plural, one {# stop has no map location, so it isn’t shown.} other {# stops have no map location, so they aren’t shown.}}"
+      "unlocatedStops": "{count, plural, one {# stop has no map location, so it isn’t shown.} other {# stops have no map location, so they aren’t shown.}}",
+      "routesControl": "Routes",
+      "chooseRoute": "Choose a route",
+      "closeRouteChooser": "Close route chooser",
+      "routeEndpoint": "{order}. {name}",
+      "routeDirection": "{origin} → {destination}",
+      "routePathUnavailable": "This path is unavailable. Your itinerary is still available.",
+      "selectedRouteAnnouncement": "Selected route: {origin} → {destination}."
     },
     "routes": {
       "summaryLabel": "Daily travel summary",

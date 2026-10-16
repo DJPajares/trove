@@ -26,3 +26,28 @@ describe('routeLineStyle', () => {
     expect(routeLineStyle('flight')).toEqual(routeLineStyle('drive'));
   });
 });
+
+describe('route emphasis', () => {
+  for (const mode of ['drive', 'walk', 'transit'] as const) {
+    it(`keeps ${mode} patterns and emphasizes without erasing other legs`, () => {
+      const normal = routeLineStyle(mode);
+      const selected = routeLineStyle(mode, 'selected');
+      const muted = routeLineStyle(mode, 'muted');
+      const outline = routeLineStyle(mode, 'selected', true);
+      expect(selected.strokeWeight).toBeGreaterThan(normal.strokeWeight);
+      expect(outline.strokeWeight).toBeGreaterThan(selected.strokeWeight);
+      if (mode === 'drive') {
+        expect(muted.strokeOpacity).toBeGreaterThan(0);
+        expect(muted.strokeOpacity).toBeLessThan(selected.strokeOpacity);
+      } else {
+        expect(selected.strokeOpacity).toBe(0);
+        expect(outline.icons?.[0]?.repeat).toBe(selected.icons?.[0]?.repeat);
+        expect(outline.icons?.[0]?.icon.path).toBe(normal.icons?.[0]?.icon.path);
+        const opacity = (style: typeof normal) =>
+          style.icons?.[0]?.icon.fillOpacity ?? style.icons?.[0]?.icon.strokeOpacity ?? 0;
+        expect(opacity(muted)).toBeGreaterThan(0);
+        expect(opacity(muted)).toBeLessThan(opacity(selected));
+      }
+    });
+  }
+});

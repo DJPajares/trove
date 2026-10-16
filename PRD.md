@@ -1252,6 +1252,8 @@ Tablet/desktop should support synchronized itinerary + map views.
 
 Map and itinerary selection should stay in sync.
 
+Across the planner, a focused day on the trip map, and Trip Mode/Preview, selecting a stop highlights its outgoing travel leg while keeping place actions available. A final stop without an outgoing leg highlights its incoming leg. Selecting a path highlights the complete leg and its endpoint markers, with direction, stop numbers, names, mode and available estimates. Other routes fade while the selected route preserves its travel-mode pattern and gains a contrasting outline. Crossings and shared paths offer an itinerary-ordered route chooser; a Routes control provides keyboard access to every day leg, including unavailable paths. Empty map space, dismissal or Escape clears selection before closing the map. Selection preserves the viewport, reuses loaded evidence and never acquires provider data or rebuilds the map. Day changes and invalidating itinerary edits clear selection. The All days overview remains unchanged.
+
 Trove should initially hand off turn-by-turn navigation to Google Maps / Apple Maps.
 
 Location permission is optional and should only be requested contextually when live location would materially help. Denial/unavailability must not prevent Trip Mode or itinerary use.

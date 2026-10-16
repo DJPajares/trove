@@ -35,22 +35,28 @@ const DASH_PATH = 'M 0,-1 0,1';
  *
  * Colours are left to the caller, which reads them from the theme at draw time.
  */
-export function routeLineStyle(mode: RouteTravelMode): RouteLineStyle {
+export function routeLineStyle(
+  mode: RouteTravelMode,
+  emphasis: 'normal' | 'selected' | 'muted' = 'normal',
+  outline = false,
+): RouteLineStyle {
+  const opacity = emphasis === 'muted' ? 0.2 : emphasis === 'selected' ? 1 : LINE_OPACITY;
+  const weight = (emphasis === 'selected' ? 7 : LINE_WEIGHT) + (outline ? 4 : 0);
   if (mode === 'walk') {
     return {
       icons: [
         {
           icon: {
-            fillOpacity: LINE_OPACITY,
+            fillOpacity: opacity,
             path: DOT_PATH,
-            scale: 2.5,
+            scale: weight / 2,
             strokeOpacity: 0,
           },
           repeat: '12px',
         },
       ],
       strokeOpacity: 0,
-      strokeWeight: LINE_WEIGHT,
+      strokeWeight: weight,
     };
   }
 
@@ -60,17 +66,17 @@ export function routeLineStyle(mode: RouteTravelMode): RouteLineStyle {
         {
           icon: {
             path: DASH_PATH,
-            scale: 3,
-            strokeOpacity: LINE_OPACITY,
-            strokeWeight: LINE_WEIGHT,
+            scale: emphasis === 'selected' ? 4 : 3,
+            strokeOpacity: opacity,
+            strokeWeight: weight,
           },
           repeat: '18px',
         },
       ],
       strokeOpacity: 0,
-      strokeWeight: LINE_WEIGHT,
+      strokeWeight: weight,
     };
   }
 
-  return { strokeOpacity: LINE_OPACITY, strokeWeight: LINE_WEIGHT };
+  return { strokeOpacity: opacity, strokeWeight: weight };
 }

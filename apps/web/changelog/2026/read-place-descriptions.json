@@ -1,0 +1,11 @@
+{
+  "id": "read-place-descriptions",
+  "date": "2026-10-16",
+  "version": "1.7.0",
+  "summaries": {
+    "en": [
+      "Expand long stop descriptions without leaving your itinerary, then collapse them to keep your plan easy to scan.",
+      "Opening-hours summaries are clearer, without extra checked-date labels."
+    ]
+  }
+}

@@ -15,8 +15,8 @@ export type SignalsTranslator = (key: string, values?: Record<string, number | s
 const METRES_PER_MILE = 1609.344;
 const FEET_PER_METRE = 3.28084;
 
-/** A place's hours on a day, split so a row can set their age quieter than the hours themselves. */
-export type HoursParts = { checked: string; closed: boolean; label: string };
+/** A place's hours on a day, with a separate closed state for warning styles. */
+export type HoursParts = { closed: boolean; label: string };
 
 /** A rating split into the number, its review count, and the full sentence for assistive tech. */
 export type RatingParts = { count: string | null; label: string; value: string };
@@ -34,23 +34,17 @@ export function describeHours(
   options: { hour12: boolean; locale: string; t: SignalsTranslator },
 ): string | null {
   const parts = describeHoursParts(status, options);
-  return parts ? `${parts.label} · ${parts.checked}` : null;
+  return parts?.label ?? null;
 }
 
-/** The same as `describeHours`, with the hours and the date they were checked kept apart. */
+/** The same as `describeHours`, with a closed state for warning styles. */
 export function describeHoursParts(
   status: PlaceHoursStatus | undefined,
   options: { hour12: boolean; locale: string; t: SignalsTranslator },
 ): HoursParts | null {
   if (!status) return null;
   const { hour12, locale, t } = options;
-  const checked = t('checked', {
-    date: new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(
-      new Date(status.asOf),
-    ),
-  });
-
-  if (status.status === 'closed') return { checked, closed: true, label: t('closed') };
+  if (status.status === 'closed') return { closed: true, label: t('closed') };
 
   const allDay =
     status.spans.length === 1 &&
@@ -68,7 +62,7 @@ export function describeHoursParts(
     ? t('allDay')
     : t(status.special ? 'specialHours' : 'openHours', { times: times ?? '' });
 
-  return { checked, closed: false, label };
+  return { closed: false, label };
 }
 
 /** "4.5 on Google (1.2K reviews)": the source is named because the number is theirs. */

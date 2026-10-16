@@ -16,6 +16,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
+import { ExpandableDescription } from '@/components/expandable-description';
 import { ItineraryRouteSummary } from '@/components/itinerary-route-details';
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
@@ -716,9 +717,12 @@ export function TripModeMapView({
                             </p>
                           ) : null}
                           {item.notes || item.tripPlace?.note ? (
-                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-subtle">
-                              {item.notes ?? item.tripPlace?.note}
-                            </p>
+                            <ExpandableDescription
+                              className="mt-1 text-xs leading-5 text-text-subtle"
+                              lines={2}
+                              name={itemName(item)}
+                              text={item.notes || item.tripPlace?.note || ''}
+                            />
                           ) : null}
                           <div className="mt-2 flex flex-wrap gap-1">
                             {point ? (

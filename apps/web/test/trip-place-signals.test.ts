@@ -17,7 +17,7 @@ const asOf = '2026-09-28T00:00:00.000Z';
 test('hours say when the place is open, that it is closed, or nothing at all', () => {
   const options = { hour12: false, locale: 'en', t };
   expect(describeHours(undefined, options)).toBeNull();
-  expect(describeHours({ asOf, status: 'closed' }, options)).toMatch(/^closed · checked:/);
+  expect(describeHours({ asOf, status: 'closed' }, options)).toBe('closed');
   expect(
     describeHours(
       { asOf, special: false, spans: [{ close: '17:00', open: '09:00' }], status: 'open' },
@@ -35,10 +35,10 @@ test('hours say when the place is open, that it is closed, or nothing at all', (
       { asOf, special: false, spans: [{ close: '24:00', open: '00:00' }], status: 'open' },
       options,
     ),
-  ).toMatch(/^allDay · checked:/);
+  ).toBe('allDay');
 });
 
-test('hours keep the date they were checked apart, so a row can set it quieter', () => {
+test('hours expose only the useful label and closed state, without a checked-date label', () => {
   const options = { hour12: false, locale: 'en', t };
   expect(describeHoursParts(undefined, options)).toBeNull();
   expect(describeHoursParts({ asOf, status: 'closed' }, options)).toMatchObject({
@@ -49,8 +49,7 @@ test('hours keep the date they were checked apart, so a row can set it quieter',
     { asOf, special: false, spans: [{ close: '17:00', open: '09:00' }], status: 'open' },
     options,
   );
-  expect(open).toMatchObject({ closed: false, label: 'openHours:{"times":"09:00 – 17:00"}' });
-  expect(open?.checked).toMatch(/^checked:/);
+  expect(open).toStrictEqual({ closed: false, label: 'openHours:{"times":"09:00 – 17:00"}' });
 });
 
 test('a rating splits into its number, a compact count, and a sentence to read aloud', () => {

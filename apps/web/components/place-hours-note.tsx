@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 
 /**
  * One quiet line saying whether a place is open on the day it is planned for,
- * from hours Trove already has stored, with the date they were checked. Shows
+ * from hours Trove already has stored. Shows
  * nothing when the hours are not known: no guess is better than a wrong "open".
  * A closed day is the one thing worth raising its voice for.
  */

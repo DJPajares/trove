@@ -432,7 +432,6 @@ export function TripPlacesPanel({
                       'truncate',
                       context.tone === 'warning' && 'font-medium text-status-warning',
                     )}
-                    title={facts.hours?.checked}
                   >
                     {context.parts.map((part, index) => (
                       <span

@@ -13,8 +13,10 @@ import {
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
+import { buildMapRouteLegs } from '@/lib/maps/map-route-selection';
+import { useMapSelection } from '@/hooks/use-map-selection';
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { ExpandableDescription } from '@/components/expandable-description';
 import { ItineraryRouteSummary } from '@/components/itinerary-route-details';
@@ -42,6 +44,7 @@ import { formatTravelDuration } from '@/lib/itinerary/route-format';
 import { haversineMeters } from '@/lib/maps/haversine';
 import {
   buildItineraryMapPoints,
+  dailyBasePoints,
   type ItineraryMapLocation,
   type ItineraryMapPoint,
 } from '@/lib/maps/itinerary-map';
@@ -91,13 +94,13 @@ export function TripModeMapView({
   const { isPreview, withPreviewHref } = useTripModePreview();
   const { context, itinerary, refresh, status } = useTripModeData();
   const { openPlaceDetails } = useTripModePlaceDetails();
-  const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
+  const [mapControlsContainer, setMapControlsContainer] = useState<HTMLDivElement | null>(null);
+  const [mapControlsExpanded, setMapControlsExpanded] = useState(false);
   const {
     position: deviceLocation,
     request: requestLocation,
     status: locationStatus,
   } = useTravellerPosition({ enabled: !isPreview && active });
-  const clearMapSelection = useCallback(() => setSelectedPointId(null), []);
   // Ticks only while the view is on screen and the clock is real.
   const now = useNowTick(!isPreview && active);
 
@@ -110,6 +113,13 @@ export function TripModeMapView({
   // Keyed on the day's ordering, not just its identity, so a reorder made in the
   // planner invalidates the legs this view is showing.
   const routeRevision = itineraryDayRouteRevision(day);
+  const {
+    selectedPointId,
+    selectedRouteId,
+    setSelectedPointId,
+    selectRoute,
+    clearSelection: clearMapSelection,
+  } = useMapSelection(`${tripId}:${day?.id}:${routeRevision}`);
 
   const routesQuery = useQuery({
     enabled: Boolean(day && online && active),
@@ -203,8 +213,9 @@ export function TripModeMapView({
   // function from the same inputs, so a pin and a stop can never disagree about
   // which stop they are. Without the offset the map restarted at 1 on any day
   // whose base had already taken first place.
+  const dailyBases = resolveDailyBases({ day, routeSegments: routeState.data?.segments });
   const stopNumbers = dayStopNumbers({
-    bases: resolveDailyBases({ day }),
+    bases: dailyBases,
     itemCount: day.items.length,
   });
   const allMapPoints = buildItineraryMapPoints({
@@ -217,13 +228,14 @@ export function TripModeMapView({
   });
   const scheduledPoints = allMapPoints.filter((point) => point.kind === 'scheduled');
   const baseTripPlaceId =
-    day.dailyBaseTripPlaceId ??
+    dailyBases.arrivalTripPlaceId ??
+    dailyBases.departureTripPlaceId ??
     (day.defaultTimeZoneSource === 'accommodation' ? day.defaultTimeZoneSourceTripPlaceId : null);
   const baseTripPlace = baseTripPlaceId
     ? (itinerary.tripPlaces.find((tripPlace) => tripPlace.id === baseTripPlaceId) ?? null)
     : null;
   const baseLocation = baseTripPlace ? placeLocation(baseTripPlace) : null;
-  const basePoint: ItineraryMapPoint | null =
+  const fallbackBasePoint: ItineraryMapPoint | null =
     baseTripPlace && baseLocation && !scheduledPoints.some((point) => point.id === baseTripPlace.id)
       ? {
           id: `base:${baseTripPlace.id}`,
@@ -236,13 +248,33 @@ export function TripModeMapView({
           tripPlaceId: baseTripPlace.id,
         }
       : null;
+  const resolvedBasePoints = dailyBasePoints({
+    bases: dailyBases,
+    numbers: stopNumbers,
+    resolvePlaceLocation: placeLocation,
+    resolvePlaceName: placeName,
+    scheduledTripPlaceIds: new Set(scheduledPoints.map((point) => point.tripPlaceId)),
+    tripPlaces: itinerary.tripPlaces,
+  });
+  const basePoints = resolvedBasePoints.length
+    ? resolvedBasePoints
+    : fallbackBasePoint
+      ? [fallbackBasePoint]
+      : [];
+  const basePoint = basePoints[0] ?? null;
+  const basePlaceIds = new Set(basePoints.map((point) => point.tripPlaceId));
   const nearbyAnchors: ItineraryMapLocation[] = [
     ...scheduledPoints,
-    ...(baseLocation ? [baseLocation] : []),
+    ...basePoints,
     ...(deviceLocation ? [deviceLocation] : []),
   ];
   const nearbyPoints = allMapPoints
-    .filter((point) => point.kind === 'considered' && nearbyAnchors.length > 0)
+    .filter(
+      (point) =>
+        point.kind === 'considered' &&
+        !basePlaceIds.has(point.tripPlaceId) &&
+        nearbyAnchors.length > 0,
+    )
     .map((point) => ({
       distance: Math.min(...nearbyAnchors.map((anchor) => haversineMeters(point, anchor))),
       point,
@@ -251,13 +283,13 @@ export function TripModeMapView({
     .sort((a, b) => a.distance - b.distance)
     .slice(0, NEARBY_PLACE_LIMIT)
     .map(({ point }) => point);
-  const mapPoints = [...scheduledPoints, ...(basePoint ? [basePoint] : []), ...nearbyPoints];
-  const routeLines =
-    routeState.data?.segments.flatMap((segment) =>
-      segment.encodedPolyline
-        ? [{ encodedPolyline: segment.encodedPolyline, mode: segment.mode }]
-        : [],
-    ) ?? [];
+  const mapPoints = [...scheduledPoints, ...basePoints, ...nearbyPoints];
+  const routeLines = buildMapRouteLegs(
+    day,
+    routeState.data?.segments ?? [],
+    mapPoints,
+    routeState.data?.source === 'cache' || routeState.data?.stale === true,
+  );
   const routeSummaryData: ItineraryDayRoutes = routeState.data ?? {
     generatedAt: context.contextAt,
     segments: [],
@@ -350,6 +382,10 @@ export function TripModeMapView({
               ariaLabel={t('interactiveMapLabel')}
               className="h-full lg:h-auto"
               currentLocation={deviceLocation}
+              controlsContainer={mapControlsContainer}
+              onControlsExpandedChange={setMapControlsExpanded}
+              selectedRouteId={selectedRouteId}
+              onSelectRoute={selectRoute}
               onClearSelection={clearMapSelection}
               onSelectPoint={(point) => setSelectedPointId(point.id)}
               onViewItem={(itemId) =>
@@ -454,10 +490,11 @@ export function TripModeMapView({
         <TripModeMapSheet
           peek={
             <>
+              <div ref={setMapControlsContainer} />
               {/* On a phone the route summary rides on the map, so the peek can
                   hold the next move - the thing a map in Trip Mode is opened
                   to act on - and every stop of the day a tap away. */}
-              {nextItem ? (
+              {!mapControlsExpanded && nextItem ? (
                 <div className="flex items-center gap-3 py-1.5 lg:hidden">
                   <span className="grid size-8 shrink-0 place-items-center rounded-full bg-accent-strong text-sm font-semibold text-primary-foreground tabular-nums">
                     <span className="sr-only">
@@ -506,7 +543,7 @@ export function TripModeMapView({
                   ) : null}
                 </div>
               ) : null}
-              {day.items.length ? (
+              {!mapControlsExpanded && day.items.length ? (
                 <ul
                   aria-label={t('todayItinerary')}
                   className="interaction-scrollbar -mx-[var(--gutter-inline-start)] flex gap-2 overflow-x-auto px-[var(--gutter-inline-start)] pt-1 pb-2 lg:hidden"

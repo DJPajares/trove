@@ -23,6 +23,9 @@ import { ItineraryPlaceGroups } from '@/components/itinerary-place-groups';
 import { ItineraryBetterOrder } from '@/components/itinerary-better-order';
 import { ItineraryDayTimeSuggestions } from '@/components/itinerary-day-time-suggestions';
 import { PageState } from '@/components/page-state';
+import { buildMapRouteLegs } from '@/lib/maps/map-route-selection';
+import { useMapSelection } from '@/hooks/use-map-selection';
+
 import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
 import { ItineraryTripMap } from '@/components/itinerary-trip-map';
 import { useRegisterTripPlacesDay, useTripPlacesDrawer } from '@/components/trip-places-provider';
@@ -353,7 +356,6 @@ export function ItineraryManager({
   // A phone shows the day's map in place of the day only once it is asked for.
   const [phoneMapOpen, setPhoneMapOpen] = useState(false);
   const [planningMapMounted, setPlanningMapMounted] = useState(false);
-  const [selectedMapPointId, setSelectedMapPointId] = useState<string | null>(null);
   const [selectedMapItemId, setSelectedMapItemId] = useState<string | null>(null);
   const [savingRouteOwner, setSavingRouteOwner] = useState<string | null>(null);
   const { openPlaces } = useTripPlacesDrawer();
@@ -512,6 +514,14 @@ export function ItineraryManager({
   const effectiveDayMoveStrategy =
     dayMoveTarget && !dayMoveTarget.items.length ? 'append' : dayMoveStrategy;
   const routeRevision = itineraryDayRouteRevision(selectedDay);
+  const {
+    selectedPointId: selectedMapPointId,
+    selectedRouteId,
+    setSelectedPointId: setSelectedMapPointId,
+    selectRoute,
+    clearSelection: clearRouteSelection,
+  } = useMapSelection(`${tripId}:${selectedDayId}:${routeRevision}`);
+
   const includeRoutePolylines = planningMapVisible;
   /**
    * A day's legs, keyed by the ordering they were computed for.
@@ -573,15 +583,6 @@ export function ItineraryManager({
         : routesQuery.error
           ? 'error'
           : 'idle';
-  const routeLines = useMemo(
-    () =>
-      routes?.segments.flatMap((segment) =>
-        segment.encodedPolyline
-          ? [{ encodedPolyline: segment.encodedPolyline, mode: segment.mode }]
-          : [],
-      ) ?? [],
-    [routes],
-  );
 
   const selectedIndex = itinerary?.days.findIndex((day) => day.id === selectedDayId) ?? -1;
   // Shown in the Places drawer so nothing gets added to a day twice unnoticed.
@@ -817,6 +818,17 @@ export function ItineraryManager({
     ];
   }, [activeView, dailyBases, itinerary, placeUse, selectedDay, selectedIndex, stopNumbers, t]);
 
+  const routeLines = useMemo(
+    () =>
+      buildMapRouteLegs(
+        selectedDay,
+        routes?.segments ?? [],
+        mapPoints,
+        routes?.source === 'cache' || routes?.stale === true,
+      ),
+    [selectedDay, routes, mapPoints],
+  );
+
   // Where the day already goes (its stops and base), for "nearest to this day".
   const dayAnchors = useMemo(
     () => mapPoints.filter((point) => point.kind !== 'considered'),
@@ -902,7 +914,7 @@ export function ItineraryManager({
   useEffect(() => {
     setSelectedMapPointId(null);
     setSelectedMapItemId(null);
-  }, [selectedDayId]);
+  }, [selectedDayId, routeRevision]);
 
   // Lands on the stop opened from the trip's map, picked out on its day's list
   // and its day's map. Declared after the effect above, which clears the
@@ -923,9 +935,9 @@ export function ItineraryManager({
   }, [activeView, pendingDayItemId, selectedDay]);
 
   const clearMapSelection = useCallback(() => {
-    setSelectedMapPointId(null);
+    clearRouteSelection();
     setSelectedMapItemId(null);
-  }, []);
+  }, [clearRouteSelection]);
 
   function scrollToItem(itemId: string, focus = false) {
     window.requestAnimationFrame(() => {
@@ -1612,6 +1624,13 @@ export function ItineraryManager({
                   className="h-full min-h-0 lg:min-h-0"
                   onAddToDay={(point) => addTripPlaceToSelectedDay(point.tripPlaceId)}
                   onClearSelection={clearMapSelection}
+                  selectedRouteId={selectedRouteId}
+                  onSelectRoute={(leg) => {
+                    selectRoute(leg);
+                    const itemId = leg.origin.kind === 'itinerary_item' ? leg.origin.id : null;
+                    setSelectedMapItemId(itemId);
+                    if (desktopMapLayout && itemId) scrollToItem(itemId);
+                  }}
                   onSelectPoint={handleMapPointSelection}
                   onViewItem={viewMapItem}
                   onViewPlaceDetails={(point) => {

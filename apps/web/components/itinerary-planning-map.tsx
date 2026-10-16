@@ -1,23 +1,28 @@
 'use client';
 
-import { CalendarPlus, Eye, X } from 'lucide-react';
+import { CalendarPlus, Eye, Route, X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useTheme } from 'next-themes';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+
+import { createPortal } from 'react-dom';
+
+import { MapRouteChooser, MapRouteSummary } from '@/components/map-route-controls';
+import {
+  hitTestMapRoutes,
+  mapRoutePath,
+  routeForMapPoint,
+  type MapRouteLeg,
+} from '@/lib/maps/map-route-selection';
 
 import { PageState } from '@/components/page-state';
-import type { RouteTravelMode } from '@/lib/itinerary/api';
 import { Button } from '@/components/ui/button';
 import {
   getGoogleMapsMapId,
   hasGoogleMapsConfiguration,
   loadGoogleMaps,
 } from '@/lib/maps/google-maps';
-import {
-  decodeGooglePolyline,
-  type ItineraryMapPoint,
-  viewportPoints,
-} from '@/lib/maps/itinerary-map';
+import { type ItineraryMapPoint, viewportPoints } from '@/lib/maps/itinerary-map';
 import { mapDayTint } from '@/lib/maps/map-day-tints';
 import { retainWhileSuspended } from '@/lib/maps/map-retention';
 import { routeLineStyle } from '@/lib/maps/route-line-style';
@@ -33,6 +38,11 @@ type ItineraryPlanningMapProps = {
    * scrolling column.
    */
   className?: string;
+  /** Trip Mode carries controls in its day sheet, above the map. */
+  controlsContainer?: HTMLElement | null;
+  onControlsExpandedChange?: (expanded: boolean) => void;
+  selectedRouteId?: string | null;
+  onSelectRoute?: (leg: MapRouteLeg) => void;
   currentLocation?: {
     accuracyMeters: number | null;
     latitude: number;
@@ -59,17 +69,12 @@ type ItineraryPlanningMapProps = {
   onViewPlaceDetails?: (point: ItineraryMapPoint) => void;
   points: ItineraryMapPoint[];
   /** A day's travel legs, each drawn in the style of the mode it is taken in. */
-  routeLines: RouteLine[];
+  routeLines: MapRouteLeg[];
   selectedPointId: string | null;
   /** Keeps a retained, hidden map from updating its viewport until it is visible again. */
   suspendUpdates?: boolean;
   /** What "View item" is called where viewing it means going somewhere else. */
   viewItemLabel?: string;
-};
-
-export type RouteLine = {
-  encodedPolyline: string;
-  mode: RouteTravelMode;
 };
 
 type LoadedGoogleMaps = Awaited<ReturnType<typeof loadGoogleMaps>>;
@@ -78,11 +83,19 @@ type GoogleAdvancedMarkerInstance = InstanceType<
   LoadedGoogleMaps['marker']['AdvancedMarkerElement']
 >;
 type GooglePolylineInstance = InstanceType<LoadedGoogleMaps['maps']['Polyline']>;
+type GoogleOverlayInstance = InstanceType<LoadedGoogleMaps['maps']['OverlayView']>;
+type GooglePolylineOptions = NonNullable<
+  ConstructorParameters<LoadedGoogleMaps['maps']['Polyline']>[0]
+>;
+type GoogleMapMouseEvent = {
+  latLng: { lat: () => number; lng: () => number } | null;
+  domEvent: Event;
+};
 
 function markerContent(point: ItineraryMapPoint) {
   const element = document.createElement('span');
   element.className = cn(
-    'grid place-items-center border-2 font-semibold shadow-[var(--shadow-control)] transition-[transform,box-shadow] duration-[var(--motion-fast)]',
+    'grid place-items-center border-2 font-semibold shadow-[var(--shadow-control)] transition-[transform,box-shadow] duration-[var(--motion-fast)] motion-reduce:transition-none',
     point.kind === 'scheduled'
       ? cn(
           'size-9 rounded-full border-background text-xs',
@@ -130,6 +143,10 @@ function currentLocationContent() {
 export function ItineraryPlanningMap({
   ariaLabel,
   className,
+  controlsContainer,
+  onControlsExpandedChange,
+  selectedRouteId = null,
+  onSelectRoute,
   currentLocation: liveCurrentLocation = null,
   describeSelection,
   onAddToDay,
@@ -144,13 +161,25 @@ export function ItineraryPlanningMap({
   viewItemLabel,
 }: Readonly<ItineraryPlanningMapProps>) {
   const t = useTranslations('itinerary.map');
+  const routeT = useTranslations('itinerary.routes');
   const locale = useLocale();
   const { resolvedTheme } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<GoogleMapInstance | null>(null);
   const markerRefs = useRef(new Map<string, GoogleAdvancedMarkerInstance>());
   const currentLocationMarkerRef = useRef<GoogleAdvancedMarkerInstance | null>(null);
-  const polylineRefs = useRef<GooglePolylineInstance[]>([]);
+  const polylineRefs = useRef<
+    { id: string; line: GooglePolylineInstance; outline: GooglePolylineInstance }[]
+  >([]);
+  const projectRef = useRef<
+    ((point: { latitude: number; longitude: number }) => { x: number; y: number } | null) | null
+  >(null);
+  const overlayRef = useRef<GoogleOverlayInstance | null>(null);
+  const clickRef = useRef<(event: GoogleMapMouseEvent) => void>(() => {});
+  const [chooserIds, setChooserIds] = useState<string[] | null>(null);
+  const chooserId = useId();
+  const controlsRef = useRef<HTMLDivElement>(null);
+  const routesButtonRef = useRef<HTMLButtonElement>(null);
   // While hidden the map keeps working from what it last showed. Its opening
   // point and its empty state both come from these, and a hidden map whose day
   // emptied would otherwise rebuild itself - a second billed load - on return.
@@ -210,6 +239,138 @@ export function ItineraryPlanningMap({
     [points, selectedPointId],
   );
 
+  const selectedRoute = useMemo(
+    () =>
+      selectedRouteId
+        ? (routeLines.find((leg) => leg.id === selectedRouteId) ?? null)
+        : routeForMapPoint(selectedPoint, routeLines),
+    [routeLines, selectedPoint, selectedRouteId],
+  );
+  // A shared pin keeps its first visit's identity on the map. An explicitly
+  // chosen leg's card must describe that leg's actual occurrence instead.
+  const cardPoint =
+    selectedPoint && selectedRouteId && selectedRoute
+      ? {
+          ...selectedPoint,
+          name: selectedRoute.origin.label ?? selectedPoint.name,
+          order: selectedRoute.origin.order,
+          itemId: selectedRoute.origin.kind === 'itinerary_item' ? selectedRoute.origin.id : null,
+        }
+      : selectedPoint;
+  const controlsExpanded = Boolean(selectedPoint || selectedRoute || chooserIds);
+  useEffect(() => {
+    onControlsExpandedChange?.(controlsExpanded && !suspendUpdates);
+    return () => onControlsExpandedChange?.(false);
+  }, [controlsExpanded, onControlsExpandedChange, suspendUpdates]);
+
+  const actionItemId =
+    selectedRouteId && selectedRoute
+      ? selectedRoute.origin.kind === 'itinerary_item'
+        ? selectedRoute.origin.id
+        : null
+      : selectedPoint?.itemId;
+  const routePaths = useMemo(
+    () =>
+      routeLines
+        .map((leg) => ({ id: leg.id, mode: leg.mode, path: mapRoutePath(leg) }))
+        .filter(({ path }) => path.length > 1),
+    [routeLines],
+  );
+  const selectedRouteRef = useRef(selectedRoute);
+  selectedRouteRef.current = selectedRoute;
+  function clearSelection() {
+    const restoreFocus = controlsRef.current?.contains(document.activeElement);
+    setChooserIds(null);
+    onClearSelection();
+    if (restoreFocus)
+      requestAnimationFrame(() => {
+        const marker = selectedPointId ? markerRefs.current.get(selectedPointId) : null;
+        (marker ?? routesButtonRef.current)?.focus({ preventScroll: true });
+      });
+  }
+  function selectRoute(leg: MapRouteLeg) {
+    setChooserIds(null);
+    onSelectRoute?.(leg);
+    // A route button in the chooser disappears; keep keyboard focus on the
+    // resulting card instead of dropping it to the document body.
+    requestAnimationFrame(() =>
+      controlsRef.current
+        ?.querySelector<HTMLButtonElement>('[data-dismiss-map-selection]')
+        ?.focus({ preventScroll: true }),
+    );
+  }
+  clickRef.current = (event) => {
+    if (!event.latLng || !projectRef.current) return;
+    const point = projectRef.current({
+      latitude: event.latLng.lat(),
+      longitude: event.latLng.lng(),
+    });
+    if (!point) return;
+    const touch =
+      ('pointerType' in event.domEvent && event.domEvent.pointerType === 'touch') ||
+      'changedTouches' in event.domEvent ||
+      ('sourceCapabilities' in event.domEvent &&
+        (event.domEvent.sourceCapabilities as { firesTouchEvents?: boolean } | null)
+          ?.firesTouchEvents);
+    const candidates = hitTestMapRoutes(
+      point,
+      routePaths.map(({ id, path }) => ({
+        id,
+        path: path.flatMap((location) => {
+          const projected = projectRef.current?.(location);
+          return projected ? [projected] : [];
+        }),
+      })),
+      touch ? 20 : 12,
+    );
+    if (candidates.length > 1) setChooserIds(candidates);
+    else if (candidates.length === 1) {
+      const leg = routeLines.find((line) => line.id === candidates[0]);
+      if (leg) selectRoute(leg);
+    } else clearSelection();
+  };
+
+  useEffect(() => {
+    if (!suspendUpdates && selectedRouteId && !routeLines.some((leg) => leg.id === selectedRouteId))
+      onClearSelectionRef.current();
+  }, [routeLines, selectedRouteId, suspendUpdates]);
+
+  useEffect(() => {
+    if (!chooserIds) return;
+    controlsRef.current
+      ?.querySelector<HTMLButtonElement>('[data-route-chooser] [aria-pressed]')
+      ?.focus({ preventScroll: true });
+  }, [chooserIds]);
+
+  const routeIdentity = JSON.stringify(
+    routeLines.map((leg) => [leg.id, leg.mode, leg.encodedPolyline]),
+  );
+  useEffect(() => {
+    setChooserIds(null);
+  }, [routeIdentity, selectedPointId]);
+
+  useEffect(() => {
+    if (suspendUpdates || (!selectedPoint && !selectedRoute && !chooserIds)) return;
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      // Place details and other open popups own their own dismissal key.
+      if (
+        event.target instanceof Element &&
+        event.target.closest(
+          '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]',
+        )
+      )
+        return;
+      event.preventDefault();
+      event.stopPropagation();
+      setChooserIds(null);
+      onClearSelectionRef.current();
+      routesButtonRef.current?.focus({ preventScroll: true });
+    };
+    window.addEventListener('keydown', escape, true);
+    return () => window.removeEventListener('keydown', escape, true);
+  }, [chooserIds, selectedPoint, selectedRoute, suspendUpdates]);
+
   useEffect(() => {
     onClearSelectionRef.current = onClearSelection;
   }, [onClearSelection]);
@@ -250,7 +411,7 @@ export function ItineraryPlanningMap({
     let active = true;
     setStatus('loading');
     void loadGoogleMaps(locale)
-      .then(({ maps }) => {
+      .then(({ core, maps }) => {
         if (!active || !containerRef.current) return;
         const map = new maps.Map(containerRef.current, {
           center: { lat: openingPoint.latitude, lng: openingPoint.longitude },
@@ -263,7 +424,17 @@ export function ItineraryPlanningMap({
           streetViewControl: false,
           zoom: 13,
         });
-        map.addListener('click', () => onClearSelectionRef.current());
+        const overlay = new maps.OverlayView();
+        overlay.onAdd = () => {};
+        overlay.draw = () => {};
+        overlay.onRemove = () => {};
+        overlay.setMap(map);
+        overlayRef.current = overlay;
+        projectRef.current = (point) =>
+          overlay
+            .getProjection()
+            ?.fromLatLngToContainerPixel(new core.LatLng(point.latitude, point.longitude)) ?? null;
+        map.addListener('click', (event: GoogleMapMouseEvent) => clickRef.current(event));
         mapRef.current = map;
         setStatus('ready');
       })
@@ -276,11 +447,19 @@ export function ItineraryPlanningMap({
       markerRefs.current.clear();
       if (currentLocationMarkerRef.current) currentLocationMarkerRef.current.map = null;
       currentLocationMarkerRef.current = null;
-      polylineRefs.current.forEach((polyline) => polyline.setMap(null));
+      polylineRefs.current.forEach(({ line, outline }) => {
+        line.setMap(null);
+        outline.setMap(null);
+      });
       polylineRefs.current = [];
+      overlayRef.current?.setMap(null);
+      overlayRef.current = null;
+      projectRef.current = null;
       mapRef.current = null;
     };
   }, [hasInitialPoint, hasResolvedTheme, locale]);
+
+  const mapContentKey = JSON.stringify({ currentLocation, points, routePaths });
 
   useEffect(() => {
     if (suspendUpdates || status !== 'ready' || !mapRef.current) return;
@@ -294,7 +473,10 @@ export function ItineraryPlanningMap({
         markerRefs.current.clear();
         if (currentLocationMarkerRef.current) currentLocationMarkerRef.current.map = null;
         currentLocationMarkerRef.current = null;
-        polylineRefs.current.forEach((polyline) => polyline.setMap(null));
+        polylineRefs.current.forEach(({ line, outline }) => {
+          line.setMap(null);
+          outline.setMap(null);
+        });
         polylineRefs.current = [];
 
         const bounds = new core.LatLngBounds();
@@ -302,7 +484,10 @@ export function ItineraryPlanningMap({
         const framing = new Set(viewportPoints(points).map((point) => point.id));
         points.forEach((point) => {
           const content = markerContent(point);
-          const selected = selectedPointIdRef.current === point.id;
+          const selected =
+            selectedPointIdRef.current === point.id ||
+            selectedRouteRef.current?.origin.pointId === point.id ||
+            selectedRouteRef.current?.destination.pointId === point.id;
           content.dataset.selected = String(selected);
           const advancedMarker = new marker.AdvancedMarkerElement({
             gmpClickable: true,
@@ -330,6 +515,7 @@ export function ItineraryPlanningMap({
           });
           advancedMarker.append(content);
           advancedMarker.addEventListener('gmp-click', () => {
+            setChooserIds(null);
             if (selectedPointIdRef.current === point.id) onClearSelectionRef.current();
             else onSelectPointRef.current(point);
           });
@@ -337,30 +523,37 @@ export function ItineraryPlanningMap({
           if (framing.has(point.id)) bounds.extend({ lat: point.latitude, lng: point.longitude });
         });
 
-        const routePaths = routeLines
-          .map((line) => ({ mode: line.mode, path: decodeGooglePolyline(line.encodedPolyline) }))
-          .filter(({ path }) => path.length > 1);
         const routeColor = getComputedStyle(document.documentElement)
           .getPropertyValue('--primary')
           .trim();
-        polylineRefs.current = routePaths.map(({ mode, path }) => {
-          const { icons, ...stroke } = routeLineStyle(mode);
-          return new maps.Polyline({
-            clickable: false,
-            map: mapRef.current,
-            path: path.map((point) => ({ lat: point.latitude, lng: point.longitude })),
-            strokeColor: routeColor,
-            ...stroke,
-            ...(icons
-              ? {
-                  icons: icons.map(({ icon, repeat }) => ({
-                    icon: { fillColor: routeColor, strokeColor: routeColor, ...icon },
-                    repeat,
-                  })),
-                }
-              : {}),
-            zIndex: 2,
-          });
+        const outlineColor = getComputedStyle(document.documentElement)
+          .getPropertyValue('--background')
+          .trim();
+        const activeId = selectedRouteRef.current?.id;
+        polylineRefs.current = routePaths.map(({ id, mode, path }) => {
+          const emphasis = id === activeId ? 'selected' : activeId ? 'muted' : 'normal';
+          const options = (outline: boolean): GooglePolylineOptions => {
+            const color = outline ? outlineColor : routeColor;
+            const { icons, ...stroke } = routeLineStyle(mode, emphasis, outline);
+            return {
+              clickable: false,
+              map: mapRef.current,
+              path: path.map((point) => ({ lat: point.latitude, lng: point.longitude })),
+              strokeColor: color,
+              ...stroke,
+              icons: icons?.map(({ icon, repeat }) => ({
+                icon: { fillColor: color, strokeColor: color, ...icon },
+                repeat,
+              })),
+              visible: !outline || id === activeId,
+              zIndex: id === activeId ? (outline ? 3 : 4) : 2,
+            };
+          };
+          return {
+            id,
+            line: new maps.Polyline(options(false)),
+            outline: new maps.Polyline(options(true)),
+          };
         });
         routePaths
           .flatMap(({ path }) => path)
@@ -392,16 +585,242 @@ export function ItineraryPlanningMap({
     return () => {
       active = false;
     };
-  }, [currentLocation, locale, points, routeLines, status, suspendUpdates, t]);
+    // The content key compares values: callers may rebuild arrays during a
+    // selection-only render, which must never refit the traveller's viewport.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locale, mapContentKey, status, suspendUpdates, t]);
 
   useEffect(() => {
     if (suspendUpdates) return;
     markerRefs.current.forEach((marker, id) => {
       const content = marker.firstElementChild as HTMLElement | null;
-      if (content) content.dataset.selected = String(id === selectedPointId);
-      marker.zIndex = id === selectedPointId ? 100 : null;
+      const endpoint =
+        id === selectedRoute?.origin.pointId || id === selectedRoute?.destination.pointId;
+      if (content) content.dataset.selected = String(id === selectedPointId || endpoint);
+      marker.zIndex = id === selectedPointId || endpoint ? 100 : null;
     });
-  }, [selectedPointId, suspendUpdates]);
+    polylineRefs.current.forEach(({ id, line, outline }) => {
+      const leg = routeLines.find((candidate) => candidate.id === id);
+      if (!leg) return;
+      const emphasis = id === selectedRoute?.id ? 'selected' : selectedRoute ? 'muted' : 'normal';
+      for (const [polyline, isOutline] of [
+        [line, false],
+        [outline, true],
+      ] as const) {
+        const color = getComputedStyle(document.documentElement)
+          .getPropertyValue(isOutline ? '--background' : '--primary')
+          .trim();
+        const { icons, ...stroke } = routeLineStyle(leg.mode, emphasis, isOutline);
+        polyline.setOptions({
+          ...stroke,
+          strokeColor: color,
+          icons:
+            icons?.map(({ icon, repeat }) => ({
+              icon: { fillColor: color, strokeColor: color, ...icon },
+              repeat,
+            })) ?? [],
+          visible: !isOutline || id === selectedRoute?.id,
+          zIndex: id === selectedRoute?.id ? (isOutline ? 3 : 4) : 2,
+        });
+      }
+    });
+  }, [routeLines, selectedPointId, selectedRoute, status, suspendUpdates]);
+
+  const controls = (
+    <div ref={controlsRef}>
+      <span aria-atomic="true" aria-live="polite" className="sr-only" role="status">
+        {selectedRoute
+          ? t('selectedRouteAnnouncement', {
+              origin: selectedRoute.origin.label ?? routeT(`point.${selectedRoute.origin.kind}`),
+              destination:
+                selectedRoute.destination.label ??
+                routeT(`point.${selectedRoute.destination.kind}`),
+            })
+          : ''}
+      </span>
+      {routeLines.length && status === 'ready' ? (
+        <div
+          className={cn(controlsContainer ? 'mb-2 flex justify-end' : 'absolute end-3 top-3 z-[1]')}
+        >
+          <Button
+            aria-controls={chooserIds ? chooserId : undefined}
+            aria-expanded={Boolean(chooserIds)}
+            className="shadow-[var(--shadow-overlay)]"
+            onClick={() => {
+              if (chooserIds) setChooserIds(null);
+              else setChooserIds(routeLines.map((leg) => leg.id));
+            }}
+            ref={routesButtonRef}
+            size="sm"
+            variant="outline"
+          >
+            <Route aria-hidden="true" />
+            {t('routesControl')}
+          </Button>
+        </div>
+      ) : null}
+      {chooserIds && status === 'ready' ? (
+        <div
+          className={cn(
+            !controlsContainer && 'absolute inset-x-3 bottom-3 z-[1]',
+            'max-h-[45dvh] overflow-y-auto rounded-[var(--radius-lg)] border border-border bg-card p-3 shadow-[var(--shadow-overlay)]',
+          )}
+          data-route-chooser
+          id={chooserId}
+        >
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold">{t('chooseRoute')}</p>
+            <Button
+              aria-label={t('closeRouteChooser')}
+              onClick={() => {
+                setChooserIds(null);
+                routesButtonRef.current?.focus({ preventScroll: true });
+              }}
+              size="icon-xs"
+              variant="ghost"
+            >
+              <X aria-hidden="true" />
+            </Button>
+          </div>
+          <MapRouteChooser
+            legs={routeLines.filter((leg) => chooserIds.includes(leg.id))}
+            onSelect={selectRoute}
+            selectedRouteId={selectedRoute?.id ?? null}
+          />
+        </div>
+      ) : null}
+      {cardPoint && status === 'ready' && !chooserIds ? (
+        <div
+          className={cn(
+            !controlsContainer && 'absolute inset-x-3 bottom-3 z-[1]',
+            'max-h-[45dvh] overflow-y-auto rounded-[var(--radius-lg)] border border-border bg-card/95 p-3 shadow-[var(--shadow-overlay)] backdrop-blur-sm',
+          )}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <p className="truncate text-sm font-semibold">{cardPoint.name}</p>
+            <Button
+              aria-label={t('dismissSelection')}
+              className="-mr-1 -mt-1"
+              data-dismiss-map-selection
+              onClick={clearSelection}
+              size="icon-xs"
+              variant="ghost"
+            >
+              <X aria-hidden="true" />
+            </Button>
+          </div>
+          {selectedRoute ? (
+            <div className="mt-2 border-t border-border-subtle pt-2">
+              <MapRouteSummary leg={selectedRoute} />
+            </div>
+          ) : null}
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {describeSelection?.(cardPoint) ??
+              (cardPoint.kind === 'scheduled'
+                ? t('scheduledSelection', { order: cardPoint.order ?? 0 })
+                : cardPoint.kind === 'base'
+                  ? t(baseSelectionKey(cardPoint.baseRole))
+                  : t('consideredSelection'))}
+          </p>
+          {/* A Place off this day may still be spoken for. Saying which day it is on
+              is what stops the same Place being planned twice by accident. */}
+          {cardPoint.otherDayNumbers?.length ? (
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {t('alsoOnDays', {
+                count: cardPoint.otherDayNumbers.length,
+                days: cardPoint.otherDayNumbers.join(', '),
+              })}
+            </p>
+          ) : null}
+          <div className="mt-3 flex flex-wrap gap-2" ref={actionsRef}>
+            {/* Only a Place that is not on this day yet can be added to it. Once it
+                is, the point becomes `scheduled` and this gives way to "View item". */}
+            {onAddToDay && cardPoint.kind === 'considered' ? (
+              <Button
+                disabled={addingPointId === cardPoint.id}
+                onClick={() => void addToDay(cardPoint)}
+                size="sm"
+              >
+                <CalendarPlus aria-hidden="true" data-icon="inline-start" />
+                {t('addToDay')}
+              </Button>
+            ) : null}
+            {onViewItem && actionItemId ? (
+              <Button onClick={() => onViewItem(actionItemId!)} size="sm" variant="outline">
+                <Eye aria-hidden="true" data-icon="inline-start" />
+                {viewItemLabel ?? t('viewItem')}
+              </Button>
+            ) : null}
+            {onViewPlaceDetails ? (
+              <Button onClick={() => onViewPlaceDetails(cardPoint)} size="sm" variant="outline">
+                <Icons.Place aria-hidden="true" data-icon="inline-start" />
+                {t('viewPlace')}
+              </Button>
+            ) : (
+              <Button
+                nativeButton={false}
+                render={
+                  <a href={googleMapsCoordinatesHref(cardPoint)} rel="noreferrer" target="_blank" />
+                }
+                size="sm"
+                variant="outline"
+              >
+                <Icons.Place aria-hidden="true" data-icon="inline-start" />
+                {t('viewPlace')}
+              </Button>
+            )}
+            <Button
+              nativeButton={false}
+              render={
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${cardPoint.latitude},${cardPoint.longitude}`}
+                  rel="noreferrer"
+                  target="_blank"
+                />
+              }
+              size="sm"
+              variant="outline"
+            >
+              <Icons.Directions aria-hidden="true" data-icon="inline-start" />
+              {t('directions')}
+            </Button>
+          </div>
+          {/* Always mounted so the result is announced, but it takes no room until
+              there is something to say. */}
+          <p
+            aria-live="polite"
+            className={cn('text-xs text-muted-foreground', addFeedback && 'mt-2')}
+            role="status"
+          >
+            {addFeedback}
+          </p>
+        </div>
+      ) : null}
+      {selectedRoute && !selectedPoint && !chooserIds && status === 'ready' ? (
+        <div
+          className={cn(
+            !controlsContainer && 'absolute inset-x-3 bottom-3 z-[1]',
+            'rounded-[var(--radius-lg)] border border-border bg-card p-3 shadow-[var(--shadow-overlay)]',
+          )}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <MapRouteSummary leg={selectedRoute} />
+            </div>
+            <Button
+              aria-label={t('dismissSelection')}
+              data-dismiss-map-selection
+              onClick={clearSelection}
+              size="icon-xs"
+              variant="ghost"
+            >
+              <X aria-hidden="true" />
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 
   if (!points.length && !currentLocation) {
     return (
@@ -466,106 +885,7 @@ export function ItineraryPlanningMap({
           title={t('unavailableTitle')}
         />
       ) : null}
-      {selectedPoint && status === 'ready' ? (
-        <div className="absolute inset-x-3 bottom-3 z-[1] rounded-[var(--radius-lg)] border border-border bg-card/95 p-3 shadow-[var(--shadow-overlay)] backdrop-blur-sm">
-          <div className="flex items-start justify-between gap-2">
-            <p className="truncate text-sm font-semibold">{selectedPoint.name}</p>
-            <Button
-              aria-label={t('dismissSelection')}
-              className="-mr-1 -mt-1"
-              onClick={onClearSelection}
-              size="icon-xs"
-              variant="ghost"
-            >
-              <X aria-hidden="true" />
-            </Button>
-          </div>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {describeSelection?.(selectedPoint) ??
-              (selectedPoint.kind === 'scheduled'
-                ? t('scheduledSelection', { order: selectedPoint.order ?? 0 })
-                : selectedPoint.kind === 'base'
-                  ? t(baseSelectionKey(selectedPoint.baseRole))
-                  : t('consideredSelection'))}
-          </p>
-          {/* A Place off this day may still be spoken for. Saying which day it is on
-              is what stops the same Place being planned twice by accident. */}
-          {selectedPoint.otherDayNumbers?.length ? (
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {t('alsoOnDays', {
-                count: selectedPoint.otherDayNumbers.length,
-                days: selectedPoint.otherDayNumbers.join(', '),
-              })}
-            </p>
-          ) : null}
-          <div className="mt-3 flex flex-wrap gap-2" ref={actionsRef}>
-            {/* Only a Place that is not on this day yet can be added to it. Once it
-                is, the point becomes `scheduled` and this gives way to "View item". */}
-            {onAddToDay && selectedPoint.kind === 'considered' ? (
-              <Button
-                disabled={addingPointId === selectedPoint.id}
-                onClick={() => void addToDay(selectedPoint)}
-                size="sm"
-              >
-                <CalendarPlus aria-hidden="true" data-icon="inline-start" />
-                {t('addToDay')}
-              </Button>
-            ) : null}
-            {onViewItem && selectedPoint.itemId ? (
-              <Button onClick={() => onViewItem(selectedPoint.itemId!)} size="sm" variant="outline">
-                <Eye aria-hidden="true" data-icon="inline-start" />
-                {viewItemLabel ?? t('viewItem')}
-              </Button>
-            ) : null}
-            {onViewPlaceDetails ? (
-              <Button onClick={() => onViewPlaceDetails(selectedPoint)} size="sm" variant="outline">
-                <Icons.Place aria-hidden="true" data-icon="inline-start" />
-                {t('viewPlace')}
-              </Button>
-            ) : (
-              <Button
-                nativeButton={false}
-                render={
-                  <a
-                    href={googleMapsCoordinatesHref(selectedPoint)}
-                    rel="noreferrer"
-                    target="_blank"
-                  />
-                }
-                size="sm"
-                variant="outline"
-              >
-                <Icons.Place aria-hidden="true" data-icon="inline-start" />
-                {t('viewPlace')}
-              </Button>
-            )}
-            <Button
-              nativeButton={false}
-              render={
-                <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${selectedPoint.latitude},${selectedPoint.longitude}`}
-                  rel="noreferrer"
-                  target="_blank"
-                />
-              }
-              size="sm"
-              variant="outline"
-            >
-              <Icons.Directions aria-hidden="true" data-icon="inline-start" />
-              {t('directions')}
-            </Button>
-          </div>
-          {/* Always mounted so the result is announced, but it takes no room until
-              there is something to say. */}
-          <p
-            aria-live="polite"
-            className={cn('text-xs text-muted-foreground', addFeedback && 'mt-2')}
-            role="status"
-          >
-            {addFeedback}
-          </p>
-        </div>
-      ) : null}
+      {controlsContainer ? createPortal(controls, controlsContainer) : controls}
     </div>
   );
 }

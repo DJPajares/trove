@@ -75,7 +75,6 @@ export function DayTimeline({
   distanceUnit,
   entries,
   hoursFor,
-  itemCount,
   label,
   menuActions,
   onEditTiming,
@@ -99,7 +98,6 @@ export function DayTimeline({
   distanceUnit: 'km' | 'mi';
   entries: readonly BandedEntry[];
   hoursFor: (item: ItineraryItem) => PlaceHoursStatus | undefined;
-  itemCount: number;
   label: string;
   menuActions: StopMenuActions;
   /** Opens a stop's timing on its own. */
@@ -303,17 +301,7 @@ export function DayTimeline({
         hours={hoursFor(item)}
         item={item}
         key={item.id}
-        menu={
-          <StopMenu
-            actions={menuActions}
-            index={position}
-            item={item}
-            itemCount={itemCount}
-            located={view.located}
-            mapsHref={view.mapsHref}
-            name={view.name}
-          />
-        }
+        menu={<StopMenu actions={menuActions} item={item} name={view.name} />}
         number={entry.stopNumber}
         onEditTiming={onEditTiming ? () => onEditTiming(item) : undefined}
         onSelectOnMap={() => onSelectItem(item)}

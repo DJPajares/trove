@@ -2040,12 +2040,8 @@
     },
     "itemActions": "Actions for {name}",
     "itemMenu": {
-      "moveEarlier": "Move earlier",
-      "moveLater": "Move later",
       "edit": "Edit",
       "duplicate": "Duplicate",
-      "showOnMap": "Show on map",
-      "openPlace": "Open in Google Maps",
       "delete": "Delete"
     },
     "viewDetailsFor": "View details for {name}",

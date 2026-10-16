@@ -1,16 +1,6 @@
 'use client';
 
-import {
-  ArrowDown,
-  ArrowLeftRight,
-  ArrowUp,
-  Copy,
-  Ellipsis,
-  ExternalLink,
-  MapPin,
-  Pencil,
-  Trash2,
-} from 'lucide-react';
+import { ArrowLeftRight, Ellipsis, Pencil, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Button } from '@/components/ui/button';
@@ -18,7 +8,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLinkItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
@@ -34,58 +23,38 @@ export type StopMenuActions = {
   onSwapItem?: (item: ItineraryItem) => void;
   movementDisabled?: boolean;
   onDeleteItem: (item: ItineraryItem) => void;
-  onDuplicateItem: (item: ItineraryItem) => void;
   onEditItem: (item: ItineraryItem) => void;
-  onMoveItem: (item: ItineraryItem, dayId: string | null, position: number) => void;
   /** Opens the sheet that moves the stop to another day or to Unscheduled. */
   onMoveToDay: (item: ItineraryItem) => void;
   onPlacePriorityChange?: (item: ItineraryItem, priority: ItineraryPriority | null) => void;
-  /** Shows the stop's pin on the map. */
-  onSelectItem: (item: ItineraryItem) => void;
   organizingItemId: string | null;
   savingPriorityIds?: ReadonlySet<string>;
-  selectedDayId: string;
 };
 
 /**
- * Everything a stop can be asked to do, in one menu (PRD 17.2.1).
- *
- * One menu instead of a row of controls: the card is content, not a toolbar,
- * and the menu behaves the same without hover on every form factor. Moving a
- * stop earlier, later or to another day is here too, so no reorder depends on
- * dragging (PRD 17.4).
+ * What a stop can be asked to do that its card does not already offer: edit
+ * it, set its priority, move it to another day or swap it with another stop,
+ * and delete it. Reordering within the day is the card's drag handle; showing
+ * it on the map is its number; Google Maps is in its place details.
  */
 export function StopMenu({
   actions,
-  index,
   item,
-  itemCount,
-  located,
-  mapsHref,
   name,
 }: Readonly<{
   actions: StopMenuActions;
-  /** The stop's place among the day's stops, from zero. */
-  index: number;
   item: ItineraryItem;
-  itemCount: number;
-  located: boolean;
-  mapsHref: string | null;
   name: string;
 }>) {
   const t = useTranslations('itinerary');
   const placesT = useTranslations('tripPlaces');
   const {
     onDeleteItem,
-    onDuplicateItem,
     onEditItem,
-    onMoveItem,
     onMoveToDay,
     onPlacePriorityChange,
-    onSelectItem,
     organizingItemId,
     savingPriorityIds,
-    selectedDayId,
   } = actions;
 
   return (
@@ -104,37 +73,10 @@ export function StopMenu({
         <Ellipsis aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-48">
-        <DropdownMenuItem
-          disabled={actions.movementDisabled || index === 0}
-          onClick={() => onMoveItem(item, selectedDayId, index - 1)}
-        >
-          <ArrowUp aria-hidden="true" />
-          {t('itemMenu.moveEarlier')}
+        <DropdownMenuItem onClick={() => onEditItem(item)}>
+          <Pencil aria-hidden="true" />
+          {t('itemMenu.edit')}
         </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={actions.movementDisabled || index === itemCount - 1}
-          onClick={() => onMoveItem(item, selectedDayId, index + 1)}
-        >
-          <ArrowDown aria-hidden="true" />
-          {t('itemMenu.moveLater')}
-        </DropdownMenuItem>
-
-        <DropdownMenuItem disabled={actions.movementDisabled} onClick={() => onMoveToDay(item)}>
-          <Icons.Itinerary aria-hidden="true" />
-          {t('planner.move.menuItem')}
-        </DropdownMenuItem>
-
-        {actions.onSwapItem && item.itineraryDayId ? (
-          <DropdownMenuItem
-            disabled={actions.movementDisabled}
-            onClick={() => actions.onSwapItem?.(item)}
-          >
-            <ArrowLeftRight aria-hidden="true" />
-            {t('movement.swap')}
-          </DropdownMenuItem>
-        ) : null}
-        <DropdownMenuSeparator />
-
         {item.tripPlace && onPlacePriorityChange ? (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger disabled={savingPriorityIds?.has(item.tripPlace.id)}>
@@ -168,28 +110,20 @@ export function StopMenu({
           </DropdownMenuSub>
         ) : null}
 
-        <DropdownMenuItem onClick={() => onEditItem(item)}>
-          <Pencil aria-hidden="true" />
-          {t('itemMenu.edit')}
+        <DropdownMenuSeparator />
+
+        <DropdownMenuItem disabled={actions.movementDisabled} onClick={() => onMoveToDay(item)}>
+          <Icons.Itinerary aria-hidden="true" />
+          {t('planner.move.menuItem')}
         </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={organizingItemId === item.id}
-          onClick={() => onDuplicateItem(item)}
-        >
-          <Copy aria-hidden="true" />
-          {t('itemMenu.duplicate')}
-        </DropdownMenuItem>
-        {located ? (
-          <DropdownMenuItem onClick={() => onSelectItem(item)}>
-            <MapPin aria-hidden="true" />
-            {t('itemMenu.showOnMap')}
+        {actions.onSwapItem && item.itineraryDayId ? (
+          <DropdownMenuItem
+            disabled={actions.movementDisabled}
+            onClick={() => actions.onSwapItem?.(item)}
+          >
+            <ArrowLeftRight aria-hidden="true" />
+            {t('movement.swap')}
           </DropdownMenuItem>
-        ) : null}
-        {mapsHref ? (
-          <DropdownMenuLinkItem render={<a href={mapsHref} rel="noreferrer" target="_blank" />}>
-            <ExternalLink aria-hidden="true" />
-            {t('itemMenu.openPlace')}
-          </DropdownMenuLinkItem>
         ) : null}
 
         <DropdownMenuSeparator />

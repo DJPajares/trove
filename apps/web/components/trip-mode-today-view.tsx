@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { PageState } from '@/components/page-state';
+import { ExpandableDescription } from '@/components/expandable-description';
 import { PlaceHoursNote } from '@/components/place-hours-note';
 import { usePreferences } from '@/components/preferences-provider';
 import { useTripModeData } from '@/components/trip-mode-data';
@@ -938,12 +939,14 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                           where
                         )}
                         {item.notes || (tripPlace?.note && tripPlace.note !== item.notes) ? (
-                          <p className="flex items-start gap-1.5 text-text-subtle">
+                          <div className="flex items-start gap-1.5 text-text-subtle">
                             <Icons.Notes aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-                            <span className="min-w-0 line-clamp-2">
-                              {item.notes ?? tripPlace?.note}
-                            </span>
-                          </p>
+                            <ExpandableDescription
+                              lines={2}
+                              name={name}
+                              text={item.notes || tripPlace?.note || ''}
+                            />
+                          </div>
                         ) : null}
                         {linkedReservations.length ? (
                           <Link

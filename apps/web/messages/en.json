@@ -1822,12 +1822,17 @@
     "openHours": "Open {times}",
     "specialHours": "Special hours {times}",
     "allDay": "Open all day",
-    "checked": "hours checked {date}",
     "rating": "{rating} on Google",
     "ratingWithCount": "{rating} on Google ({count} reviews)",
     "ratingCompact": "<value>{rating}</value> ({count})",
     "ratingCompactNoCount": "<value>{rating}</value>",
     "fromDay": "{distance} from this day"
+  },
+  "placeDescription": {
+    "showMore": "Show more",
+    "showLess": "Show less",
+    "expandFor": "Show full description for {name}",
+    "collapseFor": "Collapse description for {name}"
   },
   "itinerary": {
     "title": "Itinerary for {trip}",

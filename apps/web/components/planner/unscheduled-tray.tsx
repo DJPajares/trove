@@ -4,6 +4,7 @@ import { Copy, Ellipsis, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Button } from '@/components/ui/button';
+import { ExpandableDescription } from '@/components/expandable-description';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -70,7 +71,7 @@ export function UnscheduledTray({
               >
                 <Icon className="size-4" />
               </span>
-              <span className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1">
                 {item.tripPlace ? (
                   <button
                     aria-label={t('viewDetailsFor', { name: view.name })}
@@ -84,9 +85,13 @@ export function UnscheduledTray({
                   <span className="block truncate text-sm font-semibold">{view.name}</span>
                 )}
                 {item.notes ? (
-                  <span className="block truncate text-xs text-muted-foreground">{item.notes}</span>
+                  <ExpandableDescription
+                    className="text-xs text-muted-foreground"
+                    name={view.name}
+                    text={item.notes}
+                  />
                 ) : null}
-              </span>
+              </div>
               <span className="relative z-10 flex shrink-0 items-center gap-1">
                 <Button
                   aria-label={t('scheduleItem', { name: view.name })}

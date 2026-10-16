@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { Fragment, type CSSProperties, type ReactNode, type Ref } from 'react';
 
 import { PlaceHoursNote } from '@/components/place-hours-note';
+import { ExpandableDescription } from '@/components/expandable-description';
 import { MediaFrame } from '@/components/media-frame';
 import { usePreferences } from '@/components/preferences-provider';
 import type { ItineraryItem, PlaceHoursStatus } from '@/lib/itinerary/api';
@@ -87,12 +88,6 @@ function StopHoursLine({
           : at.kind === 'open_all_day'
             ? signalsT('allDay')
             : t('openUntil', { close: clock(at.close) });
-  const checked = signalsT('checked', {
-    date: new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(
-      new Date(status.asOf),
-    ),
-  });
-
   return (
     <p
       className={cn(
@@ -102,7 +97,6 @@ function StopHoursLine({
     >
       {status.status === 'open' && status.special ? `${t('specialHours')} · ` : null}
       {text}
-      <span className="font-normal text-muted-foreground"> · {checked}</span>
     </p>
   );
 }
@@ -359,7 +353,11 @@ export function StopCard({
             ) : null}
             <StopHoursLine item={item} status={hours} />
             {item.notes ? (
-              <p className="mt-1 line-clamp-1 text-sm text-text-subtle">{item.notes}</p>
+              <ExpandableDescription
+                className="mt-1 text-sm text-text-subtle"
+                name={view.name}
+                text={item.notes}
+              />
             ) : null}
           </div>
           <div className="relative z-10 col-span-2 col-start-1 row-start-4 -mt-1 -mr-1 flex items-center justify-end @min-[14rem]:col-span-1 @min-[14rem]:col-start-3 @min-[14rem]:row-start-1">

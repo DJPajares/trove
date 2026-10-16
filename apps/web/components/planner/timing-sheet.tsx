@@ -95,7 +95,6 @@ function TimingBody({
             ) : null}
             <TimingField
               customDuration={customDuration}
-              expanded
               form={form}
               onChange={(patch) => {
                 suggestedTime.reset();
@@ -103,7 +102,6 @@ function TimingBody({
                 setFormError(null);
               }}
               onCustomDurationChange={setCustomDuration}
-              onExpand={() => undefined}
               onRemove={() => {
                 setForm((current) => ({
                   ...current,

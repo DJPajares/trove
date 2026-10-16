@@ -1,6 +1,5 @@
 'use client';
 
-import { Clock3, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useId } from 'react';
 
@@ -9,16 +8,10 @@ import {
   type SuggestedTimeActionProps,
 } from '@/components/itinerary-suggested-time';
 import { TimeInput } from '@/components/time-input';
-import { Button } from '@/components/ui/button';
+import { Chip, ChipGroup } from '@/components/ui/chip';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import {
   durationMinutesFromParts,
   durationParts,
@@ -29,42 +22,79 @@ import {
 
 const SCHEDULES = ['anytime', 'morning', 'afternoon', 'evening', 'exact'] as const;
 
+/** Chips large enough to tap in a sheet, still reading as one quiet row. */
+const chipClassName =
+  'min-h-8 border border-border-subtle bg-background px-3.5 text-[0.8125rem] data-[pressed]:border-brand/30';
+
 /**
- * When a stop happens and for how long: a part of the day or an exact time,
- * a time suggested from what the day already holds, and a length as a preset,
- * custom hours and minutes, or an end time. The stop editor and the timing
- * sheet both edit timing with it, so the two can never disagree about what a
- * time means.
+ * When a stop happens and for how long, as two short rows of choices rather
+ * than a form: when (a part of the day, or a time), then how long (a length,
+ * or - once there is a start time - until an end time). Tapping the chosen
+ * option again clears it, so there is no separate "remove" to find.
+ *
+ * Only a set time brings more with it: the time itself, and whether Trove may
+ * move it when the day changes. The stop editor and the timing sheet both edit
+ * timing with it, so the two can never disagree about what a time means.
  */
 export function TimingField({
   customDuration,
-  expanded,
   form,
   onChange,
   onCustomDurationChange,
-  onExpand,
   onRemove,
   suggest,
   protectedTiming,
 }: Readonly<{
   customDuration: StopEditorCustomDuration;
-  /** Collapsed, the "when" is a single "Add timing" button. */
-  expanded: boolean;
   form: StopEditorForm;
   onChange: (patch: Partial<StopEditorForm>) => void;
   onCustomDurationChange: (next: StopEditorCustomDuration) => void;
-  onExpand: () => void;
+  /** Clears when the stop happens: its part of the day, time and end time. */
   onRemove: () => void;
   /** Offered only where a suggestion can be honest - online, for a stop the server can place. */
   suggest: SuggestedTimeActionProps | null;
   protectedTiming?: boolean;
 }>) {
   const t = useTranslations('itinerary');
+  const editorT = useTranslations('itinerary.planner.editor');
   const id = useId();
+  const exact = form.schedule === 'exact';
+  const presets = ITINERARY_DURATION_PRESETS.map(String);
+  const length =
+    form.timingMode === 'end_time'
+      ? 'until'
+      : customDuration.open || (form.durationMinutes && !presets.includes(form.durationMinutes))
+        ? 'custom'
+        : form.durationMinutes;
 
-  function chooseDurationPreset(minutes: number) {
-    onChange({ durationMinutes: minutes.toString() });
-    onCustomDurationChange({ ...durationParts(minutes.toString()), open: false });
+  function chooseSchedule(value: (typeof SCHEDULES)[number] | undefined) {
+    if (!value) {
+      onRemove();
+      return;
+    }
+    onChange({
+      // An end time is only meaningful after an exact start.
+      ...(value !== 'exact' && form.timingMode === 'end_time'
+        ? { durationMinutes: '', localEndTime: '', timingMode: 'duration' as const }
+        : {}),
+      schedule: value,
+    });
+  }
+
+  function chooseLength(value: string | undefined) {
+    if (!value) {
+      onChange({ durationMinutes: '', localEndTime: '', timingMode: 'duration' });
+      onCustomDurationChange({ hours: '', minutes: '', open: false });
+    } else if (value === 'until') {
+      onChange({ durationMinutes: '', timingMode: 'end_time' });
+      onCustomDurationChange({ hours: '', minutes: '', open: false });
+    } else if (value === 'custom') {
+      onChange({ localEndTime: '', timingMode: 'duration' });
+      onCustomDurationChange({ ...durationParts(form.durationMinutes), open: true });
+    } else {
+      onChange({ durationMinutes: value, localEndTime: '', timingMode: 'duration' });
+      onCustomDurationChange({ ...durationParts(value), open: false });
+    }
   }
 
   function updateCustomDuration(kind: 'hours' | 'minutes', value: string) {
@@ -77,212 +107,127 @@ export function TimingField({
   }
 
   return (
-    <section
-      className="space-y-4 rounded-[var(--radius-lg)] border p-4"
-      aria-label={t('connectedTiming.question')}
-    >
-      <p className="text-sm font-medium">{t('connectedTiming.question')}</p>
-      {!expanded ? (
-        <Button className="w-full justify-start" onClick={onExpand} type="button" variant="outline">
-          <Clock3 aria-hidden="true" />
-          {t('addTiming')}
-        </Button>
-      ) : (
-        <Field className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <FieldLabel>{t('scheduleLabel')}</FieldLabel>
-            <Button onClick={onRemove} size="sm" type="button" variant="ghost">
-              <X aria-hidden="true" />
-              {t('removeTiming')}
-            </Button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {SCHEDULES.map((value) => (
-              <Button
-                aria-pressed={form.schedule === value}
-                key={value}
-                onClick={() =>
-                  onChange({
-                    // An end time is only meaningful after an exact start.
-                    ...(value !== 'exact' && form.timingMode === 'end_time'
-                      ? { durationMinutes: '', localEndTime: '', timingMode: 'duration' as const }
-                      : {}),
-                    schedule: value,
-                  })
-                }
-                size="sm"
-                type="button"
-                variant={form.schedule === value ? 'secondary' : 'outline'}
-              >
-                {t(`schedule.${value}`)}
-              </Button>
-            ))}
-          </div>
-          {form.schedule === 'exact' ? (
-            <div className="space-y-2">
-              <FieldLabel htmlFor={`${id}-exact`}>{t('exactTime')}</FieldLabel>
+    <div className="space-y-5">
+      <Field className="gap-2.5">
+        <FieldLabel id={`${id}-when`}>{t('scheduleLabel')}</FieldLabel>
+        <ChipGroup
+          aria-labelledby={`${id}-when`}
+          multiple={false}
+          onValueChange={([value]) => chooseSchedule(value as (typeof SCHEDULES)[number])}
+          value={form.schedule === 'none' ? [] : [form.schedule]}
+        >
+          {SCHEDULES.map((value) => (
+            <Chip className={chipClassName} key={value} value={value}>
+              {t(`schedule.${value}`)}
+            </Chip>
+          ))}
+        </ChipGroup>
+
+        {exact ? (
+          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-3">
+            <div className="flex items-center gap-2.5">
+              <FieldLabel className="font-normal text-muted-foreground" htmlFor={`${id}-exact`}>
+                {editorT('starts')}
+              </FieldLabel>
               <TimeInput
-                aria-describedby={`${id}-exact-hint`}
+                className="w-36"
                 id={`${id}-exact`}
                 onValueChange={(value) => onChange({ exactTime: value })}
                 required
                 value={form.exactTime}
               />
-              <FieldDescription id={`${id}-exact-hint`}>{t('localTimeHint')}</FieldDescription>
             </div>
-          ) : null}
-          {form.schedule === 'exact' ? (
-            <Field>
-              <FieldLabel htmlFor={`${id}-flexibility`}>
-                {t('connectedTiming.flexibility')}
-              </FieldLabel>
-              <Select
+            {/* Whether the day may move this time. A booking, a journey or a
+                stop already done is held where it is, and says so. */}
+            <label className="flex items-center gap-2.5 text-sm" htmlFor={`${id}-flexible`}>
+              <Switch
+                checked={!protectedTiming && form.timingFlexibility === 'flexible'}
                 disabled={protectedTiming}
-                value={protectedTiming ? 'fixed' : (form.timingFlexibility ?? 'fixed')}
-                onValueChange={(value) => {
-                  if (value === 'flexible' || value === 'fixed')
-                    onChange({ timingFlexibility: value });
-                }}
-              >
-                <SelectTrigger
-                  id={`${id}-flexibility`}
-                  className="w-full"
-                  aria-describedby={`${id}-flexibility-hint`}
-                >
-                  <SelectValue>
-                    {t(`connectedTiming.${form.timingFlexibility ?? 'fixed'}`)}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="flexible">{t('connectedTiming.flexible')}</SelectItem>
-                  <SelectItem value="fixed">{t('connectedTiming.fixed')}</SelectItem>
-                </SelectContent>
-              </Select>
-              <FieldDescription id={`${id}-flexibility-hint`}>
-                {t(
-                  protectedTiming
-                    ? 'connectedTiming.protected'
-                    : form.timingFlexibility === 'flexible'
-                      ? 'connectedTiming.flexibleHint'
-                      : 'connectedTiming.fixedHint',
-                )}
-              </FieldDescription>
-            </Field>
-          ) : null}
-          {suggest ? <SuggestedTimeAction {...suggest} /> : null}
-        </Field>
-      )}
-
-      <Field>
-        <FieldLabel>{t('durationQuestion')}</FieldLabel>
-        <FieldDescription>{t('durationHint')}</FieldDescription>
-        <div aria-label={t('timingModeLabel')} className="flex flex-wrap gap-2" role="group">
-          <Button
-            aria-pressed={form.timingMode === 'duration'}
-            onClick={() => onChange({ localEndTime: '', timingMode: 'duration' })}
-            size="sm"
-            type="button"
-            variant={form.timingMode === 'duration' ? 'secondary' : 'outline'}
-          >
-            {t('durationMode')}
-          </Button>
-          <Button
-            aria-pressed={form.timingMode === 'end_time'}
-            disabled={form.schedule !== 'exact' || !form.exactTime}
-            onClick={() => {
-              onChange({ durationMinutes: '', timingMode: 'end_time' });
-              onCustomDurationChange({ hours: '', minutes: '', open: false });
-            }}
-            size="sm"
-            type="button"
-            variant={form.timingMode === 'end_time' ? 'secondary' : 'outline'}
-          >
-            {t('endTimeMode')}
-          </Button>
-        </div>
-        {form.timingMode === 'duration' ? (
-          <>
-            <div className="flex flex-wrap gap-2">
-              {ITINERARY_DURATION_PRESETS.map((minutes) => (
-                <Button
-                  aria-pressed={form.durationMinutes === minutes.toString()}
-                  key={minutes}
-                  onClick={() => chooseDurationPreset(minutes)}
-                  size="sm"
-                  type="button"
-                  variant={form.durationMinutes === minutes.toString() ? 'secondary' : 'outline'}
-                >
-                  {t(`durationPreset.${minutes}`)}
-                </Button>
-              ))}
-              <Button
-                aria-pressed={customDuration.open}
-                onClick={() =>
-                  onCustomDurationChange({ ...durationParts(form.durationMinutes), open: true })
+                id={`${id}-flexible`}
+                onCheckedChange={(checked) =>
+                  onChange({ timingFlexibility: checked ? 'flexible' : 'fixed' })
                 }
-                size="sm"
-                type="button"
-                variant={customDuration.open ? 'secondary' : 'outline'}
-              >
-                {t('customDuration')}
-              </Button>
-              {form.durationMinutes ? (
-                <Button
-                  aria-label={t('clearDuration')}
-                  onClick={() => {
-                    onChange({ durationMinutes: '' });
-                    onCustomDurationChange({ hours: '', minutes: '', open: false });
-                  }}
-                  size="icon-sm"
-                  type="button"
-                  variant="ghost"
-                >
-                  <X aria-hidden="true" />
-                </Button>
-              ) : null}
-            </div>
-            {customDuration.open ? (
-              <div className="grid grid-cols-2 gap-3 rounded-[var(--radius-lg)] bg-muted/40 p-3">
-                <Field>
-                  <FieldLabel htmlFor={`${id}-hours`}>{t('hours')}</FieldLabel>
-                  <Input
-                    id={`${id}-hours`}
-                    inputMode="numeric"
-                    min="0"
-                    onChange={(event) => updateCustomDuration('hours', event.target.value)}
-                    type="number"
-                    value={customDuration.hours}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor={`${id}-minutes`}>{t('minutes')}</FieldLabel>
-                  <Input
-                    id={`${id}-minutes`}
-                    inputMode="numeric"
-                    max="59"
-                    min="0"
-                    onChange={(event) => updateCustomDuration('minutes', event.target.value)}
-                    type="number"
-                    value={customDuration.minutes}
-                  />
-                </Field>
-              </div>
-            ) : null}
-          </>
-        ) : (
-          <div className="space-y-2">
-            <FieldLabel htmlFor={`${id}-end`}>{t('endTime')}</FieldLabel>
+              />
+              {editorT('flexible')}
+            </label>
+          </div>
+        ) : null}
+        {exact && protectedTiming ? (
+          <FieldDescription>{t('connectedTiming.protected')}</FieldDescription>
+        ) : null}
+        {suggest ? <SuggestedTimeAction {...suggest} /> : null}
+      </Field>
+
+      <Field className="gap-2.5">
+        <FieldLabel id={`${id}-length`}>{t('durationQuestion')}</FieldLabel>
+        <ChipGroup
+          aria-labelledby={`${id}-length`}
+          multiple={false}
+          onValueChange={([value]) => chooseLength(value)}
+          value={length ? [length] : []}
+        >
+          {ITINERARY_DURATION_PRESETS.map((minutes) => (
+            <Chip className={chipClassName} key={minutes} value={minutes.toString()}>
+              {t(`durationPreset.${minutes}`)}
+            </Chip>
+          ))}
+          <Chip className={chipClassName} value="custom">
+            {t('customDuration')}
+          </Chip>
+          {/* An end time needs a start to be after. */}
+          {exact && form.exactTime ? (
+            <Chip className={chipClassName} value="until">
+              {editorT('until')}
+            </Chip>
+          ) : null}
+        </ChipGroup>
+
+        {length === 'custom' ? (
+          <div className="mt-1 grid max-w-xs grid-cols-2 gap-3">
+            <Field>
+              <FieldLabel className="font-normal text-muted-foreground" htmlFor={`${id}-hours`}>
+                {t('hours')}
+              </FieldLabel>
+              <Input
+                id={`${id}-hours`}
+                inputMode="numeric"
+                min="0"
+                onChange={(event) => updateCustomDuration('hours', event.target.value)}
+                type="number"
+                value={customDuration.hours}
+              />
+            </Field>
+            <Field>
+              <FieldLabel className="font-normal text-muted-foreground" htmlFor={`${id}-minutes`}>
+                {t('minutes')}
+              </FieldLabel>
+              <Input
+                id={`${id}-minutes`}
+                inputMode="numeric"
+                max="59"
+                min="0"
+                onChange={(event) => updateCustomDuration('minutes', event.target.value)}
+                type="number"
+                value={customDuration.minutes}
+              />
+            </Field>
+          </div>
+        ) : null}
+        {length === 'until' ? (
+          <div className="mt-1 flex items-center gap-2.5">
+            <FieldLabel className="font-normal text-muted-foreground" htmlFor={`${id}-end`}>
+              {t('endTime')}
+            </FieldLabel>
             <TimeInput
-              aria-describedby={`${id}-end-hint`}
               aria-invalid={Boolean(form.localEndTime && form.localEndTime <= form.exactTime)}
+              className="w-36"
               id={`${id}-end`}
               onValueChange={(value) => onChange({ localEndTime: value })}
               value={form.localEndTime}
             />
-            <FieldDescription id={`${id}-end-hint`}>{t('endTimeHint')}</FieldDescription>
           </div>
-        )}
+        ) : null}
       </Field>
-    </section>
+    </div>
   );
 }

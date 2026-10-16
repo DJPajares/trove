@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { CircleAlert, Trash2 } from 'lucide-react';
+import { CircleAlert, NotebookPen, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useMemo, useState, type FormEvent } from 'react';
 
@@ -10,7 +10,7 @@ import { useOnlineStatus } from '@/components/trip-sync-status';
 import { useTripContext } from '@/components/trip-provider';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Field, FieldLabel } from '@/components/ui/field';
 import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -105,11 +105,8 @@ function StopEditorBody({
       : stopEditorForm(null, request.kind === 'create' ? request.tripPlaceId : null),
   );
   const [customDuration, setCustomDuration] = useState(() => stopEditorCustomDuration(form));
-  const [timingExpanded, setTimingExpanded] = useState(
-    () =>
-      Boolean(editing && (editing.localStartTime || editing.dayPart)) ||
-      (request.kind === 'edit' && request.focus === 'timing'),
-  );
+  // Notes are opened on request unless the stop already has one.
+  const [notesOpen, setNotesOpen] = useState(() => Boolean(editing?.notes));
   const [pickerOpen, setPickerOpen] = useState(() =>
     request.kind === 'edit' ? request.focus === 'place' : !form.tripPlaceId,
   );
@@ -121,7 +118,6 @@ function StopEditorBody({
   const timingTouched = useRef(false);
   const suggestedTime = useSuggestedTime(tripId, (slot, revision) => {
     setForm((current) => acceptSuggestedSlot(current, slot, revision));
-    setTimingExpanded(true);
     setFormError(null);
   });
 
@@ -194,7 +190,6 @@ function StopEditorBody({
 
   useEffect(() => {
     if (!online || request.kind !== 'create' || !form.tripPlaceId || timingTouched.current) return;
-    setTimingExpanded(true);
     void suggestedTime.request({
       dayId: request.dayId,
       schedule: form.schedule,
@@ -236,7 +231,6 @@ function StopEditorBody({
       timingMode: 'duration',
     }));
     timingTouched.current = true;
-    setTimingExpanded(false);
     suggestedTime.reset();
     setFormError(null);
   }
@@ -283,7 +277,7 @@ function StopEditorBody({
 
   const title =
     request.kind === 'edit'
-      ? t('editTitle')
+      ? plannerT('editTitle')
       : request.insert
         ? request.insert.afterName
           ? plannerT('insertAfterTitle', { name: request.insert.afterName })
@@ -292,67 +286,64 @@ function StopEditorBody({
 
   return (
     <>
-      <SheetHeading
-        title={title}
-        description={request.kind === 'edit' ? t('editDescription') : t('createDescription')}
-      />
+      {/* The place field explains itself, so the title stands alone. */}
+      <SheetHeading title={title} />
       <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
-          <FieldGroup>
-            {formError ? (
-              <Alert role="alert" variant="destructive">
-                <CircleAlert aria-hidden="true" />
-                <AlertDescription>{formError}</AlertDescription>
-              </Alert>
-            ) : null}
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 pt-4 pb-6">
+          {formError ? (
+            <Alert role="alert" variant="destructive">
+              <CircleAlert aria-hidden="true" />
+              <AlertDescription>{formError}</AlertDescription>
+            </Alert>
+          ) : null}
 
-            <PlaceField
-              identity={form}
-              locationBias={locationBias}
-              onChoose={choose}
-              onError={setFormError}
-              onKeepCurrent={() => setPickerOpen(false)}
-              onOpenPicker={() => setPickerOpen(true)}
-              onSelectingChange={setSelecting}
-              onTripPlaceAdded={(tripPlace) => {
-                const entry = itineraryTripPlaceFrom(tripPlace);
-                setAdded((current) =>
-                  current.some((candidate) => candidate.id === entry.id)
-                    ? current
-                    : [...current, entry],
-                );
-                onTripPlaceAdded(tripPlace);
-              }}
-              online={online}
-              pickerOpen={pickerOpen}
-              placeUse={placeUse}
-              savedPlaces={savedNearTrip}
-              selecting={selecting}
-              tripId={tripId}
-              tripPlaces={availableTripPlaces}
-            />
+          <PlaceField
+            identity={form}
+            locationBias={locationBias}
+            onChoose={choose}
+            onError={setFormError}
+            onKeepCurrent={() => setPickerOpen(false)}
+            onOpenPicker={() => setPickerOpen(true)}
+            onSelectingChange={setSelecting}
+            onTripPlaceAdded={(tripPlace) => {
+              const entry = itineraryTripPlaceFrom(tripPlace);
+              setAdded((current) =>
+                current.some((candidate) => candidate.id === entry.id)
+                  ? current
+                  : [...current, entry],
+              );
+              onTripPlaceAdded(tripPlace);
+            }}
+            online={online}
+            pickerOpen={pickerOpen}
+            placeUse={placeUse}
+            savedPlaces={savedNearTrip}
+            selecting={selecting}
+            tripId={tripId}
+            tripPlaces={availableTripPlaces}
+          />
 
-            {hasIdentity ? (
-              <>
-                <TimingField
-                  customDuration={customDuration}
-                  expanded={timingExpanded}
-                  form={form}
-                  onChange={(patch) => {
-                    timingTouched.current = true;
-                    suggestedTime.reset();
-                    setForm((current) => manualTimingPatch(current, patch));
-                    setFormError(null);
-                  }}
-                  onCustomDurationChange={setCustomDuration}
-                  onExpand={() => setTimingExpanded(true)}
-                  onRemove={removeTiming}
-                  protectedTiming={editing?.timingProtected}
-                  suggest={suggest}
-                />
+          {hasIdentity ? (
+            <>
+              <TimingField
+                customDuration={customDuration}
+                form={form}
+                onChange={(patch) => {
+                  timingTouched.current = true;
+                  suggestedTime.reset();
+                  setForm((current) => manualTimingPatch(current, patch));
+                  setFormError(null);
+                }}
+                onCustomDurationChange={setCustomDuration}
+                onRemove={removeTiming}
+                protectedTiming={editing?.timingProtected}
+                suggest={suggest}
+              />
+              {notesOpen ? (
                 <Field>
                   <FieldLabel htmlFor="stop-editor-notes">{t('notes')}</FieldLabel>
                   <Textarea
+                    autoFocus={!form.notes}
                     id="stop-editor-notes"
                     maxLength={5_000}
                     onChange={(event) => {
@@ -363,36 +354,56 @@ function StopEditorBody({
                     value={form.notes}
                   />
                 </Field>
-              </>
-            ) : null}
-          </FieldGroup>
-        </div>
-        <SheetFooter className="sm:flex-row sm:items-center sm:justify-between">
+              ) : (
+                <Button
+                  className="-ml-2.5"
+                  onClick={() => setNotesOpen(true)}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  <NotebookPen aria-hidden="true" data-icon="inline-start" />
+                  {plannerT('addNote')}
+                </Button>
+              )}
+            </>
+          ) : null}
+
+          {/* Deleting sits apart from saving, at the end of the stop rather
+              than beside the button that keeps it. */}
           {editing && onDelete ? (
-            <Button
-              className="justify-start text-destructive hover:text-destructive"
-              disabled={saving}
-              onClick={() => onDelete(editing)}
-              type="button"
-              variant="ghost"
-            >
-              <Trash2 aria-hidden="true" data-icon="inline-start" />
-              {t('deleteItem')}
-            </Button>
-          ) : (
-            <span />
-          )}
-          <div className="flex flex-col-reverse gap-2 sm:flex-row">
-            <Button disabled={saving} onClick={onClose} type="button" variant="outline">
-              {t('cancel')}
-            </Button>
-            <Button
-              disabled={saving || selecting || suggestedTime.loading || !hasIdentity}
-              type="submit"
-            >
-              {saving ? t('saving') : editing ? t('save') : plannerT('add')}
-            </Button>
-          </div>
+            <div className="border-t border-border-subtle pt-4">
+              <Button
+                className="-ml-2.5 text-destructive hover:text-destructive"
+                disabled={saving}
+                onClick={() => onDelete(editing)}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                <Trash2 aria-hidden="true" data-icon="inline-start" />
+                {plannerT('deleteStop')}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+        <SheetFooter className="flex-row px-5 py-4 sm:justify-end">
+          <Button
+            className="flex-1 sm:flex-none"
+            disabled={saving}
+            onClick={onClose}
+            type="button"
+            variant="outline"
+          >
+            {t('cancel')}
+          </Button>
+          <Button
+            className="flex-1 sm:flex-none"
+            disabled={saving || selecting || suggestedTime.loading || !hasIdentity}
+            type="submit"
+          >
+            {saving ? t('saving') : editing ? t('save') : plannerT('add')}
+          </Button>
         </SheetFooter>
       </form>
     </>

@@ -1,6 +1,6 @@
 'use client';
 
-import { NotebookPen, Search, X } from 'lucide-react';
+import { NotebookPen, Search } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 
@@ -257,9 +257,11 @@ export function PlaceField({
   return (
     <>
       {hasIdentity ? (
-        <div className="rounded-[var(--radius-lg)] border bg-muted/30 p-3">
-          <div className="flex items-start gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-background text-muted-foreground shadow-xs">
+        // Once chosen, the place is a quiet row: what it is and where, with
+        // changing it one tap away rather than a form of its own.
+        <div className="rounded-[var(--radius-lg)] bg-surface-tint/50 px-3 py-2.5">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-background text-muted-foreground">
               {identity.tripPlaceId ? (
                 <Icons.Place aria-hidden="true" className="size-4" />
               ) : (
@@ -267,7 +269,7 @@ export function PlaceField({
               )}
             </div>
             <div className="flex min-h-9 min-w-0 flex-1 flex-col justify-center">
-              <p className="truncate text-sm font-medium">
+              <p className="truncate text-[0.9375rem] font-semibold">
                 {identity.customLabel || selectedPlaceName}
               </p>
               {identity.customLabel && selectedPlaceName ? (
@@ -276,42 +278,22 @@ export function PlaceField({
                 </p>
               ) : selectedTripPlace?.place.snapshot?.address ||
                 selectedTripPlace?.place.providerAddress ? (
-                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">
                   {selectedTripPlace.place.snapshot?.address ??
                     selectedTripPlace.place.providerAddress}
                 </p>
               ) : null}
-              {selectedTripPlace?.priority ? (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t('inheritedPriority', {
-                    priority: tripPlacesT(`priority.${selectedTripPlace.priority}`),
-                  })}
-                </p>
-              ) : null}
             </div>
-            <div className="flex shrink-0 gap-1">
-              <Button
-                aria-label={t('changeIdentity')}
-                onClick={onOpenPicker}
-                size="sm"
-                type="button"
-                variant="ghost"
-              >
-                {t('change')}
-              </Button>
-              <Button
-                aria-label={t('clearIdentity')}
-                onClick={() => {
-                  onChoose({ kind: 'clear' });
-                  changeQuery('');
-                }}
-                size="icon-sm"
-                type="button"
-                variant="ghost"
-              >
-                <X aria-hidden="true" />
-              </Button>
-            </div>
+            <Button
+              aria-label={t('changeIdentity')}
+              className="shrink-0"
+              onClick={onOpenPicker}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              {t('change')}
+            </Button>
           </div>
         </div>
       ) : null}

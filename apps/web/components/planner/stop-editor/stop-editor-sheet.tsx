@@ -10,7 +10,6 @@ import { useOnlineStatus } from '@/components/trip-sync-status';
 import { useTripContext } from '@/components/trip-provider';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Field, FieldLabel } from '@/components/ui/field';
 import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -37,6 +36,7 @@ import type { ProviderSearchLocationBias } from '@/lib/saved/provider-search-ses
 import type { TripPlace } from '@/lib/trip-places/api';
 import { savedPlacesNearTrip } from '@/lib/trip-places/saved-near-trip';
 
+import { EditRow, EditRows } from './edit-row';
 import { PlaceField } from './place-field';
 import { TimingField } from './timing-field';
 
@@ -105,8 +105,6 @@ function StopEditorBody({
       : stopEditorForm(null, request.kind === 'create' ? request.tripPlaceId : null),
   );
   const [customDuration, setCustomDuration] = useState(() => stopEditorCustomDuration(form));
-  // Notes are opened on request unless the stop already has one.
-  const [notesOpen, setNotesOpen] = useState(() => Boolean(editing?.notes));
   const [pickerOpen, setPickerOpen] = useState(() =>
     request.kind === 'edit' ? request.focus === 'place' : !form.tripPlaceId,
   );
@@ -325,26 +323,31 @@ function StopEditorBody({
 
           {hasIdentity ? (
             <>
-              <TimingField
-                customDuration={customDuration}
-                form={form}
-                onChange={(patch) => {
-                  timingTouched.current = true;
-                  suggestedTime.reset();
-                  setForm((current) => manualTimingPatch(current, patch));
-                  setFormError(null);
-                }}
-                onCustomDurationChange={setCustomDuration}
-                onRemove={removeTiming}
-                protectedTiming={editing?.timingProtected}
-                suggest={suggest}
-              />
-              {notesOpen ? (
-                <Field>
-                  <FieldLabel htmlFor="stop-editor-notes">{t('notes')}</FieldLabel>
+              {/* The stop's details as a list that says what is set; each line
+                  opens in place to change it. */}
+              <EditRows>
+                <TimingField
+                  customDuration={customDuration}
+                  form={form}
+                  onChange={(patch) => {
+                    timingTouched.current = true;
+                    suggestedTime.reset();
+                    setForm((current) => manualTimingPatch(current, patch));
+                    setFormError(null);
+                  }}
+                  onCustomDurationChange={setCustomDuration}
+                  onRemove={removeTiming}
+                  open={request.kind === 'edit' && request.focus === 'timing'}
+                  protectedTiming={editing?.timingProtected}
+                  suggest={suggest}
+                />
+                <EditRow
+                  icon={<NotebookPen />}
+                  label={plannerT('note')}
+                  value={form.notes.trim() ? form.notes.trim().split('\n')[0]! : null}
+                >
                   <Textarea
-                    autoFocus={!form.notes}
-                    id="stop-editor-notes"
+                    aria-label={plannerT('note')}
                     maxLength={5_000}
                     onChange={(event) => {
                       const notes = event.target.value;
@@ -353,19 +356,8 @@ function StopEditorBody({
                     placeholder={t('notesPlaceholder')}
                     value={form.notes}
                   />
-                </Field>
-              ) : (
-                <Button
-                  className="-ml-2.5"
-                  onClick={() => setNotesOpen(true)}
-                  size="sm"
-                  type="button"
-                  variant="ghost"
-                >
-                  <NotebookPen aria-hidden="true" data-icon="inline-start" />
-                  {plannerT('addNote')}
-                </Button>
-              )}
+                </EditRow>
+              </EditRows>
             </>
           ) : null}
 

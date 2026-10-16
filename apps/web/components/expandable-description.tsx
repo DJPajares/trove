@@ -50,7 +50,9 @@ export function ExpandableDescription({
           aria-controls={id}
           aria-expanded={expanded}
           aria-label={t(expanded ? 'collapseFor' : 'expandFor', { name })}
-          className="h-9 text-xs"
+          // Flush with the text it opens, so the two read as one block; the
+          // invisible inset keeps the tap target full size.
+          className="relative mt-1 h-auto p-0 text-xs after:absolute after:-inset-x-2 after:-inset-y-3"
           onClick={() => setOpen((value) => !value)}
           size="sm"
           type="button"

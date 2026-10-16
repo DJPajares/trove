@@ -4,7 +4,7 @@
   "version": "1.7.2",
   "summaries": {
     "en": [
-      "Editing a stop is quicker: pick when and how long with a tap, and notes open only when you want them.",
+      "Editing a stop is quicker: its time, duration and note show as a short list, and each opens only when you change it.",
       "Delete now sits apart from Save, so it is harder to tap by mistake."
     ]
   }

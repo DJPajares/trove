@@ -1925,10 +1925,16 @@
         "addCustomPlace": "Add “{name}” as a custom place",
         "savedBadge": "Saved",
         "editTitle": "Edit stop",
-        "starts": "Starts",
-        "flexible": "Trove can adjust",
-        "until": "Until…",
-        "addNote": "Add a note",
+        "time": "Time",
+        "partOfDay": "Part of day",
+        "fixedTime": "Fixed time",
+        "fixedValue": "{time} · Fixed",
+        "clearWhen": "Clear",
+        "duration": "Duration",
+        "noDuration": "Not set",
+        "untilOption": "Until a set time",
+        "untilValue": "Until {time}",
+        "note": "Note",
         "deleteStop": "Delete stop"
       },
       "insert": {
@@ -2299,7 +2305,6 @@
       },
       "use": "Use this slot"
     },
-    "durationQuestion": "How long?",
     "endTime": "Ends at",
     "endTimeError": "End time must be later than the start time.",
     "endTimeStartRequired": "Choose an exact start time before setting an end time.",

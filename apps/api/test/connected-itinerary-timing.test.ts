@@ -101,6 +101,51 @@ const order = () =>
     .toSorted((a, b) => Number(a.position) - Number(b.position))
     .map((i) => i.id);
 
+test.each(['Pacific/Auckland', 'Asia/Singapore'])(
+  'compares the 10:00 shopping stop in %s against a 12:30 Auckland stop',
+  async (shoppingZone) => {
+    seed();
+    store.trip[0]!.referenceTimeZone = 'Pacific/Auckland';
+    store.itineraryDay[0]!.defaultTimeZone = 'Pacific/Auckland';
+    for (const place of store.place) {
+      place.customLatitude = -36.918;
+      place.customLongitude = 174.841;
+      place.customTimeZone = 'Pacific/Auckland';
+    }
+    item('a', 0, '10:00', false);
+    item('b', 1, '12:30', false);
+    for (const [index, zone] of [shoppingZone, 'Pacific/Auckland'].entries()) {
+      const stop = store.itineraryItem[index]!;
+      stop.timeZone = zone;
+      stop.startInstant = floatingLocalTimeToInstant(
+        '2026-09-05',
+        index ? '12:30' : '10:00',
+        zone!,
+      );
+      stop.durationMinutes = index ? 240 : 120;
+    }
+    const before = structuredClone(store.itineraryItem);
+    const result = await getItineraryDayTimeSuggestions('user', 'trip', 'day');
+    if (shoppingZone === 'Pacific/Auckland') expect(result.issues).toEqual([]);
+    else
+      expect(result.issues).toContainEqual(
+        expect.objectContaining({
+          itemId: 'b',
+          code: 'FIXED_CONFLICT',
+          references: ['a'],
+          orderConflict: {
+            previousItemId: 'a',
+            earliestStartInstant: '2026-09-05T04:00:00.000Z',
+            scheduledStartInstant: '2026-09-05T00:30:00.000Z',
+            timeZone: 'Pacific/Auckland',
+          },
+        }),
+      );
+    expect(store.itineraryItem).toEqual(before);
+    expect(getProviderCallCounts()).toEqual({});
+  },
+);
+
 test('saving a stop with review policy preserves neighboring times until explicit acceptance', async () => {
   seed();
   item('a', 0, '09:00', false);

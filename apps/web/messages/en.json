@@ -2390,6 +2390,7 @@
         "notice": "Connection notice"
       },
       "suggestionsReady": "Timing suggestions ready.",
+      "orderConflict": "After {previous} and travel, this stop can start at {earliest} or later. It is set for {scheduled}. Times shown in {timeZone}.",
       "proposalHint": "Your current times stay unchanged until you apply a suggestion.",
       "currentTime": "Current time",
       "suggestedTime": "Suggested time",

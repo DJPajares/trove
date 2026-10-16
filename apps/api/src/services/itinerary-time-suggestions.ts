@@ -429,6 +429,32 @@ export async function assessDay(
     targetIds: movement?.targetIds ?? (reconcile ? new Set(targetId ? [targetId] : []) : targets),
     allowDayPartAdjustment: reconcile,
   });
+  for (const issue of result.issues) {
+    if (issue.code !== 'FIXED_CONFLICT' || issue.references.length !== 1) continue;
+    const index = items.findIndex((item) => item.id === issue.itemId);
+    const current = items[index];
+    const previous = items[index - 1];
+    if (
+      !current?.start ||
+      !previous?.duration ||
+      issue.references[0] !== previous.id ||
+      (current.inboundRequired && !current.inboundTravel)
+    )
+      continue;
+    const previousStart = result.slots.get(previous.id)?.startMinute ?? previous.start?.minutes;
+    if (previousStart === undefined) continue;
+    const earliest =
+      previousStart + previous.duration.minutes + (current.inboundTravel?.minutes ?? 0);
+    if (earliest <= current.start.minutes) continue;
+    issue.orderConflict = {
+      previousItemId: previous.id,
+      earliestStartInstant: new Date(scoring.origin + Math.ceil(earliest) * 60_000).toISOString(),
+      scheduledStartInstant: new Date(
+        scoring.origin + current.start.minutes * 60_000,
+      ).toISOString(),
+      timeZone: day.timeZone,
+    };
+  }
   for (const item of day.items) {
     const linked = trip.reservations.filter((r) => r.itineraryItemId === item.id);
     if (

@@ -130,6 +130,7 @@ import {
 } from '@/lib/maps/itinerary-map';
 import { useTripPlaceHours } from '@/lib/trip-places/use-trip-place-hours';
 import { untimedItems } from '@/lib/itinerary/day-time-suggestions';
+import { describeTimingIssue } from '@/lib/itinerary/timing-issue-description';
 import { overviewMapLifecycle, planningMapLifecycle } from '@/lib/maps/map-retention';
 import { routeSketch } from '@/lib/maps/route-sketch';
 import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editorial-images';
@@ -1829,7 +1830,13 @@ export function ItineraryManager({
                             <span className="sr-only">
                               {t(`connectedTiming.issueLabel.${issue.severity}`)}:{' '}
                             </span>
-                            {t(`connectedTiming.issue.${issue.code}`)}
+                            {describeTimingIssue(issue, {
+                              locale,
+                              hour12: preferences.timeFormat === '12h',
+                              nameFor: (id) =>
+                                itemName(selectedDay.items.find((stop) => stop.id === id) ?? item),
+                              t,
+                            })}
                           </span>
                           <div className="mt-1 flex flex-wrap gap-x-4">
                             <Button
@@ -1847,7 +1854,7 @@ export function ItineraryManager({
                                 variant="link"
                                 onClick={() => setMoveTarget({ allowUnscheduled: true, item })}
                               >
-                                {t('itemMenu.moveToDay')}
+                                {t('planner.move.menuItem')}
                               </Button>
                             ) : null}
                           </div>

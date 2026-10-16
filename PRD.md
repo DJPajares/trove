@@ -1183,15 +1183,16 @@ An explicit end time requires an exact start and defines the duration; conflicti
 
 Support:
 
-- drag-and-drop,
-- move earlier/later,
+- drag-and-drop, including by keyboard,
 - move to another day,
 - swap with another scheduled stop, including non-adjacent and cross-day exchanges,
-- duplicate,
+- duplicate an unscheduled idea,
 - remove,
 - unschedule.
 
-Drag-and-drop must not be the only mechanism. Drag, earlier/later, cross-day moves, scheduling/unscheduling, stop swaps, Better order and whole-day moves/exchanges share the movement preview/apply flow. A swap exchanges positions and day membership while preserving each stop’s duration, relationships and constraints. Better order commits one complete permutation, never a series of separately saved moves.
+A scheduled stop's menu stays short: edit, priority for a linked Place, move to another day, swap, and remove. Moving a stop one place earlier or later within a day is the drag handle, and duplicating a scheduled stop, showing it on the map and opening it in Google Maps are not menu items: the stop's number selects it on the map and its place details carry the Google Maps link.
+
+Drag-and-drop must not be the only mechanism: keyboard dragging, cross-day moves and swaps cover it. Drag, cross-day moves, scheduling/unscheduling, stop swaps, Better order and whole-day moves/exchanges share the movement preview/apply flow. A swap exchanges positions and day membership while preserving each stop’s duration, relationships and constraints. Better order commits one complete permutation, never a series of separately saved moves.
 
 Deleting a stop does not delete linked Reservations, Tasks, Expenses, or Memories. Detach the removed stop link, preserve the records and their own dated context, and keep them reachable in the relevant trip views. Duplication creates another planning occurrence; it does not duplicate bookings, actual expenses, captured Memories, or completion/skip history.
 

@@ -19,6 +19,13 @@ export type TimingIssue = {
   itemId: string;
   references: string[];
   severity: 'conflict' | 'review' | 'notice';
+  /** A confirmed order conflict, compared on one timeline and displayed in the day zone. */
+  orderConflict?: {
+    previousItemId: string;
+    earliestStartInstant: string;
+    scheduledStartInstant: string;
+    timeZone: string;
+  };
 };
 export type TimingChange = {
   itemId: string;

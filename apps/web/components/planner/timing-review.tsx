@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { formatSuggestedClock } from '@/lib/itinerary/day-time-suggestions';
+import { describeTimingIssue } from '@/lib/itinerary/timing-issue-description';
 import { withItineraryEdit } from '@/lib/itinerary/edit-lifecycle';
 import {
   applyItineraryTimingReview,
@@ -295,7 +296,12 @@ function TimingReviewBody({
                   <li className="space-y-1" key={`${issue.itemId}:${issue.code}:${index}`}>
                     <p className="text-sm font-medium">{nameFor(issue.itemId)}</p>
                     <p className="text-sm leading-5 text-muted-foreground">
-                      {t(`connectedTiming.issue.${issue.code}`)}
+                      {describeTimingIssue(issue, {
+                        locale,
+                        hour12: preferences.timeFormat === '12h',
+                        nameFor,
+                        t,
+                      })}
                     </p>
                     <Button
                       className="-ml-2"

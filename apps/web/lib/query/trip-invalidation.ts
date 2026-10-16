@@ -140,6 +140,7 @@ export const TRIP_DATE_QUERY_ROOTS: readonly TripScopedQueryRoot[] = [
 export const PLACE_LOCATION_QUERY_ROOTS: readonly TripScopedQueryRoot[] = [
   'trip-overview',
   'itinerary',
+  'itinerary-timing',
   'gap-suggestions',
   'hours-notices',
   'itinerary-day-routes',

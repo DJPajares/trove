@@ -17,6 +17,7 @@ import {
 import {
   invalidateTripQueries,
   ITINERARY_EDIT_QUERY_ROOTS,
+  PLACE_LOCATION_QUERY_ROOTS,
   PLAN_SCORE_INPUT_QUERY_ROOTS,
 } from '../lib/query/trip-invalidation.ts';
 
@@ -41,6 +42,26 @@ test('every provider-billable root refetches only on invalidation or a key chang
     expect(client.getQueryDefaults([root]).staleTime).toBe(Number.POSITIVE_INFINITY);
   }
 });
+
+test.each(['itinerary-timing', 'gap-suggestions', 'rain-alternatives'] as const)(
+  '%s rechecks an invalidated cached answer when returning from a booking or Place edit',
+  async (root) => {
+    const client = createQueryClient();
+    const queryKey = [root, 'trip', 'day'];
+    client.setQueryData(queryKey, { entries: ['old-warning-or-stay'] });
+    const read = vi.fn(async () => ({ entries: [] }));
+    // The itinerary is unmounted while the edit happens elsewhere.
+    await invalidateTripQueries(client, 'trip', [root]);
+    expect(read).not.toHaveBeenCalled();
+    const observer = new QueryObserver(client, { queryKey, queryFn: read });
+    const unsubscribe = observer.subscribe(() => {});
+    await vi.waitFor(() => expect(observer.getCurrentResult().data).toEqual({ entries: [] }));
+    expect(read).toHaveBeenCalledOnce();
+    expect(PROVIDER_BILLABLE_QUERY_ROOTS.has(root)).toBe(false);
+    unsubscribe();
+    client.clear();
+  },
+);
 
 test('returning to a fresh Trips list reuses its answer without a new request', () => {
   const client = createQueryClient();
@@ -308,6 +329,62 @@ test('locating a shared Place invalidates other cached scores without acquiring 
   await invalidateTripQueries(client, 'trip-1', PLACE_LOCATION_QUERY_ROOTS);
   expect(client.getQueryState(queryKeys.planScore('trip-2'))?.isInvalidated).toBe(true);
   expect(client.getQueryState(routes)?.isInvalidated).toBe(false);
+  client.clear();
+});
+
+test('reconciling a Place refreshes timing without a stop edit, then rechecks newly acquired routes', async () => {
+  const client = createQueryClient();
+  // Relinking can retain the Trip Place and item IDs, timestamps and timing key.
+  const key = queryKeys.itineraryTiming('trip', 'day', 'unchanged-item-revision');
+  const otherDay = queryKeys.itineraryTiming('trip', 'other-day', 'unchanged');
+  const warning = { issues: ['TRAVEL_UNKNOWN'] };
+  client.setQueryData(key, warning);
+  client.setQueryData(otherDay, warning);
+  const unopenedRoutes = queryKeys.itineraryDayRoutes('trip', 'other-day', 'old', false, 'en');
+  client.setQueryData(unopenedRoutes, { route: 'unopened' });
+  let finishTiming!: () => void;
+  const timing = vi
+    .fn()
+    // The first read captures missing evidence before the route request finishes.
+    .mockImplementationOnce(
+      () =>
+        new Promise<typeof warning>((resolve) => {
+          finishTiming = () => resolve(warning);
+        }),
+    )
+    .mockResolvedValue({ issues: [] });
+  const timingObserver = new QueryObserver(client, { queryKey: key, queryFn: timing });
+  const unsubscribeTiming = timingObserver.subscribe(() => {});
+  let finishRoutes!: () => void;
+  const routeOptions = {
+    queryKey: queryKeys.itineraryDayRoutes('trip', 'day', 'unchanged', false, 'en'),
+    queryFn: vi.fn(
+      () =>
+        new Promise<{ route: string }>((resolve) => {
+          finishRoutes = () => resolve({ route: 'located' });
+        }),
+    ),
+  };
+  client.setQueryData(routeOptions.queryKey, { route: 'unlocated' });
+  const routeObserver = new QueryObserver(client, routeOptions);
+  const unsubscribeRoutes = routeObserver.subscribe(() => {});
+
+  const refreshed = invalidateTripQueries(client, 'trip', PLACE_LOCATION_QUERY_ROOTS);
+  await vi.waitFor(() => expect(timing).toHaveBeenCalledOnce());
+  finishRoutes();
+  await vi.waitFor(() =>
+    expect(client.getQueryData(routeOptions.queryKey)).toEqual({ route: 'located' }),
+  );
+  finishTiming();
+  await refreshed;
+  await vi.waitFor(() => expect(timingObserver.getCurrentResult().data).toEqual({ issues: [] }));
+  expect(timing).toHaveBeenCalledTimes(2);
+  expect(routeOptions.queryFn).toHaveBeenCalledOnce();
+  expect(client.getQueryState(otherDay)?.isInvalidated).toBe(true);
+  expect(client.getQueryState(unopenedRoutes)?.isInvalidated).toBe(true);
+  expect(client.getQueryData(unopenedRoutes)).toEqual({ route: 'unopened' });
+  unsubscribeTiming();
+  unsubscribeRoutes();
   client.clear();
 });
 

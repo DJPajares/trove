@@ -1,6 +1,7 @@
 import { getPrismaClient } from '@trove/db';
 import { readTripPlanningPreferences } from '@trove/types';
 
+import { activitySuggestionCandidateIds } from './activity-suggestion-candidates.js';
 import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
 import { findDayGaps, type DayGap, type GapCandidate } from './gap-suggestions-rules.js';
 import { formatInstantInTimeZone } from './itinerary-rules.js';
@@ -52,22 +53,7 @@ export async function getDayGapSuggestions(
   const day = readPlanScoreInputs(trip, now).days.find((entry) => entry.id === itineraryDayId);
   if (!day) throw new ItineraryNotFoundError('itinerary_day_not_found');
 
-  // Only places the traveller chose and has not planned yet, and never a base.
-  const scheduled = new Set(
-    trip.itineraryDays.flatMap((row) =>
-      row.items.flatMap((item) => (item.tripPlaceId ? [item.tripPlaceId] : [])),
-    ),
-  );
-  const bases = new Set(
-    trip.itineraryDays.flatMap((row) =>
-      [row.dailyBaseTripPlaceId, row.dailyBaseDepartureTripPlaceId].filter((id): id is string =>
-        Boolean(id),
-      ),
-    ),
-  );
-  const candidateIds = new Set(
-    trip.tripPlaces.flatMap((row) => (scheduled.has(row.id) || bases.has(row.id) ? [] : [row.id])),
-  );
+  const candidateIds = activitySuggestionCandidateIds(trip);
   const dayPlaceIds = new Set(
     day.items.flatMap((item) => (item.tripPlaceId ? [item.tripPlaceId] : [])),
   );

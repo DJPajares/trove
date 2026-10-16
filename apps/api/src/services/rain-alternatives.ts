@@ -1,5 +1,6 @@
 import { getPrismaClient } from '@trove/db';
 
+import { activitySuggestionCandidateIds } from './activity-suggestion-candidates.js';
 import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
 import { ItineraryNotFoundError } from './itineraries.js';
 import { placeHoursStatus } from './place-hours-status.js';
@@ -56,21 +57,7 @@ export async function getRainAlternatives(
   if (!day) throw new ItineraryNotFoundError('itinerary_day_not_found');
   const empty = { date: day.date, generatedAt: now.toISOString(), stops: [] };
 
-  const scheduled = new Set(
-    trip.itineraryDays.flatMap((row) =>
-      row.items.flatMap((item) => (item.tripPlaceId ? [item.tripPlaceId] : [])),
-    ),
-  );
-  const bases = new Set(
-    trip.itineraryDays.flatMap((row) =>
-      [row.dailyBaseTripPlaceId, row.dailyBaseDepartureTripPlaceId].filter((id): id is string =>
-        Boolean(id),
-      ),
-    ),
-  );
-  const candidateIds = new Set(
-    trip.tripPlaces.flatMap((row) => (scheduled.has(row.id) || bases.has(row.id) ? [] : [row.id])),
-  );
+  const candidateIds = activitySuggestionCandidateIds(trip);
   const dayPlaceIds = new Set(
     day.items.flatMap((item) => (item.tripPlaceId ? [item.tripPlaceId] : [])),
   );

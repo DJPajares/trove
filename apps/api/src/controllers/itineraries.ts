@@ -58,7 +58,7 @@ const organizeItemSchema = z
   .object({
     itineraryDayId: z.uuid().nullable(),
     position: z.number().int().min(0),
-    timingPolicy: z.enum(['preserve', 'reconcile_flexible']).optional(),
+    timingPolicy: z.enum(['preserve', 'reconcile_flexible', 'review_flexible']).optional(),
   })
   .strict();
 const dayBaseSchema = z
@@ -103,7 +103,7 @@ const plannedCostSchema = z
   })
   .strict();
 const itemFields = {
-  timingPolicy: z.enum(['preserve', 'reconcile_flexible']).optional(),
+  timingPolicy: z.enum(['preserve', 'reconcile_flexible', 'review_flexible']).optional(),
   timingFlexibility: z.enum(['fixed', 'flexible']).optional(),
   timeProvenance: z.enum(['user_owned', 'ai_estimated', 'app_estimated']).optional(),
   durationProvenance: z.enum(['user_owned', 'ai_estimated', 'app_estimated']).optional(),

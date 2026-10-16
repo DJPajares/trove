@@ -10,6 +10,7 @@ import {
 } from './itinerary-time-suggestions.js';
 import {
   stayLeaveDate,
+  isConnectedTimingPolicy,
   readDayPlanningContext,
   type DayPlanningContext,
   type SchedulingOutcome,
@@ -84,6 +85,7 @@ export class ItineraryConflictError extends Error {
     code:
       | 'itinerary_day_conflict'
       | 'itinerary_item_conflict'
+      | 'itinerary_timing_group_required'
       | 'itinerary_schedule_conflict' = 'itinerary_item_conflict',
   ) {
     super(code);
@@ -1056,7 +1058,7 @@ export async function organizeItineraryItem(
         current.timeSemantics === 'AUTHORITATIVE_INSTANT' ||
         ['COMPLETED', 'SKIPPED'].includes(current.travelStatus);
       const timeZone =
-        targetDay && !(input.timingPolicy === 'reconcile_flexible' && protectedTiming)
+        targetDay && !(isConnectedTimingPolicy(input.timingPolicy) && protectedTiming)
           ? resolveItemTimeZone({
               customLocationTimeZone: current.customLocationTimeZone,
               dayTimeZone: targetDay.defaultTimeZone,
@@ -1096,7 +1098,7 @@ export async function organizeItineraryItem(
       if (targetDay && targetDay.id !== current.itineraryDayId) {
         await refreshDayDefaultTimeZone(transaction, tripId, targetDay.id);
       }
-      if (input.timingPolicy === 'reconcile_flexible') {
+      if (isConnectedTimingPolicy(input.timingPolicy)) {
         const scheduling: SchedulingOutcome = { changes: [], issues: [] };
         for (const dayId of new Set([current.itineraryDayId, input.itineraryDayId])) {
           if (!dayId) continue;
@@ -1106,9 +1108,11 @@ export async function organizeItineraryItem(
             tripId,
             dayId,
             dayId === input.itineraryDayId ? itemId : undefined,
+            input.timingPolicy === 'review_flexible',
           );
           scheduling.changes.push(...result.changes);
           scheduling.issues.push(...result.issues);
+          if (result.proposals) (scheduling.proposals ??= []).push(...result.proposals);
         }
         return { scheduling };
       }
@@ -1374,10 +1378,10 @@ export async function createItineraryItem(
           select: { id: true, tripId: true },
         });
         if (existing?.tripId === tripId) {
-          if (input.timingPolicy === 'reconcile_flexible') {
+          if (isConnectedTimingPolicy(input.timingPolicy)) {
             const saved = await transaction.itineraryItem.findUnique({
               where: { id: existing.id },
-              select: { itineraryDayId: true },
+              select: { itineraryDayId: true, localStartTime: true, timeProvenance: true },
             });
             if (saved?.itineraryDayId)
               scheduling = await reconcileItineraryTiming(
@@ -1385,6 +1389,11 @@ export async function createItineraryItem(
                 userId,
                 tripId,
                 saved.itineraryDayId,
+                input.timingPolicy === 'review_flexible' &&
+                  (!saved.localStartTime || saved.timeProvenance === 'APP_ESTIMATED')
+                  ? existing.id
+                  : undefined,
+                input.timingPolicy === 'review_flexible',
               );
           }
           return existing.id;
@@ -1472,16 +1481,17 @@ export async function createItineraryItem(
       if (input.position !== undefined) {
         await placeItemAt(transaction, tripId, day.id, item.id, input.position);
       }
-      if (input.timingPolicy !== 'reconcile_flexible')
+      if (!isConnectedTimingPolicy(input.timingPolicy))
         await reslotItemByTime(transaction, tripId, day.id, item.id, schedule);
       await refreshDayDefaultTimeZone(transaction, tripId, day.id);
-      if (input.timingPolicy === 'reconcile_flexible')
+      if (isConnectedTimingPolicy(input.timingPolicy))
         scheduling = await reconcileItineraryTiming(
           transaction,
           userId,
           tripId,
           day.id,
           schedule.localStartTime && input.timeProvenance !== 'app_estimated' ? undefined : item.id,
+          input.timingPolicy === 'review_flexible',
         );
       return item.id;
     },
@@ -1671,17 +1681,23 @@ export async function updateItineraryItem(
       // Retiming an item should move it, but only when the clock actually changed —
       // an unrelated edit must never disturb an order the traveller arranged.
       if (
-        input.timingPolicy !== 'reconcile_flexible' &&
+        !isConnectedTimingPolicy(input.timingPolicy) &&
         itemSortMinute(current) !== itemSortMinute(updated)
       ) {
         await reslotItemByTime(transaction, tripId, current.itineraryDayId, itemId, updated);
       }
       await refreshDayDefaultTimeZone(transaction, tripId, current.itineraryDayId);
 
-      const scheduling =
-        input.timingPolicy === 'reconcile_flexible'
-          ? await reconcileItineraryTiming(transaction, userId, tripId, current.itineraryDayId)
-          : undefined;
+      const scheduling = isConnectedTimingPolicy(input.timingPolicy)
+        ? await reconcileItineraryTiming(
+            transaction,
+            userId,
+            tripId,
+            current.itineraryDayId,
+            undefined,
+            input.timingPolicy === 'review_flexible',
+          )
+        : undefined;
       const finalItem = scheduling
         ? await transaction.itineraryItem.findFirst({
             where: { id: itemId },

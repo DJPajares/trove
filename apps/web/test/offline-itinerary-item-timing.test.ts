@@ -107,47 +107,50 @@ test('offline duration selection clears an existing explicit end time', () => {
   expect(result.days[0]?.items[0]).toMatchObject({ durationMinutes: 45, localEndTime: null });
 });
 
-test('queued planner inserts and moves preserve position, flexibility and daypart intent', () => {
-  const original = applyOfflineMutation(itinerary(), {
-    clientItemId: 'first',
-    kind: 'itinerary_item_create',
-    input: {
-      customLabel: 'First',
-      itineraryDayId: 'day',
-      durationMinutes: 60,
-      schedule: { kind: 'exact', localTime: '09:00' },
-    },
-  });
-  const inserted = applyOfflineMutation(original, {
-    clientItemId: 'new',
-    kind: 'itinerary_item_create',
-    input: {
-      customLabel: 'New',
-      itineraryDayId: 'day',
-      position: 0,
-      durationMinutes: 90,
-      schedule: { kind: 'exact', localTime: '14:00', dayPart: 'afternoon' },
-      timingPolicy: 'reconcile_flexible',
+test.each(['reconcile_flexible', 'review_flexible'] as const)(
+  'queued %s inserts and moves preserve position, flexibility and daypart intent',
+  (timingPolicy) => {
+    const original = applyOfflineMutation(itinerary(), {
+      clientItemId: 'first',
+      kind: 'itinerary_item_create',
+      input: {
+        customLabel: 'First',
+        itineraryDayId: 'day',
+        durationMinutes: 60,
+        schedule: { kind: 'exact', localTime: '09:00' },
+      },
+    });
+    const inserted = applyOfflineMutation(original, {
+      clientItemId: 'new',
+      kind: 'itinerary_item_create',
+      input: {
+        customLabel: 'New',
+        itineraryDayId: 'day',
+        position: 0,
+        durationMinutes: 90,
+        schedule: { kind: 'exact', localTime: '14:00', dayPart: 'afternoon' },
+        timingPolicy,
+        timingFlexibility: 'flexible',
+        timeProvenance: 'app_estimated',
+        durationProvenance: 'app_estimated',
+      },
+    });
+    expect(inserted.days[0]!.items.map((item) => item.id)).toEqual(['new', 'first']);
+    expect(inserted.days[0]!.items[0]).toMatchObject({
+      dayPart: 'afternoon',
       timingFlexibility: 'flexible',
       timeProvenance: 'app_estimated',
       durationProvenance: 'app_estimated',
-    },
-  });
-  expect(inserted.days[0]!.items.map((item) => item.id)).toEqual(['new', 'first']);
-  expect(inserted.days[0]!.items[0]).toMatchObject({
-    dayPart: 'afternoon',
-    timingFlexibility: 'flexible',
-    timeProvenance: 'app_estimated',
-    durationProvenance: 'app_estimated',
-  });
-  const moved = applyOfflineMutation(inserted, {
-    baseItem: inserted.days[0]!.items[1]!,
-    kind: 'itinerary_item_organize',
-    itemId: 'first',
-    input: { itineraryDayId: 'day', position: 0, timingPolicy: 'reconcile_flexible' },
-  });
-  expect(moved.days[0]!.items.map((item) => item.id)).toEqual(['first', 'new']);
-});
+    });
+    const moved = applyOfflineMutation(inserted, {
+      baseItem: inserted.days[0]!.items[1]!,
+      kind: 'itinerary_item_organize',
+      itemId: 'first',
+      input: { itineraryDayId: 'day', position: 0, timingPolicy },
+    });
+    expect(moved.days[0]!.items.map((item) => item.id)).toEqual(['first', 'new']);
+  },
+);
 
 test('offline explicit ends retain elapsed duration across daylight saving', () => {
   const snapshot = itinerary();

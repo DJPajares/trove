@@ -1,3 +1,4 @@
+import { isConnectedTimingPolicy } from '@trove/types';
 import { authenticatedFetch, getProtectedSession } from '@/lib/auth/transport';
 import { isAuthDeparting } from '@/lib/auth/transition';
 import { publishTimingReview } from '@/lib/itinerary/timing-review';
@@ -641,7 +642,7 @@ async function replayItineraryMutation(
     !(
       'input' in operation &&
       'timingPolicy' in operation.input &&
-      operation.input.timingPolicy === 'reconcile_flexible'
+      isConnectedTimingPolicy(operation.input.timingPolicy)
     )
   ) {
     await removeOfflineMutation(mutation.id);

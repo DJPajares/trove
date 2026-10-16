@@ -1,3 +1,4 @@
+import { isConnectedTimingPolicy } from '@trove/types';
 import { getProtectedSession, authenticatedFetch } from '@/lib/auth/transport';
 import { localPreviewInstant } from './local-instant';
 export { localPreviewInstant } from './local-instant';
@@ -812,6 +813,50 @@ export async function applyItineraryDayTiming(
   return result;
 }
 
+/** Fresh, cache-only preview. Opening a review never saves its suggested slots. */
+export async function fetchItineraryTimingReview(
+  tripId: string,
+  proposal: import('@trove/types').TimingReviewProposal,
+  signal?: AbortSignal,
+) {
+  const auth = await getAuthContext();
+  const query = proposal.targetItemId
+    ? `?targetItemId=${encodeURIComponent(proposal.targetItemId)}`
+    : '';
+  return itineraryRequest<SchedulingOutcome>(
+    `/trips/${tripId}/itinerary/days/${proposal.itineraryDayId}/timing-review${query}`,
+    { signal },
+    auth,
+  );
+}
+export async function applyItineraryTimingReview(
+  tripId: string,
+  proposal: import('@trove/types').TimingReviewProposal,
+  itemIds: string[],
+) {
+  const auth = await getAuthContext();
+  const result = await itineraryRequest<{
+    scheduling: SchedulingOutcome;
+    applied: import('@trove/types').TimingChange[];
+  }>(
+    `/trips/${tripId}/itinerary/days/${proposal.itineraryDayId}/timing-review`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        scheduleRevision: proposal.scheduleRevision,
+        targetItemId: proposal.targetItemId,
+        itemIds,
+      }),
+    },
+    auth,
+  );
+  return result;
+}
+export async function saveItineraryTimingReview(tripId: string, outcome: SchedulingOutcome) {
+  const auth = await getAuthContext();
+  publishTimingReview(auth.userId, tripId, outcome);
+}
+
 function createMutation(
   userId: string,
   tripId: string,
@@ -842,7 +887,7 @@ async function queueOrThrow(
   if (
     'input' in operation &&
     'timingPolicy' in operation.input &&
-    operation.input.timingPolicy === 'reconcile_flexible'
+    isConnectedTimingPolicy(operation.input.timingPolicy)
   )
     publishPendingTimingReview(userId, tripId);
 }

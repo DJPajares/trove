@@ -62,7 +62,7 @@ function TimingBody({
     try {
       const result = await updateItineraryItem(tripId, item.id, {
         ...stopTimingInput(built.input),
-        timingPolicy: 'reconcile_flexible',
+        timingPolicy: 'review_flexible',
       });
       await onSaved({
         timeZoneConsequence: Boolean(result.timeZoneConsequence),

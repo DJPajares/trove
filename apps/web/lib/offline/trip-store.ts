@@ -1,3 +1,4 @@
+import { isConnectedTimingPolicy } from '@trove/types';
 import type {
   Itinerary,
   ItineraryDayMoveInput,
@@ -698,7 +699,7 @@ export async function removeOfflineMutation(id: string) {
           isMovementOperation(operation) ||
           ('input' in operation &&
             'timingPolicy' in operation.input &&
-            operation.input.timingPolicy === 'reconcile_flexible'),
+            isConnectedTimingPolicy(operation.input.timingPolicy)),
       )
     )
       clearPendingTimingReview(removed.userId, removed.tripId);
@@ -1360,7 +1361,7 @@ export function applyOfflineMutation(
     const position = mutation.input.position;
     if (position === undefined) day.items.push(item);
     else day.items.splice(Math.min(Math.max(position, 0), day.items.length), 0, item);
-    if (mutation.input.timingPolicy !== 'reconcile_flexible') reslotItemByTime(day.items, item.id);
+    if (!isConnectedTimingPolicy(mutation.input.timingPolicy)) reslotItemByTime(day.items, item.id);
     normalizePositions(day.items);
     return next;
   }
@@ -1382,7 +1383,7 @@ export function applyOfflineMutation(
   if (mutation.kind === 'itinerary_item_update') {
     const before = itemSortMinute(item);
     applyInput(item, mutation.input, next);
-    if (mutation.input.timingPolicy !== 'reconcile_flexible' && itemSortMinute(item) !== before) {
+    if (!isConnectedTimingPolicy(mutation.input.timingPolicy) && itemSortMinute(item) !== before) {
       const day = next.days.find((candidate) =>
         candidate.items.some((candidateItem) => candidateItem.id === item.id),
       );

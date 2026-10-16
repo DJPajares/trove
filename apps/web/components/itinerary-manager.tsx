@@ -935,7 +935,13 @@ export function ItineraryManager({
         behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
         block: 'center',
       });
-      if (focus) element?.focus({ preventScroll: true });
+      if (focus)
+        (
+          element?.querySelector<HTMLElement>('h3 button, h3 a') ??
+          element?.querySelector<HTMLElement>('button')
+        )?.focus({
+          preventScroll: true,
+        });
     });
   }
 
@@ -1196,7 +1202,7 @@ export function ItineraryManager({
       try {
         const result = await createItineraryItem(tripId, {
           itineraryDayId: selectedDay.id,
-          timingPolicy: 'reconcile_flexible',
+          timingPolicy: 'review_flexible',
           schedule: { kind: 'none' },
           tripPlaceId,
         });
@@ -1482,6 +1488,13 @@ export function ItineraryManager({
         </Alert>
       ) : null}
       <TimingReviewNotice
+        tripId={tripId}
+        onApplied={refresh}
+        onOpenStop={openTripMapItem}
+        dayLabelFor={(id) => {
+          const index = itinerary.days.findIndex((day) => day.id === id);
+          return index >= 0 ? dayOption(itinerary.days[index]!, index) : '';
+        }}
         outcome={timingReview}
         pending={timingPending}
         nameFor={(id) => {

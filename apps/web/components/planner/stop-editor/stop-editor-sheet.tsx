@@ -254,7 +254,7 @@ function StopEditorBody({
       if (request.kind === 'edit') {
         const result = await updateItineraryItem(tripId, request.item.id, {
           ...built.input,
-          timingPolicy: 'reconcile_flexible',
+          timingPolicy: 'review_flexible',
         });
         await onSaved({
           timeZoneConsequence: Boolean(result.timeZoneConsequence),
@@ -263,7 +263,7 @@ function StopEditorBody({
       } else {
         const result = await createItineraryItem(
           tripId,
-          { ...built.input, itineraryDayId: request.dayId, timingPolicy: 'reconcile_flexible' },
+          { ...built.input, itineraryDayId: request.dayId, timingPolicy: 'review_flexible' },
           { position: request.insert?.position },
         );
         await onSaved({ timeZoneConsequence: false, scheduling: result.item.scheduling });

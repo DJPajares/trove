@@ -7,6 +7,8 @@ import {
 import {
   applyItineraryDayTiming,
   getItineraryDayTimeSuggestions,
+  getItineraryTimingReview,
+  applyItineraryTimingReview,
 } from '../src/services/itinerary-time-suggestions.js';
 import { readCachedRoute } from '../src/services/route-evidence-cache.js';
 import { floatingLocalTimeToInstant, parseLocalTime } from '../src/services/itinerary-rules.js';
@@ -98,6 +100,132 @@ const order = () =>
     .filter((i) => i.itineraryDayId === 'day')
     .toSorted((a, b) => Number(a.position) - Number(b.position))
     .map((i) => i.id);
+
+test('saving a stop with review policy preserves neighboring times until explicit acceptance', async () => {
+  seed();
+  item('a', 0, '09:00', false);
+  item('b', 1, '10:00');
+  const result = await updateItineraryItem('user', 'trip', 'a', {
+    durationMinutes: 90,
+    timingPolicy: 'review_flexible',
+  });
+  expect(store.itineraryItem.find((i) => i.id === 'b')!.localStartTime).toEqual(
+    parseLocalTime('10:00'),
+  );
+  expect(result.scheduling!.changes).toEqual([
+    expect.objectContaining({
+      itemId: 'b',
+      before: { localTime: '10:00', localEndTime: '11:00' },
+      after: { localTime: '10:30', localEndTime: '11:30' },
+    }),
+  ]);
+  const before = structuredClone(store.itineraryItem);
+  const preview = await getItineraryTimingReview('user', 'trip', 'day');
+  expect(store.itineraryItem).toEqual(before);
+  const accepted = await applyItineraryTimingReview('user', 'trip', 'day', {
+    ...preview.proposals![0]!,
+    itemIds: ['b'],
+  });
+  expect(accepted.applied.map((i) => i.itemId)).toEqual(['b']);
+  expect(store.itineraryItem.find((i) => i.id === 'b')!.localStartTime).toEqual(
+    parseLocalTime('10:30'),
+  );
+  expect(accepted.scheduling.changes).toEqual([]);
+  expect(getProviderCallCounts()).toEqual({});
+});
+
+test('new stops stay untimed until the traveller applies their preview', async () => {
+  seed();
+  item('a', 0, '09:00', false);
+  const added = await createItineraryItem('user', 'trip', {
+    clientItemId: 'new',
+    tripPlaceId: 'tp-new',
+    durationMinutes: 60,
+    itineraryDayId: 'day',
+    position: 1,
+    schedule: { kind: 'none' },
+    timingPolicy: 'review_flexible',
+  });
+  expect(added.localStartTime).toBe(null);
+  // A reconnect/retry must preserve the pending proposal for the same saved stop.
+  const retry = await createItineraryItem('user', 'trip', {
+    clientItemId: 'new',
+    tripPlaceId: 'tp-new',
+    durationMinutes: 60,
+    itineraryDayId: 'day',
+    position: 1,
+    schedule: { kind: 'none' },
+    timingPolicy: 'review_flexible',
+  });
+  expect(retry.scheduling!.changes).toEqual(added.scheduling!.changes);
+  const proposal = added.scheduling!.proposals![0]!;
+  expect(proposal.targetItemId).toBe('new');
+  await applyItineraryTimingReview('user', 'trip', 'day', { ...proposal, itemIds: ['new'] });
+  expect(store.itineraryItem.find((i) => i.id === 'new')!.localStartTime).toEqual(
+    parseLocalTime('10:00'),
+  );
+});
+
+test('review apply rejects stale, foreign and duplicate rows without writes', async () => {
+  seed();
+  item('a', 0, '09:00', false);
+  item('b', 1, '09:30');
+  const preview = await getItineraryTimingReview('user', 'trip', 'day');
+  const proposal = preview.proposals![0]!;
+  await expect(
+    applyItineraryTimingReview('user', 'trip', 'day', {
+      ...proposal,
+      targetItemId: 'b',
+      itemIds: ['b'],
+    }),
+  ).rejects.toThrow('itinerary_schedule_conflict');
+  for (const itemIds of [['a'], ['missing'], ['b', 'b']]) {
+    const before = structuredClone(store.itineraryItem);
+    await expect(
+      applyItineraryTimingReview('user', 'trip', 'day', { ...proposal, itemIds }),
+    ).rejects.toThrow('itinerary_schedule_conflict');
+    expect(store.itineraryItem).toEqual(before);
+  }
+  store.itineraryItem.find((i) => i.id === 'a')!.durationMinutes = 90;
+  const before = structuredClone(store.itineraryItem);
+  await expect(
+    applyItineraryTimingReview('user', 'trip', 'day', { ...proposal, itemIds: ['b'] }),
+  ).rejects.toThrow('itinerary_schedule_conflict');
+  await expect(getItineraryTimingReview('other-user', 'trip', 'day')).rejects.toThrow(
+    'trip_not_found',
+  );
+  await expect(
+    applyItineraryTimingReview('other-user', 'trip', 'day', { ...proposal, itemIds: ['b'] }),
+  ).rejects.toThrow('trip_not_found');
+  expect(store.itineraryItem).toEqual(before);
+});
+
+test('dependent changes require group acceptance and never silently retime an unselected stop', async () => {
+  seed();
+  item('a', 0, '09:00', false);
+  item('new', 1, '09:30');
+  item('b', 2, '10:00');
+  const preview = await getItineraryTimingReview('user', 'trip', 'day');
+  expect(preview.changes.map((c) => c.itemId)).toEqual(['new', 'b']);
+  const before = structuredClone(store.itineraryItem);
+  await expect(
+    applyItineraryTimingReview('user', 'trip', 'day', {
+      ...preview.proposals![0]!,
+      itemIds: ['new'],
+    }),
+  ).rejects.toThrow('itinerary_timing_group_required');
+  expect(store.itineraryItem).toEqual(before);
+  await applyItineraryTimingReview('user', 'trip', 'day', {
+    ...preview.proposals![0]!,
+    itemIds: ['new', 'b'],
+  });
+  expect(store.itineraryItem.find((i) => i.id === 'new')!.localStartTime).toEqual(
+    parseLocalTime('10:00'),
+  );
+  expect(store.itineraryItem.find((i) => i.id === 'b')!.localStartTime).toEqual(
+    parseLocalTime('11:00'),
+  );
+});
 test('insertion keeps the chosen position, assigns a complete flexible slot, and retains estimated provenance', async () => {
   seed();
   item('a', 0, '09:00', false);

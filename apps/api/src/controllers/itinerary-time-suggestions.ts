@@ -4,6 +4,8 @@ import { z } from 'zod';
 import {
   applyItineraryDayTiming,
   getItineraryDayTimeSuggestions,
+  getItineraryTimingReview,
+  applyItineraryTimingReview,
 } from '../services/itinerary-time-suggestions.js';
 import {
   ItineraryConflictError,
@@ -48,6 +50,8 @@ const batchSchema = z
     itemIds: z.array(z.uuid()).min(1).max(200),
   })
   .strict();
+const reviewQuerySchema = z.object({ targetItemId: z.uuid().optional() }).strict();
+const reviewApplySchema = batchSchema.extend({ targetItemId: z.uuid().nullable().optional() });
 
 function getUserId(request: FastifyRequest, reply: FastifyReply) {
   if (!request.authUserId) {
@@ -69,6 +73,46 @@ function handleError(reply: FastifyReply, error: unknown) {
 
 export function createItineraryTimeSuggestionControllers() {
   return {
+    async getTimingReview(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      const params = dayParamsSchema.safeParse(request.params);
+      const query = reviewQuerySchema.safeParse(request.query);
+      if (!userId) return;
+      if (!params.success || !query.success)
+        return reply.code(400).send({ code: 'invalid_itinerary_time_suggestion_request' });
+      try {
+        return reply.send(
+          await getItineraryTimingReview(
+            userId,
+            params.data.tripId,
+            params.data.itineraryDayId,
+            query.data.targetItemId,
+          ),
+        );
+      } catch (error) {
+        return handleError(reply, error);
+      }
+    },
+    async applyTimingReview(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getUserId(request, reply);
+      const params = dayParamsSchema.safeParse(request.params);
+      const body = reviewApplySchema.safeParse(request.body);
+      if (!userId) return;
+      if (!params.success || !body.success)
+        return reply.code(400).send({ code: 'invalid_itinerary_time_suggestion_request' });
+      try {
+        return reply.send(
+          await applyItineraryTimingReview(
+            userId,
+            params.data.tripId,
+            params.data.itineraryDayId,
+            body.data,
+          ),
+        );
+      } catch (error) {
+        return handleError(reply, error);
+      }
+    },
     async applyDayTiming(request: FastifyRequest, reply: FastifyReply) {
       const userId = getUserId(request, reply);
       const params = dayParamsSchema.safeParse(request.params);

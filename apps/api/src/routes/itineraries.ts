@@ -95,6 +95,16 @@ export function registerItineraryRoutes(app: FastifyInstance) {
     authenticated,
     timeSuggestionControllers.applyDayTiming,
   );
+  app.get(
+    '/trips/:tripId/itinerary/days/:itineraryDayId/timing-review',
+    authenticated,
+    timeSuggestionControllers.getTimingReview,
+  );
+  app.post(
+    '/trips/:tripId/itinerary/days/:itineraryDayId/timing-review',
+    authenticated,
+    timeSuggestionControllers.applyTimingReview,
+  );
   // Stored evidence only, so no provider fan-out: an ordinary authenticated read.
   app.get('/trips/:tripId/place-hours', authenticated, tripPlaceHoursControllers.getTripPlaceHours);
   // What offline Trip Mode keeps: stored legs and hours only, never acquired.

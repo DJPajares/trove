@@ -1,5 +1,8 @@
 export type TimingFlexibility = 'fixed' | 'flexible';
-export type TimingPolicy = 'preserve' | 'reconcile_flexible';
+export type TimingPolicy = 'preserve' | 'reconcile_flexible' | 'review_flexible';
+export function isConnectedTimingPolicy(policy: TimingPolicy | undefined) {
+  return policy === 'reconcile_flexible' || policy === 'review_flexible';
+}
 export type TimingProvenance = 'user_owned' | 'ai_estimated' | 'app_estimated';
 
 export type TimingIssueCode =
@@ -23,7 +26,17 @@ export type TimingChange = {
   before: { localTime: string | null; localEndTime: string | null };
   after: { localTime: string | null; localEndTime: string | null };
 };
-export type SchedulingOutcome = { changes: TimingChange[]; issues: TimingIssue[] };
+export type TimingReviewProposal = {
+  itineraryDayId: string;
+  scheduleRevision: string;
+  targetItemId: string | null;
+};
+export type SchedulingOutcome = {
+  changes: TimingChange[];
+  issues: TimingIssue[];
+  /** Absent in historical outcomes whose changes were already saved. */
+  proposals?: TimingReviewProposal[];
+};
 
 /** Extra slot fields are optional only for older cached/client payloads. New responses supply all. */
 export type ItineraryDayTimeSuggestion = {

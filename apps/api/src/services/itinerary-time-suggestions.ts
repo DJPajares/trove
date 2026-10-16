@@ -558,14 +558,13 @@ export async function getItineraryDayTimeSuggestions(
   ).response;
 }
 
-/** Called inside the structural edit's transaction. Unsolvable blocks never write neighbors. */
-export async function reconcileItineraryTiming(
+async function planItineraryTiming(
   transaction: Prisma.TransactionClient,
   userId: string,
   tripId: string,
   dayId: string,
   targetId?: string,
-): Promise<SchedulingOutcome> {
+) {
   const assessment = await assessDay(
     userId,
     tripId,
@@ -575,6 +574,7 @@ export async function reconcileItineraryTiming(
     new Date(),
     true,
   );
+  const writes = new Map<string, Prisma.ItineraryItemUpdateInput>();
   const outcome: SchedulingOutcome = { changes: [], issues: assessment.result.issues };
   for (const item of assessment.day.items) {
     const normalized = assessment.items.find((i) => i.id === item.id)!;
@@ -584,12 +584,9 @@ export async function reconcileItineraryTiming(
     const clear = item.id === targetId && !slot && item.localStartTime;
     if (!slot && !clear) {
       if (item.id === targetId && item.durationMinutes === null && normalized.duration)
-        await transaction.itineraryItem.update({
-          where: { id: item.id },
-          data: {
-            durationMinutes: normalized.duration.minutes,
-            durationProvenance: 'APP_ESTIMATED',
-          },
+        writes.set(item.id, {
+          durationMinutes: normalized.duration.minutes,
+          durationProvenance: 'APP_ESTIMATED',
         });
       continue;
     }
@@ -609,26 +606,23 @@ export async function reconcileItineraryTiming(
       localEndTime: null as string | null,
     };
     if (before.localTime === localTime && item.durationMinutes === slot?.durationMinutes) continue;
-    await transaction.itineraryItem.update({
-      where: { id: item.id },
-      data: {
-        localStartTime: localTime ? parseLocalTime(localTime) : null,
-        localEndTime: null,
-        startInstant: instant,
-        timeSemantics: localTime ? 'FLOATING_LOCAL' : null,
-        ...(localTime
-          ? {
-              timeZone,
-              timeZoneResolvedAt: new Date(),
-              ...(!item.timeZone ? { timeZoneSource: 'DAY_DEFAULT' as const } : {}),
-            }
-          : {}),
-        timingFlexibility: 'FLEXIBLE',
-        timeProvenance: localTime ? 'APP_ESTIMATED' : null,
-        ...(slot && item.durationMinutes === null
-          ? { durationMinutes: slot.durationMinutes, durationProvenance: 'APP_ESTIMATED' }
-          : {}),
-      },
+    writes.set(item.id, {
+      localStartTime: localTime ? parseLocalTime(localTime) : null,
+      localEndTime: null,
+      startInstant: instant,
+      timeSemantics: localTime ? 'FLOATING_LOCAL' : null,
+      ...(localTime
+        ? {
+            timeZone,
+            timeZoneResolvedAt: new Date(),
+            ...(!item.timeZone ? { timeZoneSource: 'DAY_DEFAULT' as const } : {}),
+          }
+        : {}),
+      timingFlexibility: 'FLEXIBLE',
+      timeProvenance: localTime ? 'APP_ESTIMATED' : null,
+      ...(slot && item.durationMinutes === null
+        ? { durationMinutes: slot.durationMinutes, durationProvenance: 'APP_ESTIMATED' }
+        : {}),
     });
     if (before.localTime && item.durationMinutes !== null)
       before.localEndTime = formatInstantInTimeZone(
@@ -646,7 +640,115 @@ export async function reconcileItineraryTiming(
       after: { localTime, localEndTime },
     });
   }
+  const reviewRevision = createHash('sha256')
+    .update(
+      JSON.stringify({
+        revision: assessment.response.scheduleRevision,
+        targetItemId: targetId ?? null,
+        changes: outcome.changes,
+      }),
+    )
+    .digest('hex');
+  return { outcome, writes, reviewRevision };
+}
+
+/** Legacy callers may reconcile immediately; review callers receive a read-only proposal. */
+export async function reconcileItineraryTiming(
+  transaction: Prisma.TransactionClient,
+  userId: string,
+  tripId: string,
+  dayId: string,
+  targetId?: string,
+  review = false,
+): Promise<SchedulingOutcome> {
+  const { outcome, writes, reviewRevision } = await planItineraryTiming(
+    transaction,
+    userId,
+    tripId,
+    dayId,
+    targetId,
+  );
+  if (review)
+    return {
+      ...outcome,
+      proposals: [
+        {
+          itineraryDayId: dayId,
+          scheduleRevision: reviewRevision,
+          targetItemId: targetId ?? null,
+        },
+      ],
+    };
+  for (const [id, data] of writes) await transaction.itineraryItem.update({ where: { id }, data });
   return outcome;
+}
+
+export async function getItineraryTimingReview(
+  userId: string,
+  tripId: string,
+  dayId: string,
+  targetId?: string,
+) {
+  return reconcileItineraryTiming(getPrismaClient(), userId, tripId, dayId, targetId, true);
+}
+
+/** Applies only the reviewed rows, atomically; dependent rows require explicit group acceptance. */
+export async function applyItineraryTimingReview(
+  userId: string,
+  tripId: string,
+  dayId: string,
+  input: { scheduleRevision: string; itemIds: string[]; targetItemId?: string | null },
+) {
+  return getPrismaClient().$transaction(
+    async (transaction) => {
+      const target = input.targetItemId ?? undefined;
+      const { outcome, writes, reviewRevision } = await planItineraryTiming(
+        transaction,
+        userId,
+        tripId,
+        dayId,
+        target,
+      );
+      const selected = new Set(input.itemIds);
+      if (
+        reviewRevision !== input.scheduleRevision ||
+        !selected.size ||
+        selected.size !== input.itemIds.length ||
+        input.itemIds.some((id) => !outcome.changes.some((change) => change.itemId === id))
+      )
+        throw new ItineraryConflictError('itinerary_schedule_conflict');
+      for (const id of selected)
+        await transaction.itineraryItem.update({ where: { id }, data: writes.get(id)! });
+      // Pin every remaining exact slot while checking this selection. Never save
+      // unreviewed neighbor changes to make an individual suggestion succeed.
+      const trip = await transaction.trip.findFirst({
+        where: { id: tripId, ownerId: userId },
+        include: TIMING_TRIP_INCLUDE,
+      });
+      if (!trip) throw new ItineraryNotFoundError('trip_not_found');
+      const validated = await assessDay(userId, tripId, dayId, {}, transaction, new Date(), false, {
+        trip,
+        validateOnly: true,
+      });
+      const related = (issue: import('@trove/types').TimingIssue) =>
+        selected.has(issue.itemId) || issue.references.some((id) => selected.has(id));
+      if (validated.result.issues.some((issue) => issue.severity === 'conflict' && related(issue)))
+        throw new ItineraryConflictError('itinerary_timing_group_required');
+      const scheduling = await reconcileItineraryTiming(
+        transaction,
+        userId,
+        tripId,
+        dayId,
+        target,
+        true,
+      );
+      return {
+        scheduling,
+        applied: outcome.changes.filter((change) => selected.has(change.itemId)),
+      };
+    },
+    { isolationLevel: 'Serializable' },
+  );
 }
 
 export async function applyItineraryDayTiming(

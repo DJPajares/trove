@@ -852,8 +852,16 @@ export async function applyItineraryTimingReview(
   );
   return result;
 }
-export async function saveItineraryTimingReview(tripId: string, outcome: SchedulingOutcome) {
+export async function saveItineraryTimingReview(
+  tripId: string,
+  outcome: SchedulingOutcome,
+  options: { expected?: SchedulingOutcome } = {},
+) {
   const auth = await getAuthContext();
+  // A newer edit or dismissal can land while authentication is resolving.
+  if (options.expected && storedTimingPending(auth.userId, tripId)) return;
+  const stored = options.expected ? storedTimingReview(auth.userId, tripId) : null;
+  if (stored && JSON.stringify(stored) !== JSON.stringify(options.expected)) return;
   publishTimingReview(auth.userId, tripId, outcome);
 }
 

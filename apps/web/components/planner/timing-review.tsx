@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { formatSuggestedClock } from '@/lib/itinerary/day-time-suggestions';
+import { acknowledgeTimingReview } from '@/lib/itinerary/timing-review-state';
 import { describeTimingIssue } from '@/lib/itinerary/timing-issue-description';
 import { withItineraryEdit } from '@/lib/itinerary/edit-lifecycle';
 import {
@@ -24,6 +25,7 @@ type Props = {
   outcome: SchedulingOutcome | null;
   nameFor: (id: string) => string;
   dayLabelFor: (id: string) => string;
+  dayLabelForItem: (id: string) => string;
   onOpenStop: (id: string) => void;
   onApplied: () => Promise<void>;
   pending: boolean;
@@ -39,6 +41,7 @@ function TimingReviewBody({
   outcome,
   nameFor,
   dayLabelFor,
+  dayLabelForItem,
   tripId,
   onApplied,
   onClose,
@@ -93,7 +96,7 @@ function TimingReviewBody({
     return () => controller.abort();
   }, [attempt, online, tripId, t]);
 
-  const current = proposed ? combine(reviews) : outcome;
+  const current = proposed ? { ...combine(reviews), issues: outcome.issues } : outcome;
   const changes = [
     ...current.changes,
     ...applied.filter((row) => !current.changes.some((change) => change.itemId === row.itemId)),
@@ -151,6 +154,23 @@ function TimingReviewBody({
       setStatus('error');
     }
   }
+  async function acknowledge() {
+    // A proposal still loading has not been reviewed; closing preserves it.
+    if (status !== 'ready') {
+      onClose();
+      return;
+    }
+    setStatus('saving');
+    try {
+      await saveItineraryTimingReview(tripId, acknowledgeTimingReview(current), {
+        expected: outcome,
+      });
+      onClose();
+    } catch {
+      setError(t('connectedTiming.applyError'));
+      setStatus('error');
+    }
+  }
   async function refreshReview() {
     setStatus('loading');
     try {
@@ -169,7 +189,13 @@ function TimingReviewBody({
     <>
       <SheetHeading
         title={t('connectedTiming.review')}
-        description={t(proposed ? 'connectedTiming.proposalHint' : 'connectedTiming.reviewHint')}
+        description={t(
+          proposed
+            ? 'connectedTiming.proposalHint'
+            : outcome.changes.length
+              ? 'connectedTiming.reviewHint'
+              : 'connectedTiming.reviewUnresolvedHint',
+        )}
       />
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-5">
         {!online ? (
@@ -294,6 +320,7 @@ function TimingReviewBody({
               <ul className="space-y-3">
                 {current.issues.map((issue, index) => (
                   <li className="space-y-1" key={`${issue.itemId}:${issue.code}:${index}`}>
+                    <p className="text-xs text-muted-foreground">{dayLabelForItem(issue.itemId)}</p>
                     <p className="text-sm font-medium">{nameFor(issue.itemId)}</p>
                     <p className="text-sm leading-5 text-muted-foreground">
                       {describeTimingIssue(issue, {
@@ -345,7 +372,7 @@ function TimingReviewBody({
           : null}
         <Button
           disabled={busy}
-          onClick={() => void (canKeepCurrent ? discard() : onClose())}
+          onClick={() => void (canKeepCurrent ? discard() : acknowledge())}
           type="button"
           variant="outline"
         >
@@ -361,6 +388,9 @@ export function TimingReviewNotice({ outcome, pending, ...props }: Readonly<Prop
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const jumped = useRef<string | null>(null);
+  const issueDays = [
+    ...new Set(outcome?.issues.map((issue) => props.dayLabelForItem(issue.itemId)).filter(Boolean)),
+  ];
   const visible = pending || Boolean(outcome?.changes.length || outcome?.issues.length);
   if (!visible && !open) return null;
   return (
@@ -381,7 +411,10 @@ export function TimingReviewNotice({ outcome, pending, ...props }: Readonly<Prop
                     ? outcome.proposals?.length
                       ? 'connectedTiming.suggestionsReady'
                       : 'connectedTiming.changed'
-                    : 'connectedTiming.needsReview',
+                    : issueDays.length === 1
+                      ? 'connectedTiming.needsReviewForDay'
+                      : 'connectedTiming.needsReview',
+                { day: issueDays[0] ?? '' },
               )}
             </span>
             {!pending ? (

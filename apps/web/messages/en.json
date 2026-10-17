@@ -2406,7 +2406,8 @@
       "applyError": "We couldn’t confirm the timing changes. Refresh the review before trying again.",
       "onlineReview": "Connect to the internet to review and apply timing suggestions.",
       "openStopNamed": "Open {name} in the itinerary",
-      "applySuggestionFor": "Apply timing suggestion for {name}"
+      "applySuggestionFor": "Apply timing suggestion for {name}",
+      "needsReviewForDay": "Timing needs a review on {day}."
     },
     "movement": {
       "title": "Review this move",

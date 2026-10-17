@@ -12,7 +12,7 @@ function ChipGroup<Value extends string>({
   return (
     <ToggleGroupPrimitive
       data-slot="chip-group"
-      className={cn('flex flex-wrap gap-1.5', className)}
+      className={cn('interaction-scrollbar flex flex-wrap gap-1.5', className)}
       {...props}
     />
   );

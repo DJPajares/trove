@@ -1143,7 +1143,7 @@ export function SavedPlacesManager({
             )}
             {small ? null : (
               <ChipGroup
-                className="interaction-scrollbar -mx-1 flex-nowrap overflow-x-auto px-1 pb-1"
+                className="-mx-1 flex-nowrap overflow-x-auto px-1 pb-1"
                 multiple={false}
                 onValueChange={([value]) => setCategoryFilter((value ?? 'all') as CategoryFilter)}
                 value={[categoryFilter]}

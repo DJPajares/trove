@@ -110,3 +110,24 @@ export function projectedCostTotals(input: {
 
   return totalByCurrency(values);
 }
+
+/**
+ * The trip day an expense belongs to.
+ *
+ * A dated expense belongs to the trip day with that date: the date is when the
+ * money was spent, and the day follows from it. A link stored when the expense
+ * was saved is not trusted on its own, because trip days come and go - a date
+ * change removes and recreates them, an extension adds new ones - and a link
+ * written before then can point at no day, or at a day with a different date.
+ *
+ * An undated expense keeps the day it took from its itinerary item, while that
+ * day is still on the trip. Anything else belongs to no day.
+ */
+export function expenseDayFor<Day extends { date: string; id: string }>(
+  expense: { itineraryDayId: string | null; localDate: string | null },
+  days: readonly Day[],
+): Day | null {
+  if (expense.localDate) return days.find((day) => day.date === expense.localDate) ?? null;
+  if (!expense.itineraryDayId) return null;
+  return days.find((day) => day.id === expense.itineraryDayId) ?? null;
+}

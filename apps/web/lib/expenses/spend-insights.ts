@@ -278,6 +278,8 @@ export { fromMinorUnits };
  */
 export type SpendExpense = {
   amount: string;
+  /** When the money was spent; the day it decides wins over a stored link. */
+  localDate?: string | null;
   category: ExpenseCategory | null;
   currencyCode: string;
   itineraryDay: { id: string } | null;
@@ -295,6 +297,21 @@ export type SpendExpense = {
  */
 function placeIdOf(expense: SpendExpense): string | null {
   return expense.tripPlace?.id ?? expense.itineraryItem?.place?.id ?? null;
+}
+
+/**
+ * The trip day an expense belongs to, by the server's rule: a dated expense
+ * lands on the day with its date, an undated one on the day it was linked to.
+ * Applied here too so an expense cached before the server resolved it this way
+ * still lands on its day rather than off it.
+ */
+export function expenseDayId(
+  expense: Pick<SpendExpense, 'itineraryDay' | 'localDate'>,
+  days: ReadonlyArray<{ date: string; id: string }>,
+): string | null {
+  if (expense.localDate) return days.find((day) => day.date === expense.localDate)?.id ?? null;
+  const linked = expense.itineraryDay?.id;
+  return linked && days.some((day) => day.id === linked) ? linked : null;
 }
 
 export type SpendBucket<Key> = {
@@ -448,7 +465,7 @@ export function buildSpendBreakdown(input: {
     // trip still has that day. An expense left pointing at a day a later date
     // edit removed would otherwise land in a bucket nothing reads, and vanish
     // from both halves of the screen rather than showing up in one.
-    const dayId = expense.itineraryDay?.id;
+    const dayId = expenseDayId(expense, days);
     if (!dayId || !tripDayIds.has(dayId)) {
       offDayExpenses.push(expense);
       continue;
@@ -520,7 +537,12 @@ export type SpendFilter = {
   value: string;
 };
 
-export function matchesSpendFilter(expense: SpendExpense, filter: SpendFilter | null): boolean {
+export function matchesSpendFilter(
+  expense: SpendExpense,
+  filter: SpendFilter | null,
+  /** The trip's days, so a day filter places expenses by the same rule as the totals. */
+  days: ReadonlyArray<{ date: string; id: string }> = [],
+): boolean {
   if (!filter) return true;
 
   switch (filter.kind) {
@@ -529,7 +551,7 @@ export function matchesSpendFilter(expense: SpendExpense, filter: SpendFilter | 
     case 'currency':
       return expense.currencyCode.trim().toUpperCase() === filter.value;
     case 'day':
-      return expense.itineraryDay?.id === filter.value;
+      return expenseDayId(expense, days) === filter.value;
     case 'place':
       return placeIdOf(expense) === filter.value;
   }

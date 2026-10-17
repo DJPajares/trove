@@ -5,6 +5,8 @@ import type { ReactNode } from 'react';
 
 import { SpendBudgetBar } from '@/components/expenses/spend-budget-bar';
 import { useTripContext } from '@/components/trip-provider';
+import { Plus } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 import { useSpendReference } from '@/hooks/use-spend-reference';
 import { formatCurrencyAmount, formatMinorUnits } from '@/lib/currency/money';
@@ -87,33 +89,45 @@ export function TripSpendPanel({
     : null;
   const percentLabel = new Intl.NumberFormat(locale, { style: 'percent' });
 
+  const stats = [
+    perDay !== null
+      ? {
+          label: t('spend.stats.dailyAverage'),
+          value: formatMinorUnits(locale, perDay, reference.code),
+        }
+      : null,
+    perRemainingDay !== null && pace
+      ? {
+          label: t('spend.stats.leftPerDay', { days: pace.remainingDays }),
+          value: formatMinorUnits(locale, perRemainingDay, reference.code),
+        }
+      : null,
+  ].filter((stat): stat is { label: string; value: string } => stat !== null);
+
   return (
-    // The trip's navigation row already rules off the top of the screen this
-    // opens, so a second line directly beneath it would only stutter.
     <section
       aria-label={t('title', { trip: trip?.name ?? '' })}
-      className="border-b border-border pb-5"
+      className="space-y-4 rounded-[var(--radius-xl)] border border-border-subtle bg-card p-4 sm:p-5"
     >
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+      <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 space-y-1">
-          <p className="text-sm font-medium">{t('spend.totalLabel')}</p>
+          <p className="text-sm text-muted-foreground">{t('spend.totalLabel')}</p>
           <TotalAmount reference={reference.code} total={actual} />
         </div>
-        <Button onClick={onEditBudget} size="sm" variant="ghost">
-          {budget ? t('editBudget') : t('setBudget')}
-        </Button>
+        {budget ? (
+          <Button className="-mr-2 shrink-0" onClick={onEditBudget} size="sm" variant="ghost">
+            {t('editBudget')}
+          </Button>
+        ) : null}
       </div>
 
-      {position.verdict === 'unknown' ? (
-        // Only an absent budget is worth prompting for. A budget that is set but
-        // cannot be priced is explained by the note below, not by asking the
-        // traveller to set the thing they have already set.
-        budget ? null : (
-          <p className="mt-4 text-sm text-muted-foreground">{t('spend.noBudgetPrompt')}</p>
-        )
-      ) : (
-        <div className="mt-4 space-y-2">
-          <SpendBudgetBar currencyCode={reference.code} position={position} />
+      {position.verdict !== 'unknown' ? (
+        <div className="space-y-2">
+          <SpendBudgetBar
+            currencyCode={reference.code}
+            paceRatio={pace && pace.totalDays > 0 ? pace.elapsedDays / pace.totalDays : null}
+            position={position}
+          />
           <p className={cn('text-sm font-medium', VERDICT_TONE[position.verdict])}>
             {t(`spend.verdict.${pace?.phase ?? 'upcoming'}.${position.verdict}`, {
               amount: formatMinorUnits(
@@ -130,27 +144,35 @@ export function TripSpendPanel({
             })}
           </p>
         </div>
-      )}
-
-      {perDay !== null || perRemainingDay !== null ? (
-        <p className="mt-3 flex flex-wrap gap-x-2 text-sm text-muted-foreground">
-          {perDay !== null ? (
-            <span>
-              {t(pace?.phase === 'finished' ? 'spend.pace.perDayFinished' : 'spend.pace.perDay', {
-                amount: formatMinorUnits(locale, perDay, reference.code),
-              })}
-            </span>
-          ) : null}
-          {perRemainingDay !== null && pace ? (
-            <span>
-              {t('spend.pace.remainingPerDay', {
-                amount: formatMinorUnits(locale, perRemainingDay, reference.code),
-                days: pace.remainingDays,
-              })}
-            </span>
-          ) : null}
-        </p>
       ) : null}
+
+      {stats.length ? (
+        <dl className="grid grid-cols-2 gap-2">
+          {stats.map((stat) => (
+            <div
+              className="flex flex-col-reverse gap-0.5 rounded-[var(--radius-lg)] bg-surface-tint/60 px-3 py-2.5"
+              key={stat.label}
+            >
+              <dt className="text-xs text-muted-foreground">{stat.label}</dt>
+              <dd className="text-base font-semibold tabular-nums">{stat.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+
+      {/* Without a budget there is nothing to be on track for; offer one, quietly. */}
+      {budget ? null : (
+        <Button
+          className="w-full border-dashed"
+          onClick={onEditBudget}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          <Plus aria-hidden="true" data-icon="inline-start" />
+          {t('spend.addBudget')}
+        </Button>
+      )}
 
       <ApproximationNote boardStatus={boardStatus} now={now} total={actual} />
     </section>
@@ -184,7 +206,7 @@ function TotalAmount({ reference, total }: Readonly<{ reference: string; total: 
             })
           : undefined
       }
-      className="flex items-baseline gap-1 text-2xl font-semibold tracking-tight tabular-nums"
+      className="flex items-baseline gap-1 text-3xl font-semibold tracking-[-0.02em] tabular-nums"
     >
       {total.isApproximate ? (
         <span aria-hidden="true" className="text-muted-foreground">
@@ -235,7 +257,7 @@ function ApproximationNote({
 
   if (!notes.length) return null;
 
-  return <p className="mt-3 text-xs text-muted-foreground">{notes.join(' ')}</p>;
+  return <p className="text-xs text-muted-foreground">{notes.join(' ')}</p>;
 }
 
 function EmptyPosition({

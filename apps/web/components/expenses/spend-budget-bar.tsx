@@ -19,8 +19,14 @@ const VERDICT_FILL: Record<Exclude<BudgetVerdict, 'unknown'>, string> = {
 
 export function SpendBudgetBar({
   currencyCode,
+  paceRatio = null,
   position,
-}: Readonly<{ currencyCode: string; position: BudgetPosition }>) {
+}: Readonly<{
+  currencyCode: string;
+  /** How far through the trip today is, 0-1; marks where an even spend would be. */
+  paceRatio?: number | null;
+  position: BudgetPosition;
+}>) {
   const t = useTranslations('expenses');
   const locale = useLocale();
 
@@ -52,14 +58,24 @@ export function SpendBudgetBar({
         </Progress.Label>
         <Progress.Value className="shrink-0 tabular-nums">{() => percentLabel}</Progress.Value>
       </div>
-      <Progress.Track className="h-2 overflow-hidden rounded-full bg-muted">
-        <Progress.Indicator
-          className={cn(
-            'rounded-full transition-[width] duration-[var(--motion-slow)] ease-[var(--ease-standard)] motion-reduce:transition-none',
-            VERDICT_FILL[position.verdict],
-          )}
-        />
-      </Progress.Track>
+      <div className="relative">
+        <Progress.Track className="h-2.5 overflow-hidden rounded-full bg-muted">
+          <Progress.Indicator
+            className={cn(
+              'rounded-full transition-[width] duration-[var(--motion-slow)] ease-[var(--ease-standard)] motion-reduce:transition-none',
+              VERDICT_FILL[position.verdict],
+            )}
+          />
+        </Progress.Track>
+        {/* Where an even spend would be by today: short of it is under pace. */}
+        {paceRatio !== null && paceRatio > 0 && paceRatio < 1 ? (
+          <span
+            aria-hidden="true"
+            className="absolute -top-1 h-4.5 w-0.5 -translate-x-1/2 rounded-full bg-foreground/70"
+            style={{ left: `${paceRatio * 100}%` }}
+          />
+        ) : null}
+      </div>
     </Progress.Root>
   );
 }

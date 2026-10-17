@@ -25,13 +25,15 @@ export function createExpenseForm(
   expense: Expense | null,
   budget: CurrencyTotal | null,
   preferredCurrency: string | null = null,
+  /** A new expense's date, so it lands on a day rather than off every day. */
+  defaultDate: string | null = null,
 ): ExpenseForm {
   return {
     amount: expense?.amount ?? '',
     category: expense?.category ?? 'none',
     currencyCode: expense?.currencyCode ?? preferredCurrency ?? budget?.currencyCode ?? '',
     itineraryItemId: expense?.itineraryItem?.id ?? 'none',
-    localDate: expense?.localDate ?? '',
+    localDate: expense ? (expense.localDate ?? '') : (defaultDate ?? ''),
     localTime: expense?.localTime ?? '',
     note: expense?.note ?? '',
     title: expense?.title ?? '',

@@ -43,6 +43,57 @@ function unwrapLongitudes(points: readonly SketchPoint[]) {
 
 const round = (value: number) => Math.round(value * 10) / 10;
 
+/** Where a coordinate lands in a sketch's box. */
+export type SketchProjection = (point: SketchPoint) => { x: number; y: number };
+
+/**
+ * Fits coordinates into a box, north up, with distances kept true to each
+ * other at their latitude. Every drawing of a route shares it, so a stop and
+ * the road into it land in the same place. Null when the coordinates are too
+ * close together to make a shape.
+ */
+export function sketchProjection(
+  points: readonly SketchPoint[],
+  box: RouteSketchBox,
+): SketchProjection | null {
+  if (!points.length) return null;
+  const longitudes = unwrapLongitudes(points);
+  const latitudes = points.map((point) => point.latitude);
+  const meanLatitude = latitudes.reduce((total, value) => total + value, 0) / latitudes.length;
+  const squeeze = Math.max(0.05, Math.cos((meanLatitude * Math.PI) / 180));
+  const reference = longitudes[0] ?? 0;
+
+  const minX = Math.min(...longitudes) * squeeze;
+  const maxX = Math.max(...longitudes) * squeeze;
+  const minY = Math.min(...latitudes);
+  const maxY = Math.max(...latitudes);
+  const spanX = maxX - minX;
+  const spanY = maxY - minY;
+  if (Math.max(spanX, spanY) < MIN_SPAN_DEGREES) return null;
+
+  const innerWidth = box.width - box.padding * 2;
+  const innerHeight = box.height - box.padding * 2;
+  const scale = Math.min(
+    spanX > 0 ? innerWidth / spanX : Number.POSITIVE_INFINITY,
+    spanY > 0 ? innerHeight / spanY : Number.POSITIVE_INFINITY,
+  );
+  // Centred in the box along whichever axis has room to spare.
+  const offsetX = box.padding + (innerWidth - spanX * scale) / 2;
+  const offsetY = box.padding + (innerHeight - spanY * scale) / 2;
+
+  return (point) => {
+    // The same unwrapping as the bounds, so a point across the antimeridian
+    // lands beside its neighbours rather than a world away.
+    let longitude = point.longitude;
+    while (longitude - reference > 180) longitude -= 360;
+    while (longitude - reference < -180) longitude += 360;
+    return {
+      x: round(offsetX + (longitude * squeeze - minX) * scale),
+      y: round(offsetY + (maxY - point.latitude) * scale),
+    };
+  };
+}
+
 /**
  * Fits the places into a box, north up, with distances kept true to each other
  * at the places' latitude, and returns the line and its points, one per place
@@ -65,32 +116,11 @@ export function routeSketch(
   if (distinct.size < (options.minDistinct ?? DEFAULT_MIN_DISTINCT)) return null;
 
   const longitudes = unwrapLongitudes(places);
-  const latitudes = places.map((place) => place.latitude);
-  const meanLatitude = latitudes.reduce((total, value) => total + value, 0) / latitudes.length;
-  const squeeze = Math.max(0.05, Math.cos((meanLatitude * Math.PI) / 180));
-
-  const minX = Math.min(...longitudes) * squeeze;
-  const maxX = Math.max(...longitudes) * squeeze;
-  const minY = Math.min(...latitudes);
-  const maxY = Math.max(...latitudes);
-  const spanX = maxX - minX;
-  const spanY = maxY - minY;
-  if (Math.max(spanX, spanY) < MIN_SPAN_DEGREES) return null;
-
-  const innerWidth = box.width - box.padding * 2;
-  const innerHeight = box.height - box.padding * 2;
-  const scale = Math.min(
-    spanX > 0 ? innerWidth / spanX : Number.POSITIVE_INFINITY,
-    spanY > 0 ? innerHeight / spanY : Number.POSITIVE_INFINITY,
+  const project = sketchProjection(places, box);
+  if (!project) return null;
+  const points = places.map((place, index) =>
+    project({ latitude: place.latitude, longitude: longitudes[index] ?? place.longitude }),
   );
-  // Centred in the box along whichever axis has room to spare.
-  const offsetX = box.padding + (innerWidth - spanX * scale) / 2;
-  const offsetY = box.padding + (innerHeight - spanY * scale) / 2;
-
-  const points = places.map((place, index) => ({
-    x: round(offsetX + ((longitudes[index] ?? place.longitude) * squeeze - minX) * scale),
-    y: round(offsetY + (maxY - place.latitude) * scale),
-  }));
 
   return { height: box.height, path: smoothPath(points), points, width: box.width };
 }
@@ -100,7 +130,7 @@ export function routeSketch(
  * at it: straight to the first midpoint, a curve around every point in between
  * with the midpoints as its ends, and straight in to the last.
  */
-function smoothPath(points: ReadonlyArray<{ x: number; y: number }>) {
+export function smoothPath(points: ReadonlyArray<{ x: number; y: number }>) {
   const first = points[0];
   if (!first) return '';
 

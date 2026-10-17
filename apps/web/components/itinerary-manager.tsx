@@ -115,7 +115,7 @@ import { withDayPartBands } from '@/lib/itinerary/day-bands';
 import { dayFacts, dayHeading } from '@/lib/itinerary/day-facts';
 import { localityFromAddress, sameTown } from '@/lib/itinerary/day-place';
 import { buildDaySequence, dayStopNumbers, resolveDailyBases } from '@/lib/itinerary/day-sequence';
-import { daySketchPlaces } from '@/lib/itinerary/day-sketch';
+import { dayRouteDrawing, daySketchPlaces } from '@/lib/itinerary/day-sketch';
 import { plannerDays } from '@/lib/itinerary/planner-days';
 import { stayChapters } from '@/lib/itinerary/stay-chapters';
 import {
@@ -138,7 +138,6 @@ import { useTripPlaceHours } from '@/lib/trip-places/use-trip-place-hours';
 import { untimedItems } from '@/lib/itinerary/day-time-suggestions';
 import { describeTimingIssue } from '@/lib/itinerary/timing-issue-description';
 import { overviewMapLifecycle, planningMapLifecycle } from '@/lib/maps/map-retention';
-import { routeSketch } from '@/lib/maps/route-sketch';
 import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editorial-images';
 import { problemsByStop } from '@/lib/plan-score/attention';
 import { serverNow } from '@/lib/plan-score/clock';
@@ -782,10 +781,7 @@ export function ItineraryManager({
     () => (itinerary ? daySketchPlaces(daySequence, itinerary.tripPlaces) : []),
     [daySequence, itinerary],
   );
-  const daySketch = useMemo(
-    () => routeSketch(sketchPlaces, DAY_SKETCH_BOX, { minDistinct: 2 }),
-    [sketchPlaces],
-  );
+  const daySketch = useMemo(() => dayRouteDrawing(sketchPlaces, DAY_SKETCH_BOX), [sketchPlaces]);
   const { hasBeenVisible: insightsVisible, ref: insightsSentinelRef } =
     useInViewOnce<HTMLDivElement>();
 
@@ -1583,8 +1579,8 @@ export function ItineraryManager({
                 buildDaySequence({ bases: resolveDailyBases({ day }), items: day.items }),
                 itinerary.tripPlaces,
               );
-              const sketch = routeSketch(places, DAY_SKETCH_BOX, { minDistinct: 2 });
-              return sketch ? <DayRouteSketch places={places} sketch={sketch} /> : null;
+              const drawing = dayRouteDrawing(places, DAY_SKETCH_BOX);
+              return drawing ? <DayRouteSketch drawing={drawing} places={places} /> : null;
             }}
             stayName={(tripPlaceId) => placeName(tripPlaceById(tripPlaceId))}
             timeFormat={preferences.timeFormat}
@@ -1718,9 +1714,8 @@ export function ItineraryManager({
                   />
                 ) : null
               }
-              sketch={
-                daySketch ? <DayRouteSketch places={sketchPlaces} sketch={daySketch} /> : null
-              }
+              sketch={<DayRouteSketch drawing={daySketch} places={sketchPlaces} />}
+              unmapped={selectedDay.items.filter((item) => !item.tripPlace?.place.location).length}
               weather={
                 <DayWeatherCard
                   date={selectedDay.date}

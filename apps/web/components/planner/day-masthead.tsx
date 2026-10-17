@@ -6,42 +6,16 @@ import { useLocale, useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 
 import { DayHeaderMedia } from '@/components/day-header-media';
-import { usePreferences } from '@/components/preferences-provider';
 import type { DayFacts, dayHeading } from '@/lib/itinerary/day-facts';
-import { formatDistanceValue } from '@/lib/itinerary/format-distance';
-import { formatPlannedDuration, formatTravelDuration } from '@/lib/itinerary/route-format';
 import type { DayHeaderPhotoResolution } from '@/lib/media/day-header-photos';
-import { cn } from '@/lib/utils';
-import * as Icons from '@/lib/icons';
 
 import { DayNote, DayTitle } from './day-inline-edit';
+import { DaySummary } from './day-summary';
 import { paddedDayNumber } from './planner-ribbon';
 
 /** How far, or how fast, a swipe on the photograph has to travel to change day. */
 const SWIPE_DISTANCE = 64;
 const SWIPE_VELOCITY = 420;
-
-/** One measure of the day: its value large, what it measures beneath. */
-function Fact({
-  label,
-  pending,
-  title,
-  value,
-}: Readonly<{ label: string; pending?: boolean; title?: string; value: string }>) {
-  return (
-    <div className="flex min-w-0 flex-col-reverse gap-0.5" title={title}>
-      <dt className="truncate text-xs text-muted-foreground">{label}</dt>
-      <dd
-        className={cn(
-          'truncate text-base leading-tight font-semibold tracking-[-0.01em] tabular-nums',
-          pending && 'animate-pulse text-muted-foreground motion-reduce:animate-none',
-        )}
-      >
-        {value}
-      </dd>
-    </div>
-  );
-}
 
 /**
  * The top of a day: what it is called, where it is, and what shape it is in.
@@ -81,6 +55,7 @@ export function DayMasthead({
   routesLoading,
   scoreChip,
   sketch,
+  unmapped,
   weather,
 }: Readonly<{
   /** What a wide screen offers beside the day's content: adding a stop. */
@@ -110,15 +85,15 @@ export function DayMasthead({
   routeNotes?: ReactNode;
   routesLoading: boolean;
   scoreChip?: ReactNode;
-  /** The drawn route, when the day has enough located places to draw one. */
-  sketch: ReactNode | null;
+  /** The day's route, drawn from what the trip already holds. */
+  sketch: ReactNode;
+  /** Stops with nowhere to be on a map, which the drawing leaves out. */
+  unmapped: number;
   /** The day's own weather, under its photograph. */
   weather: ReactNode;
 }>) {
   const t = useTranslations('itinerary.planner.masthead');
-  const routesT = useTranslations('itinerary.routes');
   const locale = useLocale();
-  const { preferences } = usePreferences();
   const reduced = useReducedMotion();
 
   const longDate = new Intl.DateTimeFormat(locale, {
@@ -134,9 +109,6 @@ export function DayMasthead({
     if (forward) onNextDay?.();
     else if (back) onPreviousDay?.();
   }
-
-  const travel = compactTravel ? null : facts.travel;
-  const unit = routesT(`units.${preferences.distanceUnit}`);
 
   return (
     <header
@@ -201,75 +173,33 @@ export function DayMasthead({
       <div className="space-y-3">
         <div className="flex items-stretch gap-3">
           <div className="min-w-0 flex-1 space-y-2">
-            {facts.stopCount ? (
-              <dl className="grid h-full grid-cols-2 content-center gap-x-4 gap-y-3 rounded-[var(--radius-lg)] border border-border-subtle bg-card px-3.5 py-3 sm:grid-cols-4">
-                <Fact
-                  label={t('facts.stops', { count: facts.stopCount })}
-                  value={String(facts.stopCount)}
-                />
-                {facts.planned ? (
-                  <Fact
-                    label={t('facts.planned')}
-                    value={`${facts.planned.approximate ? '≈' : ''}${formatPlannedDuration(
-                      facts.planned.minutes,
-                      locale,
-                    )}`}
-                  />
-                ) : null}
-                {compactTravel ? null : routesLoading && !travel ? (
-                  <Fact label={t('facts.travel')} pending value="…" />
-                ) : travel?.kind === 'known' ? (
-                  <Fact
-                    label={t(travel.partial ? 'facts.knownTravel' : 'facts.travel')}
-                    value={formatTravelDuration(travel.durationSeconds, locale)}
-                  />
-                ) : travel ? (
-                  <Fact
-                    label={t('facts.travel')}
-                    title={routesT(
-                      travel.kind === 'unavailable' ? 'travelTimeUnavailable' : 'noLocalTravel',
-                    )}
-                    value="—"
-                  />
-                ) : null}
-                {travel?.kind === 'known' && travel.distanceMeters !== null ? (
-                  <Fact
-                    label={t(travel.partial ? 'facts.knownDistance' : 'facts.distance')}
-                    value={`${formatDistanceValue(
-                      travel.distanceMeters,
-                      preferences.distanceUnit,
-                      locale,
-                    )} ${unit}`}
-                  />
-                ) : null}
-              </dl>
-            ) : (
-              <p className="flex h-full items-center rounded-[var(--radius-lg)] border border-dashed border-border px-3.5 py-3 text-sm text-muted-foreground">
-                {t('stops', { count: 0 })}
-              </p>
-            )}
+            <DaySummary compactTravel={compactTravel} facts={facts} routesLoading={routesLoading} />
             {routeNotes}
           </div>
 
+          {/* The day's shape at a glance, and the way into the real map. */}
           <button
             aria-label={t('openMapLabel', { number: dayNumber })}
-            className="group flex w-28 shrink-0 flex-col items-stretch gap-1 rounded-[var(--radius-lg)] border border-border-subtle bg-card p-1.5 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none sm:w-32 lg:hidden"
+            className="group flex w-28 shrink-0 flex-col gap-1.5 rounded-[var(--radius-lg)] border border-border-subtle bg-card p-1.5 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:border-border hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none sm:w-36 lg:hidden"
             // Where focus returns when the map is closed by its own way back.
             data-planner-open-map=""
             onClick={onOpenMap}
             type="button"
           >
-            {sketch ?? (
-              <span
-                aria-hidden="true"
-                className="grid aspect-[8/5] place-items-center rounded-[var(--radius-md)] bg-surface-tint/60 text-muted-foreground"
-              >
-                <Icons.MapView className="size-5" />
-              </span>
-            )}
+            <span className="relative block min-h-[4.5rem] flex-1 overflow-hidden rounded-[var(--radius-md)] bg-surface-tint/60 bg-[radial-gradient(circle,var(--color-border)_0.75px,transparent_1px)] bg-[length:9px_9px]">
+              <span className="absolute inset-0 p-0.5">{sketch}</span>
+              {unmapped ? (
+                <span className="absolute bottom-1 left-1 rounded-full bg-card/90 px-1.5 py-0.5 text-[0.625rem] leading-none font-medium text-muted-foreground">
+                  {t('unmapped', { count: unmapped })}
+                </span>
+              ) : null}
+            </span>
             <span className="flex items-center justify-between px-1 pb-0.5 text-xs font-medium text-foreground">
               {t('openMap')}
-              <ArrowUpRight aria-hidden="true" className="size-3.5 text-muted-foreground" />
+              <ArrowUpRight
+                aria-hidden="true"
+                className="size-3.5 text-muted-foreground transition-transform duration-[var(--motion-fast)] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 motion-reduce:transition-none"
+              />
             </span>
           </button>
         </div>

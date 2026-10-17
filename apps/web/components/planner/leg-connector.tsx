@@ -12,7 +12,6 @@ import {
 import type { ItineraryRouteSegment, RouteTravelMode } from '@/lib/itinerary/api';
 import { formatDistanceValue } from '@/lib/itinerary/format-distance';
 import { formatTravelDuration } from '@/lib/itinerary/route-format';
-import { routePresentationState } from '@/lib/itinerary/route-presentation';
 import { TravelModeIcon } from '@/lib/itinerary/travel-mode';
 import { cn } from '@/lib/utils';
 
@@ -37,7 +36,6 @@ export function LegConnector({
   onModeChange,
   saving,
   segment,
-  stale,
 }: Readonly<{
   className?: string;
   distanceUnit: 'km' | 'mi';
@@ -46,8 +44,6 @@ export function LegConnector({
   onModeChange: (segment: ItineraryRouteSegment, mode: RouteTravelMode) => void;
   saving: boolean;
   segment: ItineraryRouteSegment;
-  /** The whole day's legs came from the offline cache rather than a live estimate. */
-  stale: boolean;
 }>) {
   const t = useTranslations('itinerary.routes');
   const locale = useLocale();
@@ -67,7 +63,7 @@ export function LegConnector({
   const available =
     segment.status === 'ok' && segment.durationSeconds !== null && segment.distanceMeters !== null;
   const metrics = available
-    ? t(stale ? 'segmentCachedMetrics' : 'segmentEstimateMetrics', {
+    ? t('segmentEstimateMetrics', {
         distance: formatDistanceValue(segment.distanceMeters!, distanceUnit, locale),
         duration: formatTravelDuration(segment.durationSeconds!, locale),
         unit: t(`units.${distanceUnit}`),
@@ -75,7 +71,6 @@ export function LegConnector({
     : segment.status === 'not_estimated'
       ? t('segmentNotEstimatedMetrics')
       : t('segmentUnavailableMetrics');
-  const state = routePresentationState(segment.status, stale);
   const line = leavesStay || returnsToStay ? 'dashed' : 'solid';
 
   return (
@@ -92,7 +87,7 @@ export function LegConnector({
           <span aria-hidden="true" className="text-text-subtle">
             {' · '}
           </span>
-          <span className={cn(state === 'cached' && 'text-status-warning')}>{metrics}</span>
+          <span>{metrics}</span>
           {context ? <span className="block">{context}</span> : null}
         </p>
         <Select

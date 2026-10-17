@@ -191,7 +191,6 @@ export function PlaceDetailsSheet({
     [officialName, location].filter(Boolean).join(' - ') ||
     (place.kind === 'custom' ? t('customDescription') : t('place'));
   const mapsHref = googleMapsPlaceHref(place);
-  const dateFormatter = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' });
   const visitDateFormatter = new Intl.DateTimeFormat(locale, {
     dateStyle: 'medium',
     timeZone: 'UTC',
@@ -224,15 +223,6 @@ export function PlaceDetailsSheet({
     place.note ? { label: t('note'), value: place.note } : null,
     ...meta,
   ].filter((row): row is PlaceDetailsRow => row !== null);
-
-  // Provider data is stored dated rather than live, so the sheet says how old
-  // what it is showing actually is instead of implying it was just fetched.
-  const checkedAt = richDetails.data?.freshness.fetchedAt ?? place.snapshot?.fetchedAt ?? null;
-  const sourceLine = checkedAt
-    ? t(!richDetails.data && place.snapshot?.stale ? 'snapshotStale' : 'snapshotDated', {
-        date: dateFormatter.format(new Date(checkedAt)),
-      })
-    : null;
 
   return (
     <Sheet onOpenChange={onOpenChange} open>
@@ -394,7 +384,7 @@ export function PlaceDetailsSheet({
           <div className="mx-6 mt-6 grid gap-1.5 border-t border-border-subtle pt-4 text-xs text-muted-foreground">
             {place.kind === 'provider' ? (
               <p>
-                {[t('googleAttribution'), sourceLine].filter(Boolean).join(' · ')}
+                {t('googleAttribution')}
                 {evidence?.attributions.map((attribution) => (
                   <span key={attribution.provider}>
                     {' · '}

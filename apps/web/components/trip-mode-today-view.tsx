@@ -429,7 +429,6 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
   // a stop is the same stop whichever screen the traveller is standing on - now
   // with the legs between them, from the routes read above.
   const routeData = routesQuery.data ?? null;
-  const staleRoutes = routeData?.source === 'cache';
   const allEntries = buildDaySequence({
     bases: resolveDailyBases({ day }),
     items: day.items,
@@ -488,7 +487,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
       segment.durationSeconds !== null &&
       segment.distanceMeters !== null;
     const metrics = available
-      ? routesT(staleRoutes ? 'segmentCachedMetrics' : 'segmentEstimateMetrics', {
+      ? routesT('segmentEstimateMetrics', {
           distance: formatDistanceValue(segment.distanceMeters!, preferences.distanceUnit, locale),
           duration: formatTravelDuration(segment.durationSeconds!, locale),
           unit: routesT(`units.${preferences.distanceUnit}`),
@@ -765,12 +764,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                   <li className={rowGrid} key={`leg-${entry.segment.id}`}>
                     <span />
                     <span />
-                    <p
-                      className={cn(
-                        'py-1.5 text-[0.8125rem] leading-5 text-muted-foreground tabular-nums',
-                        staleRoutes && entry.segment.status === 'ok' && 'text-status-warning',
-                      )}
-                    >
+                    <p className="py-1.5 text-[0.8125rem] leading-5 text-muted-foreground tabular-nums">
                       {legText(entry.segment)}
                     </p>
                   </li>

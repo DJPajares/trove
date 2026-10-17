@@ -317,13 +317,8 @@ export function CurrencyConverter() {
                       source: rate.base,
                       target: rate.quote,
                     })}
-                  </span>{' '}
-                  ·{' '}
-                  {stale
-                    ? t('savedRate', { date: shortDate.format(new Date(rate.fetchedAt)) })
-                    : t('referenceRate', {
-                        date: shortDate.format(new Date(`${rate.date}T00:00:00`)),
-                      })}
+                  </span>
+                  {stale ? <> · {t('rateMayHaveChanged')}</> : null}
                 </span>
               </p>
             ) : null}
@@ -403,7 +398,6 @@ export function CurrencyConverter() {
       </div>
 
       <CurrencyPickerSheet
-        cached={currencyMetadata.source === 'cache'}
         currencies={currencyMetadata.currencies}
         homeCurrency={preferredCurrency}
         onOpenChange={(open) => !open && setPicking(null)}

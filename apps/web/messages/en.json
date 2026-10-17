@@ -990,7 +990,7 @@
       },
       "lastPrepared": "Last prepared {date}",
       "notPrepared": "Not yet prepared on this device.",
-      "providerNote": "Live map tiles and changing provider details are not downloaded. Cached weather, routes, and currency context may become outdated.",
+      "providerNote": "Live maps and some place details need a connection. Reconnect before travel for current weather, routes, and exchange rates.",
       "offlineHint": "Connect to refresh or prepare this trip.",
       "pendingChanges": "{count, plural, one {One local change must sync before this copy can be removed.} other {# local changes must sync before this copy can be removed.}}",
       "prepare": "Prepare offline",
@@ -1055,7 +1055,6 @@
         "leaveInHours": "Leave in {hours}h {minutes}m",
         "leaveByAt": "by {time}",
         "leaveByBuffer": "{minutes, plural, one {Includes # minute of slack.} other {Includes # minutes of slack.}}",
-        "leaveByMeasured": "Offline: travel time measured {date}",
         "travelEstimate": "{duration} by {mode}",
         "travelMode": {
           "drive": "car",
@@ -1128,10 +1127,7 @@
         "forecast": "Weather forecast",
         "forecastCue": "Forecast",
         "archivedForecast": "Archived forecast",
-        "retrievalUnknown": "Retrieval time unknown",
-        "retrievedAt": "Retrieved {timestamp}",
-        "observationEvidence": "Observed {timestamp} ({timeZone})",
-        "forecastEvidence": "{kind} for {date} ({timeZone}). {retrieval}",
+        "forecastEvidence": "{kind} for {date} ({timeZone})",
         "today": "Today",
         "forDate": "Forecast for {date}",
         "feelsLike": "Feels like {temperature}",
@@ -1170,7 +1166,8 @@
           "snowShowers": "Snow showers",
           "thunderstorm": "Thunderstorms",
           "unknown": "Conditions unavailable"
-        }
+        },
+        "currentEvidence": "Current conditions ({timeZone})"
       },
       "today": {
         "label": "Today",
@@ -1575,17 +1572,17 @@
         "remainingPerDay": "{amount} a day for the {days, plural, one {# day} other {# days}} left"
       },
       "approximate": {
-        "rateDate": "Converted at reference rates published {date}.",
-        "stale": "These rates are from {date}, so this total is a rough one.",
+        "stale": "Exchange rates may have changed, so treat this total as approximate.",
         "unavailable": "Exchange rates aren’t available right now, so totals stay in the currencies you paid in.",
-        "unconvertible": "{count, plural, one {# amount} other {# amounts}} couldn’t be converted, so it isn’t included."
+        "unconvertible": "{count, plural, one {# amount} other {# amounts}} couldn’t be converted, so it isn’t included.",
+        "reference": "Converted at reference rates. Your bank or cash exchange rate may differ."
       }
     },
     "a11y": {
       "dayBar": "{date}: {amount}, {percent} of the trip’s spending.",
       "categoryBar": "{category}: {amount} across {count, plural, one {# expense} other {# expenses}}, {percent} of the trip’s spending.",
       "budgetBar": "{spent} spent of a {budget} budget, {spentPercent} used.",
-      "spendTotal": "Approximately {amount}, converted from {count, plural, one {# currency} other {# currencies}} at reference rates published {date}."
+      "spendTotal": "Approximately {amount}, converted from {count, plural, one {# currency} other {# currencies}} at reference rates."
     },
     "breakdowns": {
       "label": "Where your money went",
@@ -1689,8 +1686,6 @@
       "before": "Before you go"
     },
     "rateLine": "1 {source} ≈ {rate} {target}",
-    "referenceRate": "Reference rate · {date}",
-    "savedRate": "Saved rate from {date}",
     "openToConvert": "Open to convert",
     "tripCurrency": "Convert to {currency}",
     "addChecklist": "Add a checklist to this trip",
@@ -1719,8 +1714,6 @@
     "pairUnavailable": "Today's rates do not cover this pair.",
     "sameCurrency": "Same currency, so nothing to convert.",
     "rateLine": "1 {source} = {rate} {target}",
-    "referenceRate": "Reference rate, {date}",
-    "savedRate": "Saved rate from {date}",
     "referenceOnly": "Reference rate only. Your bank or cash exchange rate may differ.",
     "pairs": "Your pairs",
     "tripPair": "{trip} · {source} → {target}",
@@ -1741,9 +1734,9 @@
       "tripMeta": "{trip} · from {date}",
       "noMatches": "No currency matches “{query}”.",
       "useCode": "Use {code}",
-      "listCached": "Currency names are from your last saved list.",
       "close": "Close"
-    }
+    },
+    "rateMayHaveChanged": "Rates may have changed. Check before exchanging money."
   },
   "media": {
     "alt": {
@@ -1807,8 +1800,6 @@
     "regularHours": "Regular hours",
     "representativePhoto": "Illustrative",
     "showWeek": "See the week",
-    "snapshotDated": "Checked {date}",
-    "snapshotStale": "Checked {date}. Due a refresh.",
     "timeZone": "Time zone",
     "unavailableDescription": "Current provider details are unavailable.",
     "ratingSummary": "{rating} / 5 · {count, plural, one {# review} other {# reviews}}",
@@ -2149,17 +2140,13 @@
       "travelTimeUnavailable": "Travel estimate unavailable",
       "noLocalTravel": "No local travel on this day",
       "unavailable": "Route estimates are unavailable. Your itinerary remains usable.",
-      "cachedRoute": "Cached route from {date}. Check current conditions before relying on it.",
       "segmentEstimateMetrics": "{duration} · {distance} {unit}",
-      "segmentCachedMetrics": "{duration} · {distance} {unit} · not current",
       "segmentUnavailableMetrics": "No route",
       "segmentNotEstimatedMetrics": "No estimate",
       "segmentOrigin": "from {origin}",
       "segmentDestination": "to {destination}",
       "segmentLongDistance": "long distance, not routed",
       "state": {
-        "cached": "Cached estimate",
-        "estimated": "Current estimate",
         "not-estimated": "Not estimated",
         "unavailable": "Route unavailable"
       },
@@ -3583,7 +3570,7 @@
       "unknown": "Seasonal suitability is not sufficiently known for this trip."
     },
     "timing": {
-      "forecastRain": "A current cached forecast suggests rain may affect outdoor plans. Keep an indoor option flexible.",
+      "forecastRain": "Rain may affect outdoor plans. Keep an indoor option flexible.",
       "daylight": "This outdoor plan may extend beyond daylight. Review its timing and access requirements."
     },
     "trip": {
@@ -3946,7 +3933,7 @@
     },
     "hours": {
       "specialTitle": "{name} has special hours on {date}",
-      "specialBody": "Open {times} that day. Hours checked {checked}.",
+      "specialBody": "Open {times} that day.",
       "holidayTitle": "Check {name}’s hours",
       "holidayBody": "{date} is {holiday}, and places like this often close or change their hours."
     },

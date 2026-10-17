@@ -14,6 +14,7 @@ import type { DayHeaderPhotoResolution } from '@/lib/media/day-header-photos';
 import { cn } from '@/lib/utils';
 import * as Icons from '@/lib/icons';
 
+import { DayNote, DayTitle } from './day-inline-edit';
 import { paddedDayNumber } from './planner-ribbon';
 
 /** How far, or how fast, a swipe on the photograph has to travel to change day. */
@@ -47,11 +48,11 @@ function Fact({
  *
  * It opens on the shared content-aware day photograph, with a trip secondary
  * image and bundled photographic artwork reserved for genuine failures,
- * with the day's number and name set over it. Beneath, its weather, then one
- * block that says what the day is - its measures side by side with its route
- * as a sketch that opens the real map - with what can be done with it directly
- * under: add, Places, one way out of the plan, and the day's options. Where
- * the day starts and ends is shown once, on the timeline itself.
+ * with the day's number and name set over it, its options and Plan Score
+ * above. Beneath, its weather, then what the day is - its measures beside its
+ * route as a sketch that opens the real map - and its note. The title and the
+ * note are edited where they are read; where the day starts and ends is shown
+ * once, on the timeline itself.
  *
  * The date is said once (PRD 17.2.1): under the title, or as the title when the
  * day has nothing better to be called. Swiping the photograph turns to the next
@@ -59,6 +60,7 @@ function Fact({
  */
 export function DayMasthead({
   actions,
+  dayMenu,
   attention,
   compactTravel,
   date,
@@ -68,17 +70,23 @@ export function DayMasthead({
   heading,
   photos,
   isToday,
+  name,
   note,
   onNextDay,
   onOpenMap,
   onPreviousDay,
+  onRename,
+  onSaveNote,
   routeNotes,
   routesLoading,
   scoreChip,
   sketch,
   weather,
 }: Readonly<{
-  actions: ReactNode;
+  /** What a wide screen offers beside the day's content: adding a stop. */
+  actions?: ReactNode;
+  /** The day's own options, as a pill on its photograph. */
+  dayMenu: ReactNode;
   /** The day's own problem worth a look, when it names no single stop. */
   attention?: ReactNode;
   /** The traveller turned travel details off; the day says nothing about travel. */
@@ -90,10 +98,14 @@ export function DayMasthead({
   heading: ReturnType<typeof dayHeading>;
   photos: DayHeaderPhotoResolution;
   isToday: boolean;
+  /** The day's own name, when it has one; the heading may be its town or date. */
+  name: string | null;
   note: string | null;
   onNextDay?: () => void;
   onOpenMap: () => void;
   onPreviousDay?: () => void;
+  onRename: (name: string | null) => Promise<boolean>;
+  onSaveNote: (note: string | null) => Promise<boolean>;
   /** What the day's travel estimate is obliged to say about itself. */
   routeNotes?: ReactNode;
   routesLoading: boolean;
@@ -155,10 +167,11 @@ export function DayMasthead({
           className="pointer-events-none absolute inset-0 bg-gradient-to-t from-neutral-950/80 via-neutral-950/30 to-neutral-950/5"
         />
         <div className="pointer-events-none relative flex min-h-44 flex-col p-4 text-media-fallback-foreground sm:min-h-52 sm:p-6 lg:min-h-56">
-          {scoreChip ? (
-            <div className="pointer-events-auto max-w-full self-end">{scoreChip}</div>
-          ) : null}
-          <div className={cn('flex flex-1 flex-col justify-end', scoreChip && 'mt-3')}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="pointer-events-auto shrink-0">{dayMenu}</div>
+            {scoreChip ? <div className="pointer-events-auto min-w-0">{scoreChip}</div> : null}
+          </div>
+          <div className="mt-3 flex flex-1 flex-col justify-end">
             <p aria-hidden="true" className="flex shrink-0 items-end gap-2 leading-none">
               <span className="pb-1 text-[length:var(--text-metadata)] font-semibold tracking-[0.14em] uppercase opacity-85">
                 {isToday ? t('today') : t('kicker')}
@@ -167,14 +180,14 @@ export function DayMasthead({
                 {paddedDayNumber(dayNumber)}
               </span>
             </p>
-            <h2
-              className="mt-1.5 text-[length:var(--text-section-title)] leading-tight font-semibold tracking-[-0.015em] text-balance break-words outline-none"
-              id={`itinerary-day-${dayId}`}
-              tabIndex={-1}
-            >
-              <span className="sr-only">{t('dayLabel', { number: dayNumber })}: </span>
-              {heading.source === 'date' ? longDate : heading.title}
-            </h2>
+            <DayTitle
+              display={heading.source === 'date' ? longDate : heading.title}
+              headingId={`itinerary-day-${dayId}`}
+              key={dayId}
+              name={name}
+              numberLabel={t('dayLabel', { number: dayNumber })}
+              onRename={onRename}
+            />
             {heading.source === 'date' ? null : (
               <p className="mt-1 text-sm opacity-85">{longDate}</p>
             )}
@@ -261,17 +274,11 @@ export function DayMasthead({
           </button>
         </div>
 
-        <div className="flex items-center gap-2">{actions}</div>
+        <DayNote key={dayId} note={note} onSave={onSaveNote} />
+        {actions ? <div className="hidden items-center gap-2 md:flex">{actions}</div> : null}
       </div>
 
       {attention}
-
-      {note ? (
-        <p className="flex max-w-2xl gap-2 text-sm leading-6 whitespace-pre-wrap text-text-subtle">
-          <Icons.Notes aria-hidden="true" className="mt-1 size-4 shrink-0" />
-          <span className="min-w-0">{note}</span>
-        </p>
-      ) : null}
     </header>
   );
 }

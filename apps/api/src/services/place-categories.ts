@@ -55,7 +55,8 @@ const FOOD_AND_DRINK_TYPES = new Set([
   'winery',
 ]);
 
-const STAY_TYPES = new Set([
+/** Google types for somewhere to sleep. */
+export const STAY_TYPES: ReadonlySet<string> = new Set([
   'bed_and_breakfast',
   'campground',
   'camping_cabin',

@@ -1284,3 +1284,60 @@ test('rejects missing day coverage before buying provider evidence', async () =>
   expect(harness.failures[0]?.code).toBe('invalid_response');
   expect(searches).toBe(0);
 });
+
+/**
+ * A traveller who says where they are staying has told Trove something true,
+ * whether or not Google can find it. An unverified hotel keeps its nights as a
+ * custom Stay instead of vanishing from the plan.
+ */
+test('named stays survive grounding as custom stays when the provider cannot verify them', async () => {
+  const proposal = explicitModelProposal();
+  proposal.places.push(
+    {
+      id: 'candidate:park-hyatt',
+      name: 'Park Hyatt Tokyo',
+      note: null,
+      searchQuery: 'Park Hyatt Tokyo',
+    },
+    {
+      id: 'candidate:hoshinoya',
+      name: 'Hoshinoya Tokyo',
+      note: null,
+      searchQuery: 'Hoshinoya Tokyo',
+    },
+  );
+  proposal.stays = [
+    { candidatePlaceId: 'candidate:park-hyatt', firstNightDayIndex: 0, lastNightDayIndex: 0 },
+    { candidatePlaceId: 'candidate:hoshinoya', firstNightDayIndex: 1, lastNightDayIndex: 1 },
+  ];
+  const harness = createHarness(proposal, {
+    prompt: 'Tokyo October 2 to 4, first night at the Park Hyatt, then Hoshinoya',
+  });
+
+  await runAiPlanningPipeline(OWNER_ID, RUN_ID, {
+    clock: () => NOW,
+    gateway: harness.gateway,
+    groundCandidates: async (value) => customGrounding(value),
+    lifecycle: harness.lifecycle,
+    loadHomeLocation: async () => 'Singapore',
+    providerContext: noProviders,
+  });
+
+  expect(harness.failures).toStrictEqual([]);
+  const draft = harness.drafts[0]!;
+  const name = (id: string | null) => draft.places.find((place) => place.id === id)?.name ?? null;
+  expect(
+    draft.days.map((day) => [
+      name(day.dailyBasePlaceRefId),
+      name(day.dailyBaseDeparturePlaceRefId),
+    ]),
+  ).toStrictEqual([
+    [null, 'Park Hyatt Tokyo'],
+    ['Park Hyatt Tokyo', 'Hoshinoya Tokyo'],
+    [null, null],
+  ]);
+  expect(draft.places.find((place) => place.name === 'Hoshinoya Tokyo')).toMatchObject({
+    resolution: 'custom',
+  });
+  expect(harness.scores).toHaveLength(1);
+});

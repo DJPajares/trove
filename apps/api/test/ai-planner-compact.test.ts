@@ -12,6 +12,7 @@ import {
   validateAiPlannerDraft,
   validateAiPlannerModelProposal,
 } from '../src/services/ai-planning-rules.js';
+import { AiPlannerRepairLog } from '../src/services/ai-planner-repair-log.js';
 import { compactModelProposal, explicitModelProposal } from './fixtures/ai-planning.js';
 
 const NOW = new Date('2026-09-27T12:00:00.000Z');
@@ -226,5 +227,129 @@ describe('compact planner contract', () => {
     expect(flight?.label).toBe('Flight to Tokyo');
     expect(flight?.notes).toContain('flight is at night');
     expect(flight?.schedule).toStrictEqual({ dayPart: 'evening', kind: 'day_part' });
+  });
+});
+
+describe('traveller-named stays', () => {
+  function withStays(
+    hotels: Array<{ name: string; searchName?: string }>,
+    stays: Array<[place: number, firstNight: number, lastNight: number]>,
+  ) {
+    const compact = compactModelProposal(explicitModelProposal());
+    const offset = compact.places.length;
+    compact.places.push(
+      ...hotels.map((hotel) => ({
+        name: hotel.name,
+        note: null,
+        searchName: hotel.searchName ?? null,
+        searchQuery: `${hotel.name} Tokyo`,
+      })),
+    );
+    compact.stays = stays.map(([place, firstNightDayIndex, lastNightDayIndex]) => ({
+      candidatePlaceIndex: offset + place,
+      firstNightDayIndex,
+      lastNightDayIndex,
+    }));
+    return compact;
+  }
+
+  function stayedAt(proposal: ReturnType<typeof expandAiPlannerProposal>) {
+    return (proposal.stays ?? []).map((stay) => [
+      proposal.places.find((place) => place.id === stay.candidatePlaceId)?.name,
+      stay.firstNightDayIndex,
+      stay.lastNightDayIndex,
+    ]);
+  }
+
+  test('keeps a hotel the traveller named, in any script or length of name', () => {
+    expect(
+      stayedAt(
+        expandAiPlannerProposal(
+          withStays([{ name: 'Park Hyatt Tokyo' }], [[0, 0, 1]]),
+          'Tokyo, October 2 to 4, staying at the Park Hyatt',
+        ),
+      ),
+    ).toStrictEqual([['Park Hyatt Tokyo', 0, 1]]);
+    expect(
+      stayedAt(
+        expandAiPlannerProposal(
+          withStays([{ name: 'W Hotel' }], [[0, 0, 1]]),
+          'Three days around Tokyo, and we booked the W Hotel',
+        ),
+      ),
+    ).toHaveLength(1);
+    expect(
+      stayedAt(
+        expandAiPlannerProposal(
+          withStays(
+            [{ name: 'Park Hyatt Tokyo', searchName: 'パーク ハイアット 東京' }],
+            [[0, 0, 1]],
+          ),
+          '10月2日から4日まで東京。パークハイアット東京に泊まります。',
+        ),
+      ),
+    ).toHaveLength(1);
+  });
+
+  test('drops lodging the traveller only asked for, or never mentioned', () => {
+    expect(
+      expandAiPlannerProposal(
+        withStays([{ name: 'Hotel Gracery Shinjuku' }], [[0, 0, 1]]),
+        'Tokyo for three days, please find us a hotel in Tokyo',
+      ).stays,
+    ).toStrictEqual([]);
+    expect(
+      expandAiPlannerProposal(withStays([{ name: 'Hilton Tokyo' }], [[0, 0, 1]]), 'Plan Tokyo')
+        .stays,
+    ).toStrictEqual([]);
+  });
+
+  test('gives each night to one stay when the model overlaps them', () => {
+    const proposal = expandAiPlannerProposal(
+      withStays(
+        [{ name: 'Hoshinoya Tokyo' }, { name: 'Park Hyatt Tokyo' }],
+        [
+          [0, 1, 1],
+          [1, 0, 1],
+        ],
+      ),
+      'Tokyo, first at the Park Hyatt, then Hoshinoya',
+    );
+    expect(stayedAt(proposal)).toStrictEqual([['Park Hyatt Tokyo', 0, 1]]);
+  });
+
+  test('a stay is not also a stop, unless the traveller asked for one there', () => {
+    const compact = withStays([{ name: 'Park Hyatt Tokyo' }], [[0, 0, 1]]);
+    const hotel = compact.places.length - 1;
+    const base = compact.items[1]!;
+    compact.items.push(
+      {
+        ...base,
+        candidatePlaceIndex: hotel,
+        constraintIndices: [],
+        dayIndex: 0,
+        label: 'Check in at Park Hyatt Tokyo',
+        origin: 'model',
+        priority: null,
+      },
+      {
+        ...base,
+        candidatePlaceIndex: hotel,
+        constraintIndices: [],
+        dayIndex: 1,
+        label: 'Dinner at the New York Grill',
+        origin: 'user',
+        priority: null,
+      },
+    );
+    const log = new AiPlannerRepairLog();
+    const proposal = expandAiPlannerProposal(
+      compact,
+      'Tokyo, staying at the Park Hyatt, with dinner at its New York Grill',
+      log,
+    );
+    expect(proposal.items.map((item) => item.label)).toContain('Dinner at the New York Grill');
+    expect(proposal.items.map((item) => item.label)).not.toContain('Check in at Park Hyatt Tokyo');
+    expect(log.counts.stay_item_removed).toBe(1);
   });
 });

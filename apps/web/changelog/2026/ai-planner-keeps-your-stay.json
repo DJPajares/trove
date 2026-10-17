@@ -1,0 +1,11 @@
+{
+  "id": "ai-planner-keeps-your-stay",
+  "date": "2026-10-17",
+  "version": "1.11.2",
+  "summaries": {
+    "en": [
+      "Tell the AI Planner where you're staying and your hotel becomes the Stay for those nights, even with more than one stay.",
+      "A stay that can't be found on the map is still kept as your own place."
+    ]
+  }
+}

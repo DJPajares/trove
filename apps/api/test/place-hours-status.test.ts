@@ -21,7 +21,7 @@ const hours = (overrides: Record<string, unknown> = {}) =>
   }) as never;
 
 test('a day with weekly opening hours says when the place opens and closes', () => {
-  expect(placeHoursStatus({ date: SATURDAY, hours: hours(), zone: 'UTC' })).toStrictEqual({
+  expect(placeHoursStatus({ date: SATURDAY, hours: hours() })).toStrictEqual({
     asOf: FETCHED,
     special: false,
     spans: [{ close: '17:00', open: '09:00' }],
@@ -30,7 +30,7 @@ test('a day with weekly opening hours says when the place opens and closes', () 
 });
 
 test('a weekday with no period is a closed day, not an unknown one', () => {
-  expect(placeHoursStatus({ date: SUNDAY, hours: hours(), zone: 'UTC' })).toStrictEqual({
+  expect(placeHoursStatus({ date: SUNDAY, hours: hours() })).toStrictEqual({
     asOf: FETCHED,
     status: 'closed',
   });
@@ -48,13 +48,13 @@ test('date-specific hours replace the weekly pattern inside their window', () =>
     validThrough: SATURDAY,
   });
 
-  expect(placeHoursStatus({ date: SATURDAY, hours: special, zone: 'UTC' })).toMatchObject({
+  expect(placeHoursStatus({ date: SATURDAY, hours: special })).toMatchObject({
     special: true,
     spans: [{ close: '15:00', open: '10:00' }],
     status: 'open',
   });
   // Outside the window the ordinary weekly hours apply again.
-  expect(placeHoursStatus({ date: '2026-10-10', hours: special, zone: 'UTC' })).toMatchObject({
+  expect(placeHoursStatus({ date: '2026-10-10', hours: special })).toMatchObject({
     special: false,
     spans: [{ close: '17:00', open: '09:00' }],
   });
@@ -65,17 +65,30 @@ test('a place open past midnight is shown closing at the end of the day', () => 
     periods: [{ open: { day: 6, hour: 18, minute: 0 }, close: { day: 0, hour: 2, minute: 0 } }],
   });
 
-  expect(placeHoursStatus({ date: SATURDAY, hours: late, zone: 'UTC' })).toMatchObject({
+  expect(placeHoursStatus({ date: SATURDAY, hours: late })).toMatchObject({
     spans: [{ close: '24:00', open: '18:00' }],
     status: 'open',
   });
 });
 
 test('no stored hours, or no date they were checked, is unknown', () => {
-  expect(placeHoursStatus({ date: SATURDAY, hours: hours({ periods: [] }), zone: 'UTC' })).toEqual({
+  expect(placeHoursStatus({ date: SATURDAY, hours: hours({ periods: [] }) })).toEqual({
     status: 'unknown',
   });
-  expect(
-    placeHoursStatus({ date: SATURDAY, hours: hours({ fetchedAt: undefined }), zone: 'UTC' }),
-  ).toEqual({ status: 'unknown' });
+  expect(placeHoursStatus({ date: SATURDAY, hours: hours({ fetchedAt: undefined }) })).toEqual({
+    status: 'unknown',
+  });
 });
+
+// The provider's local periods remain useful even when timezone metadata is absent or stale.
+test.each([null, 'Asia/Singapore', 'Pacific/Auckland', 'invalid'])(
+  'hours ignore timezone metadata %s',
+  (timeZone) => {
+    expect(
+      placeHoursStatus({ date: SATURDAY, hours: hours({ timeZone, utcOffsetMinutes: null }) }),
+    ).toMatchObject({
+      status: 'open',
+      spans: [{ open: '09:00', close: '17:00' }],
+    });
+  },
+);

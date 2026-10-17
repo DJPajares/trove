@@ -1,6 +1,16 @@
 import { floatingLocalTimeToInstant, formatLocalTime } from './itinerary-rules.js';
 import { isValidIanaTimeZone } from './trip-rules.js';
 
+/** Optional metadata for reminders/live travel. Never validate or schedule with it. */
+export function derivedPlanInstant(date: string, time: string, zone: string | null | undefined) {
+  if (!zone) return null;
+  try {
+    return floatingLocalTimeToInstant(date, time, zone);
+  } catch {
+    return null;
+  }
+}
+
 type PlannedTiming = {
   localStartTime: Date | null;
   startInstant: Date | null;
@@ -13,8 +23,8 @@ type PlannedTiming = {
   _count?: { reservations: number };
 };
 
-/** Repair a newly located floating plan's implicit context, keeping its civil clock.
- * This is a pure reading used by itinerary, scoring, suggestions and writes.
+/** Resolve optional event metadata for a newly located plan, keeping its civil clock.
+ * Scheduling, scoring and suggestions never read this derived instant.
  * Explicit clocks, bookings, authoritative instants and travel history are stable.
  */
 export function resolvePlannedItemTiming<T extends PlannedTiming>(

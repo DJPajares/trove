@@ -1,3 +1,4 @@
+import { derivedPlanInstant } from './itinerary-local-timing.js';
 import { groupAppliedStays } from './stay-plan-rules.js';
 import { getPrismaClient, Prisma } from '@trove/db';
 import { planningPreferencesFromAi } from '@trove/types';
@@ -12,7 +13,7 @@ import {
 } from './ai-planning-plan-score.js';
 import { originalPlanScoreTime } from './plan-score-freshness.js';
 import { PLAN_SCORE_TRIP_INCLUDE, readPlanScoreInputs } from './plan-score.js';
-import { floatingLocalTimeToInstant, parseLocalTime } from './itinerary-rules.js';
+import { parseLocalTime } from './itinerary-rules.js';
 import {
   AiPlanningSessionError,
   loadAiPlanningSessionForApplyInTransaction,
@@ -224,7 +225,7 @@ function itemData(input: {
       priority: mapPriority(item.priority),
       startInstant:
         exactTime && input.dayDate
-          ? floatingLocalTimeToInstant(input.dayDate, exactTime, timeZone.timeZone)
+          ? derivedPlanInstant(input.dayDate, exactTime, timeZone.timeZone)
           : null,
       timeSemantics: exactTime ? ('FLOATING_LOCAL' as const) : null,
       timeProvenance: exactTime

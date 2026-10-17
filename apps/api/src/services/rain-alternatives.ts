@@ -98,9 +98,7 @@ export async function getRainAlternatives(
   const candidates: IndoorCandidate[] = [...candidateIds].flatMap((id) => {
     const place = evidence.places.get(id);
     const stored = evidence.hours.get(id);
-    const status = stored
-      ? placeHoursStatus({ date: day.date, hours: stored, zone: trip.referenceTimeZone ?? 'UTC' })
-      : null;
+    const status = stored ? placeHoursStatus({ date: day.date, hours: stored }) : null;
     return nameOf(id)
       ? [
           {

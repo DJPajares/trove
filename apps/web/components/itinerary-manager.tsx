@@ -14,7 +14,7 @@ import { useItineraryEditing } from '@/lib/itinerary/use-itinerary-editing';
 import { DayPlanningContextSheet } from '@/components/day-planning-context';
 
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CircleAlert, Clock3, Plus } from 'lucide-react';
+import { CircleAlert, Plus } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
@@ -311,7 +311,6 @@ export function ItineraryManager({
   const [dayMoveStrategy, setDayMoveStrategy] = useState<'append' | 'swap'>('append');
   const [dayMoveError, setDayMoveError] = useState<string | null>(null);
   const [movingDay, setMovingDay] = useState(false);
-  const [timeZoneConsequence, setTimeZoneConsequence] = useState(false);
   const [timingReview, setTimingReview] = useState<SchedulingOutcome | null>(null);
   const [timingPending, setTimingPending] = useState(false);
   useEffect(() => {
@@ -1526,12 +1525,6 @@ export function ItineraryManager({
           return item ? itemName(item) : t('connectedTiming.stop');
         }}
       />
-      {timeZoneConsequence ? (
-        <Alert role="status" variant="info">
-          <Clock3 aria-hidden="true" />
-          <AlertDescription>{t('timeZoneConsequence')}</AlertDescription>
-        </Alert>
-      ) : null}
       {renderOverview ? (
         <div className={activeView === 'overview' ? 'contents' : 'hidden'}>
           <TripBoard
@@ -1932,10 +1925,9 @@ export function ItineraryManager({
           item={timingItem}
           name={timingItem ? itemName(timingItem) : ''}
           onClose={() => setTimingItem(null)}
-          onSaved={async ({ timeZoneConsequence: consequence, scheduling }) => {
+          onSaved={async ({ scheduling }) => {
             if (scheduling) setTimingReview(scheduling);
             if (!scheduling) setTimingPending(true);
-            setTimeZoneConsequence(consequence);
             setTimingItem(null);
             await refresh();
           }}
@@ -2003,10 +1995,9 @@ export function ItineraryManager({
         locationBias={editorLocationBias}
         onClose={closeEditor}
         onDelete={setItemToDelete}
-        onSaved={async ({ timeZoneConsequence: consequence, scheduling }) => {
+        onSaved={async ({ scheduling }) => {
           if (scheduling) setTimingReview(scheduling);
           if (!scheduling) setTimingPending(true);
-          setTimeZoneConsequence(consequence);
           closeEditor();
           await refresh();
         }}
@@ -2184,7 +2175,6 @@ export function ItineraryManager({
       {contextDay ? (
         <DayPlanningContextSheet
           initial={contextDay.planningContext}
-          timeZone={contextDay.defaultTimeZone}
           onClose={() => setContextDay(null)}
           onSave={async (value) => {
             const result = await updateItineraryDayPlanningContext(tripId, contextDay.id, value);

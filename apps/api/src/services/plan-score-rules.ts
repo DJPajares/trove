@@ -32,7 +32,7 @@ export const PLAN_SCORE_CONTRACT_VERSION = 8;
  */
 export const PLAN_SCORE_RUBRIC_VERSION = 12;
 /** Bug-fix revision: invalidate derived results without changing calibration or payload shape. */
-const PLAN_SCORE_EVALUATOR_REVISION = 3;
+const PLAN_SCORE_EVALUATOR_REVISION = 4;
 /**
  * A category or component publishes its number once this share of its weight
  * is assessed from known or estimated evidence. Below it the number would rest

@@ -9,9 +9,8 @@ const issue: TimingIssue = {
   severity: 'conflict',
   orderConflict: {
     previousItemId: 'shopping',
-    earliestStartInstant: '2026-09-08T04:01:00Z',
-    scheduledStartInstant: '2026-09-08T00:30:00Z',
-    timeZone: 'Pacific/Auckland',
+    earliestStartLocal: '2026-09-08T12:02',
+    scheduledStartLocal: '2026-09-08T11:30',
   },
 };
 const options = {
@@ -20,21 +19,21 @@ const options = {
   nameFor: () => 'Sylvia Park',
   t: (key: string, values?: Record<string, string>) => JSON.stringify({ key, ...values }),
 };
-test('explains the conflicting stop and compares both times in the same zone', () => {
+test('explains the conflicting stop and uses unconverted local clocks', () => {
   expect(JSON.parse(describeTimingIssue(issue, options))).toEqual({
     key: 'connectedTiming.orderConflict',
     previous: 'Sylvia Park',
-    earliest: '4:01 PM',
-    scheduled: '12:30 PM',
+    earliest: '12:02 PM',
+    scheduled: '11:30 AM',
   });
   expect(JSON.parse(describeTimingIssue(issue, { ...options, hour12: false })).earliest).toBe(
-    '16:01',
+    '12:02',
   );
 });
 test('includes dates when the connection crosses midnight', () => {
   const nextDay = {
     ...issue,
-    orderConflict: { ...issue.orderConflict!, earliestStartInstant: '2026-09-08T13:01:00Z' },
+    orderConflict: { ...issue.orderConflict!, earliestStartLocal: '2026-09-09T01:01' },
   };
   const text = JSON.parse(describeTimingIssue(nextDay, options));
   expect(text.earliest).toContain('Sep 9');
@@ -69,4 +68,19 @@ test('a repairable gap explains the adjustment without telling travellers to cho
   expect(
     JSON.parse(describeTimingIssue({ ...repairable, suggestion: undefined }, options)).key,
   ).toBe('connectedTiming.issue.NO_ROOM');
+});
+
+test('legacy instant-only warnings fall back to current localized copy without timezone conversion', () => {
+  const legacy = {
+    ...issue,
+    orderConflict: {
+      previousItemId: 'shopping',
+      earliestStartInstant: '2026-09-08T04:02:00Z',
+      scheduledStartInstant: '2026-09-08T00:30:00Z',
+      timeZone: 'Pacific/Auckland',
+    },
+  } as unknown as TimingIssue;
+  expect(JSON.parse(describeTimingIssue(legacy, options)).key).toBe(
+    'connectedTiming.issue.FIXED_CONFLICT',
+  );
 });

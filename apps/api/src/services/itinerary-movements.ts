@@ -1,4 +1,5 @@
-import { resolvePlannedItemTiming } from './itinerary-local-timing.js';
+import { planningMinute, planningTime } from './planning-clock.js';
+import { derivedPlanInstant } from './itinerary-local-timing.js';
 import { resolveDayStay, toStayAccommodations } from './day-stay.js';
 import { movementConnectionConflicts } from './itinerary-movement-constraints.js';
 import { createHash } from 'node:crypto';
@@ -19,8 +20,6 @@ import {
 } from './itineraries.js';
 import {
   durationMinutesUntilLocalEnd,
-  floatingLocalTimeToInstant,
-  formatInstantInTimeZone,
   formatLocalTime,
   parseLocalTime,
   resolveDayTimeZone,
@@ -56,12 +55,10 @@ function slot(trip: TimingTrip, item: Item): MovementSlot {
   const localTime = formatLocalTime(item.localStartTime);
   const explicitEnd = formatLocalTime(item.localEndTime);
   const duration =
-    explicitEnd && localTime && date && timeZone
-      ? durationMinutesUntilLocalEnd(localTime, explicitEnd, { date, timeZone })
+    explicitEnd && localTime
+      ? durationMinutesUntilLocalEnd(localTime, explicitEnd)
       : item.durationMinutes;
-  const start =
-    item.startInstant ??
-    (date && timeZone && localTime ? floatingLocalTimeToInstant(date, localTime, timeZone) : null);
+  const start = item.startInstant;
   const end = start && duration != null ? new Date(start.getTime() + duration * 60000) : null;
   return {
     itineraryDayId: item.itineraryDayId,
@@ -69,12 +66,20 @@ function slot(trip: TimingTrip, item: Item): MovementSlot {
     timeZone,
     localTime,
     localEndTime:
-      explicitEnd ?? (end && timeZone ? formatInstantInTimeZone(end, timeZone).time : null),
+      explicitEnd ??
+      (localTime && duration != null ? planningTime(planningMinute(localTime) + duration) : null),
     durationMinutes: duration,
     startInstant: start?.toISOString() ?? null,
     endInstant: end?.toISOString() ?? null,
   };
 }
+const planningSlot = ({
+  itineraryDayId,
+  date,
+  localTime,
+  localEndTime,
+  durationMinutes,
+}: MovementSlot) => ({ itineraryDayId, date, localTime, localEndTime, durationMinutes });
 function cloneTrip(trip: TimingTrip): TimingTrip {
   return {
     ...trip,
@@ -177,7 +182,6 @@ function timingScope(
     const all =
       before.stayStartMode !== day.stayStartMode ||
       before.stayEndMode !== day.stayEndMode ||
-      before.defaultTimeZone !== day.defaultTimeZone ||
       before.dailyBaseTripPlaceId !== day.dailyBaseTripPlaceId ||
       before.dailyBaseDepartureTripPlaceId !== day.dailyBaseDepartureTripPlaceId;
     for (const [index, i] of day.items.entries()) {
@@ -258,7 +262,7 @@ function resolveZones(
       i.timeZone = resolved.timeZone;
       i.timeZoneSource = resolved.source;
       if (i.localStartTime)
-        i.startInstant = floatingLocalTimeToInstant(
+        i.startInstant = derivedPlanInstant(
           day.date.toISOString().slice(0, 10),
           formatLocalTime(i.localStartTime)!,
           resolved.timeZone,
@@ -290,7 +294,7 @@ function issueKey(trip: TimingTrip, issue: TimingIssue) {
           Math.max(0, d.items.findIndex((i) => ids.has(i.id)) - 1),
           d.items.findLastIndex((i) => ids.has(i.id)) + 2,
         )
-        .map((i) => ({ id: i.id, slot: slot(trip, i), travel: i.travelModeToNext })),
+        .map((i) => ({ id: i.id, slot: planningSlot(slot(trip, i)), travel: i.travelModeToNext })),
     })),
   });
 }
@@ -306,17 +310,6 @@ async function calculate(
     include: TIMING_TRIP_INCLUDE,
   });
   if (!original) throw new ItineraryNotFoundError('trip_not_found');
-  // Interpret floating clocks consistently before comparing or projecting any move.
-  // This changes the read model only; acceptance still owns every persisted write.
-  for (const day of original.itineraryDays)
-    day.items = day.items.map((item) => {
-      const place = original.tripPlaces.find((p) => p.id === item.tripPlaceId)?.place;
-      return resolvePlannedItemTiming(item, {
-        date: day.date.toISOString().slice(0, 10),
-        dayTimeZone: day.defaultTimeZone,
-        placeTimeZone: place ? resolvedPlaceTimeZone(place) : null,
-      });
-    });
   const next = cloneTrip(original);
   const originals = new Map(allItems(original).map((i) => [i.id, i]));
   const { affected, targets } = project(next, input);
@@ -343,16 +336,13 @@ async function calculate(
     if (duration == null) throw new ItineraryValidationError('invalid_itinerary_item');
     i.durationMinutes = duration;
     i.localStartTime = parseLocalTime(override.localTime);
-    i.startInstant = floatingLocalTimeToInstant(
+    i.startInstant = derivedPlanInstant(
       dateOf(next, i.itineraryDayId)!,
       override.localTime,
       i.timeZone ?? next.itineraryDays.find((d) => d.id === i.itineraryDayId)!.defaultTimeZone,
     );
     if (i.localEndTime)
-      i.localEndTime = parseLocalTime(
-        formatInstantInTimeZone(new Date(i.startInstant.getTime() + duration * 60000), i.timeZone!)
-          .time,
-      );
+      i.localEndTime = parseLocalTime(planningTime(planningMinute(override.localTime) + duration));
     i.timingFlexibility = 'FIXED';
     i.timeProvenance = 'USER_OWNED';
     i.timeSemantics = 'FLOATING_LOCAL';
@@ -398,13 +388,6 @@ async function calculate(
       limitations.add('TRAVEL_ESTIMATED');
     const day = next.itineraryDays.find((d) => d.id === dayId)!;
     for (const i of day.items) {
-      const effective = result.day.items.find((row) => row.id === i.id)!;
-      if (!protectedTiming(i)) {
-        i.timeZone = effective.timeZone;
-        i.timeZoneSource =
-          (effective.timeZoneSource as typeof i.timeZoneSource) ?? i.timeZoneSource;
-        i.startInstant = effective.startInstant;
-      }
       const normalized = result.items.find((row) => row.id === i.id)!;
       if (normalized.openingHours.status === 'UNKNOWN' && i.tripPlaceId)
         limitations.add('OPENING_HOURS_UNKNOWN');
@@ -431,19 +414,11 @@ async function calculate(
         continue;
       }
       suggested.caveats.forEach((c) => limitations.add(c));
-      const instant = new Date(result.scoring.origin + suggested.startMinute * 60000);
-      if (instant.getTime() === i.startInstant?.getTime()) continue;
-      i.startInstant = instant;
-      i.localStartTime = parseLocalTime(
-        formatInstantInTimeZone(instant, i.timeZone ?? day.defaultTimeZone).time,
-      );
-      if (i.localEndTime)
-        i.localEndTime = parseLocalTime(
-          formatInstantInTimeZone(
-            new Date(result.scoring.origin + suggested.endMinute * 60000),
-            i.timeZone ?? day.defaultTimeZone,
-          ).time,
-        );
+      const localTime = planningTime(suggested.startMinute);
+      if (localTime === formatLocalTime(i.localStartTime)) continue;
+      i.localStartTime = parseLocalTime(localTime);
+      i.startInstant = derivedPlanInstant(dateOf(next, i.itineraryDayId)!, localTime, i.timeZone);
+      if (i.localEndTime) i.localEndTime = parseLocalTime(planningTime(suggested.endMinute));
       else if (i.durationMinutes == null) {
         i.durationMinutes = suggested.durationMinutes;
         i.durationProvenance = 'APP_ESTIMATED';
@@ -496,10 +471,11 @@ async function calculate(
       after = slot(next, i);
     const reasons: MovementProposal['changes'][number]['reasons'] = [];
     if (before.itineraryDayId !== after.itineraryDayId) reasons.push('day');
-    if (before.timeZone !== after.timeZone) reasons.push('zone');
     if (overrides.has(i.id)) reasons.push('manual');
     if (!reasons.length) reasons.push('fit');
-    return hash(before) === hash(after) ? [] : [{ itemId: i.id, before, after, reasons }];
+    return hash(planningSlot(before)) === hash(planningSlot(after))
+      ? []
+      : [{ itemId: i.id, before, after, reasons }];
   });
   const editable = rows
     .filter((i) => i.itineraryDayId && !protectedTiming(i))

@@ -1,10 +1,11 @@
 {
   "id": "place-local-timing-checks",
   "date": "2026-10-17",
-  "version": "1.9.2",
+  "version": "1.10.0",
   "summaries": {
     "en": [
-      "Your itinerary uses each stop\u2019s local time, keeping valid visits free of false arrival and opening-hours warnings."
+      "Plan each stop by its local clock, without timezone shifts or false timing warnings.",
+      "Get matching time suggestions and apply fixes directly from your itinerary."
     ]
   }
 }

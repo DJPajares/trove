@@ -20,12 +20,10 @@ import { TimeInput } from '@/components/time-input';
 
 export function DayPlanningContextSheet({
   initial,
-  timeZone,
   onClose,
   onSave,
 }: Readonly<{
   initial: unknown;
-  timeZone: string;
   onClose: () => void;
   onSave: (value: DayPlanningContext) => Promise<void>;
 }>) {
@@ -102,7 +100,7 @@ export function DayPlanningContextSheet({
                 <TimeInput id="day-available-end" value={end} onValueChange={setEnd} />
               </Field>
             </div>
-            <FieldDescription>{t('windowHint', { timeZone })}</FieldDescription>
+            <FieldDescription>{t('windowHint')}</FieldDescription>
             <Button
               type="button"
               variant="ghost"

@@ -1,6 +1,7 @@
+import { floatingLocalTimeToInstant, formatLocalTime } from './itinerary-rules.js';
+import { planningDuration, planningMinute } from './planning-clock.js';
 import { resolveDayStay, toStayAccommodations, type TripStayPlan } from './day-stay.js';
 import { stayDayTimeZone } from './stay-time-zone.js';
-import { resolvePlannedItemTiming } from './itinerary-local-timing.js';
 import { isValidIanaTimeZone } from './trip-rules.js';
 import { PLAN_SCORE_TRIP_INCLUDE } from './plan-score-trip-query.js';
 export { PLAN_SCORE_TRIP_INCLUDE } from './plan-score-trip-query.js';
@@ -52,8 +53,6 @@ export { evaluateScoredDay } from './plan-score-evaluation.js';
 import {
   scoringCommitments,
   normalizeScoringItems,
-  dayOrigin,
-  elapsedLocalMinute,
   type ScoringReservation,
 } from './plan-score-normalization.js';
 import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
@@ -197,18 +196,6 @@ export function buildScoringDay(
   record: PlanScoreTripRecord,
   calibration: LegCalibration,
 ) {
-  day = {
-    ...day,
-    items: day.items.map((item) => {
-      const place = item.tripPlaceId ? record.places?.get(item.tripPlaceId) : null;
-      return resolvePlannedItemTiming(item, {
-        date: day.date,
-        dayTimeZone: day.timeZone,
-        placeTimeZone:
-          place?.timeZone ?? (place?.coordinates ? timeZoneAtCoordinates(place.coordinates) : null),
-      });
-    }),
-  };
   const locate = chainLocator(day, record);
   const routes = withEstimatedLegs(record.routes.get(day.id), locate, calibration);
   const commitments = toCommitments(day);
@@ -221,35 +208,19 @@ export function buildScoringDay(
       (index > 0 &&
         !routes?.segments.some((s) => s.destination.id === item.id && s.scope === 'long_distance')),
   }));
-  const zones = new Map(
-    day.items.flatMap((item) => (item.timeZone ? [[item.id, item.timeZone] as const] : [])),
-  );
-  const instants = new Map(
-    day.items.flatMap((item) => (item.startInstant ? [[item.id, item.startInstant] as const] : [])),
-  );
-  const items = normalizeScoringItems(day.date, day.timeZone, raw, {
-    zones,
-    instants,
+  const items = normalizeScoringItems(day.date, raw, {
     hours: record.hours,
     commitments,
     holiday: holiday !== null,
   });
   const config = readDayPlanningContext(day.planningContext);
-  const origin = dayOrigin(day.date, day.timeZone);
-  const localMinute = (time: string) =>
-    elapsedLocalMinute(
-      day.date,
-      day.timeZone,
-      Number(time.slice(0, 2)) * 60 + Number(time.slice(3)),
-      origin,
-    );
   const availability = config.availability
     ? {
-        startMinute: localMinute(config.availability.start),
-        endMinute: localMinute(config.availability.end),
+        startMinute: planningMinute(config.availability.start),
+        endMinute: planningMinute(config.availability.end),
       }
     : null;
-  return { availability, commitments, holiday, items, locate, origin, routes };
+  return { availability, commitments, holiday, items, locate, routes };
 }
 
 export function evaluateDayRecord(
@@ -257,7 +228,7 @@ export function evaluateDayRecord(
   record: PlanScoreTripRecord,
   calibration: LegCalibration,
 ): PlanScoreDayEvaluation {
-  const { availability, commitments, holiday, items, locate, origin, routes } = buildScoringDay(
+  const { availability, commitments, holiday, items, locate, routes } = buildScoringDay(
     day,
     record,
     calibration,
@@ -266,8 +237,6 @@ export function evaluateDayRecord(
     commitments,
     dayId: day.id,
     date: day.date,
-    timeZone: day.timeZone,
-    originInstant: origin,
     availability,
     items,
     places: toDayPlaces(day, record),
@@ -815,6 +784,7 @@ function toPlanScoreDayRecord(
       durationProvenance: string;
       id: string;
       localStartTime: Date | null;
+      localEndTime?: Date | null;
       startInstant: Date | null;
       timeSemantics: string | null;
       timeProvenance: string | null;
@@ -837,7 +807,11 @@ function toPlanScoreDayRecord(
     items: day.items.map((item) => ({
       blockType: item.blockType ?? null,
       dayPart: item.dayPart,
-      durationMinutes: item.durationMinutes,
+      durationMinutes: planningDuration(
+        formatLocalTime(item.localStartTime),
+        formatLocalTime(item.localEndTime ?? null),
+        item.durationMinutes,
+      ),
       durationProvenance: item.durationProvenance,
       id: item.id,
       localStartTime: item.localStartTime,
@@ -881,6 +855,7 @@ export type PlanScoreTripRows = TripStayPlan<{ id: string }> & {
       durationProvenance: string;
       id: string;
       localStartTime: Date | null;
+      localEndTime?: Date | null;
       position: number;
       startInstant: Date | null;
       timeSemantics: string | null;
@@ -918,26 +893,17 @@ function destinationName(value: string | null | undefined) {
 export function readPlanScoreInputs(trip: PlanScoreTripRows, now = new Date()) {
   const destinations: Array<{ timeZone?: string | null; place?: OwnedContextPlace }> =
     Array.isArray(trip.destinations) ? trip.destinations : [];
-  const zones = destinations.flatMap((d) => (d.timeZone ? [d.timeZone] : []));
   const identities = destinations.flatMap((d) => {
     const name = d.place ? destinationName(contextPlaceFromOwnedData(d.place, now).name) : null;
     return name ? [name] : [];
   });
   const reservations = trip.reservations.map((r) => {
-    const fromZone = r.flightDepartureTimeZone ?? r.transportDepartureTimeZone;
-    const toZone = r.flightArrivalTimeZone ?? r.transportArrivalTimeZone;
     const from = destinationName(r.transportPickupLocation),
       to = destinationName(r.transportDropoffLocation);
     // An owned booking between two unambiguously identified trip destinations is
     // an indispensable connection. Ambiguous endpoints remain unknown.
-    const zoned =
-      fromZone &&
-      toZone &&
-      fromZone !== toZone &&
-      zones.filter((z) => z === fromZone).length === 1 &&
-      zones.filter((z) => z === toZone).length === 1;
     const named = from && to && from !== to && identities.includes(from) && identities.includes(to);
-    return { ...r, indispensable: Boolean(zoned || named) };
+    return { ...r, indispensable: Boolean(named) };
   });
 
   const mustGoTripPlaceIds = trip.tripPlaces
@@ -966,18 +932,6 @@ export function readPlanScoreInputs(trip: PlanScoreTripRows, now = new Date()) {
       trip,
     ),
   );
-  const placeZones = new Map(
-    trip.tripPlaces.map(({ id, place }) => {
-      const coordinates = place ? contextPlaceFromOwnedData(place, now).coordinates : null;
-      const zone =
-        place?.customTimeZone && isValidIanaTimeZone(place.customTimeZone)
-          ? place.customTimeZone
-          : coordinates
-            ? timeZoneAtCoordinates(coordinates)
-            : null;
-      return [id, zone] as const;
-    }),
-  );
   const days = trip.itineraryDays.map((day, index) => {
     const defaultTimeZone =
       (trip.stayRanges?.length || day.date.getTime() === trip.startDate?.getTime()) &&
@@ -993,15 +947,8 @@ export function readPlanScoreInputs(trip: PlanScoreTripRows, now = new Date()) {
       {
         ...day,
         defaultTimeZone,
-        items: day.items.map((item) =>
-          resolvePlannedItemTiming(item, {
-            date: toLocalDate(day.date),
-            dayTimeZone: defaultTimeZone,
-            placeTimeZone: item.tripPlaceId ? (placeZones.get(item.tripPlaceId) ?? null) : null,
-          }),
-        ),
       },
-      scoringCommitments(reservations, toLocalDate(day.date), defaultTimeZone),
+      scoringCommitments(reservations, toLocalDate(day.date)),
     );
   });
   const scoredPlaceIds = new Set([
@@ -1030,7 +977,6 @@ export function readPlanScoreInputs(trip: PlanScoreTripRows, now = new Date()) {
           id: owned.id,
           placeId: owned.placeId,
           position: owned.position,
-          timeZone: owned.timeZone,
           place: d.place
             ? {
                 customName: d.place.customName,
@@ -1563,7 +1509,8 @@ export function discardExpiredCurrentHours(hours: PlaceHoursEvidence, now: Date)
     const after = new Date(Date.parse(`${entry.validThrough}T00:00:00Z`) + 86400000)
       .toISOString()
       .slice(0, 10);
-    if (dayOrigin(after, entry.timeZone) <= now.getTime()) entry.currentPeriods = undefined;
+    if (floatingLocalTimeToInstant(after, '00:00', entry.timeZone).getTime() <= now.getTime())
+      entry.currentPeriods = undefined;
   }
 }
 
@@ -1594,7 +1541,7 @@ export function placeHoursDeadlines(
           const after = new Date(Date.parse(`${entry.validThrough}T00:00:00Z`) + 86400000)
             .toISOString()
             .slice(0, 10);
-          return [new Date(dayOrigin(after, zone)).toISOString()];
+          return [floatingLocalTimeToInstant(after, '00:00', zone).toISOString()];
         }),
       ),
     ),

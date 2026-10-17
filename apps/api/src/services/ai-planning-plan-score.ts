@@ -3,9 +3,8 @@ import { planningPreferencesFromAi } from '@trove/types';
 import type { AiPlannerDraft, AiPlannerLegMode } from '@trove/types';
 import { readPlanScoreInputs, type PlanScoreTripRows, type TripPlanScore } from './plan-score.js';
 import { PLAN_SCORE_RUBRIC_VERSION } from './plan-score-rules.js';
-import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
-import { floatingLocalTimeToInstant, parseLocalTime } from './itinerary-rules.js';
-import { parseDateOnly, resolveCountryPrimaryTimeZone } from './trip-rules.js';
+import { parseLocalTime } from './itinerary-rules.js';
+import { parseDateOnly } from './trip-rules.js';
 
 /**
  * Where a draft day starts and ends, the same way the itinerary reads an
@@ -32,7 +31,7 @@ export function draftLegMode(mode: AiPlannerLegMode | undefined): 'DRIVE' | 'TRA
 /** Binds an assessment to the final itinerary, not mutable review copy. */
 export function draftPlanScoreInputRevision(draft: AiPlannerDraft): string {
   const payload = {
-    version: 5,
+    version: 6,
     preferences: {
       pace: draft.trip.pace,
       paceSource: draft.trip.paceSource,
@@ -78,8 +77,8 @@ export function draftPlanScoreInputRevision(draft: AiPlannerDraft): string {
 
 /**
  * Compare the ordinary scorer's complete input reading to the expected rows.
- * Only IDs may change. Unknown timezone context or merged place aliases cannot
- * prove equivalence, so those cases defer to ordinary demand-driven scoring.
+ * Only IDs may change. Timezone and instant metadata cannot change equivalence;
+ * merged place aliases defer to ordinary demand-driven scoring.
  */
 export function appliedDraftScoreInputsMatch(
   draft: AiPlannerDraft,
@@ -87,17 +86,6 @@ export function appliedDraftScoreInputsMatch(
   identity: DraftPlanScoreIdentityMap,
   now = new Date(),
 ): boolean {
-  const zones = new Map(
-    draft.places.map((place) => [
-      place.id,
-      (place.resolution === 'verified' && place.location
-        ? timeZoneAtCoordinates(place.location)
-        : null) ?? resolveCountryPrimaryTimeZone(place.name),
-    ]),
-  );
-  const referenceZone = draft.trip.destinations
-    .map(({ placeRefId }) => zones.get(placeRefId))
-    .find(Boolean);
   const ref = (value: string | null) =>
     value ? (identity.tripPlaceIdByPlaceRefId.get(value) ?? null) : null;
   const allItems = [...draft.days.flatMap((day) => day.items), ...draft.unscheduledItems];
@@ -119,22 +107,14 @@ export function appliedDraftScoreInputsMatch(
 
   const expectedDays: PlanScoreTripRows['itineraryDays'] = [];
   for (const day of draft.days) {
-    const zone =
-      (day.dailyBasePlaceRefId ? zones.get(day.dailyBasePlaceRefId) : null) ??
-      day.items
-        .map((item) => (item.placeRefId ? zones.get(item.placeRefId) : null))
-        .find(Boolean) ??
-      referenceZone;
     const dayId = identity.dayIdByDate.get(day.date);
-    if (!zone || !dayId) return false;
+    if (!dayId) return false;
     const actualDay = rows.itineraryDays.find((entry) => entry.id === dayId);
-    if (actualDay?.defaultTimeZone !== zone) return false;
+    if (!actualDay) return false;
     const items: PlanScoreTripRows['itineraryDays'][number]['items'] = [];
     for (const [position, item] of day.items.entries()) {
       const id = identity.itemIdByDraftId.get(item.id);
       if (!id || (item.placeRefId && !ref(item.placeRefId))) return false;
-      const itemZone = (item.placeRefId ? zones.get(item.placeRefId) : null) ?? zone;
-      if (actualDay.items.find((entry) => entry.id === id)?.timeZone !== itemZone) return false;
       const exact = item.schedule.kind === 'exact' ? item.schedule.localTime : null;
       items.push({
         _count: { reservations: 0 },
@@ -145,14 +125,14 @@ export function appliedDraftScoreInputsMatch(
         id,
         localStartTime: exact ? parseLocalTime(exact) : null,
         position,
-        startInstant: exact ? floatingLocalTimeToInstant(day.date, exact, itemZone) : null,
+        startInstant: null,
         timeSemantics: exact ? 'FLOATING_LOCAL' : null,
         timeProvenance: exact
           ? item.schedule.kind === 'exact' && item.schedule.source === 'model'
             ? 'AI_ESTIMATED'
             : 'USER_OWNED'
           : null,
-        timeZone: itemZone,
+        timeZone: actualDay.items.find((entry) => entry.id === id)?.timeZone ?? null,
         travelModeToNext: draftLegMode(item.travelModeToNext),
         tripPlaceId: ref(item.placeRefId),
       });
@@ -161,7 +141,7 @@ export function appliedDraftScoreInputsMatch(
       dailyBaseDepartureTripPlaceId: ref(day.dailyBaseDeparturePlaceRefId),
       dailyBaseTripPlaceId: ref(day.dailyBasePlaceRefId),
       date: parseDateOnly(day.date),
-      defaultTimeZone: zone,
+      defaultTimeZone: actualDay.defaultTimeZone,
       id: dayId,
       items,
       routeStartTravelMode: draftLegMode(day.routeStartTravelMode),

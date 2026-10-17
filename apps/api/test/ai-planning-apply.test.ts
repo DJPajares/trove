@@ -952,9 +952,6 @@ test('scoring changes invalidate a bound assessment while review copy does not',
 test('reuse requires the materialized rows to match the normal scorer inputs', async () => {
   const changes: Array<(rows: any) => void> = [
     (rows) => {
-      rows.itineraryDays[1].defaultTimeZone = 'UTC';
-    },
-    (rows) => {
       rows.itineraryDays[1].items[1].durationMinutes += 1;
     },
     (rows) => {
@@ -1063,4 +1060,22 @@ test('Apply persists explicit pace and interests beyond session retention', asyn
     unmatchedInterests: ['Bird watching'],
   });
   expect(store.state.sessions[0]?.draft).toBeNull();
+});
+
+test('timezone and derived-instant metadata do not change an equivalent local-clock plan score', async () => {
+  const draft = scoreableDraft();
+  const store = createApplyStore(draft, {
+    session: { planScore: draftAssessment(draft) },
+    adjustAppliedRows: (rows: any) => {
+      rows.itineraryDays[1].defaultTimeZone = 'UTC';
+      for (const item of rows.itineraryDays[1].items) {
+        item.timeZone = 'Pacific/Honolulu';
+        item.timeZoneSource = 'EXPLICIT';
+        item.startInstant = new Date('2030-01-01T23:59:00Z');
+      }
+    },
+  });
+  await apply(store);
+  expect(store.state.trips[0]?.planScore).toBeDefined();
+  expect(store.state.trips[0]?.planScoreRevision).toEqual(expect.any(String));
 });

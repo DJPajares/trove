@@ -111,9 +111,7 @@ export async function getPlaceHoursNotices(
       if (!name) continue;
 
       const hours = evidence.hours.get(id);
-      const status = hours
-        ? placeHoursStatus({ date: day.date, hours, zone: trip.referenceTimeZone ?? 'UTC' })
-        : null;
+      const status = hours ? placeHoursStatus({ date: day.date, hours }) : null;
       if (status?.status === 'open' && status.special) {
         notices.push({
           asOf: status.asOf,

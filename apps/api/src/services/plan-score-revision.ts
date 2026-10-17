@@ -45,9 +45,8 @@ function canonicalize(value: unknown): unknown {
  * Reusable provider evidence has a separate digest and original-age deadline:
  * opening hours and ratings can change without an itinerary edit.
  *
- * The day records are the same objects handed to `buildTripPlanScore`, which is
- * what keeps the key complete: a field added to the record is in the digest
- * without anyone remembering to add it.
+ * Day records match `buildTripPlanScore`. Optional timezone/instant metadata is
+ * excluded: only destination-local clocks define a planning schedule.
  */
 export function tripPlanScoreRevision(input: {
   context?: unknown;
@@ -62,11 +61,28 @@ export function tripPlanScoreRevision(input: {
     // what this constant already promises.
     contractVersion: PLAN_SCORE_CONTRACT_VERSION,
     rubricVersion: PLAN_SCORE_RUBRIC_VERSION,
-    evidenceIntegrationVersion: 2,
+    evidenceIntegrationVersion: 3,
     context: input.context ?? null,
     startDate: input.startDate ?? null,
     startingPlaceId: input.startingPlaceId ?? null,
-    days: input.days,
+    days: input.days.map(({ record, ...day }) => {
+      const { timeZone: _zone, items, ...localDay } = record;
+      return {
+        ...day,
+        record: {
+          ...localDay,
+          items: items.map(
+            ({
+              timeZone: _itemZone,
+              timeZoneSource: _source,
+              customLocationTimeZone: _customZone,
+              startInstant: _instant,
+              ...localItem
+            }) => localItem,
+          ),
+        },
+      };
+    }),
     mustGoTripPlaceIds: [...input.mustGoTripPlaceIds].toSorted(),
     placeIdentities: [...(input.placeIdentities ?? [])].toSorted((a, b) =>
       a.id.localeCompare(b.id),

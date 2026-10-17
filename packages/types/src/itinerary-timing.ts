@@ -21,12 +21,12 @@ export type TimingIssue = {
   severity: 'conflict' | 'review' | 'notice';
   /** Full preview from the same scheduling pass used by Suggest timing. */
   suggestion?: ItineraryDayTimeSuggestion;
-  /** An arrival lower bound, not a promise the full visit fits. Compared on one timeline. */
+  /** An arrival lower bound, not a promise the full visit fits. Compared as local wall-clock values. */
   orderConflict?: {
     previousItemId: string;
-    earliestStartInstant: string;
-    scheduledStartInstant: string;
-    timeZone: string;
+    /** Local calendar date and clock, YYYY-MM-DDTHH:mm, with no offset. */
+    earliestStartLocal: string;
+    scheduledStartLocal: string;
   };
 };
 export type TimingChange = {
@@ -55,7 +55,7 @@ export type SchedulingOutcome = {
   proposals?: TimingReviewProposal[];
 };
 
-/** Extra slot fields are optional only for older cached/client payloads. New responses supply all. */
+/** Slots are local clocks. Legacy instant/zone metadata never defines a planning time. */
 export type ItineraryDayTimeSuggestion = {
   itemId: string;
   localTime: string | null;

@@ -9,7 +9,6 @@ import {
 import {
   scoringCommitments,
   normalizeScoringItems,
-  dayOrigin,
   scoringOpeningHours,
 } from '../src/services/plan-score-normalization.js';
 import { buildPlanScoreFromEvaluations, buildTripPlanScore } from '../src/services/plan-score.js';
@@ -39,8 +38,7 @@ const visit = (id: string, extra: Partial<PlanScoreDayItem> = {}): PlanScoreDayI
 const input = (extra: Partial<ScoredDayInput> = {}): ScoredDayInput => ({
   dayId: 'day',
   date: '2026-09-29',
-  timeZone: 'Asia/Singapore',
-  originInstant: dayOrigin('2026-09-29', 'Asia/Singapore'),
+
   commitments: [],
   items: [visit('museum')],
   places: [
@@ -132,9 +130,7 @@ test('linked journey duration is counted once and its own booking cannot collide
       endKnown: true,
     },
   ];
-  const items = normalizeScoringItems('2026-09-29', 'Asia/Singapore', [visit('a')], {
-    commitments,
-  });
+  const items = normalizeScoringItems('2026-09-29', [visit('a')], { commitments });
   const result = assess({ items, commitments, segments: [] });
   expect(result.conflicts).toEqual([]);
   expect(result.pace.activeMinutes).toBe(150);
@@ -382,48 +378,59 @@ test('overnight journeys occupy both local days and preserve timezone changes', 
   const bookings = [
     {
       id: 'flight',
+      flightDepartureLocalDate: new Date('2026-09-29'),
+      flightDepartureLocalTime: new Date('1970-01-01T22:00Z'),
+      flightArrivalLocalDate: new Date('2026-09-30'),
+      flightArrivalLocalTime: new Date('1970-01-01T11:00Z'),
+      // These authoritative instants are metadata, not planning inputs.
       flightDepartureInstant: new Date('2026-09-29T14:00:00Z'),
       flightArrivalInstant: new Date('2026-09-30T02:00:00Z'),
     },
   ];
-  expect(scoringCommitments(bookings, '2026-09-29', 'Asia/Singapore')).toMatchObject([
+  expect(scoringCommitments(bookings, '2026-09-29')).toMatchObject([
     { startMinute: 1320, endMinute: 1440, longDistance: true },
   ]);
-  expect(scoringCommitments(bookings, '2026-09-30', 'Asia/Tokyo')).toMatchObject([
+  expect(scoringCommitments(bookings, '2026-09-30')).toMatchObject([
     { startMinute: 0, endMinute: 660, startKnown: true, longDistance: true },
   ]);
   const arrivalDay = assess({
-    commitments: scoringCommitments(bookings, '2026-09-30', 'Asia/Tokyo'),
+    commitments: scoringCommitments(bookings, '2026-09-30'),
   });
   expect(arrivalDay.conflicts).toContainEqual(
     expect.objectContaining({ severity: 'HARD', verified: true }),
   );
   expect(scoreDay(arrivalDay.input).caps[0]?.limit).toBe(59);
 });
-test.each([
-  ['2026-03-08', 1380],
-  ['2026-11-01', 1500],
-])('DST day %s has %i real occupied minutes', (date, minutes) => {
-  const origin = dayOrigin(date, 'America/New_York');
-  expect(
-    scoringCommitments(
-      [
-        {
-          id: 'train',
-          transportDepartureInstant: new Date(origin),
-          transportArrivalInstant: new Date(origin + minutes * 60000),
-        },
-      ],
-      date,
-      'America/New_York',
-    ),
-  ).toMatchObject([{ startMinute: 0, endMinute: minutes }]);
-});
+test.each(['2026-03-08', '2026-11-01'])(
+  'planning date %s always has 1440 local-clock minutes',
+  (date) => {
+    const nextDate = new Date(Date.parse(`${date}T00:00Z`) + 86400000);
+    expect(
+      scoringCommitments(
+        [
+          {
+            id: 'train',
+            transportDepartureLocalDate: new Date(date),
+            transportDepartureLocalTime: new Date('1970-01-01T00:00Z'),
+            transportArrivalLocalDate: nextDate,
+            transportArrivalLocalTime: new Date('1970-01-01T00:00Z'),
+          },
+        ],
+        date,
+      ),
+    ).toMatchObject([{ startMinute: 0, endMinute: 1440 }]);
+  },
+);
 test('missing arrivals never become zero-duration journeys or proven recovery', () => {
   const commitments = scoringCommitments(
-    [{ id: 'flight', flightDepartureInstant: new Date('2026-09-29T01:00:00Z') }],
+    [
+      {
+        id: 'flight',
+        flightDepartureLocalDate: new Date('2026-09-29'),
+        flightDepartureLocalTime: new Date('1970-01-01T09:00Z'),
+      },
+    ],
     '2026-09-29',
-    'Asia/Singapore',
   );
   expect(commitments).toMatchObject([{ startMinute: 540, endMinute: 540, endKnown: false }]);
   const result = assess({ items: [], places: [], segments: [], commitments });
@@ -450,24 +457,17 @@ test('one known booking does not establish duration coverage for unrelated long-
     assess({ commitments, segments: [{ ...segment, itemIds: ['train'] }] }).pace.factor.state,
   ).toBe('EVALUATED');
 });
-test('authoritative instants distinguish both occurrences of a repeated DST hour', () => {
+test('a repeated DST hour never shifts a planning clock', () => {
   const items = normalizeScoringItems(
     '2026-11-01',
-    'America/New_York',
     [visit('first', { start: at(90) }), visit('second', { start: at(90) })],
-    {
-      instants: new Map([
-        ['first', new Date('2026-11-01T05:30:00Z')],
-        ['second', new Date('2026-11-01T06:30:00Z')],
-      ]),
-    },
+    {},
   );
-  expect(items.map((i) => i.start?.minutes)).toEqual([90, 150]);
+  expect(items.map((i) => i.start?.minutes)).toEqual([90, 90]);
 });
 test('dated hours apply only within their stated horizon; overnight weekly hours cross midnight', () => {
   const date = '2026-09-29',
-    zone = 'Asia/Singapore',
-    origin = dayOrigin(date, zone);
+    zone = 'Asia/Singapore';
   const hours = {
     timeZone: zone,
     utcOffsetMinutes: 480,
@@ -478,17 +478,15 @@ test('dated hours apply only within their stated horizon; overnight weekly hours
     validFrom: date,
     validThrough: date,
   };
-  expect(scoringOpeningHours({ date, zone, origin, hours })).toMatchObject({
+  expect(scoringOpeningHours({ date, hours })).toMatchObject({
     intervals: [{ startMinute: 600, endMinute: 720 }],
   });
-  expect(
-    scoringOpeningHours({ date: '2026-10-06', zone, origin: dayOrigin('2026-10-06', zone), hours }),
-  ).toMatchObject({ intervals: [{ startMinute: 540, endMinute: 1020 }] });
+  expect(scoringOpeningHours({ date: '2026-10-06', hours })).toMatchObject({
+    intervals: [{ startMinute: 540, endMinute: 1020 }],
+  });
   expect(
     scoringOpeningHours({
       date,
-      zone,
-      origin,
       hours: {
         ...hours,
         currentPeriods: undefined,
@@ -500,9 +498,14 @@ test('dated hours apply only within their stated horizon; overnight weekly hours
 
 test('an unknown overnight arrival cannot establish recovery on a later rest day', () => {
   const commitments = scoringCommitments(
-    [{ id: 'flight', flightDepartureInstant: new Date('2026-09-28T14:00:00Z') }],
+    [
+      {
+        id: 'flight',
+        flightDepartureLocalDate: new Date('2026-09-28'),
+        flightDepartureLocalTime: new Date('1970-01-01T22:00Z'),
+      },
+    ],
     '2026-09-29',
-    'Asia/Singapore',
   );
   expect(commitments).toMatchObject([{ startKnown: false, endKnown: false }]);
   const result = assess({
@@ -607,7 +610,7 @@ test('original evidence age changes the assessment fingerprint and its expiry', 
 test('AI estimates and equivalent stored itinerary inputs produce the same category outcomes', () => {
   const original = input();
   const date = original.date!,
-    zone = original.timeZone!;
+    zone = 'Asia/Singapore';
   const hours = new Map([
     [
       'museum',
@@ -631,7 +634,7 @@ test('AI estimates and equivalent stored itinerary inputs produce the same categ
     evaluateScoredDay({
       ...original,
       planningContext,
-      items: normalizeScoringItems(date, zone, [estimated], { hours }),
+      items: normalizeScoringItems(date, [estimated], { hours }),
     }).input,
   );
   const stored = buildTripPlanScore({
@@ -744,47 +747,37 @@ test('unlocated visits and unspecified structured transfers explain the exact re
   expect(missing.pace.activeMinutes).toBeNull();
 });
 
-test.each(['Asia/Singapore', 'Pacific/Auckland'])(
-  'Auckland café timing uses its local experience windows on a %s timeline',
-  (dayZone) => {
-    const date = '2026-09-10';
-    const origin = dayOrigin(date, dayZone);
-    const assessCafe = (minute: number) =>
-      assess({
-        date,
-        timeZone: dayZone,
-        originInstant: origin,
-        items: normalizeScoringItems(
-          date,
-          dayZone,
-          [visit('cafe', { placeId: 'cafe', start: at(minute), duration: at(210) })],
-          { zones: new Map([['cafe', 'Pacific/Auckland']]) },
-        ),
-        places: [
-          {
-            tripPlaceId: 'cafe',
-            timeZone: 'Pacific/Auckland',
-            coordinates: { latitude: -36.848, longitude: 174.763 },
-            types: ['cafe'],
-            rating: { status: 'UNKNOWN' },
-          },
-        ],
-      });
-    expect(assessCafe(12 * 60 + 5).experience.timeOfDay).toEqual([]);
-    expect(assessCafe(2 * 60).experience.timeOfDay).toEqual(['cafe']);
-  },
-);
+test('Auckland café timing uses local clock experience windows', () => {
+  const date = '2026-09-10';
+  const assessCafe = (minute: number) =>
+    assess({
+      date,
 
-test('an approximate night window ending in a DST gap stays unknown instead of failing scoring', () => {
+      items: normalizeScoringItems(
+        date,
+        [visit('cafe', { placeId: 'cafe', start: at(minute), duration: at(210) })],
+        {},
+      ),
+      places: [
+        {
+          tripPlaceId: 'cafe',
+          timeZone: 'Pacific/Auckland',
+          coordinates: { latitude: -36.848, longitude: 174.763 },
+          types: ['cafe'],
+          rating: { status: 'UNKNOWN' },
+        },
+      ],
+    });
+  expect(assessCafe(12 * 60 + 5).experience.timeOfDay).toEqual([]);
+  expect(assessCafe(2 * 60).experience.timeOfDay).toEqual(['cafe']);
+});
+
+test('a local night window crossing a DST boundary remains usable', () => {
   const date = '2026-09-26';
-  const origin = dayOrigin(date, 'Pacific/Auckland');
   const result = assess({
     date,
-    timeZone: 'Pacific/Auckland',
-    originInstant: origin,
-    items: normalizeScoringItems(date, 'Pacific/Auckland', [
-      visit('bar', { placeId: 'bar', start: at(20 * 60) }),
-    ]),
+
+    items: normalizeScoringItems(date, [visit('bar', { placeId: 'bar', start: at(20 * 60) })]),
     places: [
       {
         tripPlaceId: 'bar',
@@ -795,4 +788,32 @@ test('an approximate night window ending in a DST gap stays unknown instead of f
     ],
   });
   expect(result.experience.timeOfDay).toEqual([]);
+});
+
+test('date-line transport keeps its separate booked local endpoints without shifting the plan', () => {
+  const booking = {
+    id: 'flight',
+    itineraryItemId: 'transport',
+    flightDepartureLocalDate: new Date('2026-10-17'),
+    flightDepartureLocalTime: new Date('1970-01-01T10:00Z'),
+    flightArrivalLocalDate: new Date('2026-10-17'),
+    flightArrivalLocalTime: new Date('1970-01-01T06:00Z'),
+    flightDepartureInstant: new Date('2026-10-16T21:00Z'),
+    flightArrivalInstant: new Date('2026-10-17T13:00Z'),
+  };
+  const before = structuredClone(booking);
+  expect(scoringCommitments([booking], '2026-10-17')).toMatchObject([
+    { id: 'flight', itemId: 'transport', startMinute: 600, endMinute: 600 },
+    { id: 'flight:arrival', itemId: null, startMinute: 360, endMinute: 360 },
+  ]);
+  expect(booking).toEqual(before);
+});
+
+test('an instant without booked local clocks is unknown planning evidence, never a guessed start', () => {
+  expect(
+    scoringCommitments(
+      [{ id: 'legacy', flightDepartureInstant: new Date('2026-10-17T12:00Z') }],
+      '2026-10-17',
+    ),
+  ).toEqual([]);
 });

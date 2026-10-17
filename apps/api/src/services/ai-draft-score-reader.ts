@@ -14,9 +14,9 @@ import { estimateLegMinutes, legCalibration } from './plan-score-estimates.js';
 import { haversineKm } from './plan-score-route-comparison.js';
 import { draftTripContext } from './trip-context.js';
 import { evaluateScoredDay, type ScoringRouteSegment } from './plan-score-evaluation.js';
-import { normalizeScoringItems, dayOrigin } from './plan-score-normalization.js';
+import { normalizeScoringItems } from './plan-score-normalization.js';
 import { toDayEvidenceItems } from './itinerary-day-evidence.js';
-import { floatingLocalTimeToInstant, parseLocalTime } from './itinerary-rules.js';
+import { parseLocalTime } from './itinerary-rules.js';
 import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
 import { resolveCountryPrimaryTimeZone } from './trip-rules.js';
 import { readCachedRoute, routeCacheKey } from './route-evidence-cache.js';
@@ -243,7 +243,7 @@ export async function readDraftPlanScore(draft: AiPlannerDraft, clock: Date | ((
           durationProvenance: item.durationProvenance.toUpperCase(),
           dayPart: item.schedule.kind === 'day_part' ? item.schedule.dayPart.toUpperCase() : null,
           localStartTime: exact ? parseLocalTime(exact) : null,
-          startInstant: exact ? floatingLocalTimeToInstant(day.date, exact, itemZone) : null,
+          startInstant: null,
           timeSemantics: exact ? 'FLOATING_LOCAL' : null,
           timeProvenance: exact
             ? item.schedule.kind === 'exact' && item.schedule.source === 'user'
@@ -265,8 +265,7 @@ export async function readDraftPlanScore(draft: AiPlannerDraft, clock: Date | ((
       };
     });
     const holiday = destination.holidays.get(day.date) ?? null;
-    const items = normalizeScoringItems(day.date, zone, raw, {
-      zones: new Map(record.items.map((i) => [i.id, i.timeZone])),
+    const items = normalizeScoringItems(day.date, raw, {
       hours: evidence.hours,
       holiday: holiday !== null,
     });
@@ -275,8 +274,6 @@ export async function readDraftPlanScore(draft: AiPlannerDraft, clock: Date | ((
       evaluation: evaluateScoredDay({
         dayId: day.date,
         date: day.date,
-        timeZone: zone,
-        originInstant: dayOrigin(day.date, zone),
         commitments: [],
         items,
         segments,

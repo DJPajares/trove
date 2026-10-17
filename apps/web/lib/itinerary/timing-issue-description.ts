@@ -13,20 +13,21 @@ export function describeTimingIssue(
   if (issue.code === 'NO_ROOM' && issue.suggestion?.status === 'ok')
     return t('connectedTiming.needsSpace');
   const context = issue.code === 'FIXED_CONFLICT' ? issue.orderConflict : undefined;
-  if (!context) return t(`connectedTiming.issue.${issue.code}`);
+  if (!context?.earliestStartLocal || !context.scheduledStartLocal)
+    return t(`connectedTiming.issue.${issue.code}`);
   const formatter = new Intl.DateTimeFormat(options.locale, {
     hour: 'numeric',
     minute: '2-digit',
     hour12: options.hour12,
-    timeZone: context.timeZone,
+    timeZone: 'UTC',
   });
   const date = new Intl.DateTimeFormat(options.locale, {
     day: 'numeric',
     month: 'short',
-    timeZone: context.timeZone,
+    timeZone: 'UTC',
   });
-  const scheduled = new Date(context.scheduledStartInstant);
-  const earliest = new Date(context.earliestStartInstant);
+  const scheduled = new Date(`${context.scheduledStartLocal}:00Z`);
+  const earliest = new Date(`${context.earliestStartLocal}:00Z`);
   const differentDate = date.format(scheduled) !== date.format(earliest);
   const format = (instant: Date) =>
     differentDate

@@ -7,32 +7,6 @@ import {
 } from '../src/services/place-opening-hours.js';
 import type { PlaceOpeningPeriod } from '../src/services/places.js';
 
-/** Minutes east of UTC for a zone right now, so the same-zone guard can be satisfied. */
-function currentOffsetMinutes(timeZone: string) {
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat('en-US', {
-    day: '2-digit',
-    hour: '2-digit',
-    hour12: false,
-    minute: '2-digit',
-    month: '2-digit',
-    second: '2-digit',
-    timeZone,
-    year: 'numeric',
-  }).formatToParts(now);
-  const field = (type: string) => Number(parts.find((part) => part.type === type)?.value);
-  const asUtc = Date.UTC(
-    field('year'),
-    field('month') - 1,
-    field('day'),
-    field('hour') % 24,
-    field('minute'),
-    field('second'),
-  );
-
-  return Math.round((asUtc - Math.floor(now.getTime() / 1000) * 1000) / 60_000);
-}
-
 function period(
   openDay: number,
   openHour: number,
@@ -44,8 +18,6 @@ function period(
     open: { day: openDay, hour: openHour, minute: 0 },
   };
 }
-
-const SINGAPORE = 'Asia/Singapore';
 
 test('maps every weekday from a local date, with Sunday as zero', () => {
   // 2026-08-16 is a Sunday.
@@ -106,23 +78,13 @@ test('spillover wraps from Saturday into Sunday', () => {
 test('a closed weekday is known to be closed, not unknown', () => {
   // The single most useful conflict this evidence exists to surface: the
   // provider gave a full week, and this day is not in it.
-  const result = resolveOpeningHoursForDay({
-    date: '2026-08-18', // Tuesday
-    dayTimeZone: SINGAPORE,
-    periods: [period(1, 9, 1, 17)], // Monday only
-    utcOffsetMinutes: currentOffsetMinutes(SINGAPORE),
-  });
+  const result = resolveOpeningHoursForDay({ date: '2026-08-18', periods: [period(1, 9, 1, 17)] });
 
   expect(result).toStrictEqual({ intervals: [], source: 'FRESH_PROVIDER', status: 'KNOWN' });
 });
 
 test('an open weekday resolves to its intervals', () => {
-  const result = resolveOpeningHoursForDay({
-    date: '2026-08-17', // Monday
-    dayTimeZone: SINGAPORE,
-    periods: [period(1, 9, 1, 17)],
-    utcOffsetMinutes: currentOffsetMinutes(SINGAPORE),
-  });
+  const result = resolveOpeningHoursForDay({ date: '2026-08-17', periods: [period(1, 9, 1, 17)] });
 
   expect(result).toStrictEqual({
     intervals: [{ endMinute: 1020, startMinute: 540 }],
@@ -132,47 +94,17 @@ test('an open weekday resolves to its intervals', () => {
 });
 
 test('no periods at all is unknown, since absence of a schedule proves nothing', () => {
-  expect(
-    resolveOpeningHoursForDay({
-      date: '2026-08-17',
-      dayTimeZone: SINGAPORE,
-      periods: [],
-      utcOffsetMinutes: currentOffsetMinutes(SINGAPORE),
-    }),
-  ).toStrictEqual({ status: 'UNKNOWN' });
+  expect(resolveOpeningHoursForDay({ date: '2026-08-17', periods: [] })).toStrictEqual({
+    status: 'UNKNOWN',
+  });
 });
 
-test('a missing provider offset is unknown rather than assumed to match', () => {
-  expect(
-    resolveOpeningHoursForDay({
-      date: '2026-08-17',
-      dayTimeZone: SINGAPORE,
-      periods: [period(1, 9, 1, 17)],
-      utcOffsetMinutes: null,
-    }),
-  ).toStrictEqual({ status: 'UNKNOWN' });
-});
-
-test('a place outside the day timezone is unknown, since its hours are stated elsewhere', () => {
-  expect(
-    resolveOpeningHoursForDay({
-      date: '2026-08-17',
-      dayTimeZone: SINGAPORE,
-      periods: [period(1, 9, 1, 17)],
-      utcOffsetMinutes: currentOffsetMinutes(SINGAPORE) + 60,
-    }),
-  ).toStrictEqual({ status: 'UNKNOWN' });
-});
-
-test('the same-zone guard holds across zones with different offsets', () => {
-  for (const timeZone of ['Asia/Singapore', 'Pacific/Auckland', 'America/New_York', 'UTC']) {
-    const matched = resolveOpeningHoursForDay({
-      date: '2026-08-17',
-      dayTimeZone: timeZone,
-      periods: [period(1, 9, 1, 17)],
-      utcOffsetMinutes: currentOffsetMinutes(timeZone),
-    });
-
-    expect(matched.status, `${timeZone} should match its own offset`).toBe('KNOWN');
-  }
+test('hours need only their destination-local periods, with no offset or timezone context', () => {
+  expect(resolveOpeningHoursForDay({ date: '2026-08-17', periods: [period(1, 9, 1, 17)] })).toEqual(
+    {
+      status: 'KNOWN',
+      source: 'FRESH_PROVIDER',
+      intervals: [{ startMinute: 540, endMinute: 1020 }],
+    },
+  );
 });

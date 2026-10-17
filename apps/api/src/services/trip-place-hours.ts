@@ -67,7 +67,6 @@ export async function getTripPlaceHours(
       const status = placeHoursStatus({
         date,
         hours,
-        zone: trip.referenceTimeZone ?? 'UTC',
       });
       if (status.status !== 'unknown') signals.hours = status;
     }

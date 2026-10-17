@@ -14,7 +14,6 @@ import { cn } from '@/lib/utils';
 export type TripCurrencySuggestion = { code: string; meta: string };
 
 type CurrencyPickerSheetProps = {
-  cached: boolean;
   currencies: readonly CurrencyMetadata[];
   homeCurrency: string | null;
   onOpenChange: (open: boolean) => void;
@@ -33,7 +32,6 @@ type CurrencyPickerSheetProps = {
  * still works.
  */
 export function CurrencyPickerSheet({
-  cached,
   currencies,
   homeCurrency,
   onOpenChange,
@@ -161,9 +159,6 @@ export function CurrencyPickerSheet({
                 <PickerGroup label={t('all')}>
                   {currencies.map((currency) => row(currency.code))}
                 </PickerGroup>
-              ) : null}
-              {cached ? (
-                <p className="px-3 pt-4 text-xs text-muted-foreground">{t('listCached')}</p>
               ) : null}
             </>
           )}

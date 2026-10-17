@@ -89,7 +89,6 @@ export function DayTimeline({
   partialFor,
   resolveBase,
   resolveItem,
-  routesStale,
   savingRouteOwner,
 }: Readonly<{
   /** What is worth a look about a stop, set under it. */
@@ -119,7 +118,6 @@ export function DayTimeline({
     tripPlaceId: string,
   ) => { located: boolean; name: string; selected: boolean } | null;
   resolveItem: (item: ItineraryItem) => StopView;
-  routesStale: boolean;
   savingRouteOwner: string | null;
 }>) {
   const t = useTranslations('itinerary');
@@ -237,7 +235,6 @@ export function DayTimeline({
             savingRouteOwner === `${entry.segment.modeOwner.kind}:${entry.segment.modeOwner.id}`
           }
           segment={entry.segment}
-          stale={routesStale}
         />,
       );
       return;

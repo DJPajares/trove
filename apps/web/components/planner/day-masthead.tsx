@@ -51,7 +51,6 @@ export function DayMasthead({
   onPreviousDay,
   onRename,
   onSaveNote,
-  routeNotes,
   routesLoading,
   scoreChip,
   sketch,
@@ -81,8 +80,6 @@ export function DayMasthead({
   onPreviousDay?: () => void;
   onRename: (name: string | null) => Promise<boolean>;
   onSaveNote: (note: string | null) => Promise<boolean>;
-  /** What the day's travel estimate is obliged to say about itself. */
-  routeNotes?: ReactNode;
   routesLoading: boolean;
   scoreChip?: ReactNode;
   /** The day's route, drawn from what the trip already holds. */
@@ -174,7 +171,6 @@ export function DayMasthead({
         <div className="flex items-stretch gap-3">
           <div className="min-w-0 flex-1 space-y-2">
             <DaySummary compactTravel={compactTravel} facts={facts} routesLoading={routesLoading} />
-            {routeNotes}
           </div>
 
           {/* The day's shape at a glance, and the way into the real map. */}

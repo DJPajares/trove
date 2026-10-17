@@ -988,22 +988,11 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
               not arrived, and an item with no fixed start are three different
               things, and each of them says which one it is. */}
           {route ? (
-            route.bufferSeconds || route.measuredAt ? (
+            route.bufferSeconds ? (
               <p className={cn('mt-3 text-xs leading-5', dock.muted)}>
                 {route.bufferSeconds
                   ? t('leaveByBuffer', { minutes: Math.round(route.bufferSeconds / 60) })
                   : null}
-                {/* Offline, the travel time is one measured earlier; say when. */}
-                {route.measuredAt ? (
-                  <span className="block">
-                    {t('leaveByMeasured', {
-                      date: new Intl.DateTimeFormat(locale, {
-                        day: 'numeric',
-                        month: 'short',
-                      }).format(new Date(route.measuredAt)),
-                    })}
-                  </span>
-                ) : null}
               </p>
             ) : null
           ) : nextLegIsFlight ? (

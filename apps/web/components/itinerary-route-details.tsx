@@ -76,22 +76,6 @@ export function ItineraryRouteSummary({
           </span>
         ) : null}
       </div>
-      {/* One wrapped line rather than a stack of paragraphs. Every note still
-          renders — the Google attribution is an obligation, not a nicety — but
-          on a phone they cost one row instead of four, which is four rows of
-          the day the traveller gets to see instead. */}
-      <div className="flex flex-wrap items-baseline text-xs">
-        {data?.source === 'cache' ? (
-          <span className="text-status-warning">
-            {t('cachedRoute', {
-              date: new Intl.DateTimeFormat(locale, {
-                dateStyle: 'medium',
-                timeStyle: 'short',
-              }).format(new Date(data.generatedAt)),
-            })}
-          </span>
-        ) : null}
-      </div>
     </section>
   );
 }

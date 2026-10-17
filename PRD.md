@@ -891,7 +891,7 @@ If future provider ID changes create possible duplicates, use careful matching/m
 
 - Trove may retain dated snapshots of durable Place display/location data and travel legs already requested by a user, subject to provider permission. The internal maximum is 30 days; shorter provider-specific limits take precedence. Fresh permitted snapshots should be reused, and stale snapshots refreshed on demand rather than through blanket background fetching.
 - Provider-backed Places may use only provider-permitted cached display/location data for the offline experience.
-- Cached provider-derived data is a snapshot, not canonical truth, and should retain source/freshness or last-updated context where relevant.
+- Provider-derived snapshots retain source, acquisition time, freshness, expiry and verification metadata internally for caching, scoring, debugging and refresh logic. Normal screens, cards, drawers, maps, details, tooltips and accessible descriptions omit cache-status labels and provider retrieval/verification timestamps. Keep required provider/photo attribution, useful travel metrics, applicable forecast/visit dates and closure warnings. Show a freshness warning only when it offers a concrete traveller action or is safety-critical; do not imply guaranteed current data. This presentation rule does not change acquisition, retention, TTL or refresh behavior.
 - Stale data must not be presented as guaranteed current data when freshness materially affects a decision.
 - When connectivity returns, Trove should refresh/re-resolve mutable provider data where appropriate.
 - Trove must not promise permanent/full offline Google Places or Google Maps data.
@@ -1566,9 +1566,9 @@ Weather supports planning and travel across Home, Itinerary, and Trip Mode. It i
 - Share one local-first weather service across Home, Trip, Planner, Trip Mode and Insights: memory → private IndexedDB → shared database → Open-Meteo. Fresh local evidence produces no weather HTTP request. Canonical Celsius evidence is identified by rounded location, time zone and forecast date; unit changes and overlapping trips reuse it. Trip mappings and captured archives are separate.
 - Refresh current/hourly and today’s daily evidence after **1 hour**, upcoming daily forecasts after **6 hours**, and seasonal context after **30 days**, measured from original acquisition. Render dated stale evidence immediately and revalidate once on mount, focus, reconnect or visible expiry; pause automatic acquisition while hidden/offline. Coordinate concurrent consumers and tabs, retain a five-minute transient-failure cooldown, and persist successful server acquisitions for other sessions.
 - Outside the provider horizon, retain forecast-unavailable states and use seasonal context in Insights; make no weather database/provider lookup until the date becomes eligible. Local seasonal persistence is independent of the general query cache’s 24-hour lifetime. Plan Score and AI review remain cache-only and existing assessments refresh when relevant evidence acquisition changes.
-- Evidence age is measured from its source observation or forecast retrieval, not from when a client reloaded a cached response. Current conditions that are too old become unavailable as current; a dated forecast may remain useful with its original date, location, and freshness context.
+- Evidence age is measured from its source observation or forecast retrieval, not from when a client reloaded a cached response. Current conditions that are too old become unavailable as current; a dated forecast may remain useful with its original date, location, and forecast/archived context.
 - Retain available forecasts for past trip days as archived forecasts. Do not fabricate an archive for days that were never fetched, and do not let later date/location edits relabel an old forecast as evidence for a different day or place.
-- Offline/provider failure preserves useful dated cached forecasts with honest context. Freshness details may be progressively disclosed; no stale reading may be presented as current. Weather failure never hides the itinerary or triggers automatic replanning.
+- Offline/provider failure preserves useful dated cached forecasts with honest context. Routine retrieval dates are hidden; actionable offline guidance remains available, and no stale reading may be presented as current. Weather failure never hides the itinerary or triggers automatic replanning.
 
 ---
 
@@ -1648,7 +1648,7 @@ Always preserve:
 - original amount,
 - original ISO currency.
 
-Optionally show an approximate converted home-currency value together with the exchange-rate source/reference and the rate date (or effective timestamp where the provider supplies one).
+Optionally show an approximate converted home-currency value together with the exchange-rate source/reference. Keep rate dates and acquisition timestamps internally; show a plain-language warning when rates may have changed enough to affect an exchange decision, without routine date labels.
 
 Conversion/display values must never overwrite the original amount/currency.
 

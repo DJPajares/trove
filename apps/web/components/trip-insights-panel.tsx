@@ -94,7 +94,6 @@ function InsightItem({
         formatSuggestedClock(time, locale, preferences.timeFormat === '12h');
       title = t('hours.specialTitle', { date: shortDate(notice.date), name: notice.name });
       body = t('hours.specialBody', {
-        checked: format.dateTime(new Date(notice.asOf), { day: 'numeric', month: 'short' }),
         times: notice.spans.map((span) => `${clock(span.open)} – ${clock(span.close)}`).join(', '),
       });
     } else {

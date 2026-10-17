@@ -49,19 +49,16 @@ export function ToolsLauncher() {
   const trip = useMemo(() => nextTripForTools(trips.data?.trips ?? [], localToday()), [trips.data]);
   const tripCurrency = trip ? tripLocalCurrency(trip, home) : null;
   const templateList = templates.data?.templates ?? [];
-  const dateFormat = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' });
 
-  /** "1 EUR ≈ 163.20 JPY" and how fresh it is, or null when no rate is held. */
+  /** A reference conversion, with a warning only when rates may have changed. */
   const rateFor = (pair: CurrencyPair) => {
     const rate = board ? deriveRateFromBoard(board, pair.source, pair.target) : null;
     if (!rate) return null;
     // A board served from the half-day cache is normal; only one the device
-    // could not refresh past that is worth flagging as saved.
+    // could not refresh past that needs a caution before exchanging money.
     const saved = rate.source === 'cache' && isSavedRateStale(rate.fetchedAt);
     return {
-      age: saved
-        ? t('savedRate', { date: dateFormat.format(new Date(rate.fetchedAt)) })
-        : t('referenceRate', { date: dateFormat.format(new Date(`${rate.date}T00:00:00`)) }),
+      detail: saved ? currencyT('rateMayHaveChanged') : t('openToConvert'),
       saved,
       text: t('rateLine', {
         rate: rate.rate.toLocaleString(locale, { maximumSignificantDigits: 5 }),
@@ -109,7 +106,7 @@ export function ToolsLauncher() {
             {tripPair ? (
               <li>
                 <ShortcutRow
-                  detail={tripRate?.age ?? t('openToConvert')}
+                  detail={tripRate?.detail ?? t('openToConvert')}
                   detailWarning={tripRate?.saved}
                   href={currencyPairHref(tripPair)}
                   icon={<Icons.Currency aria-hidden="true" className="size-5" />}

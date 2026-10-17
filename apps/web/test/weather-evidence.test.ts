@@ -11,7 +11,7 @@ vi.mock('next-intl', async (importOriginal) => ({
 const { useWeatherEvidenceDescription } =
   await import('../lib/weather/use-evidence-description.ts');
 
-test('forecast descriptions identify original date, zone and retrieval time', () => {
+test('forecast descriptions keep the applicable date and zone without retrieval metadata', () => {
   const describe = useWeatherEvidenceDescription();
   expect(
     describe({
@@ -20,23 +20,23 @@ test('forecast descriptions identify original date, zone and retrieval time', ()
       timeZone: 'Asia/Tokyo',
       fetchedAt: '2026-10-02T20:00Z',
     }),
-  ).toBe('Forecast for Oct 3, 2026 (Asia/Tokyo). Retrieved Oct 3, 2026, 5:00 AM');
+  ).toBe('Forecast for Oct 3, 2026 (Asia/Tokyo)');
 });
-test('legacy archived predictions keep unknown age rather than acquiring a new timestamp', () => {
+test('archived predictions retain their forecast identity without unknown-age metadata', () => {
   expect(
     useWeatherEvidenceDescription()({
       kind: 'archived',
       date: '2026-10-02',
       timeZone: 'Asia/Tokyo',
     }),
-  ).toBe('Archived forecast for Oct 2, 2026 (Asia/Tokyo). Retrieval time unknown');
+  ).toBe('Archived forecast for Oct 2, 2026 (Asia/Tokyo)');
 });
-test('observation descriptions use the evidence timezone', () => {
+test('current descriptions keep the timezone without exposing observation timestamps', () => {
   expect(
     useWeatherEvidenceDescription()({
       kind: 'current',
       observedAt: '2026-10-03T11:45',
       timeZone: 'Asia/Tokyo',
     }),
-  ).toBe('Observed Oct 3, 2026, 11:45 AM (Asia/Tokyo)');
+  ).toBe('Current conditions (Asia/Tokyo)');
 });

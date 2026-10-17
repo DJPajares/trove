@@ -29,16 +29,13 @@ export function MapRouteSummary({ leg }: Readonly<{ leg: MapRouteLeg }>) {
         })}
       </span>
       <span className="mt-1 block text-xs text-muted-foreground">
-        {routeT(
-          leg.status === 'not_estimated'
-            ? 'state.not-estimated'
-            : leg.status !== 'ok'
-              ? 'state.unavailable'
-              : leg.cached
-                ? 'state.cached'
-                : 'state.estimated',
-        )}{' '}
-        · {routeT(`mode.${leg.mode}`)}
+        {leg.status !== 'ok' ? (
+          <>
+            {routeT(leg.status === 'not_estimated' ? 'state.not-estimated' : 'state.unavailable')}{' '}
+            ·{' '}
+          </>
+        ) : null}
+        {routeT(`mode.${leg.mode}`)}
         {leg.durationSeconds !== null ? (
           <> · {formatTravelDuration(leg.durationSeconds, locale)}</>
         ) : null}

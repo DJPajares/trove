@@ -1676,24 +1676,6 @@ export function ItineraryManager({
               onPreviousDay={selectedIndex > 0 ? () => selectAdjacentDay(-1) : undefined}
               onRename={(name) => renameDay(selectedDay.id, name)}
               onSaveNote={(note) => saveDayNote(selectedDay.id, note)}
-              routeNotes={
-                !compact &&
-                (routes?.source === 'cache' ||
-                  routes?.segments.some((segment) => segment.mode === 'walk')) ? (
-                  <p className="flex flex-wrap gap-x-2 text-xs leading-5">
-                    {routes?.source === 'cache' ? (
-                      <span className="text-status-warning">
-                        {t('routes.cachedRoute', {
-                          date: new Intl.DateTimeFormat(locale, {
-                            dateStyle: 'medium',
-                            timeStyle: 'short',
-                          }).format(new Date(routes.generatedAt)),
-                        })}
-                      </span>
-                    ) : null}
-                  </p>
-                ) : null
-              }
               routesLoading={routeStatus === 'loading'}
               scoreChip={
                 planScoreEnabled ? (
@@ -1877,7 +1859,6 @@ export function ItineraryManager({
                   };
                 }}
                 partialFor={stopPartial}
-                routesStale={routes?.stale ?? false}
                 savingRouteOwner={savingRouteOwner}
               />
             ) : (

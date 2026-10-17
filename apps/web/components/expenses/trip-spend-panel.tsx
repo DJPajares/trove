@@ -152,7 +152,7 @@ export function TripSpendPanel({
         </p>
       ) : null}
 
-      <ApproximationNote boardStatus={boardStatus} locale={locale} now={now} total={actual} />
+      <ApproximationNote boardStatus={boardStatus} now={now} total={actual} />
     </section>
   );
 }
@@ -181,7 +181,6 @@ function TotalAmount({ reference, total }: Readonly<{ reference: string; total: 
           ? t('a11y.spendTotal', {
               amount,
               count: total.contributing.length,
-              date: total.rateDate ?? '',
             })
           : undefined
       }
@@ -205,36 +204,28 @@ function TotalAmount({ reference, total }: Readonly<{ reference: string; total: 
  */
 function ApproximationNote({
   boardStatus,
-  locale,
   now,
   total,
 }: Readonly<{
   boardStatus: 'loading' | 'ready' | 'unavailable';
-  locale: string;
   now: Date;
   total: ConvertedTotal;
 }>) {
   const t = useTranslations('expenses');
   const notes: string[] = [];
-  const rateDate = total.rateDate
-    ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
-        new Date(`${total.rateDate}T00:00:00.000Z`),
-      )
-    : null;
-
   // While the board is still on its way the total legitimately reads as the
   // amounts that were paid - but saying rates are unavailable before we know
   // that would be a claim the screen has to take back a moment later.
   if (total.minorUnits === null) {
     if (boardStatus !== 'loading') notes.push(t('spend.approximate.unavailable'));
-  } else if (total.rateDate && rateDate) {
+  } else if (total.rateDate) {
     const daysOld = Math.floor(
       (Date.parse(`${total.rateDate}T00:00:00.000Z`) - now.getTime()) / -86_400_000,
     );
     notes.push(
       total.rateSource === 'cache' && daysOld > STALE_RATE_DAYS
-        ? t('spend.approximate.stale', { date: rateDate })
-        : t('spend.approximate.rateDate', { date: rateDate }),
+        ? t('spend.approximate.stale')
+        : t('spend.approximate.reference'),
     );
   }
 

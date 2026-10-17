@@ -165,6 +165,21 @@ test('the prompt preserves separate occurrences and optional destinations', () =
   expect(prompt).toContain('Optional destinations may be omitted');
 });
 
+/**
+ * A hotel the traveller names is where the days start and end. The model only
+ * learns that from the prompt: the schema field alone left named hotels as
+ * check-in stops, and the trip without a Stay.
+ */
+test('the prompt turns a named stay into stay nights, not a stop', () => {
+  const prompt = buildAiPlannerPrompt('Tokyo, staying at the Park Hyatt', context());
+
+  expect(prompt).toContain('list it in stays');
+  expect(prompt).toContain('firstNightDayIndex is the zero-based day they arrive');
+  expect(prompt).toContain('add no check-in, check-out, or return-to-hotel items');
+  expect(prompt).toContain('Never add a stay the traveller did not name');
+  expect(prompt).not.toContain('unbooked arrival-day suggestion');
+});
+
 test('duration instructions use the entitlement and preserve requested weeks without legacy tiers', () => {
   const plannerContext = buildAiPlannerContext({
     generationDate: new Date('2026-08-30'),

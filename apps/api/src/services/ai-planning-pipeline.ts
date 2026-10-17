@@ -328,6 +328,7 @@ export async function groundCandidates(
   const destinationIds = new Set(
     proposal.destinations.map((destination) => destination.candidatePlaceId),
   );
+  const stayIds = new Set((proposal.stays ?? []).map((stay) => stay.candidatePlaceId));
   const associations = candidateDestinationContexts(proposal, draft);
   const byId = new Map<string, GroundedCandidate>();
   const grounder = providerContext.placesProvider
@@ -351,6 +352,7 @@ export async function groundCandidates(
       // transferring between other bases does not make the city ambiguous.
       contextConflict: !destinationIds.has(candidate.id) && association?.contextConflict,
       requireExactName: destinationIds.has(candidate.id),
+      preferLodging: stayIds.has(candidate.id),
       signal,
     };
   };
@@ -591,22 +593,6 @@ function assignDraftStays(
     day.dailyBasePlaceRefId = from;
     day.dailyBaseDeparturePlaceRefId = from === to ? null : to;
   });
-}
-
-/**
- * A stay only helps when it is somewhere real. One the provider could not
- * verify has no location to route from, so the days fall back to their stops.
- */
-export function dropUnverifiedDraftStays(draft: AiPlannerDraft) {
-  const verified = new Set(
-    draft.places.filter((place) => place.resolution === 'verified').map((place) => place.id),
-  );
-  for (const day of draft.days) {
-    if (day.dailyBasePlaceRefId && !verified.has(day.dailyBasePlaceRefId))
-      day.dailyBasePlaceRefId = null;
-    if (day.dailyBaseDeparturePlaceRefId && !verified.has(day.dailyBaseDeparturePlaceRefId))
-      day.dailyBaseDeparturePlaceRefId = null;
-  }
 }
 
 /**
@@ -1747,7 +1733,6 @@ export async function runAiPlanningPipeline(
       draft,
     );
     applyGroundingToDraft(draft, grounding);
-    dropUnverifiedDraftStays(draft);
 
     if (controller.signal.aborted)
       throw new AiPlanningPipelineFailure(deadlineReached ? 'timeout' : 'cancelled', metadata);

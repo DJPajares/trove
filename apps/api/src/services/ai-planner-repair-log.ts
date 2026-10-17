@@ -32,6 +32,7 @@ export const AI_PLANNER_REPAIR_CODES = [
   'commitment_relaxed',
   'blocking_item_unscheduled',
   'overlap_unscheduled',
+  'stay_item_removed',
 ] as const;
 
 export type AiPlannerRepairCode = (typeof AI_PLANNER_REPAIR_CODES)[number];

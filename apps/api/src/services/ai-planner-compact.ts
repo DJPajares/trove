@@ -12,20 +12,83 @@ import { AiPlannerRepairLog } from './ai-planner-repair-log.js';
 import { enumerateDateRange } from './trip-rules.js';
 
 const index = z.number().int().min(0);
+
+/**
+ * Like `localityKey`, but keeps every script: a traveller who names their hotel
+ * in Japanese or Thai named it just as plainly as one who wrote in English.
+ */
+function stayKey(text: string) {
+  return text
+    .replace(/[Đđ]/g, 'd')
+    .normalize('NFKD')
+    .replace(/\p{Mark}/gu, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
+
 /** Words any lodging name shares, which prove nothing about which one was meant. */
-const GENERIC_STAY_WORDS = new Set([
-  'hotel',
-  'hostel',
-  'resort',
-  'inn',
-  'suites',
-  'apartment',
-  'apartments',
-  'house',
-  'lodge',
-  'stay',
-  'residence',
-]);
+const GENERIC_STAY_WORDS = new Set(
+  [
+    'hotel',
+    'hotels',
+    'hostel',
+    'motel',
+    'resort',
+    'inn',
+    'suites',
+    'apartment',
+    'apartments',
+    'house',
+    'lodge',
+    'stay',
+    'residence',
+    'the',
+    'and',
+    'ホテル',
+    '旅館',
+    '酒店',
+    '飯店',
+    '饭店',
+    '호텔',
+    'โรงแรม',
+  ].map(stayKey),
+);
+
+/** Scripts written without spaces, where a word can only be found inside a run. */
+const UNSPACED_SCRIPT =
+  /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
+
+/**
+ * Whether the traveller named this stay, rather than the model choosing one.
+ * A distinctive word of its name must appear in the request; a city in the
+ * name ("Hilton Tokyo") is no evidence, because the traveller named the city as
+ * a destination. A name too short to have a distinctive word ("W Hotel")
+ * counts when the request carries the whole name.
+ */
+function stayNamedInRequest(
+  names: readonly string[],
+  requestKey: string,
+  destinationWords: ReadonlySet<string>,
+) {
+  const requestWords = new Set(requestKey.split(' '));
+  const unspacedRequest = requestKey.replaceAll(' ', '');
+  return names.some((name) => {
+    const words = stayKey(name)
+      .split(' ')
+      .filter((word) => word && !destinationWords.has(word));
+    const distinctive = words.filter((word) => !GENERIC_STAY_WORDS.has(word));
+    if (
+      distinctive.some((word) =>
+        UNSPACED_SCRIPT.test(word)
+          ? word.length >= 2 && unspacedRequest.includes(word)
+          : word.length >= 3 && requestWords.has(word),
+      )
+    )
+      return true;
+    return distinctive.length > 0 && ` ${requestKey} `.includes(` ${words.join(' ')} `);
+  });
+}
 
 /**
  * Provider-facing shape. The model chooses the trip and the provenance of its
@@ -82,13 +145,16 @@ export const aiPlannerCompactProposalSchema = z
       .array(
         z
           .object({
-            candidatePlaceIndex: index,
-            firstNightDayIndex: index,
-            lastNightDayIndex: index,
+            candidatePlaceIndex: index.describe('The places entry the traveller is sleeping at.'),
+            firstNightDayIndex: index.describe('Zero-based day they arrive at this stay.'),
+            lastNightDayIndex: index.describe('Zero-based day before they leave this stay.'),
           })
           .strict(),
       )
-      .optional(),
+      .optional()
+      .describe(
+        'Only where the traveller said they are staying, with the nights spent there. Never suggested lodging.',
+      ),
     tripDescription: aiPlannerModelProposalSchema.shape.tripDescription,
     tripName: aiPlannerModelProposalSchema.shape.tripName,
   })
@@ -449,43 +515,61 @@ export function expandAiPlannerProposal(
       // never discards an otherwise useful plan or spends another model call.
       itemIds: summary.itemIndices.map((at) => items[at]?.id ?? `item:missing:${at}`),
     }));
-  // A stay is only ever one the traveller named: a place whose distinctive
-  // words the request never mentions is a suggestion, and is dropped.
-  // A city in the hotel's name ("Hilton Tokyo") is not evidence either: the
-  // traveller named the city as a destination, not the hotel.
-  const requestWords = new Set(localityKey(rawPrompt).split(' '));
+  // A stay is only ever one the traveller named: a place whose name the
+  // request never mentions is a suggestion, and is dropped.
+  const requestKey = stayKey(rawPrompt);
   const destinationWords = new Set(
-    destinationIntents.flatMap((intent) => localityKey(intent.name).split(' ')),
+    destinationIntents.flatMap((intent) => stayKey(intent.name).split(' ')),
   );
-  const stays = (compact.stays ?? []).flatMap((stay) => {
-    const place = places[stay.candidatePlaceIndex];
-    const words = place
-      ? localityKey(place.name)
-          .split(' ')
-          .filter(
-            (word) =>
-              word.length >= 4 && !GENERIC_STAY_WORDS.has(word) && !destinationWords.has(word),
-          )
-      : [];
-    if (!place || !words.some((word) => requestWords.has(word))) return [];
-    if (stay.lastNightDayIndex < stay.firstNightDayIndex) return [];
-    return [
-      {
-        candidatePlaceId: place.id,
-        firstNightDayIndex: stay.firstNightDayIndex,
-        lastNightDayIndex: stay.lastNightDayIndex,
-      },
-    ];
+  // One bed a night: where the model overlaps two stays, the one that starts
+  // first keeps its nights and the next begins after it.
+  let firstFreeNight = 0;
+  const stays = (compact.stays ?? [])
+    .filter((stay) => stay.lastNightDayIndex >= stay.firstNightDayIndex)
+    .sort((left, right) => left.firstNightDayIndex - right.firstNightDayIndex)
+    .flatMap((stay) => {
+      const place = places[stay.candidatePlaceIndex];
+      if (
+        !place ||
+        !stayNamedInRequest(
+          [place.name, place.searchName ?? ''].filter(Boolean),
+          requestKey,
+          destinationWords,
+        )
+      )
+        return [];
+      const firstNightDayIndex = Math.max(stay.firstNightDayIndex, firstFreeNight);
+      if (firstNightDayIndex > stay.lastNightDayIndex) return [];
+      firstFreeNight = stay.lastNightDayIndex + 1;
+      return [
+        {
+          candidatePlaceId: place.id,
+          firstNightDayIndex,
+          lastNightDayIndex: stay.lastNightDayIndex,
+        },
+      ];
+    });
+  // A stay is where days start and end. A stop the model added there on its
+  // own (checking in, heading back) repeats the Stay row; one the traveller
+  // asked for, such as dinner at the hotel, is theirs and stays.
+  const stayPlaceIds = new Set(stays.map((stay) => stay.candidatePlaceId));
+  const plannedItems = items.filter((item) => {
+    const repeatsStay =
+      item.origin === 'model' &&
+      item.candidatePlaceId !== null &&
+      stayPlaceIds.has(item.candidatePlaceId);
+    if (repeatsStay) log.add('stay_item_removed');
+    return !repeatsStay;
   });
   const dates = exactDates(compact);
-  removeInventedUserDurations(rawPrompt, constraints, items);
-  splitRepeatedHardOccurrences(constraints, items, dates);
-  alignRecurringWork(rawPrompt, constraints, items, dates);
-  preserveNightFlightLanguage(rawPrompt, constraints, items);
+  removeInventedUserDurations(rawPrompt, constraints, plannedItems);
+  splitRepeatedHardOccurrences(constraints, plannedItems, dates);
+  alignRecurringWork(rawPrompt, constraints, plannedItems, dates);
+  preserveNightFlightLanguage(rawPrompt, constraints, plannedItems);
   return {
     assumptions,
     destinations,
-    items,
+    items: plannedItems,
     daySummaries,
     normalizedRequest: {
       ...compact.normalizedRequest,

@@ -392,6 +392,20 @@ test('an exact street/address name cannot tie with its attraction', () => {
   expect(rankPlaceMatches([address, venue], candidate({ name: 'National Park' }))).toEqual([venue]);
 });
 
+test('a stay resolves to the hotel, not the restaurant that shares its name', () => {
+  const hotel = place({ name: 'Park Hyatt Tokyo', rawTypes: ['hotel', 'lodging'] });
+  const restaurant = place({
+    name: 'Park Hyatt Tokyo',
+    externalPlaceId: 'restaurant',
+    rawTypes: ['restaurant', 'food'],
+  });
+  const context = candidate({ name: 'Park Hyatt Tokyo' });
+  expect(rankPlaceMatches([hotel, restaurant], context)).toHaveLength(2);
+  expect(rankPlaceMatches([hotel, restaurant], { ...context, preferLodging: true })).toEqual([
+    hotel,
+  ]);
+});
+
 test('contracted words need multiple agreeing complete words', () => {
   expect(
     nameMatchTier('Mount John Observatory', 'University of Canterbury Mt John Observatory'),

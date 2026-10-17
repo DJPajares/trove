@@ -63,6 +63,15 @@ export function compactModelProposal(proposal: AiPlannerModelProposal): AiPlanne
     partySize: proposal.partySize,
     places: proposal.places.map(({ id: _id, ...place }) => place),
     selectedDurationDays: proposal.selectedDurationDays,
+    ...(proposal.stays
+      ? {
+          stays: proposal.stays.map((stay) => ({
+            candidatePlaceIndex: placeIndex.get(stay.candidatePlaceId) ?? -1,
+            firstNightDayIndex: stay.firstNightDayIndex,
+            lastNightDayIndex: stay.lastNightDayIndex,
+          })),
+        }
+      : {}),
     tripDescription: proposal.tripDescription,
     tripName: proposal.tripName,
   };

@@ -1,4 +1,5 @@
 import type { PlaceLocationBias, ProviderPlaceSearchResult } from './places.js';
+import { STAY_TYPES } from './place-categories.js';
 import { haversineKm } from './plan-score-route-comparison.js';
 import { resolveDestinationCountryCode } from './trip-rules.js';
 
@@ -113,6 +114,8 @@ export type MatchingContext = {
   requireExactName?: boolean;
   /** Conflicting explicit destinations cannot supply a uniqueness claim. */
   contextConflict?: boolean;
+  /** The traveller is sleeping here, so a lodging identity is the one they meant. */
+  preferLodging?: boolean;
 };
 
 type LocatedIdentity = Pick<
@@ -413,7 +416,13 @@ export function rankPlaceMatches<T extends LocatedIdentity & { externalPlaceId: 
   );
   const bestRequested = Math.max(0, ...compatible.map(({ requested }) => requested));
   // Ranking never breaks a tie between equally supported real-world identities.
-  return compatible
+  const tied = compatible
     .filter(({ requested }) => requested === bestRequested)
     .map(({ identity }) => identity);
+  // Except where the request itself says which kind: a hotel the traveller
+  // sleeps at shares its name with its own bar and restaurant, and only one of
+  // those is a stay.
+  if (!candidate.preferLodging) return tied;
+  const lodging = tied.filter((identity) => identity.rawTypes.some((type) => STAY_TYPES.has(type)));
+  return lodging.length ? lodging : tied;
 }

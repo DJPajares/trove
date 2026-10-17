@@ -57,6 +57,7 @@ export type AiPlaceGroundingCandidate = AiPlannerCandidatePlace & {
   countryCode?: string;
   contextConflict?: boolean;
   locationBias?: PlaceLocationBias;
+  preferLodging?: boolean;
   regionCode?: string;
 };
 
@@ -133,7 +134,7 @@ function cacheKey(request: PlaceTextSearchRequest, candidate: AiPlaceGroundingCa
   return createHash('sha256')
     .update(
       JSON.stringify([
-        'google:grounding:v6',
+        'google:grounding:v7',
         memoKey(request),
         normalizeIdentityText(candidate.name),
         candidate.localityHint?.trim() ? normalizeIdentityText(candidate.localityHint) : null,
@@ -142,6 +143,7 @@ function cacheKey(request: PlaceTextSearchRequest, candidate: AiPlaceGroundingCa
         candidate.countryCode?.toUpperCase() ?? null,
         candidate.contextConflict ?? false,
         candidate.destinationName ?? null,
+        candidate.preferLodging ?? false,
       ]),
     )
     .digest('hex');

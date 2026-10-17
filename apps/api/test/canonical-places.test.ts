@@ -217,9 +217,12 @@ test('provider resolution creates identity only on use and reuses it across conc
   expect(repository.providerPlaceCount).toBe(1);
   expect(repository.createProviderAttempts).toBe(2);
   expect(first).toStrictEqual({
+    // Nothing says what kind of place this is yet.
+    categories: ['other'],
     id: first.id,
     kind: 'provider',
     location: null,
+    manualCategories: [],
     name: null,
     note: null,
     providerAddress: null,
@@ -280,9 +283,12 @@ test('custom Places support name-only creation and remain owner-scoped on edit',
 
   const created = await service.createCustomPlace(ownerId, { name: '  Quiet lookout  ' });
   expect(created).toStrictEqual({
+    // Nothing says what kind of place this is yet.
+    categories: ['other'],
     id: created.id,
     kind: 'custom',
     location: null,
+    manualCategories: [],
     name: 'Quiet lookout',
     note: null,
     providerAddress: null,

@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { manualPlaceCategoriesSchema } from '@trove/types';
 import { z } from 'zod';
 
 import {
@@ -31,11 +32,16 @@ const updateTripPlaceSchema = z
     customName: z.string().trim().min(1).max(200).nullable().optional(),
     note: z.string().trim().max(5_000).nullable().optional(),
     priority: z.enum(['must_go', 'interested', 'maybe']).nullable().optional(),
+    // The whole set the traveller chose; derived categories cannot be removed.
+    categories: manualPlaceCategoriesSchema.optional(),
   })
   .strict()
   .refine(
     (value) =>
-      value.customName !== undefined || value.note !== undefined || value.priority !== undefined,
+      value.customName !== undefined ||
+      value.note !== undefined ||
+      value.priority !== undefined ||
+      value.categories !== undefined,
   );
 
 const linkTripPlaceSchema = z

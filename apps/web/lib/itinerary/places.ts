@@ -5,8 +5,10 @@ import type { Itinerary, ItineraryTripPlace } from './api';
 /** The authoritative collection response also supplies the planner's compatible subset. */
 export function itineraryTripPlaceFromTripPlace(tripPlace: TripPlace): ItineraryTripPlace {
   return {
+    categories: tripPlace.categories,
     customName: tripPlace.customName,
     id: tripPlace.id,
+    manualCategories: tripPlace.manualCategories,
     note: tripPlace.note,
     place: { ...tripPlace.place, timeZone: tripPlace.place.location?.timeZone ?? null },
     priority: tripPlace.priority,

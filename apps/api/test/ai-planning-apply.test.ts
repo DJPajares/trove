@@ -353,6 +353,10 @@ function createApplyStore(
         working.tripPlaces.push(value);
         return { id: value.id };
       },
+      // Stay tagging reads the places it marks; none of these assertions are about it.
+      async findMany() {
+        return [];
+      },
     },
   });
 

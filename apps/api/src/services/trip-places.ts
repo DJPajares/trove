@@ -7,21 +7,28 @@ import {
   type ProviderPlaceLabel,
 } from './canonical-places.js';
 import { refreshDayDefaultTimeZone, refreshTripPlaceItemTimeZones } from './itineraries.js';
+import { categoriesToDb } from './place-categories.js';
 import { hydratePlaceSnapshots } from './place-data.js';
 import {
   placeProviderRefInclude,
   type PlaceSerializerOptions,
   serializeCanonicalPlace as serializePlace,
+  tripPlaceCategories,
 } from './place-serializer.js';
+import type { TrovePlaceCategory } from './places.js';
 
 export type TripPlacePriority = 'interested' | 'maybe' | 'must_go';
 
 export type TripPlace = {
+  /** Everything this Place is on this trip. */
+  categories: TrovePlaceCategory[];
   createdAt: string;
   /** What the traveller calls this Place on this trip, if they renamed it. */
   customName: string | null;
   id: string;
   isSaved: boolean;
+  /** What the traveller can change here; see `tripPlaceCategories`. */
+  manualCategories: TrovePlaceCategory[];
   note: string | null;
   place: CanonicalPlace;
   priority: TripPlacePriority | null;
@@ -81,6 +88,7 @@ const tripPlaceInclude = {
 function serializeTripPlace(
   tripPlace: {
     _count: { itineraryItems: number };
+    categories: readonly string[];
     createdAt: Date;
     customName: string | null;
     id: string;
@@ -90,13 +98,15 @@ function serializeTripPlace(
   },
   options: PlaceSerializerOptions = {},
 ): TripPlace {
+  const place = serializePlace(tripPlace.place, options);
   return {
+    ...tripPlaceCategories(place, tripPlace.categories),
     createdAt: tripPlace.createdAt.toISOString(),
     customName: tripPlace.customName,
     id: tripPlace.id,
     isSaved: tripPlace.place.savedPlaces.length > 0,
     note: tripPlace.note,
-    place: serializePlace(tripPlace.place, options),
+    place,
     priority: mapPriority(tripPlace.priority),
     referenceCount: tripPlace._count.itineraryItems,
   };
@@ -181,9 +191,16 @@ export async function updateTripPlace(
   userId: string,
   tripId: string,
   tripPlaceId: string,
-  input: { customName?: string | null; note?: string | null; priority?: TripPlacePriority | null },
+  input: {
+    categories?: TrovePlaceCategory[];
+    customName?: string | null;
+    note?: string | null;
+    priority?: TripPlacePriority | null;
+  },
 ) {
   await assertOwnedTrip(userId, tripId);
+  if (input.categories !== undefined)
+    await setTripPlaceCategories(userId, tripId, tripPlaceId, input.categories);
   const result = await getPrismaClient().tripPlace.updateMany({
     where: { id: tripPlaceId, tripId },
     data: {
@@ -209,6 +226,31 @@ export async function updateTripPlace(
   });
   if (!tripPlace) throw new TripPlaceNotFoundError();
   return serializeTripPlace(tripPlace);
+}
+
+/**
+ * What the traveller says a Place is, said where it belongs: on a Custom Place
+ * they own, so it follows the Place to every trip, and on this Trip Place for a
+ * provider Place, which is shared and keeps its own types untouched.
+ */
+async function setTripPlaceCategories(
+  userId: string,
+  tripId: string,
+  tripPlaceId: string,
+  categories: readonly TrovePlaceCategory[],
+) {
+  const prisma = getPrismaClient();
+  const tripPlace = await prisma.tripPlace.findFirst({
+    where: { id: tripPlaceId, tripId },
+    select: { place: { select: { id: true, kind: true, ownerId: true } } },
+  });
+  if (!tripPlace) throw new TripPlaceNotFoundError();
+  const values = categoriesToDb(categories.filter((category) => category !== 'other'));
+  if (tripPlace.place.kind === 'CUSTOM' && tripPlace.place.ownerId === userId) {
+    await prisma.place.update({ where: { id: tripPlace.place.id }, data: { categories: values } });
+    return;
+  }
+  await prisma.tripPlace.update({ where: { id: tripPlaceId }, data: { categories: values } });
 }
 
 /**

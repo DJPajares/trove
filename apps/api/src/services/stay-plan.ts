@@ -6,6 +6,7 @@ import {
   ItineraryNotFoundError,
   ItineraryValidationError,
 } from './itineraries.js';
+import { markTripPlacesAsStay } from './place-category-signals.js';
 import { formatDateOnly, parseDateOnly } from './trip-rules.js';
 
 /** CAS on the owning trip serializes all stay edits, including resetting day exceptions. */
@@ -77,6 +78,11 @@ export async function updateTripStayPlan(userId: string, tripId: string, input: 
             endDate: parseDateOnly(range.endDate),
           })),
         });
+      await markTripPlacesAsStay(
+        tripId,
+        [input.defaultTripPlaceId, ...ranges.map((range) => range.tripPlaceId)],
+        tx,
+      );
       if (input.resetDayOverrides)
         await tx.itineraryDay.updateMany({
           where: { tripId },
@@ -125,6 +131,11 @@ export async function updateDayStay(
         dailyBaseDepartureTripPlaceId: input.end.mode === 'place' ? input.end.tripPlaceId : null,
       },
     });
+    await markTripPlacesAsStay(
+      tripId,
+      [input.start, input.end].map((end) => (end.mode === 'place' ? end.tripPlaceId : null)),
+      tx,
+    );
     await refreshDayDefaultTimeZone(tx, tripId, dayId);
     return { revision: input.expectedRevision + 1 };
   });

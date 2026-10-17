@@ -2452,6 +2452,9 @@
       "specificDays": "Different stays",
       "choosePlace": "Choose a place",
       "findPlace": "Find or add a place",
+      "useTripPlace": "Use a trip place",
+      "noAccommodation": "No places on this trip are marked as accommodation yet.",
+      "markError": "That place couldn’t be marked as accommodation. Try again.",
       "none": "No stay",
       "automatic": "Use automatic stay",
       "sameAsStart": "Same as start",
@@ -2698,6 +2701,8 @@
     "viewDetailsAction": "View details",
     "editPlaceAction": "Edit place",
     "priorityMenuLabel": "Priority",
+    "categoryMenuLabel": "Category",
+    "categoryFilterLabel": "Filter by category",
     "sortBy": "Sort trip places",
     "sort": {
       "name": "Name A-Z",
@@ -2951,7 +2956,7 @@
       "destination": "Destination",
       "things_to_do": "Things to do",
       "food_and_drink": "Food and drink",
-      "stay": "Stay",
+      "stay": "Accommodation",
       "shopping": "Shopping",
       "transport": "Transport",
       "other": "Other"

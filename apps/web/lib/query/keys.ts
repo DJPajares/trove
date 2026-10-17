@@ -14,6 +14,13 @@ import type { TemperatureUnit } from '@/lib/profile/preferences';
  * from them whether an entry may be written to disk. A key assembled inline at
  * a call site is invisible to both, so keys are only ever built here.
  */
+/**
+ * The shape a Place arrives in. Both its roots are written to disk and never
+ * refetched on a timer, so a change to the shape - categories, here - has to
+ * change the key, or a returning traveller keeps reading the old one.
+ */
+const PLACES_CONTRACT_VERSION = 'places-v2';
+
 export const queryKeys = {
   aiPlanningAvailability: () => ['ai-planning', 'availability'] as const,
   aiPlanningRecovery: () => ['ai-planning', 'recovery'] as const,
@@ -94,14 +101,14 @@ export const queryKeys = {
     ['trip-context', tripId, TRIP_CONTEXT_VERSION, languageCode] as const,
   profile: () => ['profile'] as const,
   reservations: (tripId: string) => ['reservations', tripId] as const,
-  savedPlaces: () => ['saved'] as const,
+  savedPlaces: () => ['saved', PLACES_CONTRACT_VERSION] as const,
   taskTemplates: () => ['task-templates'] as const,
   tasks: (tripId: string) => ['tasks', tripId] as const,
   tripOverview: (tripId: string, clockTimeZone: string) =>
     ['trip-overview', tripId, clockTimeZone] as const,
   trip: (tripId: string) => ['trip', tripId] as const,
   tripInfo: (tripId: string) => ['trip-info', tripId] as const,
-  tripPlaces: (tripId: string) => ['trip-places', tripId] as const,
+  tripPlaces: (tripId: string) => ['trip-places', tripId, PLACES_CONTRACT_VERSION] as const,
   trips: () => ['trips'] as const,
 
   /**

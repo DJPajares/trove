@@ -1,5 +1,6 @@
 'use client';
 
+import type { TrovePlaceCategory } from '@/lib/place-categories';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 
@@ -89,6 +90,19 @@ export function useTripPlaces(tripId: string) {
       }
     },
     [queryClient, tripId],
+  );
+
+  /** What the traveller says this Place is, on this trip or for their own place. */
+  const setCategories = useCallback(
+    async (tripPlace: TripPlace, categories: TrovePlaceCategory[]) => {
+      setError(null);
+      try {
+        replace((await updateTripPlace(tripId, tripPlace.id, { categories })).tripPlace);
+      } catch {
+        setError({ key: 'actionError' });
+      }
+    },
+    [replace, tripId],
   );
 
   /**
@@ -181,6 +195,7 @@ export function useTripPlaces(tripId: string) {
     refresh,
     remove,
     savePlace,
+    setCategories,
     setPlaces,
     setPriority,
     status,

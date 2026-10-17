@@ -199,6 +199,9 @@ export function TripPlacesDrawer({
         setEditPlace(place);
       }}
       onPlaceLocated={places.placeLocated}
+      onCategoriesChange={(tripPlace, categories) =>
+        void places.setCategories(tripPlace, categories)
+      }
       onPriorityChange={(tripPlace, priority) => void places.setPriority(tripPlace, priority)}
       onRemove={(place) => {
         removedId.current = place.id;

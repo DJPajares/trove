@@ -145,6 +145,22 @@ enum ExpenseTimeZoneSource {
   @@schema("trove")
 }
 
+/// What kind of place something is, in Trove's own words. Provider types are
+/// mapped onto these on read; the columns that use it hold only what a
+/// traveller (or a confident Trove signal) said.
+enum PlaceCategory {
+  DESTINATION    @map("destination")
+  THINGS_TO_DO   @map("things_to_do")
+  FOOD_AND_DRINK @map("food_and_drink")
+  STAY           @map("stay")
+  SHOPPING       @map("shopping")
+  TRANSPORT      @map("transport")
+  OTHER          @map("other")
+
+  @@map("place_category")
+  @@schema("trove")
+}
+
 enum TripPlacePriority {
   MUST_GO    @map("must_go")
   INTERESTED @map("interested")
@@ -378,23 +394,26 @@ model Profile {
 }
 
 model Place {
-  id                  String    @id @default(uuid(7)) @db.Uuid
+  id                  String          @id @default(uuid(7)) @db.Uuid
   kind                PlaceKind
-  ownerId             String?   @map("owner_id") @db.Uuid
-  customName          String?   @map("custom_name")
-  customLatitude      Decimal?  @map("custom_latitude") @db.Decimal(9, 6)
-  customLongitude     Decimal?  @map("custom_longitude") @db.Decimal(9, 6)
-  customTimeZone      String?   @map("custom_time_zone")
-  customNote          String?   @map("custom_note") @db.Text
+  ownerId             String?         @map("owner_id") @db.Uuid
+  customName          String?         @map("custom_name")
+  customLatitude      Decimal?        @map("custom_latitude") @db.Decimal(9, 6)
+  customLongitude     Decimal?        @map("custom_longitude") @db.Decimal(9, 6)
+  customTimeZone      String?         @map("custom_time_zone")
+  customNote          String?         @map("custom_note") @db.Text
   /// The name and address the provider gave when this Place was first resolved.
   /// A last-resort label so a Place is never nameless; live details always win.
-  providerLabel       String?   @map("provider_label") @db.Text
-  providerAddress     String?   @map("provider_address") @db.Text
+  providerLabel       String?         @map("provider_label") @db.Text
+  providerAddress     String?         @map("provider_address") @db.Text
+  /// What kind of place a Custom Place is, as its owner said. Never written for
+  /// a provider Place, which is shared: its categories come from its types.
+  categories          PlaceCategory[] @default([])
   /// The editorial collection representing this Place. Decorative only, and
   /// unrelated to the provider data above.
-  editorialImageSetId String?   @map("editorial_image_set_id") @db.Uuid
-  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  editorialImageSetId String?         @map("editorial_image_set_id") @db.Uuid
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   owner                    Profile?           @relation("PlaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   editorialImageSet        EditorialImageSet? @relation("PlaceEditorialImageSet", fields: [editorialImageSetId], references: [id], onDelete: SetNull)
@@ -994,6 +1013,10 @@ model TripPlace {
   /// What the traveller calls this Place on this trip. The canonical Place is shared,
   /// so a rename lives here rather than overwriting what the provider returned.
   customName String?            @map("custom_name") @db.Text
+  /// Categories this trip adds to the Place - "we are staying here" for a home
+  /// the provider only knows as an address. Added to, never overruling, what
+  /// the Place already is.
+  categories PlaceCategory[]    @default([])
   createdAt  DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt  DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
 

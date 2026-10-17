@@ -5,10 +5,20 @@ import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { replaceStayRange, shiftStayDate, type DayStayUpdate, type StayRange } from '@trove/types';
 import { previewStayEndpoints } from '@/lib/itinerary/stay-plan';
+import type { TrovePlaceCategory } from '@/lib/place-categories';
+import { stayOptions } from '@/lib/trip-places/categories';
+import { updateTripPlace } from '@/lib/trip-places/api';
+import * as Icons from '@/lib/icons';
 import { AddTripPlaceSheet } from '@/components/add-trip-place-sheet';
 import { DatePicker } from '@/components/date-picker';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Field, FieldLabel } from '@/components/ui/field';
 import {
   Select,
@@ -73,8 +83,18 @@ export function StaySheet({
   const [conflicted, setConflicted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [marking, setMarking] = useState(false);
+  // Only somewhere to stay is offered as a Stay - plus whatever is already
+  // chosen, so a Stay saved before categories existed never disappears.
+  const stayPlaces = stayOptions(itinerary.tripPlaces, [
+    defaultId,
+    start,
+    end,
+    editingRange?.tripPlaceId,
+    ...ranges.map((range) => range.tripPlaceId),
+  ]);
   const options = [
-    ...itinerary.tripPlaces.map((place) => ({
+    ...stayPlaces.map((place) => ({
       id: place.id,
       name: placeName(place) ?? t('unnamed'),
     })),
@@ -82,7 +102,47 @@ export function StaySheet({
   ]
     .filter((place, index, values) => values.findIndex((p) => p.id === place.id) === index)
     .sort((a, b) => a.name.localeCompare(b.name));
-  const name = (id: string) => options.find((p) => p.id === id)?.name ?? t('unnamed');
+  // The trip's other places, any of which can be said to be a stay here.
+  const otherPlaces = itinerary.tripPlaces
+    .filter((place) => !options.some((option) => option.id === place.id))
+    .map((place) => ({ id: place.id, name: placeName(place) ?? t('unnamed'), place }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  // An inherited Stay is named even when it is not among the options.
+  const name = (id: string) =>
+    options.find((p) => p.id === id)?.name ??
+    placeName(itinerary.tripPlaces.find((place) => place.id === id) ?? null) ??
+    t('unnamed');
+
+  function chooseFor(target: NonNullable<typeof adding>, id: string) {
+    if (target === 'default') setDefaultId(id);
+    if (target === 'range' && editingRange) setEditingRange({ ...editingRange, tripPlaceId: id });
+    if (target === 'start') setStart(id);
+    if (target === 'end') {
+      setEnd(id);
+      setDifferent(true);
+    }
+  }
+
+  /** Says a place on this trip is a stay, then chooses it. */
+  async function takeAsStay(
+    target: NonNullable<typeof adding>,
+    entry: { id: string; name: string; manualCategories?: TrovePlaceCategory[] },
+  ) {
+    setMarking(true);
+    setError(null);
+    try {
+      await updateTripPlace(tripId, entry.id, {
+        categories: [...new Set([...(entry.manualCategories ?? []), 'stay' as const])],
+      });
+      setAdded((current) => [...current, { id: entry.id, name: entry.name }]);
+      chooseFor(target, entry.id);
+      void onSaved().catch(() => undefined);
+    } catch {
+      setError(t('markError'));
+    } finally {
+      setMarking(false);
+    }
+  }
   const date = (value: string) =>
     new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(
       new Date(`${value}T00:00:00Z`),
@@ -155,16 +215,54 @@ export function StaySheet({
             ))}
           </SelectContent>
         </Select>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          disabled={!online || busy}
-          onClick={() => setAdding(target)}
-        >
-          <Plus aria-hidden="true" />
-          {t('findPlace')}
-        </Button>
+        {stayPlaces.length || added.length ? null : (
+          <p className="text-sm text-muted-foreground">{t('noAccommodation')}</p>
+        )}
+        <div className="flex flex-wrap gap-1">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={!online || busy || marking}
+            onClick={() => setAdding(target)}
+          >
+            <Plus aria-hidden="true" />
+            {t('findPlace')}
+          </Button>
+          {otherPlaces.length ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    disabled={!online || busy || marking}
+                    size="sm"
+                    type="button"
+                    variant="ghost"
+                  />
+                }
+              >
+                <Icons.DailyBase aria-hidden="true" />
+                {t('useTripPlace')}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="max-h-72 min-w-56 overflow-y-auto">
+                {otherPlaces.map((entry) => (
+                  <DropdownMenuItem
+                    key={entry.id}
+                    onClick={() =>
+                      void takeAsStay(target, {
+                        id: entry.id,
+                        manualCategories: entry.place.manualCategories,
+                        name: entry.name,
+                      })
+                    }
+                  >
+                    {entry.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+        </div>
       </div>
     );
   }
@@ -512,20 +610,15 @@ export function StaySheet({
             if (!open) setAdding(null);
           }}
           onAdded={(place) => {
-            setAdded((current) => [
-              ...current,
-              { id: place.id, name: place.place.name ?? place.place.providerLabel ?? t('unnamed') },
-            ]);
-            if (adding === 'default') setDefaultId(place.id);
-            if (adding === 'range' && editingRange)
-              setEditingRange({ ...editingRange, tripPlaceId: place.id });
-            if (adding === 'start') setStart(place.id);
-            if (adding === 'end') {
-              setEnd(place.id);
-              setDifferent(true);
-            }
+            const target = adding;
             setAdding(null);
-            void onSaved().catch(() => undefined);
+            // Found from Stay, so it is somewhere to stay.
+            void takeAsStay(target, {
+              id: place.id,
+              manualCategories: place.manualCategories,
+              name:
+                place.customName ?? place.place.name ?? place.place.providerLabel ?? t('unnamed'),
+            });
           }}
         />
       ) : null}

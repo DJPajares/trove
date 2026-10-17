@@ -1885,10 +1885,7 @@
         "openMap": "Open map",
         "openMapLabel": "Open the map of day {number}",
         "addStop": "Add stop",
-        "preview": "Preview",
-        "previewLabel": "Preview day {number} in Trip Mode",
-        "scoreLabel": "Plan Score for day {number}",
-        "memories": "Memories"
+        "scoreLabel": "Plan Score for day {number}"
       },
       "stop": {
         "midnight": "midnight",
@@ -1937,6 +1934,14 @@
         "note": "Note",
         "deleteStop": "Delete stop"
       },
+      "inlineEdit": {
+        "titleLabel": "Title for {day}",
+        "rename": "Rename {day}",
+        "name": "Name {day}",
+        "noteLabel": "Day note",
+        "editNote": "Edit the day’s note",
+        "addNote": "Add note"
+      },
       "context": {
         "label": "Planning tools",
         "stay": "Stay",
@@ -1975,8 +1980,10 @@
         "schedule": "Schedule…"
       },
       "dayMenu": {
+        "plan": "Plan",
+        "move": "Move",
+        "view": "View",
         "checkOrder": "Check the order",
-        "preview": "Preview this day",
         "travel": "Show travel between stops"
       },
       "staySheet": {
@@ -2063,19 +2070,7 @@
     "dailyBaseDeparture": "End the day at",
     "dailyBaseSameAsArrival": "Same as the start",
     "noDailyBase": "Not set",
-    "addDayName": "Add title",
-    "editDayName": "Edit title",
-    "dayNameTitle": "Day name",
-    "dayNameDescription": "Give {date} a name that makes the plan easy to recognize.",
-    "dayNameLabel": "Name",
-    "dayNamePlaceholder": "Chill Beach Day",
-    "dayNameHint": "Leave this blank to return to the default day label.",
     "dayNameError": "We couldn't save this day name. Try again.",
-    "addDayNote": "Add note",
-    "editDayNote": "Edit note",
-    "dayNoteTitle": "Day note",
-    "dayNoteDescription": "Keep a private reminder for {date}.",
-    "dayNoteLabel": "Note",
     "dayNotePlaceholder": "A detail that will help on this day",
     "dayNoteError": "We couldn't save this day note. Try again.",
     "moveEarlier": "Move {name} earlier",

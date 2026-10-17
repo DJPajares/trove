@@ -15,7 +15,6 @@ import { DayPlanningContextSheet } from '@/components/day-planning-context';
 
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CircleAlert, Clock3, Plus } from 'lucide-react';
-import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
@@ -76,7 +75,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -85,7 +83,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
-import { Textarea } from '@/components/ui/textarea';
 import {
   createItineraryItem,
   deleteItineraryItem,
@@ -152,7 +149,6 @@ import { googleMapsPlaceHref } from '@/lib/saved/api';
 import { type TripPlace, type TripPlacePriority } from '@/lib/trip-places/api';
 import { setTripPlacePriority } from '@/lib/trip-places/priority';
 import { destinationLocationBias } from '@/lib/saved/provider-search-session';
-import { dayPreviewHref } from '@/lib/trips/navigation';
 import { useTripWeather } from '@/lib/weather/use-trip-weather';
 import { queryKeys } from '@/lib/query/keys';
 import {
@@ -160,7 +156,6 @@ import {
   invalidateTripQueries,
   PLACE_LOCATION_QUERY_ROOTS,
 } from '@/lib/query/trip-invalidation';
-import * as Icons from '@/lib/icons';
 
 function useDesktopMapLayout() {
   const [matches, setMatches] = useState<boolean | null>(null);
@@ -304,9 +299,7 @@ export function ItineraryManager({
   const [itemToDelete, setItemToDelete] = useState<ItineraryItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [dayNoteEditor, setDayNoteEditor] = useState<ItineraryDay | null>(null);
   const [contextDay, setContextDay] = useState<ItineraryDay | null>(null);
-  const [dayNameEditor, setDayNameEditor] = useState<ItineraryDay | null>(null);
   // Where the open day starts and ends, and the stop whose time is being changed.
   const [stayOpen, setStayOpen] = useState(false);
   const [stayView, setStayView] = useState<'trip' | 'day'>('trip');
@@ -314,11 +307,6 @@ export function ItineraryManager({
   const [dayTimesOpen, setDayTimesOpen] = useState(false);
   const [betterOrderDay, setBetterOrderDay] = useState<ItineraryDay | null>(null);
   const { compact, setCompactItinerary } = useCompactItinerary();
-  const [dayNoteValue, setDayNoteValue] = useState('');
-  const [dayNameValue, setDayNameValue] = useState('');
-  const [savingDayNote, setSavingDayNote] = useState(false);
-  const [savingDayName, setSavingDayName] = useState(false);
-  const [dayNameError, setDayNameError] = useState<string | null>(null);
   const [dayMoveSourceId, setDayMoveSourceId] = useState<string | null>(null);
   const [dayMoveTargetId, setDayMoveTargetId] = useState('');
   const [dayMoveStrategy, setDayMoveStrategy] = useState<'append' | 'swap'>('append');
@@ -854,22 +842,6 @@ export function ItineraryManager({
   // destination - so a Google search from the stop editor prefers what is near.
   const tripContext = useTripContext();
   const tripDestinations = tripContext?.trip?.destinations;
-  const tripLifecycle = tripContext?.trip?.lifecycle;
-  // A day that has been lived has its memories; the journal opens on it.
-  const dayLived = Boolean(
-    selectedDay &&
-    (tripLifecycle === 'active' || tripLifecycle === 'completed') &&
-    (!today || selectedDay.date <= today),
-  );
-  const selectedDayPreviewHref = selectedDay
-    ? dayPreviewHref(
-        tripId,
-        selectedDay.date,
-        selectedDay.items
-          .flatMap((item) => (item.localStartTime ? [item.localStartTime] : []))
-          .toSorted()[0],
-      )
-    : '';
   const editorLocationBias = useMemo(
     () =>
       destinationLocationBias([
@@ -1285,18 +1257,10 @@ export function ItineraryManager({
     }
   }
 
-  async function handleDayNoteSave(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!dayNoteEditor) return;
-
-    setSavingDayNote(true);
-    setError(null);
+  /** A day's note, saved from where it is written; `false` keeps the editor open. */
+  async function saveDayNote(dayId: string, note: string | null) {
     try {
-      const result = await updateItineraryDayNote(
-        tripId,
-        dayNoteEditor.id,
-        dayNoteValue.trim() || null,
-      );
+      const result = await updateItineraryDayNote(tripId, dayId, note);
       setItinerary((current) =>
         current
           ? {
@@ -1307,26 +1271,16 @@ export function ItineraryManager({
             }
           : current,
       );
-      setDayNoteEditor(null);
+      return true;
     } catch {
-      setError(t('dayNoteError'));
-    } finally {
-      setSavingDayNote(false);
+      return false;
     }
   }
 
-  async function handleDayNameSave(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!dayNameEditor) return;
-
-    setSavingDayName(true);
-    setDayNameError(null);
+  /** A day's name, saved from its title; `false` keeps the title editing. */
+  async function renameDay(dayId: string, name: string | null) {
     try {
-      const result = await updateItineraryDayName(
-        tripId,
-        dayNameEditor.id,
-        dayNameValue.trim() || null,
-      );
+      const result = await updateItineraryDayName(tripId, dayId, name);
       setItinerary((current) =>
         current
           ? {
@@ -1337,11 +1291,9 @@ export function ItineraryManager({
             }
           : current,
       );
-      setDayNameEditor(null);
+      return true;
     } catch {
-      setDayNameError(t('dayNameError'));
-    } finally {
-      setSavingDayName(false);
+      return false;
     }
   }
 
@@ -1683,71 +1635,25 @@ export function ItineraryManager({
           >
             <DayMasthead
               actions={
-                <>
-                  {/* A phone adds a stop with the bottom bar's plus button. */}
-                  <Button
-                    className="hidden md:inline-flex"
-                    onClick={() => openCreate(selectedDay)}
-                    size="sm"
-                    type="button"
-                  >
-                    <Plus aria-hidden="true" data-icon="inline-start" />
-                    {plannerT('masthead.addStop')}
-                  </Button>
-                  {/* One way out of the plan at a time: a day still ahead
-                      previews, a day already lived opens its memories. */}
-                  {dayLived ? (
-                    <Button
-                      nativeButton={false}
-                      render={
-                        <Link
-                          href={`/trips/${tripId}/memories?date=${encodeURIComponent(selectedDay.date)}`}
-                        />
-                      }
-                      size="sm"
-                      variant="ghost"
-                    >
-                      <Icons.Memories aria-hidden="true" data-icon="inline-start" />
-                      {plannerT('masthead.memories')}
-                    </Button>
-                  ) : (
-                    <Button
-                      aria-label={plannerT('masthead.previewLabel', {
-                        number: selectedIndex + 1,
-                      })}
-                      nativeButton={false}
-                      render={<Link href={selectedDayPreviewHref} />}
-                      size="sm"
-                      variant="ghost"
-                    >
-                      <Icons.Preview aria-hidden="true" data-icon="inline-start" />
-                      {plannerT('masthead.preview')}
-                    </Button>
-                  )}
-                  <DayMenu
-                    className="ml-auto"
-                    movementDisabled={!online || itineraryEditing}
-                    canCheckOrder={online && !itineraryEditing && selectedDay.items.length > 1}
-                    canSuggestTimes={online && untimedItems(selectedDay).length > 0}
-                    compact={compact}
-                    day={selectedDay}
-                    onCheckOrder={() => setBetterOrderDay(selectedDay)}
-                    onCompactChange={setCompactItinerary}
-                    onEditContext={() => setContextDay(selectedDay)}
-                    onEditName={() => {
-                      setDayNameEditor(selectedDay);
-                      setDayNameValue(selectedDay.name ?? '');
-                      setDayNameError(null);
-                    }}
-                    onEditNote={() => {
-                      setDayNoteEditor(selectedDay);
-                      setDayNoteValue(selectedDay.notes ?? '');
-                    }}
-                    onMoveDay={(strategy) => openDayMove(selectedDay, strategy)}
-                    onSuggestTimes={() => setDayTimesOpen(true)}
-                    previewHref={dayLived ? selectedDayPreviewHref : undefined}
-                  />
-                </>
+                // A phone adds a stop with the bottom bar's plus button.
+                <Button onClick={() => openCreate(selectedDay)} size="sm" type="button">
+                  <Plus aria-hidden="true" data-icon="inline-start" />
+                  {plannerT('masthead.addStop')}
+                </Button>
+              }
+              dayMenu={
+                <DayMenu
+                  movementDisabled={!online || itineraryEditing}
+                  canCheckOrder={online && !itineraryEditing && selectedDay.items.length > 1}
+                  canSuggestTimes={online && untimedItems(selectedDay).length > 0}
+                  compact={compact}
+                  day={selectedDay}
+                  onCheckOrder={() => setBetterOrderDay(selectedDay)}
+                  onCompactChange={setCompactItinerary}
+                  onEditContext={() => setContextDay(selectedDay)}
+                  onMoveDay={(strategy) => openDayMove(selectedDay, strategy)}
+                  onSuggestTimes={() => setDayTimesOpen(true)}
+                />
               }
               attention={
                 dayProblems.day[0] ? (
@@ -1765,12 +1671,15 @@ export function ItineraryManager({
               heading={dayHeading(selectedDay, selectedRibbonDay?.town ?? null)}
               photos={dayPhotos}
               isToday={selectedRibbonDay?.isToday ?? false}
+              name={selectedDay.name}
               note={selectedDay.notes}
               onNextDay={
                 selectedIndex < itinerary.days.length - 1 ? () => selectAdjacentDay(1) : undefined
               }
               onOpenMap={openPhoneMap}
               onPreviousDay={selectedIndex > 0 ? () => selectAdjacentDay(-1) : undefined}
+              onRename={(name) => renameDay(selectedDay.id, name)}
+              onSaveNote={(note) => saveDayNote(selectedDay.id, note)}
               routeNotes={
                 !compact &&
                 (routes?.source === 'cache' ||
@@ -2321,50 +2230,6 @@ export function ItineraryManager({
         </SheetContent>
       </Sheet>
 
-      <Sheet
-        open={Boolean(dayNoteEditor)}
-        onOpenChange={(open) => {
-          if (!open && !savingDayNote) setDayNoteEditor(null);
-        }}
-      >
-        <SheetContent closeLabel={t('close')}>
-          <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleDayNoteSave}>
-            <SheetHeading
-              title={t('dayNoteTitle')}
-              description={t('dayNoteDescription', {
-                date: dayNoteEditor ? formatDate(dayNoteEditor.date, true) : '',
-              })}
-            />
-            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
-              <Field>
-                <FieldLabel htmlFor="itinerary-day-note">{t('dayNoteLabel')}</FieldLabel>
-                <Textarea
-                  id="itinerary-day-note"
-                  maxLength={5_000}
-                  onChange={(event) => setDayNoteValue(event.target.value)}
-                  placeholder={t('dayNotePlaceholder')}
-                  rows={5}
-                  value={dayNoteValue}
-                />
-              </Field>
-            </div>
-            <SheetFooter className="flex-col-reverse sm:flex-row sm:justify-end">
-              <Button
-                disabled={savingDayNote}
-                onClick={() => setDayNoteEditor(null)}
-                type="button"
-                variant="outline"
-              >
-                {t('cancel')}
-              </Button>
-              <Button disabled={savingDayNote} type="submit">
-                {savingDayNote ? t('saving') : t('save')}
-              </Button>
-            </SheetFooter>
-          </form>
-        </SheetContent>
-      </Sheet>
-
       {contextDay ? (
         <DayPlanningContextSheet
           initial={contextDay.planningContext}
@@ -2388,56 +2253,6 @@ export function ItineraryManager({
           }}
         />
       ) : null}
-      <Sheet
-        open={Boolean(dayNameEditor)}
-        onOpenChange={(open) => {
-          if (!open && !savingDayName) setDayNameEditor(null);
-        }}
-      >
-        <SheetContent closeLabel={t('close')}>
-          <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleDayNameSave}>
-            <SheetHeading
-              title={t('dayNameTitle')}
-              description={t('dayNameDescription', {
-                date: dayNameEditor ? formatDate(dayNameEditor.date, true) : '',
-              })}
-            />
-            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
-              <Field>
-                <FieldLabel htmlFor="itinerary-day-name">{t('dayNameLabel')}</FieldLabel>
-                <Input
-                  autoFocus
-                  id="itinerary-day-name"
-                  maxLength={120}
-                  onChange={(event) => setDayNameValue(event.target.value)}
-                  placeholder={t('dayNamePlaceholder')}
-                  value={dayNameValue}
-                />
-                <FieldDescription>{t('dayNameHint')}</FieldDescription>
-                {dayNameError ? (
-                  <p className="text-sm text-destructive" role="alert">
-                    {dayNameError}
-                  </p>
-                ) : null}
-              </Field>
-            </div>
-            <SheetFooter className="flex-col-reverse sm:flex-row sm:justify-end">
-              <Button
-                disabled={savingDayName}
-                onClick={() => setDayNameEditor(null)}
-                type="button"
-                variant="outline"
-              >
-                {t('cancel')}
-              </Button>
-              <Button disabled={savingDayName} type="submit">
-                {savingDayName ? t('saving') : t('save')}
-              </Button>
-            </SheetFooter>
-          </form>
-        </SheetContent>
-      </Sheet>
-
       <AlertDialog
         open={Boolean(itemToDelete)}
         onOpenChange={(open) => {

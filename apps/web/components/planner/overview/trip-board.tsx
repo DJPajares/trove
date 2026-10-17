@@ -169,7 +169,7 @@ export function TripBoard({
                   ) : null}
                 </p>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {chapter.days.map((plannerDay) => {
                   const day = dayById.get(plannerDay.id);
                   if (!day) return null;

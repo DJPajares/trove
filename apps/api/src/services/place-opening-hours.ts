@@ -77,26 +77,10 @@ export function openingIntervalsForWeekday(
  */
 export function resolveOpeningHoursForDay(input: {
   date: string;
-  dayTimeZone: string;
   periods: PlaceOpeningPeriod[];
-  utcOffsetMinutes: number | null;
   source?: 'FRESH_PROVIDER' | 'CACHED_PROVIDER';
 }): PlanScoreOpeningHours {
-  if (input.periods.length === 0 || input.utcOffsetMinutes === null) {
-    return { status: 'UNKNOWN' };
-  }
-
-  // The periods are stated in the place's local time, but the rubric compares
-  // them against item start times expressed in the day's timezone. Those only
-  // line up when the place actually sits in that timezone.
-  //
-  // Both offsets are read at the same instant deliberately. Comparing the
-  // place's current offset against the day timezone's offset on the itinerary
-  // date would differ whenever the trip crosses a DST boundary relative to
-  // today, and would reject most plans made months ahead. Comparing like with
-  // like answers the question that matters -- same zone or not -- and once the
-  // answer is yes the periods are day-local for any date in that zone.
-  if (timeZoneOffsetMinutes(input.dayTimeZone, new Date()) !== input.utcOffsetMinutes) {
+  if (input.periods.length === 0) {
     return { status: 'UNKNOWN' };
   }
 
@@ -105,39 +89,4 @@ export function resolveOpeningHoursForDay(input: {
     source: input.source ?? 'FRESH_PROVIDER',
     status: 'KNOWN',
   };
-}
-
-/** Offset of `timeZone` from UTC at `instant`, in minutes east of UTC. */
-function timeZoneOffsetMinutes(timeZone: string, instant: Date): number | null {
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      day: '2-digit',
-      hour: '2-digit',
-      hour12: false,
-      minute: '2-digit',
-      month: '2-digit',
-      second: '2-digit',
-      timeZone,
-      year: 'numeric',
-    }).formatToParts(instant);
-    const field = (type: string) => Number(parts.find((part) => part.type === type)?.value);
-    // `hour` can format as 24 for midnight under hour12: false.
-    const hour = field('hour') % 24;
-    const asUtc = Date.UTC(
-      field('year'),
-      field('month') - 1,
-      field('day'),
-      hour,
-      field('minute'),
-      field('second'),
-    );
-
-    // Truncate to whole seconds to match the formatted parts, without mutating
-    // the caller's Date.
-    const base = Math.floor(instant.getTime() / 1000) * 1000;
-
-    return Math.round((asUtc - base) / 60_000);
-  } catch {
-    return null;
-  }
 }

@@ -1,3 +1,4 @@
+import { derivedPlanInstant } from './itinerary-local-timing.js';
 import { PLAN_SCORE_TRIP_INCLUDE } from './plan-score-trip-query.js';
 import { createHash } from 'node:crypto';
 import { getPrismaClient, type Prisma } from '@trove/db';
@@ -12,12 +13,7 @@ import {
   type RoutePoint,
   type ItineraryRouteSegment,
 } from './itinerary-route-reader.js';
-import {
-  durationMinutesUntilLocalEnd,
-  floatingLocalTimeToInstant,
-  formatInstantInTimeZone,
-  parseLocalTime,
-} from './itinerary-rules.js';
+import { durationMinutesUntilLocalEnd, parseLocalTime } from './itinerary-rules.js';
 import {
   ItineraryConflictError,
   ItineraryNotFoundError,
@@ -36,7 +32,7 @@ import {
 } from './itinerary-scheduling-rules.js';
 import { estimateLegMinutes } from './plan-score-estimates.js';
 import { placeProfile } from './plan-score-place-types.js';
-import { elapsedLocalMinute } from './plan-score-normalization.js';
+import { planningMinute, planningTime, planningLocalDateTime } from './planning-clock.js';
 import { dayPartWindow } from './day-part-windows.js';
 import { resolveDayStay, toStayAccommodations } from './day-stay.js';
 import {
@@ -202,7 +198,6 @@ export async function assessDay(
       target.durationMinutes = durationMinutesUntilLocalEnd(
         options.localTime,
         options.localEndTime,
-        { date: day.date, timeZone: target.timeZone ?? day.timeZone },
       );
     } catch {
       throw new ItineraryValidationError('invalid_local_end_time');
@@ -345,18 +340,8 @@ export async function assessDay(
     const intent = !item.fixed && !item.start ? dayPartWindow(original.dayPart) : null;
     const startWindow = intent
       ? {
-          earliestMinute: elapsedLocalMinute(
-            day.date,
-            original.timeZone ?? day.timeZone,
-            intent.startMinute,
-            scoring.origin,
-          ),
-          latestMinute: elapsedLocalMinute(
-            day.date,
-            original.timeZone ?? day.timeZone,
-            intent.endMinute,
-            scoring.origin,
-          ),
+          earliestMinute: intent.startMinute,
+          latestMinute: intent.endMinute,
           source: 'ESTIMATED' as const,
         }
       : item.startWindow;
@@ -366,31 +351,7 @@ export async function assessDay(
       profile &&
       Array.isArray(profile.windows) &&
       (profile.windowKind === 'EXPERIENCE' || item.openingHours.status !== 'KNOWN')
-        ? (profile.windows as SuggestedTimeWindow[]).map((window) => ({
-            ...window,
-            startMinute: elapsedLocalMinute(
-              day.date,
-              original.timeZone ?? day.timeZone,
-              window.startMinute,
-              scoring.origin,
-            ),
-            endMinute: elapsedLocalMinute(
-              day.date,
-              original.timeZone ?? day.timeZone,
-              window.endMinute,
-              scoring.origin,
-            ),
-            ...(window.typicalMinute !== undefined
-              ? {
-                  typicalMinute: elapsedLocalMinute(
-                    day.date,
-                    original.timeZone ?? day.timeZone,
-                    window.typicalMinute,
-                    scoring.origin,
-                  ),
-                }
-              : {}),
-          }))
+        ? (profile.windows as SuggestedTimeWindow[])
         : null;
     const preferredTime =
       options.localTime ??
@@ -401,14 +362,7 @@ export async function assessDay(
             .slice(11, 16)
         : undefined);
     if (item.id === targetId && preferredTime && duration) {
-      const preferred =
-        (floatingLocalTimeToInstant(
-          day.date,
-          preferredTime,
-          original.timeZone ?? day.timeZone,
-        ).getTime() -
-          scoring.origin) /
-        60_000;
+      const preferred = planningMinute(preferredTime);
       preferredWindows = [
         {
           startMinute: preferred,
@@ -441,13 +395,8 @@ export async function assessDay(
     items,
     commitments: scoring.commitments,
     availability: scoring.availability,
-    dayStartMinute: elapsedLocalMinute(
-      day.date,
-      day.timeZone,
-      DEFAULT_DAY_START_MINUTE,
-      scoring.origin,
-    ),
-    dayEndMinute: elapsedLocalMinute(day.date, day.timeZone, 1440, scoring.origin),
+    dayStartMinute: DEFAULT_DAY_START_MINUTE,
+    dayEndMinute: 1440,
     returnTravel,
     targetIds: movement?.targetIds ?? (reconcile ? new Set(targetId ? [targetId] : []) : targets),
     allowDayPartAdjustment: reconcile,
@@ -462,26 +411,22 @@ export async function assessDay(
     if (!conflict) continue;
     issue.orderConflict = {
       previousItemId: conflict.previousItemId,
-      earliestStartInstant: new Date(
-        scoring.origin + Math.ceil(conflict.earliest) * 60_000,
-      ).toISOString(),
-      scheduledStartInstant: new Date(scoring.origin + conflict.scheduled * 60_000).toISOString(),
-      timeZone: day.items.find((item) => item.id === issue.itemId)?.timeZone ?? day.timeZone,
+      earliestStartLocal: planningLocalDateTime(day.date, Math.ceil(conflict.earliest)),
+      scheduledStartLocal: planningLocalDateTime(day.date, conflict.scheduled),
     };
   }
   for (const item of day.items) {
     const linked = trip.reservations.filter((r) => r.itineraryItemId === item.id);
     if (
-      item.startInstant &&
+      item.localStartTime &&
       linked.some((r) => {
-        const departure = r.flightDepartureInstant ?? r.transportDepartureInstant;
-        const localTime = r.localTime;
-        return departure
-          ? departure.getTime() !== item.startInstant!.getTime()
-          : r.localDate?.toISOString().slice(0, 10) === day.date &&
-              localTime &&
-              (localTime.getUTCHours() !== item.localStartTime?.getUTCHours() ||
-                localTime.getUTCMinutes() !== item.localStartTime?.getUTCMinutes());
+        const localTime =
+          r.flightDepartureLocalTime ?? r.transportDepartureLocalTime ?? r.localTime;
+        return (
+          localTime &&
+          (localTime.getUTCHours() !== item.localStartTime!.getUTCHours() ||
+            localTime.getUTCMinutes() !== item.localStartTime!.getUTCMinutes())
+        );
       })
     )
       result.issues.push({
@@ -522,8 +467,6 @@ export async function assessDay(
       item.timeZone ??
       (item.tripPlaceId && evidence.hours.get(item.tripPlaceId)?.timeZone) ??
       day.timeZone;
-    const startInstant = slot ? new Date(scoring.origin + slot.startMinute * 60000) : null;
-    const endInstant = slot ? new Date(scoring.origin + slot.endMinute * 60000) : null;
     const issues = result.issues.filter(
       (issue) => issue.itemId === itemId || issue.references.includes(itemId),
     );
@@ -569,8 +512,8 @@ export async function assessDay(
             },
           }
         : {}),
-      localTime: startInstant ? formatInstantInTimeZone(startInstant, timeZone).time : null,
-      localEndTime: endInstant ? formatInstantInTimeZone(endInstant, timeZone).time : null,
+      localTime: slot ? planningTime(slot.startMinute) : null,
+      localEndTime: slot ? planningTime(slot.endMinute) : null,
       durationMinutes:
         slot?.durationMinutes ??
         items.find((candidate) => candidate.id === itemId)?.duration?.minutes ??
@@ -582,8 +525,6 @@ export async function assessDay(
             ? (item.durationProvenance!.toLowerCase() as 'ai_estimated' | 'app_estimated')
             : ('user_owned' as const),
       timeZone,
-      startInstant: startInstant?.toISOString() ?? null,
-      endInstant: endInstant?.toISOString() ?? null,
       ...(slot
         ? { status: 'ok' as const, ...slot }
         : missing.length
@@ -678,14 +619,9 @@ async function planItineraryTiming(
       continue;
     }
     const timeZone = item.timeZone ?? assessment.day.timeZone;
-    const instant = slot ? new Date(assessment.scoring.origin + slot.startMinute * 60000) : null;
-    const localTime = instant ? formatInstantInTimeZone(instant, timeZone).time : null;
-    const localEndTime = slot
-      ? formatInstantInTimeZone(
-          new Date(assessment.scoring.origin + slot.endMinute * 60000),
-          timeZone,
-        ).time
-      : null;
+    const localTime = slot ? planningTime(slot.startMinute) : null;
+    const localEndTime = slot ? planningTime(slot.endMinute) : null;
+    const instant = localTime ? derivedPlanInstant(sourceDay.date, localTime, timeZone) : null;
     const before = {
       localTime: item.localStartTime
         ? `${item.localStartTime.getUTCHours().toString().padStart(2, '0')}:${item.localStartTime.getUTCMinutes().toString().padStart(2, '0')}`
@@ -702,7 +638,11 @@ async function planItineraryTiming(
         ? {
             timeZone,
             timeZoneResolvedAt: new Date(),
-            ...(!item.timeZone ? { timeZoneSource: 'DAY_DEFAULT' as const } : {}),
+            ...(item.timeZoneSource
+              ? { timeZoneSource: item.timeZoneSource as 'PLACE' | 'EXPLICIT' | 'DAY_DEFAULT' }
+              : !item.timeZone
+                ? { timeZoneSource: 'DAY_DEFAULT' as const }
+                : {}),
           }
         : {}),
       timingFlexibility: repair
@@ -721,14 +661,7 @@ async function planItineraryTiming(
         : {}),
     });
     if (before.localTime && item.durationMinutes !== null)
-      before.localEndTime = formatInstantInTimeZone(
-        new Date(
-          (item.startInstant?.getTime() ??
-            floatingLocalTimeToInstant(sourceDay.date, before.localTime, timeZone).getTime()) +
-            item.durationMinutes * 60000,
-        ),
-        timeZone,
-      ).time;
+      before.localEndTime = planningTime(planningMinute(before.localTime) + item.durationMinutes);
     outcome.changes.push({
       itemId: item.id,
       itineraryDayId: dayId,
@@ -891,7 +824,11 @@ export async function applyItineraryDayTiming(
           where: { id: suggestion.itemId },
           data: {
             localStartTime: parseLocalTime(suggestion.localTime!),
-            startInstant: new Date(suggestion.startInstant!),
+            startInstant: derivedPlanInstant(
+              current.day.date,
+              suggestion.localTime!,
+              suggestion.timeZone,
+            ),
             localEndTime: null,
             durationMinutes: suggestion.durationMinutes,
             durationProvenance:

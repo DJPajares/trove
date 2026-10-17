@@ -1,3 +1,5 @@
+import { localDaylightWindow } from './place-daylight.js';
+export { daylightUtc } from './place-daylight.js';
 import {
   effectiveTripPace,
   readTripPlanningPreferences,
@@ -37,6 +39,7 @@ import { interestsForPlaceTypes, placeProfile } from './plan-score-place-types.j
 export { interestsForPlaceTypes } from './plan-score-place-types.js';
 
 export type ScoringPlace = PlanScorePlace & {
+  timeZone?: string | null;
   fieldEvidence?: Partial<
     Record<
       'identity' | 'coordinates' | 'types' | 'name' | 'rating' | 'hours',
@@ -68,13 +71,11 @@ export type ScoredDayInput = {
   commitments: PlanScoreFixedCommitment[];
   dayId: string;
   date?: string;
-  timeZone?: string;
   items: PlanScoreDayItem[];
   places: ScoringPlace[];
   segments: ScoringRouteSegment[];
   preferences?: unknown;
   planningContext?: unknown;
-  originInstant?: number;
   availability?: { startMinute: number; endMinute: number } | null;
   forecasts?: readonly ScoringForecast[];
   routeComparison?: PlanScoreRouteEfficiencyInput | 'NOT_APPLICABLE';
@@ -133,53 +134,6 @@ const withinWindows = (minute: number, windows: readonly PlanScoreInterval[]) =>
 /** Whether any start in a daypart could fall in a window: dayparts are evaluated best-case. */
 const windowMeets = (earliest: number, latest: number, windows: readonly PlanScoreInterval[]) =>
   windows.some((window) => earliest < window.endMinute && window.startMinute <= latest);
-/** NOAA solar approximation (https://gml.noaa.gov/grad/solcalc/solareqns.PDF).
- * Evaluated locally; polar day/night has no fabricated rise/set. */
-export function daylightUtc(
-  date: string,
-  coordinates: { latitude: number; longitude: number },
-): { sunrise: number; sunset: number } | null {
-  const { latitude, longitude } = coordinates;
-  if (
-    !Number.isFinite(latitude) ||
-    !Number.isFinite(longitude) ||
-    Math.abs(latitude) > 90 ||
-    Math.abs(longitude) > 180
-  )
-    return null;
-  const d = new Date(`${date}T00:00:00Z`);
-  if (!Number.isFinite(d.getTime())) return null;
-  const day = 1 + (d.getTime() - Date.UTC(d.getUTCFullYear(), 0, 1)) / 86400000;
-  const daysInYear =
-    (Date.UTC(d.getUTCFullYear() + 1, 0, 1) - Date.UTC(d.getUTCFullYear(), 0, 1)) / 86400000;
-  const gamma = ((2 * Math.PI) / daysInYear) * (day - 1);
-  const eq =
-    229.18 *
-    (0.000075 +
-      0.001868 * Math.cos(gamma) -
-      0.032077 * Math.sin(gamma) -
-      0.014615 * Math.cos(2 * gamma) -
-      0.040849 * Math.sin(2 * gamma));
-  const dec =
-    0.006918 -
-    0.399912 * Math.cos(gamma) +
-    0.070257 * Math.sin(gamma) -
-    0.006758 * Math.cos(2 * gamma) +
-    0.000907 * Math.sin(2 * gamma) -
-    0.002697 * Math.cos(3 * gamma) +
-    0.00148 * Math.sin(3 * gamma);
-  const lat = (latitude * Math.PI) / 180;
-  const cosine =
-    Math.cos((90.833 * Math.PI) / 180) / (Math.cos(lat) * Math.cos(dec)) -
-    Math.tan(lat) * Math.tan(dec);
-  if (cosine < -1 || cosine > 1) return null;
-  const ha = (Math.acos(cosine) * 180) / Math.PI;
-  const noon = 720 - 4 * longitude - eq;
-  return {
-    sunrise: d.getTime() + (noon - 4 * ha) * 60000,
-    sunset: d.getTime() + (noon + 4 * ha) * 60000,
-  };
-}
 export function loadScore(ratio: number) {
   const anchors = [
     [1, 100],
@@ -510,30 +464,21 @@ export function evaluateScoredDay(input: ScoredDayInput) {
       knownPlaces.some((p) => forecast.placeIds.includes(p.tripPlaceId) && outdoorPlace(p))
     )
       advisories.push({ code: 'RAIN_FORECAST', references: [...forecast.placeIds] });
-  if (input.date && input.originInstant !== undefined)
+  const daylightWindow = (coordinates: ScoringPlace['coordinates']) =>
+    input.date && coordinates ? localDaylightWindow(input.date, coordinates) : null;
+  if (input.date)
     for (const place of knownPlaces) {
       if (!place.coordinates || !place.types?.includes('hiking_area')) continue;
-      const sunlight = daylightUtc(input.date, place.coordinates);
+      const light = daylightWindow(place.coordinates);
       const item = input.items.find((i) => i.placeId === place.tripPlaceId);
-      if (!sunlight || !item?.start || !item.duration) continue;
-      const start = input.originInstant + item.start.minutes * 60000;
-      const end = start + item.duration.minutes * 60000;
-      if (start < sunlight.sunrise || end > sunlight.sunset)
+      if (!light || !item?.start || !item.duration) continue;
+      if (
+        item.start.minutes < light.startMinute ||
+        item.start.minutes + item.duration.minutes > light.endMinute
+      )
         advisories.push({ code: 'DAYLIGHT_LIMIT', references: [item.id] });
     }
-  // Date and time suitability: when a visit happens against when its kind of
-  // place suits a traveller, daylight for outdoor places, and holiday hours.
-  const daylightWindow = (coordinates: ScoringPlace['coordinates']) => {
-    if (!coordinates || !input.date || input.originInstant === undefined) return null;
-    const light = daylightUtc(input.date, coordinates);
-    if (!light) return null;
-    return [
-      {
-        startMinute: (light.sunrise - input.originInstant) / 60000 - 30,
-        endMinute: (light.sunset - input.originInstant) / 60000 + 30,
-      },
-    ];
-  };
+  // All suitability windows use the same local clocks as visit and opening hours.
   const timeCriteria: Criterion[] = [];
   const timeOfDayMisses: string[] = [];
   const holidayRisks: string[] = [];
@@ -567,8 +512,13 @@ export function evaluateScoredDay(input: ScoredDayInput) {
           satisfied: timingSource ? true : untimed,
         });
     } else if (profile.windows) {
+      const light = profile.windows === 'DAYLIGHT' ? daylightWindow(place?.coordinates) : null;
       const windows =
-        profile.windows === 'DAYLIGHT' ? daylightWindow(place?.coordinates) : profile.windows;
+        profile.windows === 'DAYLIGHT'
+          ? light
+            ? [{ startMinute: light.startMinute - 30, endMinute: light.endMinute + 30 }]
+            : null
+          : profile.windows;
       const satisfied =
         !timingSource || !windows
           ? untimed
@@ -731,14 +681,16 @@ export function evaluateScoredDay(input: ScoredDayInput) {
   ]);
   // Seasonal fit weighs the day's outdoor time against the month's typical
   // conditions for its area. It feeds the trip component, not this day's score.
-  const midday = (item: PlanScoreDayItem) =>
-    item.start
-      ? item.start.minutes < MIDDAY.endMinute &&
-        MIDDAY.startMinute < item.start.minutes + (item.duration?.minutes ?? 0)
+  const midday = (item: PlanScoreDayItem) => {
+    const window = MIDDAY;
+    return item.start
+      ? item.start.minutes < window.endMinute &&
+          window.startMinute < item.start.minutes + (item.duration?.minutes ?? 0)
       : item.startWindow
-        ? item.startWindow.earliestMinute >= MIDDAY.startMinute - 60 &&
-          item.startWindow.earliestMinute < MIDDAY.endMinute
+        ? item.startWindow.earliestMinute >= window.startMinute - 60 &&
+          item.startWindow.earliestMinute < window.endMinute
         : false;
+  };
   // Only a visit whose kind is known can be judged indoor or outdoor; an
   // unlocated stop is not assumed to be indoors.
   const knownKindVisits = visits.filter((item) => profileOf(item));

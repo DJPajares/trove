@@ -4,7 +4,7 @@ import { readTripPlanningPreferences } from '@trove/types';
 import { activitySuggestionCandidateIds } from './activity-suggestion-candidates.js';
 import { timeZoneAtCoordinates } from './coordinate-time-zone.js';
 import { findDayGaps, type DayGap, type GapCandidate } from './gap-suggestions-rules.js';
-import { formatInstantInTimeZone } from './itinerary-rules.js';
+import { planningTime } from './planning-clock.js';
 import { ItineraryNotFoundError } from './itineraries.js';
 import { inferDurations } from './plan-score-estimates.js';
 import { scoringOpeningHours } from './plan-score-normalization.js';
@@ -103,9 +103,7 @@ export async function getDayGapSuggestions(
     const hours = evidence.hours.get(id);
     return {
       coordinates: place?.coordinates ?? null,
-      hours: hours
-        ? scoringOpeningHours({ date: day.date, hours, origin: scoring.origin, zone: day.timeZone })
-        : { status: 'UNKNOWN' },
+      hours: hours ? scoringOpeningHours({ date: day.date, hours }) : { status: 'UNKNOWN' },
       rating: evidence.ratings.get(id) ?? null,
       tripPlaceId: id,
       types: place?.types ?? [],
@@ -122,8 +120,7 @@ export async function getDayGapSuggestions(
   });
 
   // Minutes from the day's own midnight become its wall-clock time.
-  const clock = (minute: number) =>
-    formatInstantInTimeZone(new Date(scoring.origin + minute * 60_000), day.timeZone).time;
+  const clock = (minute: number) => planningTime(minute);
 
   return {
     generatedAt: now.toISOString(),

@@ -59,17 +59,8 @@ export function MovementDialog({
           timeZone: 'UTC',
         }).format(new Date(date))
       : t('unscheduled');
-  const zoneLabel = (s: MovementSlot) => {
-    if (!s.timeZone) return '';
-    const offset = s.startInstant
-      ? new Intl.DateTimeFormat(locale, { timeZone: s.timeZone, timeZoneName: 'shortOffset' })
-          .formatToParts(new Date(s.startInstant))
-          .find((p) => p.type === 'timeZoneName')?.value
-      : null;
-    return ` (${s.timeZone}${offset ? `, ${offset}` : ''})`;
-  };
-  const range = (s: MovementSlot, showZone: boolean) =>
-    `${dateLabel(s.date)} · ${s.localTime ? `${clock(s.localTime)}${s.localEndTime ? `–${clock(s.localEndTime)}` : ''}` : t('untimed')}${showZone ? zoneLabel(s) : ''}`;
+  const range = (s: MovementSlot) =>
+    `${dateLabel(s.date)} · ${s.localTime ? `${clock(s.localTime)}${s.localEndTime ? `–${clock(s.localEndTime)}` : ''}` : t('untimed')}`;
   const days = [...new Set(proposal.changes.map((c) => c.after.date))];
   function preview() {
     if (busy || offline || !dirty) return;
@@ -115,18 +106,12 @@ export function MovementDialog({
                     <p className="text-sm font-medium">{nameFor(change.itemId)}</p>
                     <p className="text-xs text-muted-foreground tabular-nums">
                       {t('before', {
-                        range: range(
-                          change.before,
-                          change.before.timeZone !== change.after.timeZone,
-                        ),
+                        range: range(change.before),
                       })}
                     </p>
                     <p className="text-xs text-muted-foreground tabular-nums">
                       {t('after', {
-                        range: range(
-                          change.after,
-                          change.before.timeZone !== change.after.timeZone,
-                        ),
+                        range: range(change.after),
                       })}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">

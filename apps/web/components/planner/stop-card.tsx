@@ -118,7 +118,6 @@ export function StopCard({
   above,
   attention,
   below,
-  defaultTimeZone,
   dragHandle,
   hours,
   item,
@@ -137,7 +136,6 @@ export function StopCard({
   /** Notes worth a look about this stop. */
   attention?: ReactNode;
   below: SpineLine;
-  defaultTimeZone: string;
   /** The grip a stop is dragged by, when the day can be reordered. */
   dragHandle?: ReactNode;
   hours: PlaceHoursStatus | undefined;
@@ -171,9 +169,7 @@ export function StopCard({
   );
   const priority = item.tripPlace?.priority ?? item.priority;
   const when = item.localStartTime
-    ? item.timeZone && item.timeZone !== defaultTimeZone
-      ? t('exactTimeWithTimeZone', { time: time ?? item.localStartTime, timeZone: item.timeZone })
-      : (time ?? item.localStartTime)
+    ? (time ?? item.localStartTime)
     : item.dayPart
       ? t(`schedule.${item.dayPart}`)
       : null;

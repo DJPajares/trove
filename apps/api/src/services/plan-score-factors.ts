@@ -48,6 +48,7 @@ export type PlanScoreStartWindow = {
 };
 
 export type PlanScoreDayItem = {
+  /** Local clock context retained after conversion to the shared elapsed timeline. */
   blockType?: string | null;
   /** Known visit duration. */
   duration: PlanScoreMinutes | null;

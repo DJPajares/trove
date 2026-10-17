@@ -708,7 +708,7 @@ test('a no-op does not repair unrelated timing or change zone provenance', async
   expect(store).toEqual(before);
 });
 
-test('cross-zone movement discloses and commits the new instant and timezone', async () => {
+test('moving across locations preserves the local clock and refreshes only optional instant metadata', async () => {
   seed();
   item('a', 0, '09:00', false);
   store.itineraryItem[0]!.tripPlaceId = null;
@@ -719,7 +719,7 @@ test('cross-zone movement discloses and commits the new instant and timezone', a
   expect(p.changes[0]).toMatchObject({
     before: { localTime: '09:00', timeZone: 'Asia/Singapore' },
     after: { localTime: '09:00', timeZone: 'Asia/Tokyo', startInstant: '2026-09-06T00:00:00.000Z' },
-    reasons: ['day', 'zone'],
+    reasons: ['day'],
   });
   expect(p.status).toBe('needs_input');
   await apply({ ...input, overrides: [{ itemId: 'a', localTime: '09:00' }] });

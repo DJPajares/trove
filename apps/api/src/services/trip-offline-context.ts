@@ -106,7 +106,6 @@ export async function getTripOfflineContext(
       const status = placeHoursStatus({
         date,
         hours: stored,
-        zone: trip.referenceTimeZone ?? 'UTC',
       });
       if (status.status !== 'unknown') forDay[item.tripPlaceId] = status;
     }

@@ -11,6 +11,7 @@ type Where = Record<string, unknown>;
 type Call = { data?: Record<string, unknown>; model: string; op: string; where: Where };
 
 let calls: Call[] = [];
+let linkedItems: Array<Record<string, unknown>> = [];
 /** The located stop, as the ownership-checked read returns it; null when it is not the caller's Custom Place. */
 let locatedStop: {
   id: string;
@@ -28,7 +29,16 @@ const providerPlace = {
   customTimeZone: null,
   id: PROVIDER_PLACE_ID,
   kind: 'PROVIDER' as const,
-  providerRefs: [{ externalPlaceId: 'ChIJmarble', provider: 'GOOGLE' as const }],
+  providerRefs: [
+    {
+      externalPlaceId: 'ChIJmarble',
+      provider: 'GOOGLE' as const,
+      cachedAt: new Date(),
+      cachedLatitude: -36.848,
+      cachedLongitude: 174.763,
+      cachedTimeZone: 'Pacific/Auckland',
+    },
+  ],
   savedPlaces: [],
 };
 
@@ -46,7 +56,11 @@ const client = {
     findMany: () => Promise.resolve([]),
     updateMany: record('itineraryDay', 'updateMany'),
   },
-  itineraryItem: { updateMany: record('itineraryItem', 'updateMany') },
+  itineraryItem: {
+    findMany: () => Promise.resolve(linkedItems),
+    update: record('itineraryItem', 'update'),
+    updateMany: record('itineraryItem', 'updateMany'),
+  },
   memory: { updateMany: record('memory', 'updateMany') },
   reservation: { updateMany: record('reservation', 'updateMany') },
   trip: {
@@ -100,6 +114,7 @@ const canonicalPlaces = {
 
 beforeEach(() => {
   calls = [];
+  linkedItems = [];
   resolved.length = 0;
   locatedStop = {
     id: TRIP_PLACE_ID,
@@ -192,3 +207,43 @@ test('a stop that is not the caller’s Custom Place is refused before Google is
   expect(resolved).toHaveLength(0);
   expect(calls).toHaveLength(0);
 });
+
+test.each([false, true])(
+  'locating a Place persists its planned local context without moving protected rows (merging: %s)',
+  async (merging) => {
+    if (merging) existingProviderTripPlace = { id: EXISTING_TRIP_PLACE_ID, note: null };
+    const base = {
+      localStartTime: new Date('1970-01-01T12:05:00Z'),
+      startInstant: new Date('2026-09-10T04:05:00Z'),
+      timeZone: 'Asia/Singapore',
+      timeZoneSource: 'DAY_DEFAULT',
+      timeSemantics: 'FLOATING_LOCAL',
+      travelStatus: 'UPCOMING',
+      _count: { reservations: 0 },
+      itineraryDay: { date: new Date('2026-09-10'), defaultTimeZone: 'Pacific/Auckland' },
+      tripPlace: { place: providerPlace },
+    };
+    linkedItems = [
+      { ...base, id: 'planned' },
+      { ...base, id: 'booked', _count: { reservations: 1 } },
+      { ...base, id: 'completed', travelStatus: 'COMPLETED' },
+      { ...base, id: 'authoritative', timeSemantics: 'AUTHORITATIVE_INSTANT' },
+      { ...base, id: 'explicit', timeZoneSource: 'EXPLICIT' },
+    ];
+    await link();
+    expect(calls.filter((call) => call.model === 'itineraryItem' && call.op === 'update')).toEqual([
+      {
+        model: 'itineraryItem',
+        op: 'update',
+        where: { id: 'planned' },
+        data: {
+          timeZone: 'Pacific/Auckland',
+          timeZoneSource: 'PLACE',
+          startInstant: new Date('2026-09-10T00:05:00Z'),
+          timeSemantics: 'FLOATING_LOCAL',
+          timeZoneResolvedAt: expect.any(Date),
+        },
+      },
+    ]);
+  },
+);

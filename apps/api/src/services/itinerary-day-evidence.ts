@@ -1,5 +1,5 @@
 import { dayPartWindow } from './day-part-windows.js';
-import { formatInstantInTimeZone, formatLocalTime } from './itinerary-rules.js';
+import { formatLocalTime } from './itinerary-rules.js';
 import type { ItineraryDayRoutes } from './itinerary-routes.js';
 import { resolveOpeningHoursForDay } from './place-opening-hours.js';
 import type { PlaceOpeningPeriod } from './places.js';
@@ -44,6 +44,8 @@ export type ItineraryDayItemRecord = {
   timingFlexibility?: string | null;
   travelStatus?: string;
   timeZone: string | null;
+  timeZoneSource?: string | null;
+  customLocationTimeZone?: string | null;
   tripPlaceId: string | null;
 };
 
@@ -78,14 +80,9 @@ export function parseMinutes(value: string) {
   return Number.isFinite(total) ? total : null;
 }
 
-export function itemStartMinutes(item: ItineraryDayItemRecord, dayTimeZone: string) {
+export function itemStartMinutes(item: ItineraryDayItemRecord) {
   const local = formatLocalTime(item.localStartTime);
-  if (local) return parseMinutes(local);
-  if (!item.startInstant) return null;
-
-  return parseMinutes(
-    formatInstantInTimeZone(item.startInstant, item.timeZone ?? dayTimeZone).time,
-  );
+  return local ? parseMinutes(local) : null;
 }
 
 export function inboundTravelMinutes(routes: ItineraryDayRoutes | undefined, itemId: string) {
@@ -137,7 +134,7 @@ export function toDayEvidenceItems(
   hours: PlaceHoursEvidence,
 ): PlanScoreDayItem[] {
   return day.items.map((item): PlanScoreDayItem => {
-    const startMinutes = itemStartMinutes(item, day.timeZone);
+    const startMinutes = itemStartMinutes(item);
     const travelMinutes = inboundTravelMinutes(routes, item.id);
     const window = dayPartWindow(item.dayPart);
     const placeHours =
@@ -147,9 +144,7 @@ export function toDayEvidenceItems(
     const openingHours: PlanScoreOpeningHours = placeHours
       ? resolveOpeningHoursForDay({
           date: day.date,
-          dayTimeZone: day.timeZone,
           periods: placeHours.periods,
-          utcOffsetMinutes: placeHours.utcOffsetMinutes,
           source: placeHours.source,
         })
       : { status: 'UNKNOWN' };

@@ -108,6 +108,8 @@ type DecimalLike = number | { toNumber(): number };
 
 type TimeZonePlace = {
   customTimeZone: string | null;
+  customLatitude?: DecimalLike | null;
+  customLongitude?: DecimalLike | null;
   kind: 'CUSTOM' | 'PROVIDER';
   providerRefs?: readonly (PlaceSnapshotSource & { provider: 'GOOGLE' })[];
 };
@@ -117,7 +119,19 @@ export function resolvedPlaceTimeZone(place: TimeZonePlace, now: Date = new Date
   if (place.customTimeZone && isValidIanaTimeZone(place.customTimeZone)) {
     return place.customTimeZone;
   }
-  if (place.kind !== 'PROVIDER') return null;
+  if (place.kind !== 'PROVIDER') {
+    if (place.customLatitude == null || place.customLongitude == null) return null;
+    return timeZoneAtCoordinates({
+      latitude:
+        typeof place.customLatitude === 'number'
+          ? place.customLatitude
+          : place.customLatitude.toNumber(),
+      longitude:
+        typeof place.customLongitude === 'number'
+          ? place.customLongitude
+          : place.customLongitude.toNumber(),
+    });
+  }
   const reference = place.providerRefs?.find((entry) => entry.provider === 'GOOGLE');
   if (!reference?.cachedAt || now.getTime() - reference.cachedAt.getTime() > PLACE_CACHE_TTL_MS) {
     return null;

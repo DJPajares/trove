@@ -251,7 +251,7 @@ test('accepting a slot retains estimated evidence and manual changes invalidate 
   });
 });
 
-test('duration ends render across a daylight-saving jump using the stored instant', () => {
+test('duration ends stay on the local clock across DST despite stored instant metadata', () => {
   expect(
     itineraryLocalEndTime({
       localStartTime: '01:30',
@@ -259,5 +259,5 @@ test('duration ends render across a daylight-saving jump using the stored instan
       startInstant: '2026-03-08T06:30:00Z',
       timeZone: 'America/New_York',
     }),
-  ).toBe('03:30');
+  ).toBe('02:30');
 });

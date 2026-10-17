@@ -6,7 +6,7 @@ import {
   createCanonicalPlacesService,
   type ProviderPlaceLabel,
 } from './canonical-places.js';
-import { refreshDayDefaultTimeZone } from './itineraries.js';
+import { refreshDayDefaultTimeZone, refreshTripPlaceItemTimeZones } from './itineraries.js';
 import { hydratePlaceSnapshots } from './place-data.js';
 import {
   placeProviderRefInclude,
@@ -424,6 +424,7 @@ export async function linkTripPlaceToProvider(
     for (const day of affectedDays) {
       await refreshDayDefaultTimeZone(transaction, tripId, day.id);
     }
+    await refreshTripPlaceItemTimeZones(transaction, tripId, targetId);
     return targetId;
   });
 

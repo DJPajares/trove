@@ -71,7 +71,6 @@ function lineBetween(left: BandedEntry | undefined, right: BandedEntry | undefin
  */
 export function DayTimeline({
   attentionFor,
-  defaultTimeZone,
   distanceUnit,
   entries,
   hoursFor,
@@ -93,7 +92,6 @@ export function DayTimeline({
 }: Readonly<{
   /** What is worth a look about a stop, set under it. */
   attentionFor: (item: ItineraryItem) => ReactNode;
-  defaultTimeZone: string;
   distanceUnit: 'km' | 'mi';
   entries: readonly BandedEntry[];
   hoursFor: (item: ItineraryItem) => PlaceHoursStatus | undefined;
@@ -292,7 +290,6 @@ export function DayTimeline({
         above={stopAbove}
         attention={attentionFor(item)}
         below={endsAtLastStop && item.id === stops.at(-1)?.id ? 'solid' : below}
-        defaultTimeZone={defaultTimeZone}
         dragDisabled={dragDisabled}
         dragLabel={reorderT('handle', { name: view.name })}
         hours={hoursFor(item)}

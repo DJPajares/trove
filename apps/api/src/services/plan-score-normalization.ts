@@ -1,8 +1,5 @@
-import {
-  floatingLocalTimeToInstant,
-  formatLocalTime,
-  formatInstantInTimeZone,
-} from './itinerary-rules.js';
+import { formatLocalTime } from './itinerary-rules.js';
+import { planningDateMinute, planningMinute } from './planning-clock.js';
 import { openingIntervalsForWeekday, weekdayForLocalDate } from './place-opening-hours.js';
 import type { PlaceOpeningPeriod } from './places.js';
 import type {
@@ -47,79 +44,64 @@ export type ScoringReservation = {
 const dateOnly = (d: Date) => d.toISOString().slice(0, 10);
 export const addLocalDays = (date: string, days: number) =>
   new Date(Date.parse(`${date}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
-function instant(
-  date: Date | null | undefined,
-  time: Date | null | undefined,
-  zone: string | null | undefined,
-): Date | null {
-  if (!date || !time || !zone) return null;
-  try {
-    return floatingLocalTimeToInstant(dateOnly(date), formatLocalTime(time)!, zone);
-  } catch {
-    return null;
-  }
-}
-export function dayOrigin(date: string, zone: string): number {
-  return floatingLocalTimeToInstant(date, '00:00', zone).getTime();
-}
-export function elapsedLocalMinute(date: string, zone: string, minute: number, origin: number) {
-  const days = Math.floor(minute / 1440),
-    within = ((minute % 1440) + 1440) % 1440;
-  const time = `${String(Math.floor(within / 60)).padStart(2, '0')}:${String(Math.floor(within % 60)).padStart(2, '0')}`;
-  return (
-    (floatingLocalTimeToInstant(addLocalDays(date, days), time, zone).getTime() - origin) / 60000 +
-    (within % 1)
-  );
-}
-/** Structured journeys are clipped to each day's real 23/24/25-hour interval. */
+/** Booked endpoint dates/clocks are already local. Keep actual instants untouched. */
 export function scoringCommitments(
   reservations: readonly ScoringReservation[],
   date: string,
-  zone: string,
 ): PlanScoreFixedCommitment[] {
-  const origin = dayOrigin(date, zone),
-    end = dayOrigin(addLocalDays(date, 1), zone);
-  return reservations.flatMap((r) => {
+  const minute = (d: Date | null | undefined, t: Date | null | undefined) =>
+    d && t ? planningDateMinute(dateOnly(d), date, planningMinute(formatLocalTime(t)!)) : null;
+  return reservations.flatMap((r): PlanScoreFixedCommitment[] => {
     const departure =
-      r.flightDepartureInstant ??
-      r.transportDepartureInstant ??
-      instant(r.flightDepartureLocalDate, r.flightDepartureLocalTime, r.flightDepartureTimeZone) ??
-      instant(
-        r.transportDepartureLocalDate,
-        r.transportDepartureLocalTime,
-        r.transportDepartureTimeZone,
-      );
+      minute(r.flightDepartureLocalDate, r.flightDepartureLocalTime) ??
+      minute(r.transportDepartureLocalDate, r.transportDepartureLocalTime);
     const arrival =
-      r.flightArrivalInstant ??
-      r.transportArrivalInstant ??
-      instant(r.flightArrivalLocalDate, r.flightArrivalLocalTime, r.flightArrivalTimeZone) ??
-      instant(r.transportArrivalLocalDate, r.transportArrivalLocalTime, r.transportArrivalTimeZone);
-    const standalone = instant(r.localDate, r.localTime, r.timeZone);
-    const start = departure ?? standalone;
-    if (!start || !Number.isFinite(start.getTime())) return [];
+      minute(r.flightArrivalLocalDate, r.flightArrivalLocalTime) ??
+      minute(r.transportArrivalLocalDate, r.transportArrivalLocalTime);
+    const start = departure ?? minute(r.localDate, r.localTime);
+    if (start === null) return [];
     const journey = departure !== null;
-    const knownEnd = journey && arrival && arrival.getTime() >= start.getTime() ? arrival : null;
+    const base = {
+      id: r.id,
+      itemId: r.itineraryItemId ?? null,
+      longDistance: journey,
+      indispensable: r.indispensable,
+      source: 'USER_OWNED' as const,
+    };
+    // A date-line crossing can have an arrival clock/date before departure.
+    // Preserve both local anchors; never manufacture elapsed time or shift a stop.
+    if (journey && arrival !== null && arrival < start)
+      return [
+        ...(start >= 0 && start < 1440
+          ? [{ ...base, startMinute: start, endMinute: start, startKnown: true, endKnown: false }]
+          : []),
+        ...(arrival >= 0 && arrival < 1440
+          ? [
+              {
+                ...base,
+                id: `${r.id}:arrival`,
+                itemId: null,
+                longDistance: false,
+                startMinute: arrival,
+                endMinute: arrival,
+                startKnown: true,
+                endKnown: true,
+              },
+            ]
+          : []),
+      ];
+    const knownEnd = journey && arrival !== null ? arrival : null;
     if (
-      knownEnd
-        ? knownEnd.getTime() <= origin || start.getTime() >= end
-        : start.getTime() >= end || (!journey && start.getTime() < origin)
+      knownEnd !== null ? knownEnd <= 0 || start >= 1440 : start >= 1440 || (!journey && start < 0)
     )
       return [];
     return [
       {
-        id: r.id,
-        itemId: r.itineraryItemId ?? null,
-        startMinute: Math.max(0, (start.getTime() - origin) / 60000),
-        endMinute: knownEnd
-          ? Math.min((end - origin) / 60000, (knownEnd.getTime() - origin) / 60000)
-          : Math.max(0, (start.getTime() - origin) / 60000),
-        // A known journey occupies the clipped arrival-day interval from midnight.
-        // An unknown arrival only carries uncertainty forward, not a proven interval.
-        startKnown: knownEnd !== null || start.getTime() >= origin,
+        ...base,
+        startMinute: Math.max(0, start),
+        endMinute: knownEnd !== null ? Math.min(1440, knownEnd) : Math.max(0, start),
+        startKnown: knownEnd !== null || start >= 0,
         endKnown: journey ? knownEnd !== null : true,
-        longDistance: journey,
-        indispensable: r.indispensable,
-        source: 'USER_OWNED' as const,
       },
     ];
   });
@@ -136,22 +118,11 @@ export type ScoringHours = {
 };
 export function scoringOpeningHours(input: {
   date: string;
-  zone: string;
-  origin: number;
   hours: ScoringHours;
   /** On a public holiday, weekly hours are only an estimate of the day's hours. */
   holiday?: boolean;
 }): PlanScoreOpeningHours {
-  const { hours, date, zone, origin } = input;
-  // A coordinate-derived IANA zone avoids treating a provider's current UTC offset
-  // as a timezone on a future date or across DST.
-  const ownZone = hours.timeZone ?? zone;
-  if (!hours.timeZone && hours.utcOffsetMinutes !== null && hours.fetchedAt) {
-    const local = formatInstantInTimeZone(new Date(hours.fetchedAt), zone);
-    const offset =
-      (Date.parse(`${local.date}T${local.time}:00Z`) - Date.parse(hours.fetchedAt)) / 60000;
-    if (Math.abs(offset - hours.utcOffsetMinutes) > 1) return { status: 'UNKNOWN' };
-  }
+  const { hours, date } = input;
   const dated =
     hours.currentPeriods &&
     hours.validFrom &&
@@ -164,99 +135,44 @@ export function scoringOpeningHours(input: {
     dated && periods.some((p) => p.open.date)
       ? periods.flatMap((p) => {
           if (!p.open.date) return [];
-          const from = elapsedLocalMinute(
-            p.open.date,
-            ownZone,
-            p.open.hour * 60 + p.open.minute,
-            origin,
-          );
+          const from = planningDateMinute(p.open.date, date, p.open.hour * 60 + p.open.minute);
           const to = p.close?.date
-            ? elapsedLocalMinute(p.close.date, ownZone, p.close.hour * 60 + p.close.minute, origin)
-            : elapsedLocalMinute(addLocalDays(p.open.date, 1), ownZone, 0, origin);
-          return to > 0 && from < elapsedLocalMinute(date, ownZone, 1440, origin)
-            ? [{ startMinute: Math.max(0, from), endMinute: to }]
-            : [];
+            ? planningDateMinute(p.close.date, date, p.close.hour * 60 + p.close.minute)
+            : planningDateMinute(addLocalDays(p.open.date, 1), date);
+          return to > 0 && from < 1440 ? [{ startMinute: Math.max(0, from), endMinute: to }] : [];
         })
-      : openingIntervalsForWeekday(periods, weekdayForLocalDate(date)).flatMap((interval) => {
-          try {
-            return [
-              {
-                startMinute: elapsedLocalMinute(date, ownZone, interval.startMinute, origin),
-                endMinute: elapsedLocalMinute(date, ownZone, interval.endMinute, origin),
-              },
-            ];
-          } catch {
-            return [];
-          }
-        });
+      : openingIntervalsForWeekday(periods, weekdayForLocalDate(date));
   return {
     status: 'KNOWN',
     source: input.holiday && !dated ? 'ESTIMATED' : (hours.source ?? 'CACHED_PROVIDER'),
     intervals: intervals.toSorted((a, b) => a.startMinute - b.startMinute),
   };
 }
-/** Both AI and stored trips pass civil-minute items through this same conversion. */
+/** AI, scoring and scheduling share the same unconverted local-clock evidence. */
 export function normalizeScoringItems(
   date: string,
-  zone: string,
   items: readonly PlanScoreDayItem[],
   options: {
-    zones?: ReadonlyMap<string, string>;
-    instants?: ReadonlyMap<string, Date>;
     hours?: ReadonlyMap<string, ScoringHours>;
     commitments?: readonly PlanScoreFixedCommitment[];
     holiday?: boolean;
   } = {},
 ) {
-  const origin = dayOrigin(date, zone);
   return items.map((item) => {
-    const ownZone = options.zones?.get(item.id) ?? zone;
     const linked = options.commitments?.find((c) => c.itemId === item.id);
-    let start = item.start;
-    let startWindow = item.startWindow;
-    let hours = item.openingHours;
-    try {
-      if (start)
-        start = {
-          ...start,
-          minutes: options.instants?.has(item.id)
-            ? (options.instants.get(item.id)!.getTime() - origin) / 60000
-            : elapsedLocalMinute(date, ownZone, start.minutes, origin),
-        };
-      if (startWindow)
-        startWindow = {
-          ...startWindow,
-          earliestMinute: elapsedLocalMinute(date, ownZone, startWindow.earliestMinute, origin),
-          latestMinute: elapsedLocalMinute(date, ownZone, startWindow.latestMinute, origin),
-        };
-      if (
-        (!item.blockType || item.blockType === 'activity') &&
-        item.placeId &&
-        options.hours?.has(item.placeId)
-      )
-        hours = scoringOpeningHours({
-          date,
-          zone: ownZone,
-          origin,
-          hours: options.hours.get(item.placeId)!,
-          holiday: options.holiday,
-        });
-      else if (hours.status === 'KNOWN')
-        hours = {
-          ...hours,
-          intervals: hours.intervals.map((h) => ({
-            startMinute: elapsedLocalMinute(date, ownZone, h.startMinute, origin),
-            endMinute: elapsedLocalMinute(date, ownZone, h.endMinute, origin),
-          })),
-        };
-    } catch {
-      start = null;
-      startWindow = null;
-      hours = { status: 'UNKNOWN' };
-    }
+    const hours =
+      (!item.blockType || item.blockType === 'activity') &&
+      item.placeId &&
+      options.hours?.has(item.placeId)
+        ? scoringOpeningHours({
+            date,
+            hours: options.hours.get(item.placeId)!,
+            holiday: options.holiday,
+          })
+        : item.openingHours;
     return {
       ...item,
-      start: linked ? { minutes: linked.startMinute, source: linked.source } : start,
+      start: linked ? { minutes: linked.startMinute, source: linked.source } : item.start,
       duration: linked?.longDistance
         ? linked.endKnown === false
           ? null
@@ -264,7 +180,7 @@ export function normalizeScoringItems(
         : item.duration,
       longDistance: linked?.longDistance ?? item.longDistance,
       fixed: linked ? true : item.fixed,
-      startWindow: linked ? null : startWindow,
+      startWindow: linked ? null : item.startWindow,
       openingHours: hours,
     };
   });

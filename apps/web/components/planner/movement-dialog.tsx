@@ -68,8 +68,8 @@ export function MovementDialog({
       : null;
     return ` (${s.timeZone}${offset ? `, ${offset}` : ''})`;
   };
-  const range = (s: MovementSlot) =>
-    `${dateLabel(s.date)} · ${s.localTime ? `${clock(s.localTime)}${s.localEndTime ? `–${clock(s.localEndTime)}` : ''}` : t('untimed')}${zoneLabel(s)}`;
+  const range = (s: MovementSlot, showZone: boolean) =>
+    `${dateLabel(s.date)} · ${s.localTime ? `${clock(s.localTime)}${s.localEndTime ? `–${clock(s.localEndTime)}` : ''}` : t('untimed')}${showZone ? zoneLabel(s) : ''}`;
   const days = [...new Set(proposal.changes.map((c) => c.after.date))];
   function preview() {
     if (busy || offline || !dirty) return;
@@ -114,10 +114,20 @@ export function MovementDialog({
                   <li className="py-2" key={change.itemId}>
                     <p className="text-sm font-medium">{nameFor(change.itemId)}</p>
                     <p className="text-xs text-muted-foreground tabular-nums">
-                      {t('before', { range: range(change.before) })}
+                      {t('before', {
+                        range: range(
+                          change.before,
+                          change.before.timeZone !== change.after.timeZone,
+                        ),
+                      })}
                     </p>
                     <p className="text-xs text-muted-foreground tabular-nums">
-                      {t('after', { range: range(change.after) })}
+                      {t('after', {
+                        range: range(
+                          change.after,
+                          change.before.timeZone !== change.after.timeZone,
+                        ),
+                      })}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {change.reasons.map((reason) => t(`reason.${reason}`)).join(' ')}

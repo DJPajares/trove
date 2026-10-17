@@ -26,7 +26,6 @@ test('explains the conflicting stop and compares both times in the same zone', (
     previous: 'Sylvia Park',
     earliest: '4:01 PM',
     scheduled: '12:30 PM',
-    timeZone: 'Pacific/Auckland',
   });
   expect(JSON.parse(describeTimingIssue(issue, { ...options, hour12: false })).earliest).toBe(
     '16:01',

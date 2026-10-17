@@ -23,7 +23,13 @@ import {
   DEFAULT_DAY_START_MINUTE,
   type SuggestedTimeWindow,
 } from './itinerary-time-suggestions-rules.js';
-import { scheduleItinerary, type SchedulingItem } from './itinerary-scheduling-rules.js';
+import {
+  scheduleItinerary,
+  suggestScheduledTarget,
+  type SchedulingInput,
+  type SchedulingItem,
+  type SchedulingResult,
+} from './itinerary-scheduling-rules.js';
 import { estimateLegMinutes } from './plan-score-estimates.js';
 import { placeProfile } from './plan-score-place-types.js';
 import { elapsedLocalMinute } from './plan-score-normalization.js';
@@ -124,7 +130,12 @@ export async function assessDay(
           options.durationMinutes != null && options.durationMinutes !== item.durationMinutes
             ? 'USER_OWNED'
             : item.durationProvenance,
-        dayPart: options.schedule !== undefined ? dayParts[options.schedule] : item.dayPart,
+        dayPart:
+          options.schedule !== undefined
+            ? dayParts[options.schedule]
+            : item.localStartTime
+              ? null
+              : item.dayPart,
         localStartTime: null,
         startInstant: null,
         timeProvenance: null,
@@ -377,11 +388,19 @@ export async function assessDay(
               : {}),
           }))
         : null;
-    if (item.id === targetId && options.localTime && duration) {
+    const preferredTime =
+      options.localTime ??
+      (original.id === targetId
+        ? storedDay.items
+            .find((i) => i.id === targetId)
+            ?.localStartTime?.toISOString()
+            .slice(11, 16)
+        : undefined);
+    if (item.id === targetId && preferredTime && duration) {
       const preferred =
         (floatingLocalTimeToInstant(
           day.date,
-          options.localTime,
+          preferredTime,
           original.timeZone ?? day.timeZone,
         ).getTime() -
           scoring.origin) /
@@ -414,7 +433,7 @@ export async function assessDay(
     minutes: returnLeg?.durationSeconds == null ? null : returnLeg.durationSeconds / 60,
     estimated: returnLeg?.estimated,
   };
-  const result = scheduleItinerary({
+  const schedulingInput: SchedulingInput = {
     items,
     commitments: scoring.commitments,
     availability: scoring.availability,
@@ -428,31 +447,22 @@ export async function assessDay(
     returnTravel,
     targetIds: movement?.targetIds ?? (reconcile ? new Set(targetId ? [targetId] : []) : targets),
     allowDayPartAdjustment: reconcile,
-  });
+  };
+  const result =
+    targetId && !reconcile
+      ? suggestScheduledTarget(schedulingInput, targetId)
+      : scheduleItinerary(schedulingInput);
   for (const issue of result.issues) {
     if (issue.code !== 'FIXED_CONFLICT' || issue.references.length !== 1) continue;
-    const index = items.findIndex((item) => item.id === issue.itemId);
-    const current = items[index];
-    const previous = items[index - 1];
-    if (
-      !current?.start ||
-      !previous?.duration ||
-      issue.references[0] !== previous.id ||
-      (current.inboundRequired && !current.inboundTravel)
-    )
-      continue;
-    const previousStart = result.slots.get(previous.id)?.startMinute ?? previous.start?.minutes;
-    if (previousStart === undefined) continue;
-    const earliest =
-      previousStart + previous.duration.minutes + (current.inboundTravel?.minutes ?? 0);
-    if (earliest <= current.start.minutes) continue;
+    const conflict = result.orderConflicts.get(issue.itemId);
+    if (!conflict) continue;
     issue.orderConflict = {
-      previousItemId: previous.id,
-      earliestStartInstant: new Date(scoring.origin + Math.ceil(earliest) * 60_000).toISOString(),
-      scheduledStartInstant: new Date(
-        scoring.origin + current.start.minutes * 60_000,
+      previousItemId: conflict.previousItemId,
+      earliestStartInstant: new Date(
+        scoring.origin + Math.ceil(conflict.earliest) * 60_000,
       ).toISOString(),
-      timeZone: day.timeZone,
+      scheduledStartInstant: new Date(scoring.origin + conflict.scheduled * 60_000).toISOString(),
+      timeZone: day.items.find((item) => item.id === issue.itemId)?.timeZone ?? day.timeZone,
     };
   }
   for (const item of day.items) {
@@ -501,7 +511,7 @@ export async function assessDay(
       }),
     )
     .digest('hex');
-  const suggestions = [...targets].map((itemId) => {
+  const suggestionFor = (itemId: string, result: SchedulingResult) => {
     const slot = result.slots.get(itemId);
     const item = day.items.find((i) => i.id === itemId)!;
     const timeZone =
@@ -548,7 +558,17 @@ export async function assessDay(
           ? { status: 'insufficient_evidence' as const, missing }
           : { status: 'no_feasible_time' as const, blockedBy: issues.map((i) => i.code) }),
     };
-  });
+  };
+  const suggestions = [...targets].map((id) => suggestionFor(id, result));
+  const repairs = new Map<string, SchedulingResult>();
+  for (const issue of result.issues) {
+    if (issue.severity !== 'conflict' || items.find((item) => item.id === issue.itemId)?.protected)
+      continue;
+    let repair = repairs.get(issue.itemId);
+    if (!repair)
+      repairs.set(issue.itemId, (repair = suggestScheduledTarget(schedulingInput, issue.itemId)));
+    issue.suggestion = suggestionFor(issue.itemId, repair);
+  }
   return {
     response: {
       generatedAt: now.toISOString(),

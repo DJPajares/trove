@@ -21,7 +21,7 @@ installFakePrismaClient();
 beforeEach(() => {
   resetStore();
   resetProviderCallCounts();
-  vi.mocked(readCachedRoute).mockClear();
+  vi.mocked(readCachedRoute).mockReset().mockResolvedValue({ kind: 'miss', reason: 'missing_leg' });
 });
 function seed() {
   store.trip.push({
@@ -642,4 +642,133 @@ test('a no-fit move preserves neighboring flexible slots and canonical warnings 
     expect.objectContaining({ itemId: 'new', code: 'NO_ROOM' }),
   ]);
   expect(getProviderCallCounts()).toEqual({});
+});
+
+function conflictDay(next = '17:00') {
+  seed();
+  item('a', 0, '10:00', false);
+  item('b', 1, '12:00', false);
+  item('new', 2, next, false);
+  store.itineraryItem[0]!.durationMinutes = 120;
+  store.itineraryItem[1]!.durationMinutes = 240;
+  vi.mocked(readCachedRoute).mockResolvedValue({
+    kind: 'hit',
+    result: {
+      status: 'ok',
+      provider: 'google',
+      freshness: { fetchedAt: '2026-09-01T00:00:00Z', source: 'cache' },
+      estimate: { durationSeconds: 300, distanceMeters: 300, encodedPolyline: null },
+    },
+  });
+}
+
+test('a conflict and the unchanged timing editor return the same complete usable slot', async () => {
+  conflictDay();
+  const before = structuredClone(store.itineraryItem);
+  const assessment = await getItineraryDayTimeSuggestions('user', 'trip', 'day');
+  const conflict = assessment.issues!.find((issue) => issue.itemId === 'b')!;
+  const editor = await getItineraryDayTimeSuggestions('user', 'trip', 'day', {
+    itemId: 'b',
+    schedule: 'exact',
+    localTime: '12:00',
+    durationMinutes: 240,
+  });
+  expect(conflict.suggestion).toMatchObject({
+    status: 'ok',
+    localTime: '12:05',
+    localEndTime: '16:05',
+    durationMinutes: 240,
+    affectedItemIds: [],
+  });
+  expect(editor.suggestions[0]).toEqual(conflict.suggestion);
+  expect(editor.scheduleRevision).toBe(assessment.scheduleRevision);
+  expect(store.itineraryItem).toEqual(before);
+  const slot = conflict.suggestion!;
+  await updateItineraryItem('user', 'trip', 'b', {
+    schedule: { kind: 'exact', localTime: slot.localTime! },
+    durationMinutes: slot.durationMinutes,
+    scheduleRevision: assessment.scheduleRevision,
+    timingPolicy: 'review_flexible',
+    timingFlexibility: 'fixed',
+  });
+  expect(store.itineraryItem[1]!.localStartTime).toEqual(parseLocalTime('12:05'));
+  expect(store.itineraryItem[2]!.localStartTime).toEqual(before[2]!.localStartTime);
+  const after = await getItineraryDayTimeSuggestions('user', 'trip', 'day');
+  expect(after.issues?.filter((issue) => issue.itemId === 'b')).toEqual([]);
+  expect(getProviderCallCounts()).toEqual({});
+});
+
+test('an arrival lower bound is not a valid four-hour slot before the next fixed stop', async () => {
+  conflictDay('16:00');
+  const assessment = await getItineraryDayTimeSuggestions('user', 'trip', 'day');
+  const issue = assessment.issues!.find((issue) => issue.itemId === 'b')!;
+  expect(issue.orderConflict).toBeDefined();
+  expect(issue.suggestion).toMatchObject({ status: 'no_feasible_time', localTime: null });
+  const editor = await getItineraryDayTimeSuggestions('user', 'trip', 'day', {
+    itemId: 'b',
+    schedule: 'exact',
+    localTime: '12:00',
+  });
+  expect(editor.suggestions[0]).toEqual(issue.suggestion);
+  expect(store.itineraryItem[1]!.durationMinutes).toBe(240);
+});
+
+test('saved exact slots do not reacquire a stale morning daypart when suggested independently', async () => {
+  seed();
+  item('a', 0, '13:00', false);
+  item('b', 1, '13:30', true);
+  const direct = await getItineraryDayTimeSuggestions('user', 'trip', 'day', { itemId: 'b' });
+  const editor = await getItineraryDayTimeSuggestions('user', 'trip', 'day', {
+    itemId: 'b',
+    schedule: 'exact',
+    localTime: '13:30',
+  });
+  expect(direct.suggestions[0]).toMatchObject({ status: 'ok', localTime: '14:00' });
+  expect(direct.suggestions[0]).toEqual(editor.suggestions[0]);
+});
+
+test('protected timing conflicts never include a directly applicable repair', async () => {
+  conflictDay();
+  store.itineraryItem[1]!.travelStatus = 'COMPLETED';
+  const assessment = await getItineraryDayTimeSuggestions('user', 'trip', 'day');
+  expect(assessment.issues!.find((issue) => issue.itemId === 'b')?.suggestion).toBeUndefined();
+});
+
+test('a direct repair revision expires if the following stop changes', async () => {
+  conflictDay();
+  const assessment = await getItineraryDayTimeSuggestions('user', 'trip', 'day');
+  store.itineraryItem[2]!.durationMinutes = 120;
+  const before = structuredClone(store.itineraryItem);
+  await expect(
+    updateItineraryItem('user', 'trip', 'b', {
+      schedule: { kind: 'exact', localTime: '12:05' },
+      scheduleRevision: assessment.scheduleRevision,
+      timingPolicy: 'review_flexible',
+    }),
+  ).rejects.toThrow('itinerary_schedule_conflict');
+  expect(store.itineraryItem).toEqual(before);
+});
+
+test('repairs and warnings use the stop local clock even when the day reference zone differs', async () => {
+  conflictDay();
+  for (const stop of store.itineraryItem) {
+    stop.timeZone = 'Pacific/Auckland';
+    stop.timeZoneSource = 'PLACE';
+    const clock = (stop.localStartTime as Date).toISOString().slice(11, 16);
+    stop.startInstant = floatingLocalTimeToInstant('2026-09-05', clock, 'Pacific/Auckland');
+  }
+  const assessment = await getItineraryDayTimeSuggestions('user', 'trip', 'day');
+  const issue = assessment.issues!.find((issue) => issue.itemId === 'b')!;
+  expect(issue.orderConflict?.timeZone).toBe('Pacific/Auckland');
+  expect(issue.suggestion).toMatchObject({
+    status: 'ok',
+    localTime: '12:05',
+    timeZone: 'Pacific/Auckland',
+  });
+  const editor = await getItineraryDayTimeSuggestions('user', 'trip', 'day', {
+    itemId: 'b',
+    schedule: 'exact',
+    localTime: '12:00',
+  });
+  expect(editor.suggestions[0]).toEqual(issue.suggestion);
 });

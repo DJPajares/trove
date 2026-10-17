@@ -2371,7 +2371,7 @@
         "notice": "Connection notice"
       },
       "suggestionsReady": "Timing suggestions ready.",
-      "orderConflict": "After {previous} and travel, this stop can start at {earliest} or later. It is set for {scheduled}. Times shown in {timeZone}.",
+      "orderConflict": "After {previous} and travel, arrival is no earlier than {earliest}. This stop is set for {scheduled}.",
       "proposalHint": "Your current times stay unchanged until you apply a suggestion.",
       "currentTime": "Current time",
       "suggestedTime": "Suggested time",
@@ -2394,7 +2394,9 @@
       "onlineReview": "Connect to the internet to review and apply timing suggestions.",
       "openStopNamed": "Open {name} in the itinerary",
       "applySuggestionFor": "Apply timing suggestion for {name}",
-      "needsReviewForDay": "Timing needs a review on {day}."
+      "needsReviewForDay": "Timing needs a review on {day}.",
+      "useTime": "Use {start}–{end}",
+      "moreOptions": "More timing options"
     },
     "movement": {
       "title": "Review this move",

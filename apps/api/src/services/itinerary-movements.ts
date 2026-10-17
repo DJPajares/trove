@@ -1,3 +1,4 @@
+import { resolvePlannedItemTiming } from './itinerary-local-timing.js';
 import { resolveDayStay, toStayAccommodations } from './day-stay.js';
 import { movementConnectionConflicts } from './itinerary-movement-constraints.js';
 import { createHash } from 'node:crypto';
@@ -305,6 +306,17 @@ async function calculate(
     include: TIMING_TRIP_INCLUDE,
   });
   if (!original) throw new ItineraryNotFoundError('trip_not_found');
+  // Interpret floating clocks consistently before comparing or projecting any move.
+  // This changes the read model only; acceptance still owns every persisted write.
+  for (const day of original.itineraryDays)
+    day.items = day.items.map((item) => {
+      const place = original.tripPlaces.find((p) => p.id === item.tripPlaceId)?.place;
+      return resolvePlannedItemTiming(item, {
+        date: day.date.toISOString().slice(0, 10),
+        dayTimeZone: day.defaultTimeZone,
+        placeTimeZone: place ? resolvedPlaceTimeZone(place) : null,
+      });
+    });
   const next = cloneTrip(original);
   const originals = new Map(allItems(original).map((i) => [i.id, i]));
   const { affected, targets } = project(next, input);
@@ -386,6 +398,13 @@ async function calculate(
       limitations.add('TRAVEL_ESTIMATED');
     const day = next.itineraryDays.find((d) => d.id === dayId)!;
     for (const i of day.items) {
+      const effective = result.day.items.find((row) => row.id === i.id)!;
+      if (!protectedTiming(i)) {
+        i.timeZone = effective.timeZone;
+        i.timeZoneSource =
+          (effective.timeZoneSource as typeof i.timeZoneSource) ?? i.timeZoneSource;
+        i.startInstant = effective.startInstant;
+      }
       const normalized = result.items.find((row) => row.id === i.id)!;
       if (normalized.openingHours.status === 'UNKNOWN' && i.tripPlaceId)
         limitations.add('OPENING_HOURS_UNKNOWN');

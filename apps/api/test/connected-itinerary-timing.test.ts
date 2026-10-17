@@ -1,6 +1,7 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 import {
   createItineraryItem,
+  listItinerary,
   organizeItineraryItem,
   updateItineraryItem,
 } from '../src/services/itineraries.js';
@@ -10,6 +11,7 @@ import {
   getItineraryTimingReview,
   applyItineraryTimingReview,
 } from '../src/services/itinerary-time-suggestions.js';
+import { readCachedPlaceEvidence } from '../src/services/place-evidence-cache.js';
 import { readCachedRoute } from '../src/services/route-evidence-cache.js';
 import { floatingLocalTimeToInstant, parseLocalTime } from '../src/services/itinerary-rules.js';
 import { installFakePrismaClient, resetStore, store } from './support/fake-prisma.js';
@@ -17,10 +19,15 @@ import { getProviderCallCounts, resetProviderCallCounts } from '../src/services/
 vi.mock('../src/services/route-evidence-cache.js', () => ({
   readCachedRoute: vi.fn(async () => ({ kind: 'miss' })),
 }));
+vi.mock('../src/services/place-evidence-cache.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/services/place-evidence-cache.js')>()),
+  readCachedPlaceEvidence: vi.fn(async () => null),
+}));
 installFakePrismaClient();
 beforeEach(() => {
   resetStore();
   resetProviderCallCounts();
+  vi.mocked(readCachedPlaceEvidence).mockReset().mockResolvedValue(null);
   vi.mocked(readCachedRoute).mockReset().mockResolvedValue({ kind: 'miss', reason: 'missing_leg' });
 });
 function seed() {
@@ -117,6 +124,7 @@ test.each(['Pacific/Auckland', 'Asia/Singapore'])(
     for (const [index, zone] of [shoppingZone, 'Pacific/Auckland'].entries()) {
       const stop = store.itineraryItem[index]!;
       stop.timeZone = zone;
+      stop.timeZoneSource = 'EXPLICIT';
       stop.startInstant = floatingLocalTimeToInstant(
         '2026-09-05',
         index ? '12:30' : '10:00',
@@ -576,6 +584,7 @@ test('complete slots convert the item timezone independently of the day referenc
   item('new', 1, null);
   store.itineraryDay[0]!.defaultTimeZone = 'UTC';
   store.itineraryItem[0]!.timeZone = 'UTC';
+  store.itineraryItem[0]!.timeZoneSource = 'EXPLICIT';
   store.itineraryItem[0]!.startInstant = new Date('2026-09-05T09:00:00Z');
   const preview = await getItineraryDayTimeSuggestions('user', 'trip', 'day', {
     itemId: 'new',
@@ -752,6 +761,11 @@ test('a direct repair revision expires if the following stop changes', async () 
 
 test('repairs and warnings use the stop local clock even when the day reference zone differs', async () => {
   conflictDay();
+  for (const place of store.place) {
+    place.customLatitude = -36.848;
+    place.customLongitude = 174.763;
+    place.customTimeZone = 'Pacific/Auckland';
+  }
   for (const stop of store.itineraryItem) {
     stop.timeZone = 'Pacific/Auckland';
     stop.timeZoneSource = 'PLACE';
@@ -956,4 +970,158 @@ test('an explicitly accepted repair retains legacy estimated flexibility', async
     itemIds: ['b', 'new'],
   });
   expect(store.itineraryItem[2]!.timingFlexibility).toBe('FLEXIBLE');
+});
+
+function aucklandStopTimes() {
+  seed();
+  store.trip[0]!.referenceTimeZone = 'Pacific/Auckland';
+  store.itineraryDay[0]!.defaultTimeZone = 'Pacific/Auckland';
+  for (const place of store.place) {
+    place.customLatitude = -36.848;
+    place.customLongitude = 174.763;
+    place.customTimeZone = 'Pacific/Auckland';
+  }
+}
+
+test('a linked Auckland stop cannot retain a Singapore fallback in the Sylvia Park connection', async () => {
+  aucklandStopTimes();
+  item('a', 0, '10:00', false);
+  item('b', 1, '12:30', false);
+  store.itineraryItem[0]!.durationMinutes = 120;
+  store.itineraryItem[1]!.durationMinutes = 240;
+  store.itineraryItem[1]!.timeZone = 'Pacific/Auckland';
+  store.itineraryItem[1]!.startInstant = floatingLocalTimeToInstant(
+    '2026-09-05',
+    '12:30',
+    'Pacific/Auckland',
+  );
+  vi.mocked(readCachedRoute).mockResolvedValue({
+    kind: 'hit',
+    result: {
+      status: 'ok',
+      provider: 'google',
+      freshness: { fetchedAt: new Date().toISOString(), source: 'cache' },
+      estimate: { durationSeconds: 102, distanceMeters: 100, encodedPolyline: null },
+    },
+  });
+  const before = structuredClone(store.itineraryItem);
+  const response = await getItineraryDayTimeSuggestions('user', 'trip', 'day');
+  expect(response.issues?.filter((issue) => issue.severity === 'conflict')).toEqual([]);
+  expect(store.itineraryItem).toEqual(before);
+  store.itineraryItem[1]!.localStartTime = parseLocalTime('11:30');
+  store.itineraryItem[1]!.startInstant = floatingLocalTimeToInstant(
+    '2026-09-05',
+    '11:30',
+    'Pacific/Auckland',
+  );
+  const late = await getItineraryDayTimeSuggestions('user', 'trip', 'day');
+  expect(late.issues).toContainEqual(
+    expect.objectContaining({
+      itemId: 'b',
+      code: 'FIXED_CONFLICT',
+      orderConflict: expect.objectContaining({
+        earliestStartInstant: '2026-09-05T00:02:00.000Z',
+        timeZone: 'Pacific/Auckland',
+      }),
+    }),
+  );
+  expect(getProviderCallCounts()).toEqual({});
+});
+
+test.each([false, true])(
+  'The Shelf 12:05–15:35 fits Auckland hours with stale Singapore timing (identity expired: %s)',
+  async (expiredIdentity) => {
+    aucklandStopTimes();
+    store.itineraryDay[0]!.date = new Date('2026-09-10');
+    item('a', 0, '12:05', false);
+    item('b', 1, '16:10', false);
+    store.itineraryItem[0]!.durationMinutes = 210;
+    store.itineraryItem[1]!.durationMinutes = 30;
+    const place = store.place[0]!;
+    place.kind = 'PROVIDER';
+    place.customLatitude = null;
+    place.customLongitude = null;
+    place.customTimeZone = null;
+    place.providerRefs = [
+      {
+        provider: 'GOOGLE',
+        externalPlaceId: 'shelf',
+        cachedAt: expiredIdentity ? new Date('2026-08-01') : new Date(),
+        cachedLatitude: -36.848,
+        cachedLongitude: 174.763,
+        cachedTimeZone: 'Pacific/Auckland',
+      },
+    ];
+    vi.mocked(readCachedPlaceEvidence).mockResolvedValue({
+      status: 'ok',
+      provider: 'google',
+      freshness: { fetchedAt: new Date().toISOString(), source: 'cache' },
+      place: {
+        attributions: [],
+        category: 'food_and_drink',
+        externalPlaceId: 'shelf',
+        formattedAddress: null,
+        googleMapsUri: null,
+        location: { latitude: -36.848, longitude: 174.763 },
+        name: 'The Shelf',
+        openingPeriods: [
+          { open: { day: 4, hour: 7, minute: 0 }, close: { day: 4, hour: 16, minute: 0 } },
+        ],
+        primaryType: 'cafe',
+        provider: 'google',
+        rating: null,
+        rawTypes: ['cafe'],
+        utcOffsetMinutes: 720,
+      },
+    });
+    const before = structuredClone(store.itineraryItem);
+    const response = await getItineraryDayTimeSuggestions('user', 'trip', 'day');
+    expect(response.issues?.filter((issue) => issue.severity === 'conflict')).toEqual([]);
+    const suggestion = await getItineraryDayTimeSuggestions('user', 'trip', 'day', {
+      itemId: 'a',
+      schedule: 'exact',
+      localTime: '12:05',
+      durationMinutes: 210,
+    });
+    expect(suggestion.suggestions[0]).toMatchObject({
+      status: 'ok',
+      localTime: '12:05',
+      localEndTime: '15:35',
+      timeZone: 'Pacific/Auckland',
+    });
+    expect(store.itineraryItem).toEqual(before);
+    store.itineraryItem[0]!.durationMinutes = 240;
+    const tooLong = await getItineraryDayTimeSuggestions('user', 'trip', 'day');
+    expect(tooLong.issues).toContainEqual(
+      expect.objectContaining({ itemId: 'a', code: 'OPENING_HOURS' }),
+    );
+    expect(getProviderCallCounts()).toEqual({});
+  },
+);
+
+test('reading an existing implicit stop corrects its context without writing; a duration edit persists that context', async () => {
+  aucklandStopTimes();
+  item('a', 0, '12:05', false);
+  store.itineraryItem[0]!.durationMinutes = 240;
+  const before = structuredClone(store.itineraryItem);
+  const itinerary = await listItinerary('user', 'trip', 'en', { cachedOnly: true });
+  expect(itinerary.days[0]!.items[0]).toMatchObject({
+    localStartTime: '12:05',
+    timeZone: 'Pacific/Auckland',
+    timeZoneSource: 'place',
+    startInstant: '2026-09-05T00:05:00.000Z',
+  });
+  expect(store.itineraryItem).toEqual(before);
+  await updateItineraryItem('user', 'trip', 'a', {
+    durationMinutes: 210,
+    timingPolicy: 'review_flexible',
+  });
+  expect(store.itineraryItem[0]).toMatchObject({
+    localStartTime: parseLocalTime('12:05'),
+    durationMinutes: 210,
+    timeZone: 'Pacific/Auckland',
+    timeZoneSource: 'PLACE',
+    startInstant: new Date('2026-09-05T00:05:00Z'),
+  });
+  expect(getProviderCallCounts()).toEqual({});
 });

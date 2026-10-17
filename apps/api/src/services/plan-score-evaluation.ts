@@ -1,3 +1,4 @@
+import { elapsedLocalMinute } from './plan-score-normalization.js';
 import {
   effectiveTripPace,
   readTripPlanningPreferences,
@@ -37,6 +38,7 @@ import { interestsForPlaceTypes, placeProfile } from './plan-score-place-types.j
 export { interestsForPlaceTypes } from './plan-score-place-types.js';
 
 export type ScoringPlace = PlanScorePlace & {
+  timeZone?: string | null;
   fieldEvidence?: Partial<
     Record<
       'identity' | 'coordinates' | 'types' | 'name' | 'rating' | 'hours',
@@ -534,6 +536,20 @@ export function evaluateScoredDay(input: ScoredDayInput) {
       },
     ];
   };
+  const localWindows = (windows: readonly PlanScoreInterval[], item: PlanScoreDayItem) => {
+    const place = item.placeId ? places.get(item.placeId) : undefined;
+    const zone = item.timeZone ?? place?.timeZone ?? input.timeZone;
+    const { date, originInstant } = input;
+    if (!zone || !date || originInstant === undefined) return windows;
+    try {
+      return windows.map((window) => ({
+        startMinute: elapsedLocalMinute(date, zone, window.startMinute, originInstant),
+        endMinute: elapsedLocalMinute(date, zone, window.endMinute, originInstant),
+      }));
+    } catch {
+      return null;
+    } // Approximate advice cannot invent a clock in a DST gap.
+  };
   const timeCriteria: Criterion[] = [];
   const timeOfDayMisses: string[] = [];
   const holidayRisks: string[] = [];
@@ -568,7 +584,9 @@ export function evaluateScoredDay(input: ScoredDayInput) {
         });
     } else if (profile.windows) {
       const windows =
-        profile.windows === 'DAYLIGHT' ? daylightWindow(place?.coordinates) : profile.windows;
+        profile.windows === 'DAYLIGHT'
+          ? daylightWindow(place?.coordinates)
+          : localWindows(profile.windows, item);
       const satisfied =
         !timingSource || !windows
           ? untimed
@@ -731,14 +749,17 @@ export function evaluateScoredDay(input: ScoredDayInput) {
   ]);
   // Seasonal fit weighs the day's outdoor time against the month's typical
   // conditions for its area. It feeds the trip component, not this day's score.
-  const midday = (item: PlanScoreDayItem) =>
-    item.start
-      ? item.start.minutes < MIDDAY.endMinute &&
-        MIDDAY.startMinute < item.start.minutes + (item.duration?.minutes ?? 0)
+  const midday = (item: PlanScoreDayItem) => {
+    const window = localWindows([MIDDAY], item)?.[0];
+    if (!window) return false;
+    return item.start
+      ? item.start.minutes < window.endMinute &&
+          window.startMinute < item.start.minutes + (item.duration?.minutes ?? 0)
       : item.startWindow
-        ? item.startWindow.earliestMinute >= MIDDAY.startMinute - 60 &&
-          item.startWindow.earliestMinute < MIDDAY.endMinute
+        ? item.startWindow.earliestMinute >= window.startMinute - 60 &&
+          item.startWindow.earliestMinute < window.endMinute
         : false;
+  };
   // Only a visit whose kind is known can be judged indoor or outdoor; an
   // unlocated stop is not assumed to be indoors.
   const knownKindVisits = visits.filter((item) => profileOf(item));

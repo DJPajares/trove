@@ -19,6 +19,7 @@ type ContextSnapshot = {
 };
 export type OwnedContextPlace = {
   customName?: string | null;
+  customTimeZone?: string | null;
   providerLabel?: string | null;
   customLatitude?: DecimalLike | null;
   customLongitude?: DecimalLike | null;

@@ -1,5 +1,7 @@
 import { resolveDayStay, toStayAccommodations, type TripStayPlan } from './day-stay.js';
 import { stayDayTimeZone } from './stay-time-zone.js';
+import { resolvePlannedItemTiming } from './itinerary-local-timing.js';
+import { isValidIanaTimeZone } from './trip-rules.js';
 import { PLAN_SCORE_TRIP_INCLUDE } from './plan-score-trip-query.js';
 export { PLAN_SCORE_TRIP_INCLUDE } from './plan-score-trip-query.js';
 
@@ -195,6 +197,18 @@ export function buildScoringDay(
   record: PlanScoreTripRecord,
   calibration: LegCalibration,
 ) {
+  day = {
+    ...day,
+    items: day.items.map((item) => {
+      const place = item.tripPlaceId ? record.places?.get(item.tripPlaceId) : null;
+      return resolvePlannedItemTiming(item, {
+        date: day.date,
+        dayTimeZone: day.timeZone,
+        placeTimeZone:
+          place?.timeZone ?? (place?.coordinates ? timeZoneAtCoordinates(place.coordinates) : null),
+      });
+    }),
+  };
   const locate = chainLocator(day, record);
   const routes = withEstimatedLegs(record.routes.get(day.id), locate, calibration);
   const commitments = toCommitments(day);
@@ -807,6 +821,8 @@ function toPlanScoreDayRecord(
       timingFlexibility?: string | null;
       travelStatus?: string;
       timeZone: string | null;
+      timeZoneSource?: string | null;
+      customLocationTimeZone?: string | null;
       tripPlaceId: string | null;
     }>;
   },
@@ -832,6 +848,8 @@ function toPlanScoreDayRecord(
       timingFlexibility: item.timingFlexibility,
       travelStatus: item.travelStatus,
       timeZone: item.timeZone,
+      timeZoneSource: item.timeZoneSource,
+      customLocationTimeZone: item.customLocationTimeZone,
       tripPlaceId: item.tripPlaceId,
     })),
     timeZone: day.defaultTimeZone,
@@ -870,6 +888,7 @@ export type PlanScoreTripRows = TripStayPlan<{ id: string }> & {
       timingFlexibility?: string | null;
       travelStatus?: string;
       timeZone: string | null;
+      timeZoneSource?: string | null;
       travelModeToNext: string | null;
       tripPlaceId: string | null;
       customLocationTimeZone?: string | null;
@@ -947,6 +966,18 @@ export function readPlanScoreInputs(trip: PlanScoreTripRows, now = new Date()) {
       trip,
     ),
   );
+  const placeZones = new Map(
+    trip.tripPlaces.map(({ id, place }) => {
+      const coordinates = place ? contextPlaceFromOwnedData(place, now).coordinates : null;
+      const zone =
+        place?.customTimeZone && isValidIanaTimeZone(place.customTimeZone)
+          ? place.customTimeZone
+          : coordinates
+            ? timeZoneAtCoordinates(coordinates)
+            : null;
+      return [id, zone] as const;
+    }),
+  );
   const days = trip.itineraryDays.map((day, index) => {
     const defaultTimeZone =
       (trip.stayRanges?.length || day.date.getTime() === trip.startDate?.getTime()) &&
@@ -959,7 +990,17 @@ export function readPlanScoreInputs(trip: PlanScoreTripRows, now = new Date()) {
           }).timeZone
         : day.defaultTimeZone;
     return toPlanScoreDayRecord(
-      { ...day, defaultTimeZone },
+      {
+        ...day,
+        defaultTimeZone,
+        items: day.items.map((item) =>
+          resolvePlannedItemTiming(item, {
+            date: toLocalDate(day.date),
+            dayTimeZone: defaultTimeZone,
+            placeTimeZone: item.tripPlaceId ? (placeZones.get(item.tripPlaceId) ?? null) : null,
+          }),
+        ),
+      },
       scoringCommitments(reservations, toLocalDate(day.date), defaultTimeZone),
     );
   });
@@ -1499,6 +1540,12 @@ export function mergeScoringPlaceIdentity(
       tripPlaceId: id,
       name,
       coordinates,
+      timeZone:
+        owned.customTimeZone && isValidIanaTimeZone(owned.customTimeZone)
+          ? owned.customTimeZone
+          : coordinates
+            ? timeZoneAtCoordinates(coordinates)
+            : null,
       linked: Boolean(owned.providerRefs?.length),
       types: types ?? [],
       source: rich?.source ?? (reference ? 'CACHED_PROVIDER' : 'USER_OWNED'),

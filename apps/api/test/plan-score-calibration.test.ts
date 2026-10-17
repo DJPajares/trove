@@ -743,3 +743,56 @@ test('unlocated visits and unspecified structured transfers explain the exact re
   expect(missing.travel.totalMinutes).toBeNull();
   expect(missing.pace.activeMinutes).toBeNull();
 });
+
+test.each(['Asia/Singapore', 'Pacific/Auckland'])(
+  'Auckland café timing uses its local experience windows on a %s timeline',
+  (dayZone) => {
+    const date = '2026-09-10';
+    const origin = dayOrigin(date, dayZone);
+    const assessCafe = (minute: number) =>
+      assess({
+        date,
+        timeZone: dayZone,
+        originInstant: origin,
+        items: normalizeScoringItems(
+          date,
+          dayZone,
+          [visit('cafe', { placeId: 'cafe', start: at(minute), duration: at(210) })],
+          { zones: new Map([['cafe', 'Pacific/Auckland']]) },
+        ),
+        places: [
+          {
+            tripPlaceId: 'cafe',
+            timeZone: 'Pacific/Auckland',
+            coordinates: { latitude: -36.848, longitude: 174.763 },
+            types: ['cafe'],
+            rating: { status: 'UNKNOWN' },
+          },
+        ],
+      });
+    expect(assessCafe(12 * 60 + 5).experience.timeOfDay).toEqual([]);
+    expect(assessCafe(2 * 60).experience.timeOfDay).toEqual(['cafe']);
+  },
+);
+
+test('an approximate night window ending in a DST gap stays unknown instead of failing scoring', () => {
+  const date = '2026-09-26';
+  const origin = dayOrigin(date, 'Pacific/Auckland');
+  const result = assess({
+    date,
+    timeZone: 'Pacific/Auckland',
+    originInstant: origin,
+    items: normalizeScoringItems(date, 'Pacific/Auckland', [
+      visit('bar', { placeId: 'bar', start: at(20 * 60) }),
+    ]),
+    places: [
+      {
+        tripPlaceId: 'bar',
+        timeZone: 'Pacific/Auckland',
+        types: ['bar'],
+        rating: { status: 'UNKNOWN' },
+      },
+    ],
+  });
+  expect(result.experience.timeOfDay).toEqual([]);
+});

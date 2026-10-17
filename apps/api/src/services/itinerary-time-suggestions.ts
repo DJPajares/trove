@@ -1,3 +1,4 @@
+import { resolvePlannedItemTiming } from './itinerary-local-timing.js';
 import { PLAN_SCORE_TRIP_INCLUDE } from './plan-score-trip-query.js';
 import { createHash } from 'node:crypto';
 import { getPrismaClient, type Prisma } from '@trove/db';
@@ -116,7 +117,7 @@ export async function assessDay(
   if (!trip) throw new ItineraryNotFoundError('trip_not_found');
   const dayRow = trip.itineraryDays.find((day) => day.id === dayId);
   const storedInputs = readPlanScoreInputs(trip, now);
-  const storedDay = storedInputs.days.find((day) => day.id === dayId);
+  let storedDay = storedInputs.days.find((day) => day.id === dayId);
   if (!storedDay || !dayRow) throw new ItineraryNotFoundError('itinerary_day_not_found');
   if (options.itemId && !storedDay.items.some((item) => item.id === options.itemId))
     throw new ItineraryNotFoundError('itinerary_item_not_found');
@@ -189,6 +190,18 @@ export async function assessDay(
     if (hours && !hours.timeZone && merged.place.coordinates)
       hours.timeZone = timeZoneAtCoordinates(merged.place.coordinates);
   }
+  // Rich evidence and identity snapshots have independent ages. Use whichever
+  // permitted location the shared evidence reader actually selected.
+  const localTiming = (item: (typeof day.items)[number]) =>
+    resolvePlannedItemTiming(item, {
+      date: day.date,
+      dayTimeZone: day.timeZone,
+      placeTimeZone: item.tripPlaceId
+        ? (evidence.places.get(item.tripPlaceId)?.timeZone ?? null)
+        : null,
+    });
+  storedDay = { ...storedDay, items: storedDay.items.map(localTiming) };
+  day.items = day.items.map(localTiming);
   discardExpiredCurrentHours(evidence.hours, now);
   for (const item of day.items)
     if (item.id === CANDIDATE_ITEM_ID && item.tripPlaceId) {
@@ -702,7 +715,11 @@ async function planItineraryTiming(
         ? {
             timeZone,
             timeZoneResolvedAt: new Date(),
-            ...(!item.timeZone ? { timeZoneSource: 'DAY_DEFAULT' as const } : {}),
+            ...(item.timeZoneSource
+              ? { timeZoneSource: item.timeZoneSource as 'PLACE' | 'EXPLICIT' | 'DAY_DEFAULT' }
+              : !item.timeZone
+                ? { timeZoneSource: 'DAY_DEFAULT' as const }
+                : {}),
           }
         : {}),
       timingFlexibility: repair

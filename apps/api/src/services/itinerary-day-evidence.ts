@@ -44,6 +44,8 @@ export type ItineraryDayItemRecord = {
   timingFlexibility?: string | null;
   travelStatus?: string;
   timeZone: string | null;
+  timeZoneSource?: string | null;
+  customLocationTimeZone?: string | null;
   tripPlaceId: string | null;
 };
 

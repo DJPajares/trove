@@ -256,6 +256,7 @@ export function normalizeScoringItems(
     }
     return {
       ...item,
+      timeZone: ownZone,
       start: linked ? { minutes: linked.startMinute, source: linked.source } : start,
       duration: linked?.longDistance
         ? linked.endKnown === false

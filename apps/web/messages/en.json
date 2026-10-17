@@ -2169,7 +2169,6 @@
       }
     },
     "exactTimeValue": "{time}",
-    "exactTimeWithTimeZone": "{time} {timeZone}",
     "durationValue": "{minutes} min",
     "costValue": "{currency} {amount}",
     "schedule": {

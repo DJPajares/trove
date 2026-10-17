@@ -1772,7 +1772,6 @@ export function ItineraryManager({
                     </>
                   );
                 }}
-                defaultTimeZone={selectedDay.defaultTimeZone}
                 distanceUnit={preferences.distanceUnit}
                 entries={bandedSequence}
                 hoursFor={(item) =>

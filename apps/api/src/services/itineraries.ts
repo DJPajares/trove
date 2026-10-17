@@ -21,6 +21,7 @@ import {
 import { getPrismaClient, type Prisma } from '@trove/db';
 import { stayDayTimeZone } from './stay-time-zone.js';
 
+import { resolvePlannedItemTiming } from './itinerary-local-timing.js';
 import { DAY_PART_WINDOWS } from './day-part-windows.js';
 import {
   durationMinutesUntilLocalEnd,
@@ -233,6 +234,13 @@ export function serializeItineraryItem(
   item: ItineraryItemRecord,
   options: PlaceSerializerOptions = {},
 ) {
+  const tripPlace = item.tripPlace ? serializeTripPlace(item.tripPlace, options) : null;
+  if (item.itineraryDay)
+    item = resolvePlannedItemTiming(item, {
+      date: formatDateOnly(item.itineraryDay.date),
+      dayTimeZone: item.itineraryDay.defaultTimeZone,
+      placeTimeZone: tripPlace?.place.timeZone ?? null,
+    });
   return {
     createdAt: item.createdAt.toISOString(),
     customLabel: item.customLabel,
@@ -279,7 +287,7 @@ export function serializeItineraryItem(
     timeZoneSource: mapItemTimeZoneSource(item.timeZoneSource),
     travelModeToNext: mapTravelMode(item.travelModeToNext),
     travelStatus: mapTravelStatus(item.travelStatus),
-    tripPlace: item.tripPlace ? serializeTripPlace(item.tripPlace, options) : null,
+    tripPlace,
     updatedAt: item.updatedAt.toISOString(),
   };
 }
@@ -504,6 +512,37 @@ export async function refreshDayDefaultTimeZone(
         defaultTimeZoneSource: resolution.source,
         defaultTimeZoneSourceItemId: resolution.sourceItemId,
         defaultTimeZoneSourceTripPlaceId: resolution.sourceTripPlaceId,
+      },
+    });
+  }
+}
+
+/** Linking a Place upgrades only its ordinary planned stops, never bookings or history. */
+export async function refreshTripPlaceItemTimeZones(
+  transaction: Prisma.TransactionClient,
+  tripId: string,
+  tripPlaceId: string,
+) {
+  const items = await transaction.itineraryItem.findMany({
+    where: { tripId, tripPlaceId },
+    include: itineraryItemInclude,
+  });
+  for (const item of items) {
+    if (!item.itineraryDay) continue;
+    const corrected = resolvePlannedItemTiming(item, {
+      date: formatDateOnly(item.itineraryDay.date),
+      dayTimeZone: item.itineraryDay.defaultTimeZone,
+      placeTimeZone: item.tripPlace?.place ? resolvedPlaceTimeZone(item.tripPlace.place) : null,
+    });
+    if (corrected === item) continue;
+    await transaction.itineraryItem.update({
+      where: { id: item.id },
+      data: {
+        timeZone: corrected.timeZone,
+        timeZoneSource: corrected.timeZoneSource,
+        timeZoneResolvedAt: new Date(),
+        startInstant: corrected.startInstant,
+        timeSemantics: corrected.timeSemantics,
       },
     });
   }
@@ -1559,7 +1598,14 @@ export async function updateItineraryItem(
           : input.schedule
             ? null
             : previousLocalTime;
+      const correctedTiming = resolvePlannedItemTiming(current, {
+        date: formatDateOnly(current.itineraryDay.date),
+        dayTimeZone: current.itineraryDay.defaultTimeZone,
+        placeTimeZone: tripPlace?.place ? resolvedPlaceTimeZone(tripPlace.place) : null,
+      });
       const shouldResolveTimeZone =
+        correctedTiming.timeZone !== current.timeZone ||
+        correctedTiming.timeZoneSource !== current.timeZoneSource ||
         tripPlaceId !== current.tripPlaceId ||
         customLocation.label !== current.customLocation ||
         customLocation.timeZone !== current.customLocationTimeZone ||

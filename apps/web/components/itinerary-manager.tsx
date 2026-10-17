@@ -136,7 +136,7 @@ import {
 } from '@/lib/maps/itinerary-map';
 import { useTripPlaceHours } from '@/lib/trip-places/use-trip-place-hours';
 import { untimedItems } from '@/lib/itinerary/day-time-suggestions';
-import { describeTimingIssue } from '@/lib/itinerary/timing-issue-description';
+import { TimingConflictNote } from '@/components/planner/timing-conflict-note';
 import { overviewMapLifecycle, planningMapLifecycle } from '@/lib/maps/map-retention';
 import { editorialSubjectKey, type EditorialSubject } from '@/lib/media/editorial-images';
 import { problemsByStop } from '@/lib/plan-score/attention';
@@ -1737,47 +1737,23 @@ export function ItineraryManager({
                   return (
                     <>
                       {timingIssues.map((issue) => (
-                        <AttentionNote
-                          className={
-                            issue.severity === 'conflict'
-                              ? 'bg-destructive/8 [&_svg]:text-destructive'
-                              : undefined
-                          }
+                        <TimingConflictNote
                           key={issue.code}
-                        >
-                          <span>
-                            <span className="sr-only">
-                              {t(`connectedTiming.issueLabel.${issue.severity}`)}:{' '}
-                            </span>
-                            {describeTimingIssue(issue, {
-                              locale,
-                              hour12: preferences.timeFormat === '12h',
-                              nameFor: (id) =>
-                                itemName(selectedDay.items.find((stop) => stop.id === id) ?? item),
-                              t,
-                            })}
-                          </span>
-                          <div className="mt-1 flex flex-wrap gap-x-4">
-                            <Button
-                              className="h-auto px-0 text-sm"
-                              type="button"
-                              variant="link"
-                              onClick={() => setTimingItem(item)}
-                            >
-                              {t('connectedTiming.reviewTiming')}
-                            </Button>
-                            {issue.severity === 'conflict' ? (
-                              <Button
-                                className="h-auto px-0 text-sm"
-                                type="button"
-                                variant="link"
-                                onClick={() => setMoveTarget({ allowUnscheduled: true, item })}
-                              >
-                                {t('planner.move.menuItem')}
-                              </Button>
-                            ) : null}
-                          </div>
-                        </AttentionNote>
+                          issue={issue}
+                          item={item}
+                          tripId={tripId}
+                          scheduleRevision={timingAssessment.data?.scheduleRevision}
+                          nameFor={(id) =>
+                            itemName(selectedDay.items.find((stop) => stop.id === id) ?? item)
+                          }
+                          onReview={() => setTimingItem(item)}
+                          onMove={() => setMoveTarget({ allowUnscheduled: true, item })}
+                          onSaved={async (scheduling) => {
+                            if (scheduling) setTimingReview(scheduling);
+                            if (!scheduling) setTimingPending(true);
+                            await refresh();
+                          }}
+                        />
                       ))}
                       {problems.map((problem, index) => (
                         <ScoreProblemNote

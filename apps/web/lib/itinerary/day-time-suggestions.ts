@@ -30,17 +30,26 @@ export function describeSuggestedTime(
     (reason) => reason.code !== 'DAY_START' && reason.code !== 'BEFORE_FIXED_ITEM',
   );
   const reason = moved.at(-1);
+
+  return [
+    reason ? t(`suggestedTime.reason.${reason.code}`) : t('suggestedTime.applied'),
+    describeSuggestedTimeLimitation(suggestion, t),
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+/** Consequential limitation, without repeating the reason for a conflict. */
+export function describeSuggestedTimeLimitation(
+  suggestion: ItineraryDayTimeSuggestion,
+  t: ItineraryTranslator,
+): string {
+  if (suggestion.status !== 'ok') return '';
   const caveat =
     ['TIGHT_TRANSITION', 'OPENING_HOURS_UNKNOWN', 'TRAVEL_ESTIMATED', 'DURATION_ESTIMATED'].find(
       (code) => suggestion.caveats.includes(code),
     ) ?? suggestion.caveats[0];
-
-  return [
-    reason ? t(`suggestedTime.reason.${reason.code}`) : t('suggestedTime.applied'),
-    caveat ? t(`suggestedTime.caveat.${caveat}`) : null,
-  ]
-    .filter(Boolean)
-    .join(' ');
+  return caveat ? t(`suggestedTime.caveat.${caveat}`) : '';
 }
 
 /** Stops on the day that have no exact time: the ones a suggestion is for. */

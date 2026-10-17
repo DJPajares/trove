@@ -1,0 +1,10 @@
+{
+  "id": "actionable-timing-conflicts",
+  "date": "2026-10-17",
+  "version": "1.9.0",
+  "summaries": {
+    "en": [
+      "Timing warnings and suggestions now agree, with a quick action to use a valid time and quieter local-time displays."
+    ]
+  }
+}

@@ -34,6 +34,5 @@ export function describeTimingIssue(
     previous: options.nameFor(context.previousItemId),
     earliest: format(earliest),
     scheduled: format(scheduled),
-    timeZone: context.timeZone,
   });
 }

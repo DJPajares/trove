@@ -19,7 +19,9 @@ export type TimingIssue = {
   itemId: string;
   references: string[];
   severity: 'conflict' | 'review' | 'notice';
-  /** A confirmed order conflict, compared on one timeline and displayed in the day zone. */
+  /** Full preview from the same scheduling pass used by Suggest timing. */
+  suggestion?: ItineraryDayTimeSuggestion;
+  /** An arrival lower bound, not a promise the full visit fits. Compared on one timeline. */
   orderConflict?: {
     previousItemId: string;
     earliestStartInstant: string;

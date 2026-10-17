@@ -28,7 +28,11 @@ export type ScheduledSlot = {
   caveats: string[];
   reasons: Array<{ code: string; references: string[] }>;
 };
-export type SchedulingResult = { slots: Map<string, ScheduledSlot>; issues: TimingIssue[] };
+export type SchedulingResult = {
+  slots: Map<string, ScheduledSlot>;
+  issues: TimingIssue[];
+  orderConflicts: Map<string, { previousItemId: string; earliest: number; scheduled: number }>;
+};
 const roundUp = (minute: number) => Math.ceil(minute / 5) * 5;
 const roundDown = (minute: number) => Math.floor(minute / 5) * 5;
 
@@ -158,6 +162,7 @@ function groupSlots(
 export function scheduleItinerary(input: SchedulingInput): SchedulingResult {
   const slots = new Map<string, ScheduledSlot>();
   const issues: TimingIssue[] = [];
+  const orderConflicts: SchedulingResult['orderConflicts'] = new Map();
   const issue = (item: SchedulingItem, code: TimingIssue['code'], references: string[] = []) => {
     issues.push({
       code,
@@ -227,8 +232,16 @@ export function scheduleItinerary(input: SchedulingInput): SchedulingResult {
         previous?.duration &&
         previousStart + previous.duration.minutes + (first.inboundTravel?.minutes ?? 0) >
           first.start!.minutes
-      )
+      ) {
         issue(first, 'FIXED_CONFLICT', [previous.id]);
+        if (!first.inboundRequired || first.inboundTravel)
+          orderConflicts.set(first.id, {
+            previousItemId: previous.id,
+            earliest:
+              previousStart + previous.duration.minutes + (first.inboundTravel?.minutes ?? 0),
+            scheduled: first.start!.minutes,
+          });
+      }
       if (
         first.duration &&
         !valid(
@@ -394,5 +407,36 @@ export function scheduleItinerary(input: SchedulingInput): SchedulingResult {
     }
     from = to;
   }
-  return { slots, issues };
+  return { slots, issues, orderConflicts };
+}
+
+/** A personal stop can be explicitly retimed; bookings and travel history stay protected.
+ * All constraints and surrounding flexible slots still go through the same planner pass.
+ */
+export function suggestScheduledTarget(input: SchedulingInput, targetId: string): SchedulingResult {
+  return scheduleItinerary({
+    ...input,
+    targetIds: new Set([targetId]),
+    items: input.items.map((item) =>
+      item.id !== targetId || item.protected
+        ? item
+        : {
+            ...item,
+            fixed: false,
+            start: null,
+            startWindow: item.start ? null : item.startWindow,
+            preferredWindows:
+              item.start && item.duration
+                ? [
+                    {
+                      startMinute: item.start.minutes,
+                      endMinute: item.start.minutes + item.duration.minutes,
+                      typicalMinute: item.start.minutes,
+                    },
+                    ...(item.preferredWindows ?? []),
+                  ]
+                : item.preferredWindows,
+          },
+    ),
+  });
 }

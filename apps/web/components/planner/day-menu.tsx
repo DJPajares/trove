@@ -19,8 +19,9 @@ import * as Icons from '@/lib/icons';
 
 /**
  * What can be done to a day, on request (PRD 17.2.1): name it, note it, say
- * what it is for, have its times suggested or its order checked, set where it
- * starts and ends, show or hide its travel, and move or swap its whole plan.
+ * what it is for, have its times suggested or its order checked, show or hide
+ * its travel, and move or swap its whole plan. Where it starts and ends is the
+ * planner bar's Stay, above.
  *
  * One menu rather than the panel it replaces: each choice opens the one thing
  * it is about, so the day's setup never stands on the page asking for
@@ -39,7 +40,6 @@ export function DayMenu({
   onEditContext,
   onEditName,
   onEditNote,
-  onEditStay,
   onMoveDay,
   onSuggestTimes,
   previewHref,
@@ -57,7 +57,6 @@ export function DayMenu({
   onEditContext: () => void;
   onEditName: () => void;
   onEditNote: () => void;
-  onEditStay: () => void;
   onMoveDay: (strategy: 'append' | 'swap') => void;
   onSuggestTimes: () => void;
   /** Previewing a day already lived is offered here rather than beside Memories. */
@@ -95,10 +94,6 @@ export function DayMenu({
         <DropdownMenuItem onClick={onEditContext}>
           <Icons.TripInfo aria-hidden="true" />
           {dayContextT('title')}
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={onEditStay}>
-          <Icons.DailyBase aria-hidden="true" />
-          {menuT('stay')}
         </DropdownMenuItem>
         {previewHref ? (
           <DropdownMenuLinkItem render={<Link href={previewHref} />}>

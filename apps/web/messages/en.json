@@ -1937,6 +1937,15 @@
         "note": "Note",
         "deleteStop": "Delete stop"
       },
+      "context": {
+        "label": "Planning tools",
+        "stay": "Stay",
+        "addStay": "Add stay",
+        "noStay": "None this day",
+        "stayCount": "{count, plural, one {# place} other {# places}}",
+        "stayTransition": "{from} → {to}",
+        "stayLabel": "Stay: {value}"
+      },
       "insert": {
         "before": "Add a stop before {name}",
         "end": "Add a stop at the end of the day"
@@ -1966,7 +1975,6 @@
         "schedule": "Schedule…"
       },
       "dayMenu": {
-        "stay": "Where we’re staying…",
         "checkOrder": "Check the order",
         "preview": "Preview this day",
         "travel": "Show travel between stops"

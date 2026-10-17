@@ -46,10 +46,19 @@ function TimingBody({
   const [customDuration, setCustomDuration] = useState(() => stopEditorCustomDuration(form));
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const suggestedTime = useSuggestedTime(tripId, (slot, revision) => {
-    setForm((current) => acceptSuggestedSlot(current, slot, revision));
-    setFormError(null);
-  });
+  const suggestedTime = useSuggestedTime(
+    tripId,
+    (slot, revision, saved) => {
+      setForm((current) => ({
+        ...acceptSuggestedSlot(current, slot, revision),
+        ...(saved ? { timingFlexibility: current.timingFlexibility } : {}),
+      }));
+      setFormError(null);
+    },
+    async (scheduling) => {
+      await onSaved({ timeZoneConsequence: false, scheduling });
+    },
+  );
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -153,6 +162,7 @@ function TimingBody({
           </Button>
         </SheetFooter>
       </form>
+      {suggestedTime.reviewDialog}
     </>
   );
 }

@@ -2363,7 +2363,7 @@
       },
       "hours": "{hours} hr",
       "hoursMinutes": "{hours} hr {minutes} min",
-      "affected": "{count, plural, one {Another flexible stop may need a timing review after you save.} other {# other flexible stops may need a timing review after you save.}}",
+      "affected": "{count, plural, one {One following stop also needs to move. Review both times before applying.} other {# following stops also need to move. Review the times before applying.}}",
       "reviewUnresolvedHint": "These stops need a timing check. Choose a different slot, position or day.",
       "issueLabel": {
         "conflict": "Timing conflict",
@@ -2396,7 +2396,16 @@
       "applySuggestionFor": "Apply timing suggestion for {name}",
       "needsReviewForDay": "Timing needs a review on {day}.",
       "useTime": "Use {start}–{end}",
-      "moreOptions": "More timing options"
+      "moreOptions": "More timing options",
+      "reviewTime": "Review {start}–{end}",
+      "reviewSuggestion": "Review suggested times",
+      "repairTitle": "Adjust these times together",
+      "repairHint": "Check each change, then apply them together. Visit lengths stay the same unless you changed the duration.",
+      "repairFixed": "This changes a personal Fixed time. It stays Fixed after applying.",
+      "repairApply": "Apply {count, plural, one {this time} other {all # times}}",
+      "repairApplyGeneric": "Apply changes",
+      "affectedAfterSave": "{count, plural, one {Another flexible stop may need a timing review after you save.} other {# other flexible stops may need a timing review after you save.}}",
+      "needsSpace": "This visit and travel need more room between the surrounding stops."
     },
     "movement": {
       "title": "Review this move",

@@ -184,6 +184,12 @@ test('trip-scoped keys put the trip id directly after the root', () => {
     queryKeys.hoursNotices('trip-1'),
     queryKeys.itinerary('trip-1'),
     queryKeys.itineraryTiming('trip-1', 'day-1', 'rev'),
+    queryKeys.itineraryTimingRepair('trip-1', {
+      itineraryDayId: 'day-1',
+      targetItemId: 'stop-1',
+      scheduleRevision: 'rev',
+      repair: {},
+    }),
     queryKeys.itineraryDayRoutes('trip-1', 'day-1', 'rev', false, undefined),
     queryKeys.memories('trip-1'),
     queryKeys.placeGroupings('trip-1'),

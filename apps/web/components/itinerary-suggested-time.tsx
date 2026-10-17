@@ -1,4 +1,6 @@
 'use client';
+import type { SchedulingOutcome, TimingReviewProposal } from '@trove/types';
+import { TimingSuggestionReview } from '@/components/planner/timing-suggestion-review';
 import { Clock3 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -28,10 +30,12 @@ type SuggestedTimeRequest = {
 };
 export function useSuggestedTime(
   tripId: string,
-  onSuggested: (slot: ItineraryDayTimeSuggestion, revision?: string) => void,
+  onSuggested: (slot: ItineraryDayTimeSuggestion, revision?: string, saved?: boolean) => void,
+  onGroupApplied?: (outcome: SchedulingOutcome) => Promise<void>,
 ) {
   const t = useTranslations('itinerary');
   const [suggestion, setSuggestion] = useState<ItineraryDayTimeSuggestion | null>(null);
+  const [reviewProposal, setReviewProposal] = useState<TimingReviewProposal | null>(null);
   const [revision, setRevision] = useState<string>();
   const [status, setStatus] = useState<'error' | 'idle' | 'loading'>('idle');
   const inFlight = useRef<AbortController | null>(null);
@@ -39,6 +43,7 @@ export function useSuggestedTime(
   const reset = useCallback(() => {
     inFlight.current?.abort();
     setSuggestion(null);
+    setReviewProposal(null);
     setRevision(undefined);
     setStatus('idle');
   }, []);
@@ -58,7 +63,7 @@ export function useSuggestedTime(
       setSuggestion(next);
       setRevision(response.scheduleRevision);
       setStatus('idle');
-      if (autoApply && next) onSuggested(next, response.scheduleRevision);
+      if (autoApply && next && !next.review) onSuggested(next, response.scheduleRevision);
     } catch {
       if (!controller.signal.aborted) setStatus('error');
     }
@@ -81,8 +86,26 @@ export function useSuggestedTime(
     request,
     reset,
     apply: () => {
-      if (suggestion?.status === 'ok') onSuggested(suggestion, revision);
+      if (suggestion?.status !== 'ok') return;
+      if (suggestion.review) setReviewProposal(suggestion.review);
+      else onSuggested(suggestion, revision);
     },
+    reviewDialog:
+      reviewProposal && suggestion ? (
+        <TimingSuggestionReview
+          proposal={reviewProposal}
+          tripId={tripId}
+          onClose={() => setReviewProposal(null)}
+          onApplied={async (outcome, applied) => {
+            // The timing is already saved. Keep the rest of an open stop editor intact.
+            const target = applied.find((row) => row.itemId === suggestion.itemId);
+            onSuggested({ ...suggestion, ...target?.after }, undefined, true);
+            await onGroupApplied?.(outcome);
+            setSuggestion(null);
+            setRevision(undefined);
+          }}
+        />
+      ) : null,
   };
 }
 export type SuggestedTimeActionProps = {
@@ -129,11 +152,11 @@ export function SuggestedTimeAction({
           <p className="text-sm text-muted-foreground">
             {message}
             {suggestion.affectedItemIds?.length
-              ? ` ${t('connectedTiming.affected', { count: suggestion.affectedItemIds.length })}`
+              ? ` ${t(suggestion.review ? 'connectedTiming.affected' : 'connectedTiming.affectedAfterSave', { count: suggestion.affectedItemIds.length })}`
               : ''}
           </p>
           <Button onClick={onApply} size="sm" type="button" variant="secondary">
-            {t('suggestedTime.use')}
+            {t(suggestion.review ? 'connectedTiming.reviewSuggestion' : 'suggestedTime.use')}
           </Button>
         </div>
       ) : null}

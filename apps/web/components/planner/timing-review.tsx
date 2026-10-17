@@ -11,7 +11,10 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { formatSuggestedClock } from '@/lib/itinerary/day-time-suggestions';
-import { acknowledgeTimingReview } from '@/lib/itinerary/timing-review-state';
+import {
+  acknowledgeTimingReview,
+  timingIssuesNeedingReview,
+} from '@/lib/itinerary/timing-review-state';
 import { describeTimingIssue } from '@/lib/itinerary/timing-issue-description';
 import { withItineraryEdit } from '@/lib/itinerary/edit-lifecycle';
 import {
@@ -388,10 +391,11 @@ export function TimingReviewNotice({ outcome, pending, ...props }: Readonly<Prop
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const jumped = useRef<string | null>(null);
+  const unresolved = timingIssuesNeedingReview(outcome);
   const issueDays = [
-    ...new Set(outcome?.issues.map((issue) => props.dayLabelForItem(issue.itemId)).filter(Boolean)),
+    ...new Set(unresolved.map((issue) => props.dayLabelForItem(issue.itemId)).filter(Boolean)),
   ];
-  const visible = pending || Boolean(outcome?.changes.length || outcome?.issues.length);
+  const visible = pending || Boolean(outcome?.changes.length || unresolved.length);
   if (!visible && !open) return null;
   return (
     <>

@@ -1,4 +1,4 @@
-import { TRIP_CONTEXT_VERSION } from '@trove/types';
+import { TRIP_CONTEXT_VERSION, type TimingReviewProposal } from '@trove/types';
 
 import { EDITORIAL_IMAGE_RESOLUTION_VERSION } from '@/lib/media/editorial-images';
 import { WEATHER_CONTRACT_VERSION } from '@/lib/weather/api';
@@ -45,6 +45,8 @@ export const queryKeys = {
 
   expenses: (tripId: string) => ['expenses', tripId] as const,
   itinerary: (tripId: string) => ['itinerary', tripId] as const,
+  itineraryTimingRepair: (tripId: string, proposal: TimingReviewProposal) =>
+    ['itinerary-timing-repair', tripId, proposal] as const,
   itineraryTiming: (tripId: string, dayId?: string, revision?: string) =>
     ['itinerary-timing', tripId, dayId, revision] as const,
 
@@ -204,6 +206,7 @@ export const TRIP_SCOPED_QUERY_ROOTS = [
   'hours-notices',
   'itinerary',
   'itinerary-timing',
+  'itinerary-timing-repair',
   'itinerary-day-routes',
   'memories',
   'place-groupings',

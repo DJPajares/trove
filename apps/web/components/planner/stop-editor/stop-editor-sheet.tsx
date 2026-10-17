@@ -114,8 +114,11 @@ function StopEditorBody({
   const [selecting, setSelecting] = useState(false);
   const [added, setAdded] = useState<ItineraryTripPlace[]>([]);
   const timingTouched = useRef(false);
-  const suggestedTime = useSuggestedTime(tripId, (slot, revision) => {
-    setForm((current) => acceptSuggestedSlot(current, slot, revision));
+  const suggestedTime = useSuggestedTime(tripId, (slot, revision, saved) => {
+    setForm((current) => ({
+      ...acceptSuggestedSlot(current, slot, revision),
+      ...(saved ? { timingFlexibility: current.timingFlexibility } : {}),
+    }));
     setFormError(null);
   });
 
@@ -149,7 +152,7 @@ function StopEditorBody({
   // the day - so it is not offered there; nor offline, where there is no day as
   // the server holds it to ask about.
   const suggest =
-    online && !editing?.timingProtected
+    online && !editing?.timingProtected && !identityChanged
       ? {
           loading: suggestedTime.loading,
           message: suggestedTime.message,
@@ -398,6 +401,7 @@ function StopEditorBody({
           </Button>
         </SheetFooter>
       </form>
+      {suggestedTime.reviewDialog}
     </>
   );
 }

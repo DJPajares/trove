@@ -49,3 +49,24 @@ test('older responses and other causes retain the localized fallback', () => {
     'connectedTiming.issue.BOOKING_DATE',
   );
 });
+
+test('a repairable gap explains the adjustment without telling travellers to choose another day', () => {
+  const repairable: TimingIssue = {
+    ...issue,
+    code: 'NO_ROOM',
+    suggestion: {
+      itemId: 'lunch',
+      status: 'ok',
+      localTime: '12:05',
+      localEndTime: '16:05',
+      reasons: [],
+      caveats: [],
+    },
+  };
+  expect(JSON.parse(describeTimingIssue(repairable, options)).key).toBe(
+    'connectedTiming.needsSpace',
+  );
+  expect(
+    JSON.parse(describeTimingIssue({ ...repairable, suggestion: undefined }, options)).key,
+  ).toBe('connectedTiming.issue.NO_ROOM');
+});

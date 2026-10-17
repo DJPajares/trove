@@ -1,12 +1,13 @@
 'use client';
 
-import type { SchedulingOutcome, TimingIssue } from '@trove/types';
+import type { SchedulingOutcome, TimingIssue, TimingReviewProposal } from '@trove/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { MoreHorizontal } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { usePreferences } from '@/components/preferences-provider';
 import { useOnlineStatus } from '@/components/trip-sync-status';
+import { TimingSuggestionReview } from '@/components/planner/timing-suggestion-review';
 import { AttentionNote } from '@/components/planner/attention-note';
 import { Button } from '@/components/ui/button';
 import {
@@ -50,6 +51,7 @@ export function TimingConflictNote({
   const client = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reviewProposal, setReviewProposal] = useState<TimingReviewProposal | null>(null);
   const slot = issue.suggestion;
   const applicable =
     online &&
@@ -59,7 +61,7 @@ export function TimingConflictNote({
     slot.localTime &&
     slot.localEndTime &&
     slot.durationMinutes &&
-    !slot.affectedItemIds?.length;
+    (!slot.affectedItemIds?.length || Boolean(slot.review));
 
   const detail =
     slot?.status === 'ok'
@@ -70,6 +72,10 @@ export function TimingConflictNote({
 
   async function apply() {
     if (!applicable || !slot || saving) return;
+    if (slot.affectedItemIds?.length && slot.review) {
+      setReviewProposal(slot.review);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -101,73 +107,93 @@ export function TimingConflictNote({
   }
 
   return (
-    <AttentionNote
-      className={
-        issue.severity === 'conflict' ? 'bg-destructive/8 [&_svg]:text-destructive' : undefined
-      }
-    >
-      <span className="sr-only">{t(`connectedTiming.issueLabel.${issue.severity}`)}: </span>
-      {describeTimingIssue(issue, { locale, hour12: preferences.timeFormat === '12h', nameFor, t })}
-      {detail ? <p className="mt-1 text-muted-foreground">{detail}</p> : null}
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        {applicable ? (
+    <>
+      <AttentionNote
+        className={
+          issue.severity === 'conflict' ? 'bg-destructive/8 [&_svg]:text-destructive' : undefined
+        }
+      >
+        <span className="sr-only">{t(`connectedTiming.issueLabel.${issue.severity}`)}: </span>
+        {describeTimingIssue(issue, {
+          locale,
+          hour12: preferences.timeFormat === '12h',
+          nameFor,
+          t,
+        })}
+        {detail ? <p className="mt-1 text-muted-foreground">{detail}</p> : null}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {applicable ? (
+            <Button
+              disabled={saving}
+              onClick={() => void apply()}
+              size="sm"
+              type="button"
+              variant="secondary"
+            >
+              {saving
+                ? t('connectedTiming.applying')
+                : t(
+                    slot.affectedItemIds?.length
+                      ? 'connectedTiming.reviewTime'
+                      : 'connectedTiming.useTime',
+                    {
+                      start: formatSuggestedClock(
+                        slot.localTime!,
+                        locale,
+                        preferences.timeFormat === '12h',
+                      ),
+                      end: formatSuggestedClock(
+                        slot.localEndTime!,
+                        locale,
+                        preferences.timeFormat === '12h',
+                      ),
+                    },
+                  )}
+            </Button>
+          ) : null}
           <Button
             disabled={saving}
-            onClick={() => void apply()}
-            size="sm"
+            className="h-auto px-0 text-sm"
+            onClick={onReview}
             type="button"
-            variant="secondary"
+            variant="link"
           >
-            {saving
-              ? t('connectedTiming.applying')
-              : t('connectedTiming.useTime', {
-                  start: formatSuggestedClock(
-                    slot.localTime!,
-                    locale,
-                    preferences.timeFormat === '12h',
-                  ),
-                  end: formatSuggestedClock(
-                    slot.localEndTime!,
-                    locale,
-                    preferences.timeFormat === '12h',
-                  ),
-                })}
+            {t('connectedTiming.reviewTiming')}
           </Button>
+          {issue.severity === 'conflict' ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    aria-label={t('connectedTiming.moreOptions')}
+                    disabled={saving}
+                    size="icon-sm"
+                    variant="ghost"
+                  />
+                }
+              >
+                <MoreHorizontal aria-hidden="true" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-auto">
+                <DropdownMenuItem onClick={onMove}>{t('planner.move.menuItem')}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+        </div>
+        {error ? (
+          <p className="mt-2" role="alert">
+            {error}
+          </p>
         ) : null}
-        <Button
-          disabled={saving}
-          className="h-auto px-0 text-sm"
-          onClick={onReview}
-          type="button"
-          variant="link"
-        >
-          {t('connectedTiming.reviewTiming')}
-        </Button>
-        {issue.severity === 'conflict' ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  aria-label={t('connectedTiming.moreOptions')}
-                  disabled={saving}
-                  size="icon-sm"
-                  variant="ghost"
-                />
-              }
-            >
-              <MoreHorizontal aria-hidden="true" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-auto">
-              <DropdownMenuItem onClick={onMove}>{t('planner.move.menuItem')}</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
-      </div>
-      {error ? (
-        <p className="mt-2" role="alert">
-          {error}
-        </p>
+      </AttentionNote>
+      {reviewProposal ? (
+        <TimingSuggestionReview
+          proposal={reviewProposal}
+          tripId={tripId}
+          onClose={() => setReviewProposal(null)}
+          onApplied={onSaved}
+        />
       ) : null}
-    </AttentionNote>
+    </>
   );
 }

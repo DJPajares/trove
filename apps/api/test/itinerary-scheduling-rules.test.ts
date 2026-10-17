@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import {
   scheduleItinerary,
+  suggestScheduledTarget,
   type SchedulingInput,
   type SchedulingItem,
 } from '../src/services/itinerary-scheduling-rules.js';
@@ -251,4 +252,37 @@ test('reassessment retains a moved exact slot when it still fits its new neighbo
   expect(start(result, 'moved')).toBe(540);
   expect(start(result, 'neighbor')).toBe(800);
   expect(result.issues).toEqual([]);
+});
+
+test('dependent suggestions keep prior starts, durations, known hours and return travel as constraints', () => {
+  const day = input(
+    [
+      stop('previous', 600, 120, 0, false),
+      stop('shelf', 720, 240, 5, false),
+      stop('photo', 960, 30, 5, true),
+    ],
+    ['shelf'],
+  );
+  const proposed = suggestScheduledTarget(day, 'shelf');
+  expect(proposed.slots.get('shelf')).toMatchObject({
+    startMinute: 725,
+    endMinute: 965,
+    durationMinutes: 240,
+  });
+  expect(proposed.slots.get('photo')).toMatchObject({
+    startMinute: 970,
+    endMinute: 1000,
+    durationMinutes: 30,
+  });
+  expect(proposed.slots.has('previous')).toBe(false);
+  day.items[2]!.openingHours = {
+    status: 'KNOWN',
+    source: 'CACHED_PROVIDER',
+    intervals: [{ startMinute: 900, endMinute: 990 }],
+  };
+  expect(suggestScheduledTarget(day, 'shelf').slots.has('shelf')).toBe(false);
+  day.items[2]!.openingHours = { status: 'UNKNOWN' };
+  day.returnTravel = { required: true, minutes: 30 };
+  day.availability!.endMinute = 1020;
+  expect(suggestScheduledTarget(day, 'shelf').slots.has('shelf')).toBe(false);
 });

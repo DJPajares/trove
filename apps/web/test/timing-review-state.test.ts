@@ -6,6 +6,7 @@ import {
   reconcileTimingReviewIssues,
   timingAssessmentRevision,
   timingReviewDays,
+  timingIssuesNeedingReview,
 } from '@/lib/itinerary/timing-review-state';
 
 const issue = (itemId: string, code: TimingIssue['code'] = 'TRAVEL_UNKNOWN'): TimingIssue => ({
@@ -111,4 +112,12 @@ describe('timing review refresh', () => {
       }),
     ).not.toBe(timingAssessmentRevision(days[0]!));
   });
+});
+
+it('does not keep a resolved timing banner for optional connection advice', () => {
+  const notice: TimingIssue = { ...issue('b', 'TIGHT_TRANSITION'), severity: 'notice' };
+  expect(timingIssuesNeedingReview({ changes: [], issues: [notice] })).toEqual([]);
+  expect(timingIssuesNeedingReview({ changes: [], issues: [notice, issue('a')] })).toEqual([
+    issue('a'),
+  ]);
 });

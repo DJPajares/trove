@@ -414,29 +414,39 @@ export function scheduleItinerary(input: SchedulingInput): SchedulingResult {
  * All constraints and surrounding flexible slots still go through the same planner pass.
  */
 export function suggestScheduledTarget(input: SchedulingInput, targetId: string): SchedulingResult {
+  const targetIndex = input.items.findIndex((item) => item.id === targetId);
+  // Earlier saved visits define the arrival at this stop. Do not move them
+  // backwards merely to hide an overdue connection.
+  const items = input.items.map((item, index) => {
+    if (index < targetIndex && item.start) return { ...item, fixed: true };
+    if (item.id !== targetId || item.protected) return item;
+    return {
+      ...item,
+      fixed: false,
+      start: null,
+      startWindow: item.start ? null : item.startWindow,
+      preferredWindows:
+        item.start && item.duration
+          ? [
+              {
+                startMinute: item.start.minutes,
+                endMinute: item.start.minutes + item.duration.minutes,
+                typicalMinute: item.start.minutes,
+              },
+              ...(item.preferredWindows ?? []),
+            ]
+          : item.preferredWindows,
+    };
+  });
+  const focused = { ...input, items, targetIds: new Set([targetId]) };
+  const ordinary = scheduleItinerary(focused);
+  if (ordinary.slots.has(targetId) || input.items[targetIndex]?.protected) return ordinary;
+  // Personal fixed times can be proposed for explicit group review. Bookings,
+  // authoritative transport, history, hours and availability remain boundaries.
   return scheduleItinerary({
-    ...input,
-    targetIds: new Set([targetId]),
-    items: input.items.map((item) =>
-      item.id !== targetId || item.protected
-        ? item
-        : {
-            ...item,
-            fixed: false,
-            start: null,
-            startWindow: item.start ? null : item.startWindow,
-            preferredWindows:
-              item.start && item.duration
-                ? [
-                    {
-                      startMinute: item.start.minutes,
-                      endMinute: item.start.minutes + item.duration.minutes,
-                      typicalMinute: item.start.minutes,
-                    },
-                    ...(item.preferredWindows ?? []),
-                  ]
-                : item.preferredWindows,
-          },
+    ...focused,
+    items: items.map((item, index) =>
+      index > targetIndex && !item.protected && item.start ? { ...item, fixed: false } : item,
     ),
   });
 }

@@ -820,9 +820,10 @@ export async function fetchItineraryTimingReview(
   signal?: AbortSignal,
 ) {
   const auth = await getAuthContext();
-  const query = proposal.targetItemId
-    ? `?targetItemId=${encodeURIComponent(proposal.targetItemId)}`
-    : '';
+  const params = new URLSearchParams();
+  if (proposal.targetItemId) params.set('targetItemId', proposal.targetItemId);
+  if (proposal.repair) params.set('repair', JSON.stringify(proposal.repair));
+  const query = params.size ? `?${params}` : '';
   return itineraryRequest<SchedulingOutcome>(
     `/trips/${tripId}/itinerary/days/${proposal.itineraryDayId}/timing-review${query}`,
     { signal },
@@ -845,6 +846,7 @@ export async function applyItineraryTimingReview(
       body: JSON.stringify({
         scheduleRevision: proposal.scheduleRevision,
         targetItemId: proposal.targetItemId,
+        ...(proposal.repair ? { repair: proposal.repair } : {}),
         itemIds,
       }),
     },

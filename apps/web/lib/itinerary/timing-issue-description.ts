@@ -10,6 +10,8 @@ export function describeTimingIssue(
   },
 ) {
   const { t } = options;
+  if (issue.code === 'NO_ROOM' && issue.suggestion?.status === 'ok')
+    return t('connectedTiming.needsSpace');
   const context = issue.code === 'FIXED_CONFLICT' ? issue.orderConflict : undefined;
   if (!context) return t(`connectedTiming.issue.${issue.code}`);
   const formatter = new Intl.DateTimeFormat(options.locale, {

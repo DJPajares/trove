@@ -1,7 +1,11 @@
 import { PLAN_SCORE_TRIP_INCLUDE } from './plan-score-trip-query.js';
 import { createHash } from 'node:crypto';
 import { getPrismaClient, type Prisma } from '@trove/db';
-import type { ItineraryDayTimeSuggestions, SchedulingOutcome } from '@trove/types';
+import type {
+  ItineraryDayTimeSuggestions,
+  SchedulingOutcome,
+  TimingRepairOptions,
+} from '@trove/types';
 import {
   buildItineraryRoutePlan,
   createSummary,
@@ -449,7 +453,7 @@ export async function assessDay(
     allowDayPartAdjustment: reconcile,
   };
   const result =
-    targetId && !reconcile
+    targetId && targetId !== CANDIDATE_ITEM_ID && !reconcile
       ? suggestScheduledTarget(schedulingInput, targetId)
       : scheduleItinerary(schedulingInput);
   for (const issue of result.issues) {
@@ -534,9 +538,37 @@ export async function assessDay(
           scoring.items.find((i) => i.id === id)?.start?.minutes !== slot.startMinute,
       )
       .map(([id]) => id);
+    const original = storedDay.items.find((row) => row.id === itemId);
+    const repair: TimingRepairOptions = {
+      schedule:
+        itemId === targetId && options.schedule !== undefined
+          ? options.schedule
+          : original?.localStartTime
+            ? 'exact'
+            : ((original?.dayPart?.toLowerCase() as RequestedSchedule) ?? 'none'),
+      ...(item.durationMinutes !== null ? { durationMinutes: item.durationMinutes } : {}),
+      ...(itemId === targetId && options.localTime
+        ? { localTime: options.localTime }
+        : original?.localStartTime
+          ? { localTime: original.localStartTime.toISOString().slice(11, 16) }
+          : {}),
+      ...(itemId === targetId && options.localEndTime
+        ? { localEndTime: options.localEndTime }
+        : {}),
+    };
     return {
       itemId,
       affectedItemIds,
+      ...(slot && original && affectedItemIds.length
+        ? {
+            review: {
+              itineraryDayId: dayId,
+              scheduleRevision: revision,
+              targetItemId: itemId,
+              repair,
+            },
+          }
+        : {}),
       localTime: startInstant ? formatInstantInTimeZone(startInstant, timeZone).time : null,
       localEndTime: endInstant ? formatInstantInTimeZone(endInstant, timeZone).time : null,
       durationMinutes:
@@ -578,6 +610,7 @@ export async function assessDay(
       issues: result.issues,
     } satisfies ItineraryDayTimeSuggestions,
     result,
+    originalDay: storedDay,
     returnTravel,
     day,
     scoring,
@@ -610,24 +643,32 @@ async function planItineraryTiming(
   tripId: string,
   dayId: string,
   targetId?: string,
+  repair?: TimingRepairOptions,
 ) {
+  if (repair && !targetId) throw new ItineraryValidationError('invalid_itinerary_item');
   const assessment = await assessDay(
     userId,
     tripId,
     dayId,
-    { itemId: targetId },
+    { ...repair, itemId: targetId },
     transaction,
     new Date(),
-    true,
+    !repair,
   );
   const writes = new Map<string, Prisma.ItineraryItemUpdateInput>();
   const outcome: SchedulingOutcome = { changes: [], issues: assessment.result.issues };
-  for (const item of assessment.day.items) {
+  const sourceDay = repair ? assessment.originalDay : assessment.day;
+  for (const item of sourceDay.items) {
     const normalized = assessment.items.find((i) => i.id === item.id)!;
-    if (normalized.fixed || normalized.protected || (!item.localStartTime && item.id !== targetId))
+    if (repair && !assessment.result.slots.has(targetId!)) continue;
+    if (
+      (!repair && normalized.fixed) ||
+      normalized.protected ||
+      (!item.localStartTime && item.id !== targetId)
+    )
       continue;
     const slot = assessment.result.slots.get(item.id);
-    const clear = item.id === targetId && !slot && item.localStartTime;
+    const clear = !repair && item.id === targetId && !slot && item.localStartTime;
     if (!slot && !clear) {
       if (item.id === targetId && item.durationMinutes === null && normalized.duration)
         writes.set(item.id, {
@@ -664,17 +705,26 @@ async function planItineraryTiming(
             ...(!item.timeZone ? { timeZoneSource: 'DAY_DEFAULT' as const } : {}),
           }
         : {}),
-      timingFlexibility: 'FLEXIBLE',
+      timingFlexibility: repair
+        ? ((item.timingFlexibility as 'FIXED' | 'FLEXIBLE' | null) ??
+          (['AI_ESTIMATED', 'APP_ESTIMATED'].includes(item.timeProvenance ?? '')
+            ? 'FLEXIBLE'
+            : 'FIXED'))
+        : 'FLEXIBLE',
       timeProvenance: localTime ? 'APP_ESTIMATED' : null,
-      ...(slot && item.durationMinutes === null
-        ? { durationMinutes: slot.durationMinutes, durationProvenance: 'APP_ESTIMATED' }
+      ...(slot &&
+      (item.durationMinutes === null || (repair && item.durationMinutes !== slot.durationMinutes))
+        ? {
+            durationMinutes: slot.durationMinutes,
+            durationProvenance: item.durationMinutes === null ? 'APP_ESTIMATED' : 'USER_OWNED',
+          }
         : {}),
     });
     if (before.localTime && item.durationMinutes !== null)
       before.localEndTime = formatInstantInTimeZone(
         new Date(
           (item.startInstant?.getTime() ??
-            assessment.scoring.origin + (normalized.start?.minutes ?? 0) * 60000) +
+            floatingLocalTimeToInstant(sourceDay.date, before.localTime, timeZone).getTime()) +
             item.durationMinutes * 60000,
         ),
         timeZone,
@@ -691,6 +741,7 @@ async function planItineraryTiming(
       JSON.stringify({
         revision: assessment.response.scheduleRevision,
         targetItemId: targetId ?? null,
+        repair,
         changes: outcome.changes,
       }),
     )
@@ -706,6 +757,7 @@ export async function reconcileItineraryTiming(
   dayId: string,
   targetId?: string,
   review = false,
+  repair?: TimingRepairOptions,
 ): Promise<SchedulingOutcome> {
   const { outcome, writes, reviewRevision } = await planItineraryTiming(
     transaction,
@@ -713,6 +765,7 @@ export async function reconcileItineraryTiming(
     tripId,
     dayId,
     targetId,
+    repair,
   );
   if (review)
     return {
@@ -722,6 +775,7 @@ export async function reconcileItineraryTiming(
           itineraryDayId: dayId,
           scheduleRevision: reviewRevision,
           targetItemId: targetId ?? null,
+          ...(repair ? { repair } : {}),
         },
       ],
     };
@@ -734,8 +788,9 @@ export async function getItineraryTimingReview(
   tripId: string,
   dayId: string,
   targetId?: string,
+  repair?: TimingRepairOptions,
 ) {
-  return reconcileItineraryTiming(getPrismaClient(), userId, tripId, dayId, targetId, true);
+  return reconcileItineraryTiming(getPrismaClient(), userId, tripId, dayId, targetId, true, repair);
 }
 
 /** Applies only the reviewed rows, atomically; dependent rows require explicit group acceptance. */
@@ -743,7 +798,12 @@ export async function applyItineraryTimingReview(
   userId: string,
   tripId: string,
   dayId: string,
-  input: { scheduleRevision: string; itemIds: string[]; targetItemId?: string | null },
+  input: {
+    scheduleRevision: string;
+    itemIds: string[];
+    targetItemId?: string | null;
+    repair?: TimingRepairOptions;
+  },
 ) {
   return getPrismaClient().$transaction(
     async (transaction) => {
@@ -754,6 +814,7 @@ export async function applyItineraryTimingReview(
         tripId,
         dayId,
         target,
+        input.repair,
       );
       const selected = new Set(input.itemIds);
       if (
@@ -763,6 +824,12 @@ export async function applyItineraryTimingReview(
         input.itemIds.some((id) => !outcome.changes.some((change) => change.itemId === id))
       )
         throw new ItineraryConflictError('itinerary_schedule_conflict');
+      if (
+        input.repair &&
+        (selected.size !== outcome.changes.length ||
+          outcome.changes.some((change) => !selected.has(change.itemId)))
+      )
+        throw new ItineraryConflictError('itinerary_timing_group_required');
       for (const id of selected)
         await transaction.itineraryItem.update({ where: { id }, data: writes.get(id)! });
       // Pin every remaining exact slot while checking this selection. Never save
@@ -787,6 +854,7 @@ export async function applyItineraryTimingReview(
         dayId,
         target,
         true,
+        input.repair,
       );
       return {
         scheduling,

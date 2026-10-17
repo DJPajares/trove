@@ -50,8 +50,44 @@ const batchSchema = z
     itemIds: z.array(z.uuid()).min(1).max(200),
   })
   .strict();
-const reviewQuerySchema = z.object({ targetItemId: z.uuid().optional() }).strict();
-const reviewApplySchema = batchSchema.extend({ targetItemId: z.uuid().nullable().optional() });
+const repairOptionsSchema = z
+  .object({
+    schedule: z.enum(['afternoon', 'anytime', 'evening', 'exact', 'morning', 'none']).optional(),
+    durationMinutes: z.number().int().positive().max(43200).nullable().optional(),
+    localTime: z
+      .string()
+      .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/)
+      .optional(),
+    localEndTime: z
+      .string()
+      .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/)
+      .optional(),
+  })
+  .strict();
+const reviewQuerySchema = z
+  .object({
+    targetItemId: z.uuid().optional(),
+    repair: z
+      .string()
+      .transform((value, context) => {
+        try {
+          return JSON.parse(value) as unknown;
+        } catch {
+          context.addIssue({ code: 'custom', message: 'invalid_repair' });
+          return z.NEVER;
+        }
+      })
+      .pipe(repairOptionsSchema)
+      .optional(),
+  })
+  .strict()
+  .refine((query) => !query.repair || Boolean(query.targetItemId));
+const reviewApplySchema = batchSchema
+  .extend({
+    targetItemId: z.uuid().nullable().optional(),
+    repair: repairOptionsSchema.optional(),
+  })
+  .refine((body) => !body.repair || Boolean(body.targetItemId));
 
 function getUserId(request: FastifyRequest, reply: FastifyReply) {
   if (!request.authUserId) {
@@ -87,6 +123,7 @@ export function createItineraryTimeSuggestionControllers() {
             params.data.tripId,
             params.data.itineraryDayId,
             query.data.targetItemId,
+            query.data.repair,
           ),
         );
       } catch (error) {

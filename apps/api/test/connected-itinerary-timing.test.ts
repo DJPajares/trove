@@ -698,8 +698,9 @@ test('a conflict and the unchanged timing editor return the same complete usable
   expect(getProviderCallCounts()).toEqual({});
 });
 
-test('an arrival lower bound is not a valid four-hour slot before the next fixed stop', async () => {
+test('an arrival lower bound is not a valid four-hour slot before the next protected stop', async () => {
   conflictDay('16:00');
+  store.itineraryItem[2]!.travelStatus = 'COMPLETED';
   const assessment = await getItineraryDayTimeSuggestions('user', 'trip', 'day');
   const issue = assessment.issues!.find((issue) => issue.itemId === 'b')!;
   expect(issue.orderConflict).toBeDefined();
@@ -771,4 +772,188 @@ test('repairs and warnings use the stop local clock even when the day reference 
     localTime: '12:00',
   });
   expect(editor.suggestions[0]).toEqual(issue.suggestion);
+});
+
+test('The Shelf four-hour visit and its following personal stop form one reviewable timing proposal', async () => {
+  conflictDay('16:00');
+  store.itineraryItem[1]!.timingFlexibility = 'FLEXIBLE';
+  const before = structuredClone(store.itineraryItem);
+  const assessment = await getItineraryDayTimeSuggestions('user', 'trip', 'day');
+  const editor = await getItineraryDayTimeSuggestions('user', 'trip', 'day', {
+    itemId: 'b',
+    schedule: 'exact',
+    localTime: '12:00',
+    durationMinutes: 240,
+  });
+  expect(editor.suggestions[0]).toMatchObject({
+    status: 'ok',
+    localTime: '12:05',
+    localEndTime: '16:05',
+    affectedItemIds: ['new'],
+  });
+  const issue = assessment.issues!.find((i) => i.itemId === 'b')!;
+  expect(issue.suggestion).toEqual(editor.suggestions[0]);
+  expect(store.itineraryItem).toEqual(before);
+});
+
+test.each([true, false])(
+  'a dependent repair previews and atomically applies the complete chain (following flexible=%s)',
+  async (flexible) => {
+    conflictDay('16:00');
+    store.itineraryItem[1]!.timingFlexibility = 'FLEXIBLE';
+    store.itineraryItem[2]!.timingFlexibility = flexible ? 'FLEXIBLE' : 'FIXED';
+    store.itineraryItem[2]!.durationMinutes = 30;
+    const before = structuredClone(store.itineraryItem);
+    const response = await getItineraryDayTimeSuggestions('user', 'trip', 'day', { itemId: 'b' });
+    const request = response.suggestions[0]!.review!;
+    expect(request).toBeDefined();
+    const preview = await getItineraryTimingReview(
+      'user',
+      'trip',
+      'day',
+      request.targetItemId!,
+      request.repair,
+    );
+    expect(preview.changes).toEqual([
+      {
+        itemId: 'b',
+        itineraryDayId: 'day',
+        before: { localTime: '12:00', localEndTime: '16:00' },
+        after: { localTime: '12:05', localEndTime: '16:05' },
+      },
+      {
+        itemId: 'new',
+        itineraryDayId: 'day',
+        before: { localTime: '16:00', localEndTime: '16:30' },
+        after: { localTime: '16:10', localEndTime: '16:40' },
+      },
+    ]);
+    expect(store.itineraryItem).toEqual(before);
+    const proposal = preview.proposals![0]!;
+    await expect(
+      applyItineraryTimingReview('user', 'trip', 'day', { ...proposal, itemIds: ['b'] }),
+    ).rejects.toThrow('itinerary_timing_group_required');
+    expect(store.itineraryItem).toEqual(before);
+    const result = await applyItineraryTimingReview('user', 'trip', 'day', {
+      ...proposal,
+      itemIds: ['b', 'new'],
+    });
+    expect(result.applied).toEqual(preview.changes);
+    expect(store.itineraryItem[0]).toEqual(before[0]);
+    expect(store.itineraryItem[1]).toMatchObject({
+      localStartTime: parseLocalTime('12:05'),
+      durationMinutes: 240,
+      timingFlexibility: 'FLEXIBLE',
+    });
+    expect(store.itineraryItem[2]).toMatchObject({
+      localStartTime: parseLocalTime('16:10'),
+      durationMinutes: 30,
+      timingFlexibility: flexible ? 'FLEXIBLE' : 'FIXED',
+    });
+    expect(result.scheduling.changes).toEqual([]);
+    const after = await getItineraryDayTimeSuggestions('user', 'trip', 'day');
+    expect(after.issues?.filter((issue) => issue.severity === 'conflict')).toEqual([]);
+    expect(getProviderCallCounts()).toEqual({});
+  },
+);
+
+test('a changed dependent repair expires without writing any stop', async () => {
+  conflictDay('16:00');
+  const repair = { schedule: 'exact' as const, localTime: '12:00', durationMinutes: 240 };
+  const preview = await getItineraryTimingReview('user', 'trip', 'day', 'b', repair);
+  const proposal = preview.proposals![0]!;
+  store.itineraryItem[2]!.durationMinutes = 90;
+  const before = structuredClone(store.itineraryItem);
+  await expect(
+    applyItineraryTimingReview('user', 'trip', 'day', { ...proposal, itemIds: ['b', 'new'] }),
+  ).rejects.toThrow('itinerary_schedule_conflict');
+  await expect(
+    applyItineraryTimingReview('user', 'trip', 'day', {
+      ...proposal,
+      repair: { ...repair, durationMinutes: 180 },
+      itemIds: ['b', 'new'],
+    }),
+  ).rejects.toThrow('itinerary_schedule_conflict');
+  expect(store.itineraryItem).toEqual(before);
+});
+
+test('a requested duration is included in the review rather than discarded', async () => {
+  conflictDay('16:00');
+  const repair = { schedule: 'exact' as const, localTime: '12:00', durationMinutes: 250 };
+  const preview = await getItineraryTimingReview('user', 'trip', 'day', 'b', repair);
+  expect(preview.changes[0]!.after).toEqual({ localTime: '12:05', localEndTime: '16:15' });
+  await applyItineraryTimingReview('user', 'trip', 'day', {
+    ...preview.proposals![0]!,
+    itemIds: ['b', 'new'],
+  });
+  expect(store.itineraryItem[1]!.durationMinutes).toBe(250);
+  expect(store.itineraryItem[2]!.localStartTime).toEqual(parseLocalTime('16:20'));
+});
+
+test.each(['COMPLETED', 'SKIPPED'])(
+  'a grouped repair never moves %s history',
+  async (travelStatus) => {
+    conflictDay('16:00');
+    store.itineraryItem[2]!.travelStatus = travelStatus;
+    const response = await getItineraryDayTimeSuggestions('user', 'trip', 'day', { itemId: 'b' });
+    expect(response.suggestions[0]).toMatchObject({ status: 'no_feasible_time', localTime: null });
+    expect(response.suggestions[0]!.review).toBeUndefined();
+  },
+);
+
+test('dependent repairs cannot overrun availability or rewrite a protected journey', async () => {
+  conflictDay('16:00');
+  store.itineraryDay[0]!.planningContext = {
+    intent: null,
+    availability: { start: '08:00', end: '16:30' },
+  };
+  const repair = { schedule: 'exact' as const, localTime: '12:00', durationMinutes: 240 };
+  const before = structuredClone(store.itineraryItem);
+  const response = await getItineraryDayTimeSuggestions('user', 'trip', 'day', { itemId: 'b' });
+  expect(response.suggestions[0]!.status).toBe('no_feasible_time');
+  expect((await getItineraryTimingReview('user', 'trip', 'day', 'b', repair)).changes).toEqual([]);
+  store.itineraryDay[0]!.planningContext = {
+    intent: null,
+    availability: { start: '08:00', end: '20:00' },
+  };
+  store.itineraryItem[2]!.timeSemantics = 'AUTHORITATIVE_INSTANT';
+  expect(
+    (await getItineraryDayTimeSuggestions('user', 'trip', 'day', { itemId: 'b' })).suggestions[0]!
+      .status,
+  ).toBe('no_feasible_time');
+  expect(store.itineraryItem.slice(0, 2)).toEqual(before.slice(0, 2));
+  expect(getProviderCallCounts()).toEqual({});
+});
+
+test('a dependent proposal cannot shift a linked booking', async () => {
+  conflictDay('16:00');
+  store.reservation.push({
+    id: 'booking',
+    tripId: 'trip',
+    itineraryItemId: 'new',
+    type: 'ACTIVITY',
+    localDate: new Date('2026-09-05'),
+    localTime: parseLocalTime('16:00'),
+    timeZone: 'Asia/Singapore',
+  });
+  const before = structuredClone(store.itineraryItem);
+  const response = await getItineraryDayTimeSuggestions('user', 'trip', 'day', { itemId: 'b' });
+  expect(response.suggestions[0]!.status).toBe('no_feasible_time');
+  expect(response.suggestions[0]!.review).toBeUndefined();
+  expect(store.itineraryItem).toEqual(before);
+});
+
+test('an explicitly accepted repair retains legacy estimated flexibility', async () => {
+  conflictDay('16:00');
+  store.itineraryItem[2]!.timingFlexibility = null;
+  store.itineraryItem[2]!.timeProvenance = 'AI_ESTIMATED';
+  const preview = await getItineraryTimingReview('user', 'trip', 'day', 'b', {
+    schedule: 'exact',
+    localTime: '12:00',
+  });
+  await applyItineraryTimingReview('user', 'trip', 'day', {
+    ...preview.proposals![0]!,
+    itemIds: ['b', 'new'],
+  });
+  expect(store.itineraryItem[2]!.timingFlexibility).toBe('FLEXIBLE');
 });

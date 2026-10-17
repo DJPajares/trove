@@ -1,0 +1,10 @@
+{
+  "id": "apply-connected-timing-suggestions",
+  "date": "2026-10-17",
+  "version": "1.9.1",
+  "summaries": {
+    "en": [
+      "Resolve timing conflicts with one shared suggestion, then review and apply the connected stops together."
+    ]
+  }
+}

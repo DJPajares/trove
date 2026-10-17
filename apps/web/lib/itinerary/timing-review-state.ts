@@ -53,3 +53,8 @@ export function acknowledgeTimingReview(outcome: SchedulingOutcome): SchedulingO
     ? { changes: [], issues: outcome.issues }
     : { changes: [], issues: [] };
 }
+
+/** Optional connection advice belongs on the stop, not in an unresolved-review banner. */
+export function timingIssuesNeedingReview(outcome: SchedulingOutcome | null) {
+  return outcome?.issues.filter((issue) => issue.severity !== 'notice') ?? [];
+}

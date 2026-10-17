@@ -35,10 +35,18 @@ export type TimingChange = {
   before: { localTime: string | null; localEndTime: string | null };
   after: { localTime: string | null; localEndTime: string | null };
 };
+export type TimingRepairOptions = {
+  schedule?: 'afternoon' | 'anytime' | 'evening' | 'exact' | 'morning' | 'none';
+  durationMinutes?: number | null;
+  localTime?: string;
+  localEndTime?: string;
+};
 export type TimingReviewProposal = {
   itineraryDayId: string;
   scheduleRevision: string;
   targetItemId: string | null;
+  /** A fresh, explicitly accepted repair may include dependent personal fixed times. */
+  repair?: TimingRepairOptions;
 };
 export type SchedulingOutcome = {
   changes: TimingChange[];
@@ -56,6 +64,7 @@ export type ItineraryDayTimeSuggestion = {
   durationProvenance?: TimingProvenance;
   timeZone?: string;
   affectedItemIds?: string[];
+  review?: TimingReviewProposal;
   startInstant?: string | null;
   endInstant?: string | null;
 } & (

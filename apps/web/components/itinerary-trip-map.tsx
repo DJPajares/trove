@@ -172,7 +172,7 @@ export function ItineraryTripMap({
               so the map is never asked to show nothing. */}
           <ChipGroup
             aria-label={t('map.tripDaysLabel')}
-            className="interaction-scrollbar -mx-1 min-w-0 flex-nowrap overflow-x-auto px-1"
+            className="-mx-1 min-w-0 flex-nowrap overflow-x-auto px-1"
             multiple={false}
             onValueChange={([value]) => {
               setRequestedFocusDayId(!value || value === ALL_DAYS ? null : value);

@@ -231,7 +231,7 @@ export function JournalContents({
       {lensChips.length > 1 ? (
         <ChipGroup
           aria-label={t('lensLabel')}
-          className="interaction-scrollbar -m-1 flex-nowrap overflow-x-auto p-1 pr-6 [mask-image:linear-gradient(to_right,black_calc(100%-1.5rem),transparent)] [&>*]:shrink-0"
+          className="-m-1 flex-nowrap overflow-x-auto p-1 pr-6 [mask-image:linear-gradient(to_right,black_calc(100%-1.5rem),transparent)] [&>*]:shrink-0"
           multiple={false}
           onValueChange={([value]) => {
             const chip = lensChips.find((candidate) => (candidate.id ?? ALL_LENS_VALUE) === value);

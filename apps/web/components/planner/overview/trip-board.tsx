@@ -24,7 +24,6 @@ export type TripBoardDisplay = 'list' | 'map';
  * The trip's map is a click away and built only then (`mapPanel`).
  */
 export function TripBoard({
-  actions,
   chapters,
   days,
   display,
@@ -38,7 +37,6 @@ export function TripBoard({
   stayName,
   timeFormat,
 }: Readonly<{
-  actions?: ReactNode;
   chapters: readonly StayChapter[];
   days: readonly ItineraryDay[];
   display: TripBoardDisplay;
@@ -72,8 +70,6 @@ export function TripBoard({
             {t('overview.description', { count: days.length })}
           </p>
         </div>
-        {/* One toolbar: how to see the trip on the left, what to bring into
-            it on the right, all at the same height. */}
         <div className="flex items-center gap-2">
           <Tabs
             className="min-w-0 flex-1 sm:flex-none"
@@ -102,9 +98,6 @@ export function TripBoard({
               <TabsIndicator />
             </TabsList>
           </Tabs>
-          {actions ? (
-            <div className="flex shrink-0 items-center gap-2 sm:ml-auto">{actions}</div>
-          ) : null}
         </div>
       </header>
 

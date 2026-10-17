@@ -48,6 +48,10 @@ import { PlannerMapPane } from '@/components/planner/planner-map-pane';
 import { MoveToDaySheet } from '@/components/planner/move-to-day-sheet';
 import { TripBoard, type TripBoardDisplay } from '@/components/planner/overview/trip-board';
 import { TripForecastCard } from '@/components/planner/overview/trip-forecast-card';
+import {
+  PlannerContextBar,
+  type PlannerStaySummary,
+} from '@/components/planner/planner-context-bar';
 import { PlannerRibbon } from '@/components/planner/planner-ribbon';
 import { StaySheet } from '@/components/planner/stay-sheet';
 import { TimingSheet } from '@/components/planner/timing-sheet';
@@ -1439,6 +1443,37 @@ export function ItineraryManager({
     );
   }
 
+  // Every place the trip sleeps, as set by hand and as the server resolves it
+  // from bookings - so a trip with a booked hotel never reads as having none.
+  const tripStayIds = [
+    ...new Set(
+      [
+        itinerary.stayPlan?.defaultTripPlaceId,
+        ...(itinerary.stayPlan?.ranges ?? []).map((range) => range.tripPlaceId),
+        ...itinerary.days.flatMap((day) => [
+          day.stay?.startTripPlaceId,
+          day.stay?.endTripPlaceId,
+          day.dailyBaseTripPlaceId,
+          day.dailyBaseDepartureTripPlaceId,
+        ]),
+      ].filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const stayName = (tripPlaceId: string) =>
+    placeName(tripPlaceById(tripPlaceId)) ?? t('providerPlace');
+  const staySummary: PlannerStaySummary = (() => {
+    if (!tripStayIds.length) return { kind: 'unset' };
+    if (activeView === 'overview' || !selectedDay)
+      return tripStayIds.length === 1
+        ? { kind: 'one', name: stayName(tripStayIds[0]!) }
+        : { count: tripStayIds.length, kind: 'many' };
+    const { arrivalTripPlaceId: start, departureTripPlaceId: end } = dailyBases;
+    if (start && end && start !== end)
+      return { from: stayName(start), kind: 'transition', to: stayName(end) };
+    const one = start ?? end;
+    return one ? { kind: 'one', name: stayName(one) } : { kind: 'none' };
+  })();
+
   return (
     // `gap` rather than `space-y`: the Day view can sit in a `contents` wrapper,
     // and its children still need to be spaced as this section's own.
@@ -1505,6 +1540,16 @@ export function ItineraryManager({
         overviewActive={activeView === 'overview'}
         selectedDayId={selectedDayId}
       />
+      <PlannerContextBar
+        onOpenPlaces={openPlaces}
+        onOpenStay={() => {
+          // A day opens its own stay - unless nothing is set yet, when the
+          // first useful answer is where the whole trip sleeps.
+          setStayView(activeView === 'day' && selectedDay && tripStayIds.length ? 'day' : 'trip');
+          setStayOpen(true);
+        }}
+        stay={staySummary}
+      />
 
       {error ? (
         <Alert role="alert" variant="destructive">
@@ -1542,40 +1587,6 @@ export function ItineraryManager({
       {renderOverview ? (
         <div className={activeView === 'overview' ? 'contents' : 'hidden'}>
           <TripBoard
-            actions={
-              <>
-                {/* On a phone the two sit beside the view switch as icons,
-                    named for assistive tech and on hover. */}
-                <Button
-                  aria-haspopup="dialog"
-                  className="max-sm:w-9 max-sm:px-0"
-                  data-trip-places-trigger
-                  onClick={openPlaces}
-                  size="sm"
-                  title={tripPlacesTranslations('openPlaces')}
-                  variant="outline"
-                >
-                  <Icons.Places aria-hidden="true" />
-                  <span className="max-sm:sr-only">{tripPlacesTranslations('openPlaces')}</span>
-                </Button>
-                {/* Where the trip sleeps is a whole-trip choice, so it is made
-                    here; a single day's exceptions live in its options. */}
-                <Button
-                  aria-haspopup="dialog"
-                  className="max-sm:w-9 max-sm:px-0"
-                  onClick={() => {
-                    setStayView('trip');
-                    setStayOpen(true);
-                  }}
-                  size="sm"
-                  title={t('stays.title')}
-                  variant="outline"
-                >
-                  <Icons.DailyBase aria-hidden="true" />
-                  <span className="max-sm:sr-only">{t('stays.title')}</span>
-                </Button>
-              </>
-            }
             chapters={chapters}
             days={itinerary.days}
             display={overviewDisplay}
@@ -1683,17 +1694,6 @@ export function ItineraryManager({
                     <Plus aria-hidden="true" data-icon="inline-start" />
                     {plannerT('masthead.addStop')}
                   </Button>
-                  <Button
-                    aria-haspopup="dialog"
-                    data-trip-places-trigger
-                    onClick={openPlaces}
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                  >
-                    <Icons.Places aria-hidden="true" data-icon="inline-start" />
-                    {tripPlacesTranslations('openPlaces')}
-                  </Button>
                   {/* One way out of the plan at a time: a day still ahead
                       previews, a day already lived opens its memories. */}
                   {dayLived ? (
@@ -1742,10 +1742,6 @@ export function ItineraryManager({
                     onEditNote={() => {
                       setDayNoteEditor(selectedDay);
                       setDayNoteValue(selectedDay.notes ?? '');
-                    }}
-                    onEditStay={() => {
-                      setStayView('day');
-                      setStayOpen(true);
                     }}
                     onMoveDay={(strategy) => openDayMove(selectedDay, strategy)}
                     onSuggestTimes={() => setDayTimesOpen(true)}

@@ -1,0 +1,11 @@
+{
+  "id": "stay-in-planner-bar",
+  "date": "2026-10-17",
+  "version": "1.8.2",
+  "summaries": {
+    "en": [
+      "Places and Stay now sit together under the day strip, in All days and in every day.",
+      "Stay shows where you’re sleeping, and asks for it when nothing is set yet."
+    ]
+  }
+}

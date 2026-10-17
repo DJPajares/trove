@@ -68,7 +68,7 @@ function SelectContent({
       >
         <SelectPrimitive.Popup
           className={cn(
-            'w-(--anchor-width) min-w-40 max-h-[min(var(--available-height),20rem)] origin-(--transform-origin) overflow-y-auto rounded-[var(--radius-xl)] border border-border-subtle bg-popover p-1.5 text-popover-foreground shadow-[var(--shadow-overlay)] outline-none transition-[opacity,transform] duration-[var(--motion-standard)] ease-[var(--ease-standard)] data-[side=bottom]:slide-in-from-top-1 data-[side=top]:slide-in-from-bottom-1 data-closed:fade-out-0 data-closed:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95',
+            'w-max min-w-[min(var(--available-width),max(var(--anchor-width),10rem))] max-w-(--available-width) max-h-[min(var(--available-height),20rem)] origin-(--transform-origin) overflow-y-auto rounded-[var(--radius-xl)] border border-border-subtle bg-popover p-1.5 text-popover-foreground shadow-[var(--shadow-overlay)] outline-none transition-[opacity,transform] duration-[var(--motion-standard)] ease-[var(--ease-standard)] data-[side=bottom]:slide-in-from-top-1 data-[side=top]:slide-in-from-bottom-1 data-closed:fade-out-0 data-closed:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95',
             className,
           )}
           data-slot="select-content"
@@ -91,7 +91,7 @@ function SelectItem({ children, className, ...props }: SelectPrimitive.Item.Prop
       data-slot="select-item"
       {...props}
     >
-      <SelectPrimitive.ItemText className="flex min-w-0 flex-1 items-center whitespace-nowrap">
+      <SelectPrimitive.ItemText className="min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere]">
         {children}
       </SelectPrimitive.ItemText>
       <SelectPrimitive.ItemIndicator

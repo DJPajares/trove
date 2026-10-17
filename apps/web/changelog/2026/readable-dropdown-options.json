@@ -1,0 +1,10 @@
+{
+  "id": "readable-dropdown-options",
+  "date": "2026-10-17",
+  "version": "1.8.3",
+  "summaries": {
+    "en": [
+      "Dropdown options stay readable, with room for longer labels and the selected checkmark."
+    ]
+  }
+}

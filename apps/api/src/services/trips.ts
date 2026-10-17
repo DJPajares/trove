@@ -1,3 +1,4 @@
+import { relinkExpensesToDays } from './expenses.js';
 import { tripStayInclude } from './day-stay.js';
 import { refreshDayDefaultTimeZone } from './itineraries.js';
 import {
@@ -866,6 +867,11 @@ export async function updateTrip(
             })),
           });
         }
+
+        // Days were moved, removed or added: expenses follow their dates onto
+        // today's days, so an extension or a shift never strands one off-day.
+        if (offsetDays !== 0 || removedDayIds.length || dateChanges.missingDates.length)
+          await relinkExpensesToDays(transaction, tripId);
 
         await writeMovedFloatingInstants(transaction, movedFloatingInstants);
 

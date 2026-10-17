@@ -101,8 +101,23 @@ export function ExpensesManager({
     setFormError(null);
   }
 
+  /**
+   * The date a new expense starts with: the day the ledger is showing, else
+   * today while the trip is on. Before the trip there is no honest guess, so it
+   * starts empty - and stays clearable either way.
+   */
+  function defaultExpenseDate() {
+    if (filter?.kind === 'day')
+      return data?.days.find((day) => day.id === filter.value)?.date ?? null;
+    if (!trip) return null;
+    const today = getLocalDate(now, trip.referenceTimeZone);
+    return today >= trip.startDate && today <= trip.endDate ? today : null;
+  }
+
   function openCreate() {
-    setExpenseForm(createExpenseForm(null, data?.budget ?? null, preferredCurrency));
+    setExpenseForm(
+      createExpenseForm(null, data?.budget ?? null, preferredCurrency, defaultExpenseDate()),
+    );
     setFormError(null);
     setEditor({ kind: 'create', expense: null });
   }

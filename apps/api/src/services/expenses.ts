@@ -1,6 +1,7 @@
 import { getPrismaClient, type Prisma } from '@trove/db';
 
 import {
+  expenseDayFor,
   preferExplicitLocalDate,
   totalByCurrency,
   projectedCostTotals,
@@ -135,16 +136,29 @@ function itemLabel(item: NonNullable<ExpenseRecord['itineraryItem']>) {
   return item.customLabel ?? item.customLocation ?? item.tripPlace?.place.customName ?? null;
 }
 
-function serializeExpense(expense: ExpenseRecord) {
+function serializeExpense(
+  expense: ExpenseRecord,
+  /** The trip's current days; when given, the expense's day is resolved against them. */
+  days?: ReadonlyArray<{ date: string; id: string }>,
+) {
+  const itineraryDay = days
+    ? expenseDayFor(
+        {
+          itineraryDayId: expense.itineraryDayId,
+          localDate: expense.localDate ? formatDateOnly(expense.localDate) : null,
+        },
+        days,
+      )
+    : expense.itineraryDay
+      ? { date: formatDateOnly(expense.itineraryDay.date), id: expense.itineraryDay.id }
+      : null;
   return {
     amount: expense.amount.toFixed(2),
     category: serializeCategory(expense.category),
     createdAt: expense.createdAt.toISOString(),
     currencyCode: expense.currencyCode.trim(),
     id: expense.id,
-    itineraryDay: expense.itineraryDay
-      ? { date: formatDateOnly(expense.itineraryDay.date), id: expense.itineraryDay.id }
-      : null,
+    itineraryDay: itineraryDay ? { date: itineraryDay.date, id: itineraryDay.id } : null,
     itineraryItem: expense.itineraryItem
       ? {
           id: expense.itineraryItem.id,
@@ -361,15 +375,28 @@ export async function listExpenses(userId: string, tripId: string) {
   });
   if (!trip) throw new ExpenseNotFoundError('trip_not_found');
 
+  // Every expense is placed on today's days by its date, so a day the trip
+  // gained or moved after the expense was saved still counts it.
+  const tripDays = trip.itineraryDays.map((day) => ({
+    date: formatDateOnly(day.date),
+    id: day.id,
+  }));
   const actualByDay = new Map<
     string,
     Array<{ amount: (typeof trip.expenses)[number]['amount']; currencyCode: string }>
   >();
   for (const expense of trip.expenses) {
-    if (!expense.itineraryDayId) continue;
-    const values = actualByDay.get(expense.itineraryDayId) ?? [];
+    const day = expenseDayFor(
+      {
+        itineraryDayId: expense.itineraryDayId,
+        localDate: expense.localDate ? formatDateOnly(expense.localDate) : null,
+      },
+      tripDays,
+    );
+    if (!day) continue;
+    const values = actualByDay.get(day.id) ?? [];
     values.push({ amount: expense.amount, currencyCode: expense.currencyCode });
-    actualByDay.set(expense.itineraryDayId, values);
+    actualByDay.set(day.id, values);
   }
   const dayIdByDate = new Map(trip.itineraryDays.map((day) => [formatDateOnly(day.date), day.id]));
   const itineraryDayByItemId = new Map(
@@ -442,7 +469,7 @@ export async function listExpenses(userId: string, tripId: string) {
       id: day.id,
       projectedCost: totalByCurrency(projectedByDay.get(day.id) ?? []),
     })),
-    expenses: trip.expenses.map(serializeExpense),
+    expenses: trip.expenses.map((expense) => serializeExpense(expense, tripDays)),
     itineraryItems: trip.itineraryItems.map((item) => ({
       id: item.id,
       label: item.customLabel ?? item.customLocation ?? item.tripPlace?.place.customName ?? null,
@@ -595,4 +622,33 @@ export async function updateTripBudget(userId: string, tripId: string, budget: M
       ? { amount: trip.budgetAmount.toFixed(2), currencyCode: trip.budgetCurrencyCode.trim() }
       : null;
   });
+}
+
+/**
+ * Re-files a trip's expenses on the days their dates fall on, after the trip's
+ * days have changed. A dated expense moves to the day with its date, or to no
+ * day when the trip no longer has one; an undated expense keeps its link only
+ * while that day still exists. Only rows that change are written.
+ */
+export async function relinkExpensesToDays(transaction: Prisma.TransactionClient, tripId: string) {
+  const [days, expenses] = await Promise.all([
+    transaction.itineraryDay.findMany({ where: { tripId }, select: { date: true, id: true } }),
+    transaction.expense.findMany({
+      where: { tripId },
+      select: { id: true, itineraryDayId: true, localDate: true },
+    }),
+  ]);
+  const tripDays = days.map((day) => ({ date: formatDateOnly(day.date), id: day.id }));
+  for (const expense of expenses) {
+    const day = expenseDayFor(
+      {
+        itineraryDayId: expense.itineraryDayId,
+        localDate: expense.localDate ? formatDateOnly(expense.localDate) : null,
+      },
+      tripDays,
+    );
+    const itineraryDayId = day?.id ?? null;
+    if (itineraryDayId !== expense.itineraryDayId)
+      await transaction.expense.update({ where: { id: expense.id }, data: { itineraryDayId } });
+  }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { Pencil, ReceiptText, X } from 'lucide-react';
+import { CalendarPlus, Pencil, X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { EditorialSection } from '@/components/editorial-section';
@@ -20,7 +20,8 @@ import {
   expenseTitle as resolveExpenseTitle,
   placeLabel as resolvePlaceLabel,
 } from '@/lib/expenses/labels';
-import { matchesSpendFilter, type SpendFilter } from '@/lib/expenses/spend-insights';
+import { resolveExpenseCategory } from '@/lib/expenses/categories';
+import { expenseDayId, matchesSpendFilter, type SpendFilter } from '@/lib/expenses/spend-insights';
 
 /**
  * Every recorded expense, grouped by the day it belongs to.
@@ -48,14 +49,16 @@ export function ExpenseLedger({
   const t = useTranslations('expenses');
   const locale = useLocale();
 
-  const visible = expenses.filter((expense) => matchesSpendFilter(expense, filter));
+  const visible = expenses.filter((expense) => matchesSpendFilter(expense, filter, days));
   const expensesByDay = new Map<string, Expense[]>();
   const unassignedExpenses: Expense[] = [];
   for (const expense of visible) {
-    if (expense.itineraryDay) {
-      const values = expensesByDay.get(expense.itineraryDay.id) ?? [];
+    // The same rule the totals use, so a day's rows always add up to its total.
+    const dayId = expenseDayId(expense, days);
+    if (dayId) {
+      const values = expensesByDay.get(dayId) ?? [];
       values.push(expense);
-      expensesByDay.set(expense.itineraryDay.id, values);
+      expensesByDay.set(dayId, values);
     } else {
       unassignedExpenses.push(expense);
     }
@@ -93,44 +96,61 @@ export function ExpenseLedger({
         )
       : totals(day.actualSpend, t('noActualSpend'));
 
-  const renderExpense = (expense: Expense) => (
-    <Item className="flex-nowrap px-3 py-3" key={expense.id}>
-      <ItemMedia
-        className="size-10 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
-        variant="icon"
-      >
-        <ReceiptText aria-hidden="true" />
-      </ItemMedia>
-      <ItemContent className="min-w-0 gap-1">
-        <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          <ItemTitle className="min-w-0 truncate text-base">{expenseTitle(expense)}</ItemTitle>
-          <span className="shrink-0 text-base font-semibold tabular-nums">
-            {money({ amount: expense.amount, currencyCode: expense.currencyCode })}
-          </span>
-        </div>
-        <ItemDescription className="line-clamp-none">
-          <span className="flex flex-wrap gap-x-2 gap-y-1">
-            {expense.category ? <span>{t(`categories.${expense.category}`)}</span> : null}
-            {expense.tripPlace ? <span>{placeLabel(expense.tripPlace)}</span> : null}
-            {expense.localDate && !expense.itineraryDay ? <span>{expense.localDate}</span> : null}
-          </span>
-          {!expense.itineraryDay && expense.localDate ? (
-            <span className="mt-1 block">{t('unassignedDatedExpense')}</span>
-          ) : null}
-        </ItemDescription>
-      </ItemContent>
-      <ItemActions className="shrink-0">
-        <Button
-          aria-label={t('editExpense', { title: expenseTitle(expense) })}
-          onClick={() => onEdit(expense)}
-          size="icon-sm"
-          variant="ghost"
+  const renderExpense = (expense: Expense) => {
+    const { Icon } = resolveExpenseCategory(expense.category);
+    const onDay = Boolean(expenseDayId(expense, days));
+    return (
+      <Item className="flex-nowrap px-3 py-3" key={expense.id}>
+        <ItemMedia
+          className="size-10 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
+          variant="icon"
         >
-          <Pencil aria-hidden="true" />
-        </Button>
-      </ItemActions>
-    </Item>
-  );
+          <Icon aria-hidden="true" />
+        </ItemMedia>
+        <ItemContent className="min-w-0 gap-1">
+          <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <ItemTitle className="min-w-0 truncate text-base">{expenseTitle(expense)}</ItemTitle>
+            <span className="shrink-0 text-base font-semibold tabular-nums">
+              {money({ amount: expense.amount, currencyCode: expense.currencyCode })}
+            </span>
+          </div>
+          <ItemDescription className="line-clamp-none">
+            <span className="flex flex-wrap gap-x-2 gap-y-1">
+              {expense.category ? <span>{t(`categories.${expense.category}`)}</span> : null}
+              {expense.tripPlace ? <span>{placeLabel(expense.tripPlace)}</span> : null}
+              {expense.localDate && !onDay ? <span>{expense.localDate}</span> : null}
+            </span>
+            {!onDay && expense.localDate ? (
+              <span className="mt-1 block">{t('unassignedDatedExpense')}</span>
+            ) : null}
+          </ItemDescription>
+          {/* An expense with no date counts toward the trip, but no day can show it. */}
+          {!expense.localDate ? (
+            <Button
+              className="-ml-2.5 self-start"
+              onClick={() => onEdit(expense)}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              <CalendarPlus aria-hidden="true" data-icon="inline-start" />
+              {t('addDate')}
+            </Button>
+          ) : null}
+        </ItemContent>
+        <ItemActions className="shrink-0">
+          <Button
+            aria-label={t('editExpense', { title: expenseTitle(expense) })}
+            onClick={() => onEdit(expense)}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <Pencil aria-hidden="true" />
+          </Button>
+        </ItemActions>
+      </Item>
+    );
+  };
 
   return (
     <div className="space-y-7">

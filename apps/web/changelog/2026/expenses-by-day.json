@@ -1,0 +1,11 @@
+{
+  "id": "expenses-by-day",
+  "date": "2026-10-18",
+  "version": "1.12.0",
+  "summaries": {
+    "en": [
+      "Expenses now show what you spent each day, even after your trip dates change.",
+      "A clearer summary shows your budget pace, and one page shows where your money went."
+    ]
+  }
+}

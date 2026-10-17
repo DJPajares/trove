@@ -1647,11 +1647,11 @@ Derived from recorded Expense records.
 Rules:
 
 - Expense records do not automatically become Projected Cost records.
-- Dated expenses may contribute to per-day Actual Spend.
-- Undated/trip-level expenses contribute to overall Actual Spend but not to a specific day's total.
+- A dated expense contributes to the trip day with its date, resolved against the trip's current days. Its date decides its day: a day link stored when the expense was saved never overrides it, so an extended or moved trip still counts the expense on its day. A dated expense outside the trip's days counts only toward the trip total.
+- Undated/trip-level expenses contribute to overall Actual Spend but not to a specific day's total. Adding an expense during the trip suggests today's date (or the day being viewed), so a quick entry lands on a day.
 - Budget, Projected Cost, and Actual Spend remain technically and visually distinct.
 
-Support trip-level and per-day views where the underlying data supports them.
+Support trip-level and per-day views where the underlying data supports them. The Expenses page reads as one page rather than tabs: the spend summary and budget pace, each day's spending, where the money went (categories, then currencies and places when they say something), and the ledger by day. Choosing a day, category, currency or place narrows the ledger to it.
 
 ## 22.3 Multi-Currency
 

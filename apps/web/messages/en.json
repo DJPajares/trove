@@ -1536,6 +1536,14 @@
     "transportEndpointError": "For each transport time, add its date and IANA timezone."
   },
   "expenses": {
+    "addDate": "Add a date",
+    "day": {
+      "label": "Spending by day",
+      "nothing": "nothing spent",
+      "selected": "{date} · {amount}",
+      "offDay": "{amount} on no trip day ({count, plural, one {# expense} other {# expenses}})",
+      "hint": "Tap a day to see what it cost."
+    },
     "title": "Expenses for {trip}",
     "description": "What you actually spent, kept apart from what you planned to.",
     "backToTrips": "Trips",
@@ -1548,7 +1556,11 @@
     "spend": {
       "totalLabel": "Spent so far",
       "ofBudget": "of {budget}",
-      "noBudgetPrompt": "Set a budget to see whether you’re on track.",
+      "addBudget": "Add a budget to see if you’re on track",
+      "stats": {
+        "dailyAverage": "Daily average",
+        "leftPerDay": "Left per day · {days, plural, one {# day} other {# days}}"
+      },
       "verdict": {
         "upcoming": {
           "onTrack": "{amount} still to spend.",
@@ -1566,11 +1578,6 @@
           "over": "Finished {amount} over budget."
         }
       },
-      "pace": {
-        "perDay": "{amount} a day so far",
-        "perDayFinished": "{amount} a day across the trip",
-        "remainingPerDay": "{amount} a day for the {days, plural, one {# day} other {# days}} left"
-      },
       "approximate": {
         "stale": "Exchange rates may have changed, so treat this total as approximate.",
         "unavailable": "Exchange rates aren’t available right now, so totals stay in the currencies you paid in.",
@@ -1585,27 +1592,19 @@
       "spendTotal": "Approximately {amount}, converted from {count, plural, one {# currency} other {# currencies}} at reference rates."
     },
     "breakdowns": {
-      "label": "Where your money went",
       "empty": "Nothing recorded yet.",
-      "tabs": {
-        "day": "By day",
-        "category": "By category",
-        "currency": "By currency",
-        "place": "By place"
-      },
-      "day": {
-        "today": "Today",
-        "outlier": "Big day",
-        "noSpend": "—",
-        "offDay": "{count, plural, one {# expense} other {# expenses}} on no trip day"
-      },
+      "days": "Each day",
+      "whereItWent": "Where it went",
+      "paidIn": "Paid in",
+      "places": "Places",
       "currency": {
         "worth": "≈ {amount}",
         "unpriced": "No rate available"
       },
       "place": {
         "none": "No expenses are linked to a place yet.",
-        "more": "{count, plural, one {# more place} other {# more places}} not shown."
+        "all": "Show {count, plural, one {# more place} other {# more places}}",
+        "fewer": "Show fewer places"
       }
     },
     "filters": {

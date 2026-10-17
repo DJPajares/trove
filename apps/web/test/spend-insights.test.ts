@@ -559,8 +559,8 @@ test('each filter keeps only what it names', () => {
   expect(matchesSpendFilter(expense, { kind: 'category', value: 'food' })).toBe(true);
   expect(matchesSpendFilter(expense, { kind: 'category', value: 'stay' })).toBe(false);
   expect(matchesSpendFilter(expense, { kind: 'currency', value: 'JPY' })).toBe(true);
-  expect(matchesSpendFilter(expense, { kind: 'day', value: 'd1' })).toBe(true);
-  expect(matchesSpendFilter(expense, { kind: 'day', value: 'd2' })).toBe(false);
+  expect(matchesSpendFilter(expense, { kind: 'day', value: 'd1' }, TRIP_DAYS)).toBe(true);
+  expect(matchesSpendFilter(expense, { kind: 'day', value: 'd2' }, TRIP_DAYS)).toBe(false);
   expect(matchesSpendFilter(expense, { kind: 'place', value: 'p1' })).toBe(true);
 });
 
@@ -600,4 +600,15 @@ test('an item with no place of its own leaves the expense out of the place view'
   const result = breakdown([spent('30.00', { itineraryItem: { place: null } })]);
 
   expect(result.byPlace).toStrictEqual([]);
+});
+
+test('a dated expense lands on its day even when it was never linked to one', () => {
+  // Saved before the trip had that day, or linked to a day that has since moved.
+  const result = breakdown([
+    spent('12.00', { localDate: '2026-09-02' }),
+    spent('8.00', { itineraryDay: { id: 'd1' }, localDate: '2026-09-03' }),
+    spent('5.00'),
+  ]);
+  expect(result.days.map((day) => day.actual.minorUnits)).toEqual([0, 1200, 800]);
+  expect(result.offDay.count).toBe(1);
 });

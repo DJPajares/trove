@@ -1,6 +1,8 @@
 'use client';
 import type { SchedulingOutcome } from '@trove/types';
 import { TimingReviewNotice } from '@/components/planner/timing-review';
+import { useTimingReviewRefresh } from '@/hooks/use-timing-review-refresh';
+import { timingAssessmentRevision } from '@/lib/itinerary/timing-review-state';
 import { TIMING_REVIEW_EVENT } from '@/lib/itinerary/timing-review';
 import {
   fetchItineraryDayTimeSuggestions,
@@ -323,18 +325,24 @@ export function ItineraryManager({
   const [timingPending, setTimingPending] = useState(false);
   useEffect(() => {
     let active = true;
+    let receivedOutcome = false;
+    let receivedPending = false;
     void readItineraryTimingReview(tripId).then((outcome) => {
-      if (active) setTimingReview(outcome);
+      if (active && !receivedOutcome) setTimingReview(outcome);
     });
     void readItineraryTimingPending(tripId).then((pending) => {
-      if (active) setTimingPending(pending);
+      if (active && !receivedPending) setTimingPending(pending);
     });
     const receive = (event: Event) => {
       const detail = (
         event as CustomEvent<{ tripId: string; outcome?: SchedulingOutcome; pending?: boolean }>
       ).detail;
       if (detail.tripId === tripId) {
-        if (detail.outcome) setTimingReview(detail.outcome);
+        receivedPending = true;
+        if (detail.outcome) {
+          receivedOutcome = true;
+          setTimingReview(detail.outcome);
+        }
         setTimingPending(Boolean(detail.pending));
       }
     };
@@ -464,13 +472,17 @@ export function ItineraryManager({
     queryKey: queryKeys.itineraryTiming(
       tripId,
       selectedDay?.id,
-      JSON.stringify([
-        selectedDay?.planningContext,
-        selectedDay?.items.map((item) => [item.id, item.updatedAt, item.position]),
-      ]),
+      timingAssessmentRevision(selectedDay),
     ),
     enabled: online && !itineraryEditing && !timingPending && Boolean(selectedDay),
     queryFn: ({ signal }) => fetchItineraryDayTimeSuggestions(tripId, selectedDay!.id, { signal }),
+  });
+
+  useTimingReviewRefresh({
+    enabled: online && !itineraryEditing && !timingPending,
+    itinerary,
+    outcome: timingReview,
+    tripId,
   });
 
   // What Trove has stored about each place on the selected day: whether it is
@@ -1507,6 +1519,12 @@ export function ItineraryManager({
         dayLabelFor={(id) => {
           const index = itinerary.days.findIndex((day) => day.id === id);
           return index >= 0 ? dayOption(itinerary.days[index]!, index) : '';
+        }}
+        dayLabelForItem={(itemId) => {
+          const index = itinerary.days.findIndex((day) =>
+            day.items.some((item) => item.id === itemId),
+          );
+          return index >= 0 ? t('dayNumber', { number: index + 1 }) : '';
         }}
         outcome={timingReview}
         pending={timingPending}

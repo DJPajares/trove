@@ -1875,13 +1875,10 @@
         "dayLabel": "Day {number}",
         "stops": "{count, plural, =0 {Nothing planned yet} one {# stop} other {# stops}}",
         "facts": {
-          "stops": "{count, plural, one {stop} other {stops}}",
-          "planned": "planned",
-          "travel": "travel",
-          "knownTravel": "known travel",
-          "distance": "distance",
-          "knownDistance": "known distance"
+          "plannedAt": "planned at {count, plural, one {# stop} other {# stops}}"
         },
+        "measuringTravel": "Measuring travel…",
+        "unmapped": "{count} not on map",
         "openMap": "Open map",
         "openMapLabel": "Open the map of day {number}",
         "addStop": "Add stop",

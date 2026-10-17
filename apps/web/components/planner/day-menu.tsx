@@ -56,9 +56,12 @@ export function DayMenu({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="inline-flex h-8 items-center gap-1.5 rounded-full border border-score-media-foreground/20 bg-score-media-background px-3 text-sm font-semibold text-score-media-foreground outline-none transition-colors duration-[var(--motion-standard)] hover:border-score-media-foreground/40 focus-visible:ring-2 focus-visible:ring-score-media-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-score-media-background motion-reduce:transition-none">
+      <DropdownMenuTrigger
+        aria-label={t('daySettings')}
+        title={t('daySettings')}
+        className="inline-flex h-8 items-center gap-1.5 rounded-full border border-score-media-foreground/20 bg-score-media-background px-3 text-sm font-semibold text-score-media-foreground outline-none transition-colors duration-[var(--motion-standard)] hover:border-score-media-foreground/40 focus-visible:ring-2 focus-visible:ring-score-media-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-score-media-background motion-reduce:transition-none"
+      >
         <SlidersHorizontal aria-hidden="true" className="size-3.5" />
-        {t('daySettings')}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-60">
         <DropdownMenuGroup>
@@ -103,6 +106,8 @@ export function DayMenu({
           <DropdownMenuLabel>{menuT('view')}</DropdownMenuLabel>
           <DropdownMenuCheckboxItem
             checked={!compact}
+            // A choice made, so the menu gets out of the way.
+            closeOnClick
             onCheckedChange={(checked) => onCompactChange(!checked)}
           >
             {menuT('travel')}

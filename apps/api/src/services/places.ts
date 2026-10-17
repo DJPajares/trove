@@ -1,22 +1,17 @@
 import { createHash, randomUUID } from 'node:crypto';
 
+import { PLACE_CATEGORIES, type PlaceCategory } from '@trove/types';
+
 import type { ProviderCacheMissReason } from './provider-usage.js';
 import { providerTargetFingerprint } from './provider-usage.js';
 
 export const PLACE_PROVIDERS = ['google'] as const;
 export type PlaceProviderName = (typeof PLACE_PROVIDERS)[number];
 
-export const TROVE_PLACE_CATEGORIES = [
-  'destination',
-  'things_to_do',
-  'food_and_drink',
-  'stay',
-  'shopping',
-  'transport',
-  'other',
-] as const;
+/** Trove's own place categories, shared with the web from one definition. */
+export const TROVE_PLACE_CATEGORIES = PLACE_CATEGORIES;
 
-export type TrovePlaceCategory = (typeof TROVE_PLACE_CATEGORIES)[number];
+export type TrovePlaceCategory = PlaceCategory;
 
 export type PlaceCoordinates = {
   latitude: number;

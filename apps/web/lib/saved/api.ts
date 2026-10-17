@@ -23,9 +23,17 @@ export type PlaceSnapshot = {
 };
 
 export type CanonicalPlace = {
+  /**
+   * What kind of place this is: its provider types plus what its owner said of
+   * a Custom Place. Optional because places cached before categories existed
+   * arrive without them; `placeCategories` falls back to the snapshot.
+   */
+  categories?: TrovePlaceCategory[];
   id: string;
   kind: 'custom' | 'provider';
   location: { latitude: number; longitude: number; timeZone: string | null } | null;
+  /** What the owner said a Custom Place is; empty for a provider Place. */
+  manualCategories?: TrovePlaceCategory[];
   name: string | null;
   note: string | null;
   /** The address the provider gave when this Place was first resolved. */

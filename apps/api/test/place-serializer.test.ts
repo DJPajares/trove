@@ -135,9 +135,12 @@ test('a Custom Place is unchanged: its own coordinates, its own name, no snapsho
   );
 
   expect(place).toStrictEqual({
+    // Nothing says what kind of place this is yet.
+    categories: ['other'],
     id: 'place-2',
     kind: 'custom',
     location: { latitude: 1.3521, longitude: 103.8198, timeZone: 'Asia/Singapore' },
+    manualCategories: [],
     name: 'Quiet lookout',
     note: 'Meet by the sheltered bench.',
     providerAddress: null,

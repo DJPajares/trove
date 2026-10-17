@@ -1,5 +1,7 @@
 'use client';
 
+import type { TrovePlaceCategory } from '@/lib/place-categories';
+import { placeCategories } from '@/lib/trip-places/categories';
 import {
   CalendarPlus,
   Check,
@@ -10,6 +12,7 @@ import {
   Pencil,
   Plus,
   Trash2,
+  Tags,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
@@ -20,6 +23,7 @@ import { PlaceMedia } from '@/components/place-media';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuRadioGroup,
@@ -71,6 +75,8 @@ type TripPlacesPanelProps = {
    */
   onPlaceLocated: () => Promise<void> | void;
   onPriorityChange: (tripPlace: TripPlace, priority: TripPlacePriority | null) => void;
+  /** Sets the categories the traveller added; the menu offers it when given. */
+  onCategoriesChange?: (tripPlace: TripPlace, categories: TrovePlaceCategory[]) => void;
   onRemove: (tripPlace: TripPlace) => void;
   placeUse?: Readonly<Record<string, ScheduledPlaceUse>>;
   /** The rows' inline inset, so they line up with the edge of whatever holds the list. */
@@ -94,11 +100,22 @@ type TripPlacesPanelProps = {
  * tap of its own - adding the place to that day - sits on the row; the rest
  * stay behind the menu.
  */
+/** The kinds of place a traveller can say a place is; `other` is only their absence. */
+const EDITABLE_CATEGORIES = [
+  'stay',
+  'food_and_drink',
+  'things_to_do',
+  'shopping',
+  'transport',
+  'destination',
+] as const satisfies readonly TrovePlaceCategory[];
+
 export function TripPlacesPanel({
   busyPlaceIds,
   day,
   justAddedIds,
   onAddToDay,
+  onCategoriesChange,
   onEditPlace,
   onPlaceLocated,
   onPriorityChange,
@@ -111,6 +128,7 @@ export function TripPlacesPanel({
   tripPlaces,
 }: Readonly<TripPlacesPanelProps>) {
   const t = useTranslations('tripPlaces');
+  const categoryT = useTranslations('saved.categories');
   const nestedPlaceId = useRef<string | null>(null);
   const mediaTranslations = useTranslations('media');
   // The locate copy belongs to the Place, not to this list, so it says the same
@@ -283,6 +301,42 @@ export function TripPlacesPanel({
             </DropdownMenuRadioGroup>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
+
+        {/* What kind of place this is. What its provider already says stays
+            checked; the traveller adds to it - "we're staying here" - and can
+            take back only what they added. */}
+        {onCategoriesChange ? (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Tags aria-hidden="true" />
+              {t('categoryMenuLabel')}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              {EDITABLE_CATEGORIES.map((category) => {
+                const manual = tripPlace.manualCategories ?? [];
+                const derived =
+                  placeCategories(tripPlace).includes(category) && !manual.includes(category);
+                return (
+                  <DropdownMenuCheckboxItem
+                    checked={derived || manual.includes(category)}
+                    disabled={derived}
+                    key={category}
+                    onCheckedChange={(checked) =>
+                      onCategoriesChange(
+                        tripPlace,
+                        checked
+                          ? [...manual, category]
+                          : manual.filter((entry) => entry !== category),
+                      )
+                    }
+                  >
+                    {categoryT(category)}
+                  </DropdownMenuCheckboxItem>
+                );
+              })}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        ) : null}
 
         <DropdownMenuSeparator />
 

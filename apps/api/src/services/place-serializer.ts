@@ -6,7 +6,8 @@ import {
   toPlaceCoordinates,
   toPlaceSnapshot,
 } from './place-data.js';
-import type { PlaceProviderName } from './places.js';
+import { categoriesFromDb, effectiveCategories, placeTypeCategories } from './place-categories.js';
+import type { PlaceProviderName, TrovePlaceCategory } from './places.js';
 
 /**
  * The include every place-carrying query uses. Shared so no caller can narrow
@@ -20,6 +21,11 @@ export type SerializedPlaceProviderRef = {
 };
 
 export type CanonicalPlace = {
+  /**
+   * What kind of place this is: its provider types, plus what its owner said
+   * of a Custom Place. A Trip Place adds what that trip says on top.
+   */
+  categories: TrovePlaceCategory[];
   id: string;
   kind: 'custom' | 'provider';
   /**
@@ -32,6 +38,8 @@ export type CanonicalPlace = {
     longitude: number;
     timeZone: string | null;
   } | null;
+  /** What the owner said a Custom Place is. Always empty for a provider Place. */
+  manualCategories: TrovePlaceCategory[];
   /** Trove-owned. A Custom Place's name; null for a provider Place. */
   name: string | null;
   note: string | null;
@@ -55,6 +63,7 @@ export type PlaceReference = {
 type DecimalLike = number | { toNumber(): number };
 
 type PlaceRecordInput = {
+  categories?: readonly string[];
   customLatitude: DecimalLike | null;
   customLongitude: DecimalLike | null;
   customName: string | null;
@@ -135,10 +144,19 @@ export function serializeCanonicalPlace(
   const providerCoordinates = toPlaceCoordinates(reference);
   const providerLocation = providerCoordinates ? { ...providerCoordinates, timeZone } : null;
 
+  const manualCategories = place.kind === 'CUSTOM' ? categoriesFromDb(place.categories) : [];
+
   return {
+    categories: effectiveCategories(
+      reference
+        ? placeTypeCategories(reference.cachedTypes ?? [], reference.cachedPrimaryType)
+        : [],
+      manualCategories,
+    ),
     id: place.id,
     kind: place.kind === 'CUSTOM' ? 'custom' : 'provider',
     location: customLocation ?? providerLocation,
+    manualCategories,
     name: place.customName,
     note: place.customNote,
     providerAddress: place.providerAddress,
@@ -215,4 +233,20 @@ export function resolveItineraryItemName(item: {
   }
 
   return item.customLocation?.label ?? null;
+}
+
+/**
+ * A Place as one trip sees it: everything it is, plus what this trip added.
+ * `manualCategories` is what the traveller can change here - the Place's own
+ * for a Custom Place they own, this trip's additions for a provider Place.
+ */
+export function tripPlaceCategories(
+  place: Pick<CanonicalPlace, 'categories' | 'kind' | 'manualCategories'>,
+  tripCategories: readonly string[] | null | undefined,
+) {
+  const added = categoriesFromDb(tripCategories);
+  return {
+    categories: effectiveCategories(place.categories, added),
+    manualCategories: place.kind === 'custom' ? place.manualCategories : added,
+  };
 }

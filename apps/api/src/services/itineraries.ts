@@ -37,6 +37,7 @@ import {
   placeProviderRefInclude,
   type PlaceSerializerOptions,
   serializeCanonicalPlace,
+  tripPlaceCategories,
 } from './place-serializer.js';
 import { formatDateOnly, isValidIanaTimeZone, parseDateOnly } from './trip-rules.js';
 
@@ -219,6 +220,7 @@ function serializeTripPlace(
 ) {
   const place = serializeCanonicalPlace(tripPlace.place, options);
   return {
+    ...tripPlaceCategories(place, tripPlace.categories),
     customName: tripPlace.customName,
     id: tripPlace.id,
     note: tripPlace.note,

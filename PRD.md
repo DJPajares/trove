@@ -905,6 +905,16 @@ If future provider ID changes create possible duplicates, use careful matching/m
 - Provider outages, quotas, or kill switches must degrade enrichment without preventing access to Trove-owned plans or manual editing. Public itinerary reads never dispatch billable provider requests.
 - Internal cache durations and UI preferences never override provider permissions. Do not claim that every field from a provider has the same caching or attribution allowance.
 
+## 11.9 Place Categories
+
+Trove describes what kind of place something is in its own travel categories: **Accommodation**, Food and drink, Things to do, Shopping, Transport and Destination, with Other only as the absence of one. A Place may have several.
+
+- A provider Place's categories are derived on read from its cached provider types. No provider request is made to categorize, and provider type names never leave the server.
+- A Custom Place has no provider types; its owner may assign categories, which travel with the Place to every trip.
+- A provider Place is shared, so a traveller's additions are recorded on that trip's Trip Place - "we are staying here" for a home a provider knows only as an address. Additions never remove a derived category.
+- A Trip Place the trip already treats as a stay - its default or range Stay, a day's start or end, or a linked accommodation Reservation - is recorded as Accommodation automatically, including existing trips.
+- The Stay picker offers Accommodation places, plus any place already chosen as a Stay. Any other Trip Place can be used as a Stay in one step, which records it as Accommodation for that trip. Places and other collections continue to show every category, with an optional category filter.
+
 ---
 
 # 12. Custom Places
@@ -1268,7 +1278,7 @@ Travellers see the Daily Base as their **Stay**. "Daily Base" and "Departure Bas
 
 Daily Base is distinct from trip Starting Location.
 
-A trip may have a default Stay and non-overlapping date-range Stays, independent of accommodation Reservations. Ranges describe nights using **Arrive** (inclusive) and **Leave** (exclusive), for every kind of accommodation. Arriving October 19 and leaving October 20 means one night: October 19 starts at the previous stay and ends at the new stay; October 20 starts at the new stay. No check-in/out times or accommodation categories are needed. The common flow is one place for the whole trip; date ranges and different start/end locations are progressively disclosed.
+A trip may have a default Stay and non-overlapping date-range Stays, independent of accommodation Reservations. Ranges describe nights using **Arrive** (inclusive) and **Leave** (exclusive), for every kind of accommodation. Arriving October 19 and leaving October 20 means one night: October 19 starts at the previous stay and ends at the new stay; October 20 starts at the new stay. No check-in/out times are needed. The common flow is one place for the whole trip; date ranges and different start/end locations are progressively disclosed.
 
 Resolve each endpoint using:
 
@@ -1282,7 +1292,7 @@ The trip default does not establish a stay for the night before the trip begins.
 
 Day settings distinguish inheriting the automatic stay from explicitly choosing no stay. The return endpoint may follow the start or be configured independently. Changing a trip default preserves day exceptions and ranges unless the traveller explicitly resets the day exceptions. Every day shows its effective stay and source. Adjacent ranges automatically resolve a transfer day from the previous stay to the next; day overrides remain available for exceptions rather than being required for an ordinary change of stay.
 
-Stay means where the traveller is staying, whether a hotel, rental, friend's or family's home, or their own place. All use the same flow, with no accommodation category or booking required. Selection can use existing Trip Places, contextual place search, or a Custom Place such as “Mum's house”; it does not create a booking.
+Stay means where the traveller is staying, whether a hotel, rental, friend's or family's home, or their own place. All use the same flow, with no booking required. Selection offers the trip's Accommodation places (Section 11.9); any other Trip Place, a contextual place search, or a Custom Place such as “Mum's house” can be chosen in one step and is then recorded as Accommodation for the trip. Choosing a Stay does not create a booking.
 
 Overlapping range edits replace the selected coverage and preserve unaffected fragments, with a preview before save. Stay writes require connectivity; prepared snapshots retain the plan and resolved day endpoints for offline reading.
 

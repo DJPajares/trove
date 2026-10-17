@@ -131,18 +131,57 @@ function mapPlaceType(type: string): TrovePlaceCategory | null {
   return null;
 }
 
-export function categorizePlaceTypes(rawTypes: string[], primaryType?: string | null) {
+/**
+ * Every Trove category a provider's types describe, the primary type's first,
+ * each once - a hotel with a restaurant is a stay and food and drink. `other`
+ * only when nothing matched. Provider type names stop here: callers see Trove
+ * categories and nothing else.
+ */
+export function placeTypeCategories(
+  rawTypes: readonly string[],
+  primaryType?: string | null,
+): TrovePlaceCategory[] {
   const orderedTypes = primaryType
     ? [primaryType, ...rawTypes.filter((type) => type !== primaryType)]
     : rawTypes;
-
+  const categories: TrovePlaceCategory[] = [];
   for (const type of orderedTypes) {
     const category = mapPlaceType(type);
-
-    if (category) {
-      return category;
-    }
+    if (category && !categories.includes(category)) categories.push(category);
   }
+  return categories.length ? categories : ['other'];
+}
 
-  return 'other' satisfies TrovePlaceCategory;
+/** The one category a surface shows when it can show only one. */
+export function categorizePlaceTypes(rawTypes: string[], primaryType?: string | null) {
+  return placeTypeCategories(rawTypes, primaryType)[0] ?? ('other' satisfies TrovePlaceCategory);
+}
+
+type DbPlaceCategory =
+  'DESTINATION' | 'FOOD_AND_DRINK' | 'OTHER' | 'SHOPPING' | 'STAY' | 'THINGS_TO_DO' | 'TRANSPORT';
+
+/** The database spells categories as enum names; everything above it uses Trove's words. */
+export function categoriesFromDb(
+  values: readonly string[] | null | undefined,
+): TrovePlaceCategory[] {
+  return (values ?? []).map((value) => value.toLowerCase() as TrovePlaceCategory);
+}
+
+export function categoriesToDb(values: readonly TrovePlaceCategory[]): DbPlaceCategory[] {
+  return [...new Set(values)].map((value) => value.toUpperCase() as DbPlaceCategory);
+}
+
+/**
+ * What a place is, all told: what its provider types say, plus what the
+ * traveller added for the place itself or for this trip. Additions never take
+ * a derived category away, and `other` stands only when nothing else does.
+ */
+export function effectiveCategories(
+  derived: readonly TrovePlaceCategory[],
+  ...added: ReadonlyArray<readonly TrovePlaceCategory[]>
+): TrovePlaceCategory[] {
+  const all = [...new Set([...derived, ...added.flat()])].filter(
+    (category) => category !== 'other',
+  );
+  return all.length ? all : ['other'];
 }

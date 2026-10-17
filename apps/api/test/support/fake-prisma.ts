@@ -81,7 +81,9 @@ function matches(row: Row, where: Where): boolean {
 
 function hydrateTripPlace(row: Row | undefined) {
   if (!row) return null;
+  const place = store.place.find((candidate) => candidate.id === row.placeId);
   return {
+    categories: [],
     ...row,
     _count: {
       dailyBaseForDays: store.itineraryDay.filter((day) => day.dailyBaseTripPlaceId === row.id)
@@ -91,7 +93,8 @@ function hydrateTripPlace(row: Row | undefined) {
         (day) => day.defaultTimeZoneSourceTripPlaceId === row.id,
       ).length,
     },
-    place: store.place.find((candidate) => candidate.id === row.placeId) ?? null,
+    // Columns the database defaults to an empty list.
+    place: place ? { categories: [], ...place } : null,
   };
 }
 
@@ -141,7 +144,9 @@ function applyData(row: Row, data: Row) {
     row[key] =
       value && typeof value === 'object' && 'increment' in value
         ? Number(row[key] ?? 0) + Number(value.increment)
-        : value;
+        : value && typeof value === 'object' && !Array.isArray(value) && 'push' in value
+          ? [...((row[key] as unknown[] | undefined) ?? []), value.push]
+          : value;
 }
 
 /** Returns rows with their relations attached, which covers every include and select in use. */

@@ -1,3 +1,4 @@
+import type { TrovePlaceCategory } from '@/lib/place-categories';
 import { isConnectedTimingPolicy } from '@trove/types';
 import { getProtectedSession, authenticatedFetch } from '@/lib/auth/transport';
 import { localPreviewInstant } from './local-instant';
@@ -45,10 +46,15 @@ export type ItineraryScheduleInput =
   | { kind: 'exact'; localTime: string; dayPart?: ItineraryDayPart };
 
 export type ItineraryTripPlace = {
+  /** Everything this Place is on this trip, including what the trip added. */
+  categories?: TrovePlaceCategory[];
   customName: string | null;
   id: string;
+  /** What the traveller can change here: a Custom Place's own, or this trip's additions. */
+  manualCategories?: TrovePlaceCategory[];
   note: string | null;
   place: {
+    categories?: TrovePlaceCategory[];
     id: string;
     kind: 'custom' | 'provider';
     location: { latitude: number; longitude: number; timeZone: string | null } | null;

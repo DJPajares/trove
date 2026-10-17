@@ -1,15 +1,20 @@
 import { getProtectedSession, authenticatedFetch } from '@/lib/auth/transport';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import type { TrovePlaceCategory } from '@/lib/place-categories';
 import type { CanonicalPlace } from '@/lib/saved/api';
 
 export type TripPlacePriority = 'interested' | 'maybe' | 'must_go';
 
 export type TripPlace = {
+  /** Everything this Place is on this trip, including what the trip added. */
+  categories?: TrovePlaceCategory[];
   createdAt: string;
   /** What the traveller calls this Place on this trip, if they renamed it. */
   customName: string | null;
   id: string;
   isSaved: boolean;
+  /** What the traveller can change here: a Custom Place's own, or this trip's additions. */
+  manualCategories?: TrovePlaceCategory[];
   note: string | null;
   place: CanonicalPlace;
   priority: TripPlacePriority | null;
@@ -86,7 +91,12 @@ export function addTripPlace(
 export function updateTripPlace(
   tripId: string,
   tripPlaceId: string,
-  input: { customName?: string | null; note?: string | null; priority?: TripPlacePriority | null },
+  input: {
+    categories?: TrovePlaceCategory[];
+    customName?: string | null;
+    note?: string | null;
+    priority?: TripPlacePriority | null;
+  },
 ) {
   return tripPlaceRequest<{ tripPlace: TripPlace }>(`/trips/${tripId}/places/${tripPlaceId}`, {
     body: JSON.stringify(input),

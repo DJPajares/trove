@@ -8,6 +8,7 @@ import {
   parseLocalTime,
 } from './itinerary-rules.js';
 import { refreshDayDefaultTimeZone } from './itineraries.js';
+import { markTripPlacesAsStay } from './place-category-signals.js';
 import { resolvedPlaceTimeZone } from './place-data.js';
 import { placeProviderRefInclude } from './place-serializer.js';
 import { createAuthenticatedSupabaseClient } from './supabase-auth.js';
@@ -789,6 +790,8 @@ export async function createReservation(
       });
       await refreshAccommodationDays(transaction, tripId, applicableDayIds);
     }
+    // A booked stay is a stay, so the Stay picker offers its Place.
+    if (type === 'accommodation') await markTripPlacesAsStay(tripId, [tripPlace?.id], transaction);
     return reservation.id;
   });
   const reservation = await prisma.reservation.findFirst({
@@ -921,6 +924,7 @@ export async function updateReservation(
         current.accommodationDays.map((day) => day.itineraryDayId),
       );
     }
+    if (type === 'accommodation') await markTripPlacesAsStay(tripId, [tripPlace?.id], transaction);
   });
   const reservation = await prisma.reservation.findFirst({
     where: { id: reservationId, trip: { ownerId: userId }, tripId },

@@ -8,6 +8,7 @@ import type { ReactNode } from 'react';
 
 import { SearchField } from '@/components/search-field';
 import { Button } from '@/components/ui/button';
+import { Chip, ChipGroup } from '@/components/ui/chip';
 import {
   Empty,
   EmptyContent,
@@ -23,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import type { TrovePlaceCategory } from '@/lib/place-categories';
 import type { TripPlaceDaySort } from '@/lib/trip-places/signals';
 import type { TripPlacesView } from '@/lib/trip-places/use-trip-places-view';
 import * as Icons from '@/lib/icons';
@@ -54,6 +56,7 @@ export function TripPlacesToolbar({
   view: TripPlacesView;
 }>) {
   const t = useTranslations('tripPlaces');
+  const categoryT = useTranslations('saved.categories');
   const { counts } = view;
   const searchable = counts.all > 1;
 
@@ -125,6 +128,24 @@ export function TripPlacesToolbar({
             </TogglePrimitive>
           ))}
         </ToggleGroupPrimitive>
+      ) : null}
+
+      {/* Narrowing by kind of place is offered once the trip holds more than one kind. */}
+      {searchable && view.categoriesPresent.length > 1 ? (
+        <ChipGroup
+          aria-label={t('categoryFilterLabel')}
+          className="-mx-5 flex-nowrap overflow-x-auto px-5 pb-0.5"
+          multiple={false}
+          onValueChange={([value]) => view.setCategory((value as TrovePlaceCategory) ?? 'all')}
+          value={[view.category]}
+        >
+          <Chip value="all">{categoryT('all')}</Chip>
+          {view.categoriesPresent.map((category) => (
+            <Chip key={category} value={category}>
+              {categoryT(category)}
+            </Chip>
+          ))}
+        </ChipGroup>
       ) : null}
 
       <p aria-live="polite" className="sr-only" role="status">

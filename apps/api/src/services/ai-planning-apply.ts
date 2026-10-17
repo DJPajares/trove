@@ -1,3 +1,4 @@
+import { markTripPlacesAsStay } from './place-category-signals.js';
 import { derivedPlanInstant } from './itinerary-local-timing.js';
 import { groupAppliedStays } from './stay-plan-rules.js';
 import { getPrismaClient, Prisma } from '@trove/db';
@@ -395,6 +396,12 @@ export async function applyAiPlanningSession(
           endDate: parseDateOnly(range.endDate),
         })),
       });
+    // Where the plan sleeps is a stay, whatever the provider calls it.
+    await markTripPlacesAsStay(
+      trip.id,
+      [stayPlan.defaultTripPlaceId, ...stayPlan.ranges.map((range) => range.tripPlaceId)],
+      transaction,
+    );
     const draftDays = new Map(draft.days.map((day) => [day.date, day]));
     for (const date of enumerateDateRange(draft.trip.startDate, draft.trip.endDate)) {
       const day = draftDays.get(date);

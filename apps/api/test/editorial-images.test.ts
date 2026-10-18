@@ -293,7 +293,7 @@ test('an exact Pexels request asks for enough candidates to verify the place', a
 
   const url = new URL(capturedUrl);
   expect(url.pathname).toBe('/v1/search');
-  expect(url.searchParams.get('query')).toBe('Lisbon hotel');
+  expect(url.searchParams.get('query')).toBe('Lisbon hotel architecture');
   expect(url.searchParams.get('per_page')).toBe('15');
   expect(url.searchParams.get('locale')).toBe('pt-BR');
   expect(url.searchParams.get('orientation')).toBe('landscape');
@@ -1082,8 +1082,8 @@ test('a request for a place with no cached row still reaches the shared fallback
 
 /**
  * A cover is a wide band, so the frame that survives its crop is the one worth
- * putting there. This orders equally relevant photographs and nothing else -
- * relevance is still the first sort key in the provider.
+ * putting there. Relevance is verified before the provider compares scene and
+ * frame suitability.
  */
 test('cover fit prefers a wide frame over a tall one, and size breaks the rest', () => {
   const wide = editorialCoverFitScore({ height: 1_080, width: 1_920 });
@@ -1105,7 +1105,7 @@ test('contextual photos must corroborate geography and the requested theme', () 
     name: 'Tokyo',
     context: { area: 'Tokyo', countryCode: 'JP', theme: 'nightlife' },
   };
-  expect(buildPexelsQuery(subject)).toBe('Tokyo Japan night');
+  expect(buildPexelsQuery(subject)).toBe('Tokyo Japan night cityscape');
   expect(
     editorialMatchScore(subject, { altText: 'Tokyo Japan illuminated at night' }),
   ).toBeGreaterThan(0);

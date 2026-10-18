@@ -42,6 +42,7 @@ describe('assignDraftLegModes', () => {
     const day = draft.days.find((entry) => entry.items.length >= 2)!;
     const [first, second] = day.items;
     day.dailyBasePlaceRefId = 'stay';
+    day.stayEndMode = 'same_as_start';
     first!.placeRefId = 'first';
     second!.placeRefId = 'second';
     const contexts = new Map([

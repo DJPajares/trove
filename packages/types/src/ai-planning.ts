@@ -222,16 +222,20 @@ export const aiPlannerModelProposalSchema = z
     schemaVersion: schemaVersionField,
     selectedDurationDays: tripDurationSchema.nullable(),
     /**
-     * Where the traveller said they are staying, as a candidate place and the
-     * zero-based days whose nights are spent there. Never invented.
+     * Named accommodations and disclosed recommendations, with their night indexes.
+     * Null indexes retain a named place whose dates are not established.
      */
+    lodgingRecommendations: z.enum(['allow', 'declined']).optional(),
     stays: z
       .array(
         z
           .object({
             candidatePlaceId: identifierSchema,
-            firstNightDayIndex: z.number().int().min(0),
-            lastNightDayIndex: z.number().int().min(0),
+            firstNightDayIndex: z.number().int().min(0).nullable(),
+            lastNightDayIndex: z.number().int().min(0).nullable(),
+            source: z.enum(['user', 'model']).optional(),
+            isMain: z.boolean().optional(),
+            assignmentIssue: z.enum(['dates_missing', 'dates_conflicting']).optional(),
           })
           .strict(),
       )
@@ -381,6 +385,7 @@ export const aiPlannerDraftSchema = z
     days: z.array(
       z
         .object({
+          stayEndMode: z.enum(['none', 'place', 'same_as_start']).optional(),
           dailyBaseDeparturePlaceRefId: identifierSchema.nullable(),
           dailyBasePlaceRefId: identifierSchema.nullable(),
           date: dateOnlySchema,
@@ -392,6 +397,21 @@ export const aiPlannerDraftSchema = z
         })
         .strict(),
     ),
+    mainStaySource: z.enum(['user', 'model']).optional(),
+    stays: z
+      .array(
+        z
+          .object({
+            placeRefId: identifierSchema,
+            source: z.enum(['user', 'model']),
+            isMain: z.boolean(),
+            arriveDate: dateOnlySchema.nullable(),
+            leaveDate: dateOnlySchema.nullable(),
+            assignmentIssue: z.enum(['dates_missing', 'dates_conflicting']).optional(),
+          })
+          .strict(),
+      )
+      .optional(),
     evidence: z.array(aiPlannerEvidenceSchema),
     normalizedRequest: aiPlannerNormalizedRequestSchema,
     places: z.array(aiPlannerDraftPlaceSchema),
@@ -483,4 +503,23 @@ export function parseAiPlannerModelProposal(value: unknown) {
 
 export function parseAiPlannerDraft(value: unknown) {
   return parseVersioned(aiPlannerDraftSchema, value);
+}
+
+/** Explicit empty evenings never inherit the morning; old drafts retain their meaning. */
+export function draftDayStay(day: {
+  dailyBasePlaceRefId: string | null;
+  dailyBaseDeparturePlaceRefId: string | null;
+  stayEndMode?: 'none' | 'place' | 'same_as_start';
+}) {
+  return {
+    start: day.dailyBasePlaceRefId,
+    end:
+      day.stayEndMode === 'none'
+        ? null
+        : day.stayEndMode === 'same_as_start'
+          ? day.dailyBasePlaceRefId
+          : day.stayEndMode === 'place'
+            ? day.dailyBaseDeparturePlaceRefId
+            : (day.dailyBaseDeparturePlaceRefId ?? day.dailyBasePlaceRefId),
+  };
 }

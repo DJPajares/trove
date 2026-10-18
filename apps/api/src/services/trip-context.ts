@@ -42,6 +42,7 @@ export async function readTripContext(
       countries: true,
       referenceTimeZone: true,
       startDate: true,
+      endDate: true,
       destinations: {
         orderBy: { position: 'asc' },
         select: { place: { include: placeProviderRefInclude } },

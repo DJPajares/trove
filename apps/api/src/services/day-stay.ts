@@ -16,6 +16,7 @@ export type DayStaySource = import('@trove/types').StaySource;
 type EndpointMode = 'INHERIT' | 'NONE' | 'PLACE' | 'SAME_AS_START';
 export type TripStayPlan<Place> = {
   startDate?: Date;
+  endDate?: Date;
   defaultStayTripPlace?: Place | null;
   stayRanges?: readonly { startDate: Date; endDate: Date; tripPlace: Place }[];
 };
@@ -31,7 +32,7 @@ export type DayStayEnd<Place> = { place: Place; source: DayStaySource } | null;
 export type StayAccommodation<Place> = {
   checkInDate: Date | null;
   checkOutDate: Date | null;
-  /** Days the traveller linked by hand; when any exist, they alone apply. */
+  /** Linked days restrict this booking; known dates still constrain each endpoint. */
   linkedDayIds: readonly string[];
   tripPlace: Place | null;
 };
@@ -50,24 +51,28 @@ function only<Place extends { id: string }>(places: readonly Place[]): Place | n
   return distinct.length === 1 ? distinct[0]! : null;
 }
 
-/**
- * Hand-linked accommodations keep their original rule: a single one is both
- * ends; two split cleanly only on the day one is checked out of and the other
- * checked into.
- */
-function linkedStay<Place extends { id: string }>(
-  linked: ReadonlyArray<StayAccommodation<Place> & { tripPlace: Place }>,
-  day: Date,
-): { start: Place | null; end: Place | null } {
-  const places = only(linked.map((entry) => entry.tripPlace));
-  if (places) return { start: places, end: places };
-  if (linked.length === 2) {
-    const leaving = linked.find((entry) => entry.checkOutDate?.getTime() === day.getTime());
-    const arriving = linked.find((entry) => entry.checkInDate?.getTime() === day.getTime());
-    if (leaving && arriving && leaving.tripPlace.id !== arriving.tripPlace.id)
-      return { start: leaving.tripPlace, end: arriving.tripPlace };
-  }
-  return { start: null, end: null };
+/** Linked days select applicability; known dates still constrain each endpoint. */
+function accommodationCandidates<Place extends { id: string }>(
+  day: Pick<StayDay<Place>, 'id' | 'date'>,
+  accommodations: readonly StayAccommodation<Place>[],
+  endpoint: 'start' | 'end',
+) {
+  const eligible = (entry: StayAccommodation<Place>) =>
+    endpoint === 'start'
+      ? (!entry.checkInDate || entry.checkInDate < day.date) &&
+        (!entry.checkOutDate || day.date <= entry.checkOutDate)
+      : (!entry.checkInDate || entry.checkInDate <= day.date) &&
+        (!entry.checkOutDate || day.date < entry.checkOutDate);
+  const located = accommodations.filter(
+    (entry): entry is StayAccommodation<Place> & { tripPlace: Place } => entry.tripPlace !== null,
+  );
+  const linked = located.filter((entry) => entry.linkedDayIds.includes(day.id) && eligible(entry));
+  return linked.length
+    ? linked
+    : located.filter(
+        (entry) =>
+          !entry.linkedDayIds.length && entry.checkInDate && entry.checkOutDate && eligible(entry),
+      );
 }
 
 /** The accommodation-backed stay alone, before anything the traveller set. */
@@ -75,31 +80,11 @@ export function accommodationStay<Place extends { id: string }>(
   day: Pick<StayDay<Place>, 'id' | 'date'>,
   accommodations: readonly StayAccommodation<Place>[],
 ): { start: Place | null; end: Place | null } {
-  const located = accommodations.filter(
-    (entry): entry is StayAccommodation<Place> & { tripPlace: Place } => entry.tripPlace !== null,
-  );
-  const linked = located.filter((entry) => entry.linkedDayIds.includes(day.id));
-  if (linked.length) return linkedStay(linked, day.date);
-
-  const time = day.date.getTime();
-  const dated = located.filter(
-    (entry) => !entry.linkedDayIds.length && entry.checkInDate && entry.checkOutDate,
-  );
   return {
     start: only(
-      dated
-        .filter(
-          (entry) => entry.checkInDate!.getTime() < time && time <= entry.checkOutDate!.getTime(),
-        )
-        .map((entry) => entry.tripPlace),
+      accommodationCandidates(day, accommodations, 'start').map((entry) => entry.tripPlace),
     ),
-    end: only(
-      dated
-        .filter(
-          (entry) => entry.checkInDate!.getTime() <= time && time < entry.checkOutDate!.getTime(),
-        )
-        .map((entry) => entry.tripPlace),
-    ),
+    end: only(accommodationCandidates(day, accommodations, 'end').map((entry) => entry.tripPlace)),
   };
 }
 
@@ -119,22 +104,10 @@ export function resolveDayStay<Place extends { id: string }>(
     if (range) return { place: range.tripPlace, source: 'stay_range' };
     if (booked[end]) return { place: booked[end], source: 'accommodation' };
     // A conflicting booking is not permission to guess the trip default.
-    const located = accommodations.filter((entry) => entry.tripPlace);
-    const linked = located.filter((entry) => entry.linkedDayIds.includes(day.id));
-    const candidates = linked.length
-      ? linked
-      : located.filter(
-          (entry) =>
-            !entry.linkedDayIds.length &&
-            entry.checkInDate &&
-            entry.checkOutDate &&
-            (end === 'start'
-              ? entry.checkInDate < day.date && day.date <= entry.checkOutDate
-              : entry.checkInDate <= day.date && day.date < entry.checkOutDate),
-        );
-    if (candidates.length) return null;
+    if (accommodationCandidates(day, accommodations, end).length) return null;
     // A trip default plans this trip's nights, not the night before arrival.
     if (end === 'start' && day.date.getTime() === plan.startDate?.getTime()) return null;
+    if (end === 'end' && plan.endDate && day.date >= plan.endDate) return null;
     return plan.defaultStayTripPlace
       ? { place: plan.defaultStayTripPlace, source: 'trip_default' }
       : null;

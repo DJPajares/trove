@@ -711,6 +711,20 @@ function draftRuleIssues(draft: AiPlannerDraft, maxItineraryDays: number) {
     }
   });
 
+  for (const [index, stay] of (draft.stays ?? []).entries()) {
+    if (!placeIds.has(stay.placeRefId))
+      issues.push({
+        code: 'dangling_reference',
+        path: ['stays', index],
+        subjectId: stay.placeRefId,
+      });
+    if (
+      (stay.arriveDate === null) !== (stay.leaveDate === null) ||
+      (stay.arriveDate && stay.leaveDate && stay.arriveDate >= stay.leaveDate)
+    )
+      issues.push({ code: 'invalid_date_range', path: ['stays', index] });
+  }
+
   draft.days.forEach((day, dayIndex) => {
     if (day.destinationId && !destinationIds.has(day.destinationId)) {
       issues.push({ code: 'dangling_reference', path: ['days', dayIndex, 'destinationId'] });

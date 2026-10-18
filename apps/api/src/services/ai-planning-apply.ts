@@ -1,3 +1,4 @@
+import { draftDayStay } from '@trove/types';
 import { markTripPlacesAsStay } from './place-category-signals.js';
 import { derivedPlanInstant } from './itinerary-local-timing.js';
 import { groupAppliedStays } from './stay-plan-rules.js';
@@ -372,16 +373,18 @@ export async function applyAiPlanningSession(
     const dayIdByDate = new Map<string, string>();
     const itemIdByDraftId = new Map<string, string>();
 
+    const mainStay = draft.stays?.find((stay) => stay.isMain);
     const stayPlan = groupAppliedStays(
       draft.days.map((day) => ({
         date: day.date,
         start: day.dailyBasePlaceRefId ? (tripPlaceIds.get(day.dailyBasePlaceRefId) ?? null) : null,
-        end:
-          (day.dailyBaseDeparturePlaceRefId ?? day.dailyBasePlaceRefId)
-            ? (tripPlaceIds.get((day.dailyBaseDeparturePlaceRefId ?? day.dailyBasePlaceRefId)!) ??
-              null)
-            : null,
+        end: draftDayStay(day).end ? (tripPlaceIds.get(draftDayStay(day).end!) ?? null) : null,
       })),
+      mainStay
+        ? mainStay.arriveDate
+          ? (tripPlaceIds.get(mainStay.placeRefId) ?? null)
+          : null
+        : undefined,
     );
     await transaction.trip.update({
       where: { id: trip.id },
@@ -399,7 +402,11 @@ export async function applyAiPlanningSession(
     // Where the plan sleeps is a stay, whatever the provider calls it.
     await markTripPlacesAsStay(
       trip.id,
-      [stayPlan.defaultTripPlaceId, ...stayPlan.ranges.map((range) => range.tripPlaceId)],
+      [
+        stayPlan.defaultTripPlaceId,
+        ...stayPlan.ranges.map((range) => range.tripPlaceId),
+        ...(draft.stays ?? []).map((stay) => tripPlaceIds.get(stay.placeRefId) ?? null),
+      ],
       transaction,
     );
     const draftDays = new Map(draft.days.map((day) => [day.date, day]));

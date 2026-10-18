@@ -218,6 +218,9 @@ function fieldDefault(root: Json, path: Path, rawPrompt: string): { value: unkno
     return undefined;
   }
 
+  if (path[0] === 'stays' && (key === 'firstNightDayIndex' || key === 'lastNightDayIndex'))
+    return { value: null };
+
   if (path[0] === 'items') {
     switch (key) {
       case 'blockType':

@@ -1,0 +1,5 @@
+simulation: multi-stay
+routing: header
+mocks:
+  - routeKey: google-places
+    path: ../mocks/google-places-stays/default.js

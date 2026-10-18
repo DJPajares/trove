@@ -1,3 +1,5 @@
+import { draftDayStay } from '@trove/types';
+import { resolveDayStay } from '../src/services/day-stay.js';
 import { scoreDay, toPlanScoreDayPayload } from '../src/services/plan-score-rules.js';
 import { Prisma } from '@trove/db';
 import type { AiPlannerDraft } from '@trove/types';
@@ -270,8 +272,13 @@ function createApplyStore(
       },
     },
     place: {
+      async update({ where, data }: any) {
+        const place = working.places.find((p) => p.id === where.id)!;
+        place.categories.push(data.categories.push);
+        return place;
+      },
       async create({ data }: any) {
-        const value = { ...data, id: id(), providerAddress: null };
+        const value = { categories: [], ...data, id: id(), providerAddress: null };
         working.places.push(value);
         return { id: value.id };
       },
@@ -349,13 +356,22 @@ function createApplyStore(
     },
     tripPlace: {
       async create({ data }: any) {
-        const value = { ...data, id: id() };
+        const value = { categories: [], ...data, id: id() };
         working.tripPlaces.push(value);
         return { id: value.id };
       },
-      // Stay tagging reads the places it marks; none of these assertions are about it.
-      async findMany() {
-        return [];
+      async update({ where, data }: any) {
+        const place = working.tripPlaces.find((p) => p.id === where.id)!;
+        place.categories.push(data.categories.push);
+        return place;
+      },
+      async findMany({ where }: any) {
+        return working.tripPlaces
+          .filter((p) => where.id.in.includes(p.id) && p.tripId === where.tripId)
+          .map((p) => ({
+            ...p,
+            place: { categories: [], ...working.places.find((place) => place.id === p.placeId) },
+          }));
       },
     },
   });
@@ -1082,4 +1098,92 @@ test('timezone and derived-instant metadata do not change an equivalent local-cl
   await apply(store);
   expect(store.state.trips[0]?.planScore).toBeDefined();
   expect(store.state.trips[0]?.planScoreRevision).toEqual(expect.any(String));
+});
+
+test('Apply retains unassigned accommodation and preserves checkout endpoints and the carried score', async () => {
+  const draft = scoreableDraft();
+  const accommodation = draft.places.find((p) => p.resolution === 'custom')!;
+  const recommended = { ...accommodation, id: 'place:recommended', name: 'Recommended hotel' };
+  const unassigned = { ...accommodation, id: 'place:undated', name: 'Undated hotel' };
+  draft.places.push(recommended, unassigned);
+  draft.stays = [
+    {
+      placeRefId: accommodation.id,
+      source: 'user',
+      isMain: true,
+      arriveDate: draft.trip.startDate,
+      leaveDate: draft.trip.endDate,
+    },
+    {
+      placeRefId: recommended.id,
+      source: 'model',
+      isMain: false,
+      arriveDate: draft.days[1]!.date,
+      leaveDate: draft.trip.endDate,
+    },
+    {
+      placeRefId: unassigned.id,
+      source: 'user',
+      isMain: false,
+      arriveDate: null,
+      leaveDate: null,
+      assignmentIssue: 'dates_missing',
+    },
+  ];
+  draft.days.forEach((day, index) => {
+    day.dailyBasePlaceRefId = index === 0 ? null : index === 1 ? accommodation.id : recommended.id;
+    day.dailyBaseDeparturePlaceRefId =
+      index === 0 ? accommodation.id : index === 1 ? recommended.id : null;
+    day.stayEndMode = index === 2 ? 'none' : 'place';
+  });
+  const store = createApplyStore(draft, { session: { planScore: draftAssessment(draft) } });
+  await apply(store);
+  const tripPlaceId = (ref: string | null) =>
+    ref
+      ? (store.state.tripPlaces.find(
+          (p) =>
+            p.placeId ===
+            store.state.places.find(
+              (place) => place.customName === draft.places.find((entry) => entry.id === ref)?.name,
+            )?.id,
+        )?.id ?? null)
+      : null;
+  const trip = store.state.trips[0]!;
+  expect(trip.defaultStayTripPlaceId).toBe(tripPlaceId(accommodation.id));
+  expect(store.state.stayRanges).toHaveLength(1);
+  for (const stay of draft.stays) {
+    const place = store.state.places.find(
+      (p) => p.customName === draft.places.find((entry) => entry.id === stay.placeRefId)?.name,
+    )!;
+    expect(place.categories).toContain('STAY');
+    expect(store.state.tripPlaces.some((p) => p.placeId === place.id)).toBe(true);
+  }
+  for (const [index, row] of store.state.days.entries()) {
+    const resolved = resolveDayStay(
+      {
+        ...row,
+        dailyBaseTripPlace: row.dailyBaseTripPlaceId ? { id: row.dailyBaseTripPlaceId } : null,
+        dailyBaseDepartureTripPlace: row.dailyBaseDepartureTripPlaceId
+          ? { id: row.dailyBaseDepartureTripPlaceId }
+          : null,
+      } as never,
+      [],
+      {
+        ...trip,
+        defaultStayTripPlace: { id: trip.defaultStayTripPlaceId },
+        stayRanges: store.state.stayRanges.map((r) => ({
+          ...r,
+          tripPlace: { id: r.tripPlaceId },
+        })) as never,
+      },
+    );
+    const expected = draftDayStay(draft.days[index]!);
+    expect([resolved.start?.place.id ?? null, resolved.end?.place.id ?? null]).toEqual([
+      tripPlaceId(expected.start),
+      tripPlaceId(expected.end),
+    ]);
+  }
+  expect(store.state.days.at(-1)?.stayEndMode).toBe('NONE');
+  expect(trip.planScore).toBeDefined();
+  expect(trip.planScoreRevision).toEqual(expect.any(String));
 });

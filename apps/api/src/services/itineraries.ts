@@ -460,6 +460,7 @@ export async function refreshDayDefaultTimeZone(
       trip: {
         select: {
           startDate: true,
+          endDate: true,
           referenceTimeZone: true,
           ...tripStayInclude({ include: { place: { include: placeProviderRefInclude } } }),
           reservations: stayAccommodationsInclude({

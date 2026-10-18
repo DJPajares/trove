@@ -10,6 +10,7 @@ import {
 } from '@trove/types';
 import { AiPlannerRepairLog } from './ai-planner-repair-log.js';
 import { enumerateDateRange } from './trip-rules.js';
+import { normalizeProposedStays } from './ai-planning-stays.js';
 
 const index = z.number().int().min(0);
 
@@ -141,19 +142,27 @@ export const aiPlannerCompactProposalSchema = z
     partySize: aiPlannerModelProposalSchema.shape.partySize,
     places: z.array(aiPlannerCandidatePlaceSchema.omit({ id: true })),
     selectedDurationDays: aiPlannerModelProposalSchema.shape.selectedDurationDays,
+    lodgingRecommendations: z.enum(['allow', 'declined']).optional(),
     stays: z
       .array(
         z
           .object({
             candidatePlaceIndex: index.describe('The places entry the traveller is sleeping at.'),
-            firstNightDayIndex: index.describe('Zero-based day they arrive at this stay.'),
-            lastNightDayIndex: index.describe('Zero-based day before they leave this stay.'),
+            firstNightDayIndex: index
+              .nullable()
+              .describe('Arrival night, zero-based. Null when the traveller gave no usable dates.'),
+            lastNightDayIndex: index
+              .nullable()
+              .describe('Last night, zero-based. Null when dates are unknown.'),
+            source: z.enum(['user', 'model']).optional(),
+            isMain: z.boolean().optional(),
+            assignmentIssue: z.enum(['dates_missing', 'dates_conflicting']).optional(),
           })
           .strict(),
       )
       .optional()
       .describe(
-        'Only where the traveller said they are staying, with the nights spent there. Never suggested lodging.',
+        'Every named accommodation, including those with unknown dates, and recommended lodging unless declined. Mark recommendations as model source.',
       ),
     tripDescription: aiPlannerModelProposalSchema.shape.tripDescription,
     tripName: aiPlannerModelProposalSchema.shape.tripName,
@@ -521,34 +530,48 @@ export function expandAiPlannerProposal(
   const destinationWords = new Set(
     destinationIntents.flatMap((intent) => stayKey(intent.name).split(' ')),
   );
-  // One bed a night: where the model overlaps two stays, the one that starts
-  // first keeps its nights and the next begins after it.
-  let firstFreeNight = 0;
-  const stays = (compact.stays ?? [])
-    .filter((stay) => stay.lastNightDayIndex >= stay.firstNightDayIndex)
-    .sort((left, right) => left.firstNightDayIndex - right.firstNightDayIndex)
-    .flatMap((stay) => {
+  const lodgingRecommendations =
+    compact.lodgingRecommendations === 'declined' ||
+    /\b(?:do not|don['’]t|no|without)\s+(?:(?:recommend|suggest)(?:ing|ed)?\s+)?(?:(?:a|any|new)\s+)?(?:hotels?|lodging|accommodations?|places? to stay|stays?)\b/i.test(
+      rawPrompt,
+    )
+      ? ('declined' as const)
+      : ('allow' as const);
+  const stays = normalizeProposedStays(
+    (compact.stays ?? []).flatMap((stay) => {
       const place = places[stay.candidatePlaceIndex];
+      if (!place) return [];
+      const named = stayNamedInRequest(
+        [place.name, place.searchName ?? ''].filter(Boolean),
+        requestKey,
+        destinationWords,
+      );
+      const source =
+        stay.source === 'model' ? ('model' as const) : named ? ('user' as const) : null;
+      if (!source) return [];
       if (
-        !place ||
-        !stayNamedInRequest(
-          [place.name, place.searchName ?? ''].filter(Boolean),
-          requestKey,
-          destinationWords,
-        )
+        source === 'model' &&
+        destinations.some((destination) => destination.candidatePlaceId === place.id)
       )
         return [];
-      const firstNightDayIndex = Math.max(stay.firstNightDayIndex, firstFreeNight);
-      if (firstNightDayIndex > stay.lastNightDayIndex) return [];
-      firstFreeNight = stay.lastNightDayIndex + 1;
+      if (source === 'model' && lodgingRecommendations === 'declined') return [];
       return [
         {
           candidatePlaceId: place.id,
-          firstNightDayIndex,
+          firstNightDayIndex: stay.firstNightDayIndex,
           lastNightDayIndex: stay.lastNightDayIndex,
+          source,
+          isMain: source === 'user' && stay.isMain === true,
         },
       ];
-    });
+    }),
+    compact.normalizedRequest.datePreference.kind === 'exact'
+      ? enumerateDateRange(
+          compact.normalizedRequest.datePreference.startDate,
+          compact.normalizedRequest.datePreference.endDate,
+        ).length
+      : (compact.selectedDurationDays ?? 0),
+  );
   // A stay is where days start and end. A stop the model added there on its
   // own (checking in, heading back) repeats the Stay row; one the traveller
   // asked for, such as dinner at the hotel, is theirs and stays.
@@ -582,6 +605,7 @@ export function expandAiPlannerProposal(
     schemaVersion: AI_PLANNER_SCHEMA_VERSION,
     selectedDurationDays: compact.selectedDurationDays,
     stays,
+    lodgingRecommendations,
     tripDescription: compact.tripDescription,
     tripName: compact.tripName,
   };

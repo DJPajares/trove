@@ -12,7 +12,9 @@ import { EditorialImageProviderError, MAX_GENERIC_IMAGES } from './editorial-ima
 import {
   buildEditorialSearchQuery,
   editorialCoverFitScore,
+  editorialFrameTier,
   editorialMatchScore,
+  editorialSceneScore,
   supportedEditorialLocale,
 } from './editorial-image-matching.js';
 import type { ProviderCallSource } from './provider-usage.js';
@@ -25,8 +27,9 @@ const DEFAULT_TIMEOUT_MS = 8_000;
  * An exact request asks for enough landscape candidates to verify the venue; a
  * generic request asks for enough to fill the shared fallback pool. At most
  * three verified references are retained for a subject and eight for the pool,
- * ordered by match score, then by how well each frame works as a cover, then by
- * the order the provider returned them.
+ * selected from the best available frame tier, then ordered by scene focus,
+ * cover fit, match strength, and the provider's original order. Portrait-focused
+ * subjects never become fallback pool entries.
  */
 export const PEXELS_SEARCH_PARAMETERS = {
   orientation: 'landscape',
@@ -208,36 +211,52 @@ export class PexelsEditorialImageProvider implements EditorialImageProvider {
     const seenIds = new Set<string>();
     const seenUrls = new Set<string>();
 
-    return (body.photos ?? [])
-      .flatMap((photo, position) => {
-        const reference = mapPexelsPhoto(photo);
-        const score = reference
-          ? editorialMatchScore(subject, {
-              altText: reference.altText,
-              description: cleanString(photo.description),
-              metadata: photoMetadata(photo),
-              name: cleanString(photo.name),
-              providerPageUrl: reference.attribution.providerPageUrl,
-              sourceUrl: reference.sourceUrl,
-              title: cleanString(photo.title),
-            })
-          : 0;
-        if (
-          !reference ||
-          score === 0 ||
-          seenIds.has(reference.externalPhotoId) ||
-          seenUrls.has(reference.sourceUrl)
-        ) {
-          return [];
-        }
-        seenIds.add(reference.externalPhotoId);
-        seenUrls.add(reference.sourceUrl);
-        return [{ coverFit: editorialCoverFitScore(reference), position, reference, score }];
-      })
+    const candidates = (body.photos ?? []).flatMap((photo, position) => {
+      const reference = mapPexelsPhoto(photo);
+      if (!reference) return [];
+      const evidence = {
+        altText: reference.altText,
+        description: cleanString(photo.description),
+        metadata: photoMetadata(photo),
+        name: cleanString(photo.name),
+        providerPageUrl: reference.attribution.providerPageUrl,
+        sourceUrl: reference.sourceUrl,
+        title: cleanString(photo.title),
+      };
+      const score = editorialMatchScore(subject, evidence);
+      const scene = editorialSceneScore(evidence);
+      if (
+        score === 0 ||
+        scene < 0 ||
+        seenIds.has(reference.externalPhotoId) ||
+        seenUrls.has(reference.sourceUrl)
+      ) {
+        return [];
+      }
+      seenIds.add(reference.externalPhotoId);
+      seenUrls.add(reference.sourceUrl);
+      return [
+        {
+          coverFit: editorialCoverFitScore(reference),
+          frame: editorialFrameTier(reference),
+          position,
+          reference,
+          scene,
+          score,
+        },
+      ];
+    });
+    // Do not pad a landscape pool with portraits: generic consumers select by
+    // seed rather than rank. If landscape results are absent, gracefully use
+    // square/unknown frames, then taller place photographs from this same call.
+    const bestFrame = Math.max(...candidates.map(({ frame }) => frame));
+    return candidates
+      .filter(({ frame }) => frame === bestFrame)
       .toSorted(
         (left, right) =>
-          right.score - left.score ||
+          right.scene - left.scene ||
           right.coverFit - left.coverFit ||
+          right.score - left.score ||
           left.position - right.position,
       )
       .map(({ reference }) => reference)

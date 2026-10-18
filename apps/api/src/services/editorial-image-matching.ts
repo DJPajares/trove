@@ -17,6 +17,19 @@ const CATEGORY_QUERY_TERMS: Record<TrovePlaceCategory, string> = {
   transport: 'station',
 };
 
+// Positive scene terms keep searches about the environment. Pexels search does
+// not document negative-keyword syntax, so exclusions belong in local ranking.
+const THEME_SCENE_TERMS = {
+  beach: 'coastline',
+  food: 'restaurant interior',
+  market: 'streetscape',
+  museum: 'architecture',
+  nature: 'landscape',
+  nightlife: 'cityscape',
+  shopping: 'streetscape',
+  temple: 'architecture',
+} as const;
+
 const UNHELPFUL_PLACE_TYPES = new Set([
   'establishment',
   'food',
@@ -265,6 +278,10 @@ export function buildEditorialSearchQuery(subject: EditorialImageSubject) {
       parts,
       subject.context.theme ? DAY_PHOTO_THEME_TERMS[subject.context.theme][0] : null,
     );
+    appendUniquePart(
+      parts,
+      subject.context.theme ? THEME_SCENE_TERMS[subject.context.theme] : 'scenery',
+    );
     return parts.join(' ').slice(0, MAX_EDITORIAL_QUERY_LENGTH);
   }
   appendUniquePart(parts, subject.name);
@@ -274,11 +291,13 @@ export function buildEditorialSearchQuery(subject: EditorialImageSubject) {
     appendUniquePart(parts, detailedEditorialPlaceType(subject)?.replace(/_/g, ' '));
   }
 
-  const categoryTerm = CATEGORY_QUERY_TERMS[subject.category ?? 'destination'];
+  const category = subject.category ?? 'destination';
+  const categoryTerm = category === 'destination' ? 'scenery' : CATEGORY_QUERY_TERMS[category];
   const existingTokens = new Set(normalizedTokens(parts.join(' ')));
   if (!normalizedTokens(categoryTerm).every((token) => existingTokens.has(token))) {
     appendUniquePart(parts, categoryTerm);
   }
+  if (category === 'stay') appendUniquePart(parts, 'architecture');
 
   let query = '';
   for (const part of parts) {
@@ -414,17 +433,16 @@ export function editorialMatchScore(
  * How well a photograph works as a cover, rather than how well it matches.
  *
  * A cover is a wide band across the top of a screen, so a frame near 16:9 keeps
- * its subject when the crop takes the rest, and a taller one loses it. This is
- * a tiebreak and only a tiebreak: it orders photographs that were equally
- * relevant, which is exactly the case where "whatever the provider returned
- * first" was arbitrary.
+ * more of its subject after cropping. Relevance is checked separately before
+ * choosing a scene and its frame; provider order breaks any remaining ties.
  */
 const COVER_ASPECT_RATIO = 16 / 9;
 const COVER_MINIMUM_WIDTH = 1_600;
 
 export function editorialCoverFitScore(photo: { height?: number | null; width?: number | null }) {
-  const { height, width } = photo;
-  if (!width || !height || width <= 0 || height <= 0) return 0;
+  const dimensions = photoDimensions(photo);
+  if (!dimensions) return 0;
+  const { width, height } = dimensions;
 
   // Distance from the cover's shape, in either direction: a panorama is as hard
   // to place in a fixed band as a portrait.
@@ -434,4 +452,62 @@ export function editorialCoverFitScore(photo: { height?: number | null; width?: 
   const resolution = width >= COVER_MINIMUM_WIDTH ? 2 : 0;
 
   return shape + resolution;
+}
+
+function photoDimensions({ width, height }: { height?: number | null; width?: number | null }) {
+  return width &&
+    height &&
+    Number.isFinite(width) &&
+    Number.isFinite(height) &&
+    width > 0 &&
+    height > 0
+    ? { width, height }
+    : null;
+}
+
+/** Prefer landscapes as a collection, including shared pools picked by seed. */
+export function editorialFrameTier(photo: { height?: number | null; width?: number | null }) {
+  const dimensions = photoDimensions(photo);
+  if (!dimensions) return 1;
+  return dimensions.width > dimensions.height ? 2 : dimensions.width === dimensions.height ? 1 : 0;
+}
+
+const PERSON =
+  /\b(?:person|people|man|men|woman|women|boy|girl|child|children|couple|model|bride|groom|tourist|travell?er)\b/;
+const PEOPLE_FOCUS =
+  /\b(?:posing|poses|fashion model|fashion shoot|fashion portrait|beauty portrait|lifestyle portrait|portrait of|portraits of|man portrait|woman portrait|couple portrait)\b/;
+const PERSON_CLOSE_UP =
+  /\bclose up (?:of )?(?:(?:a|an|the|young|smiling|happy)\s+)*(?:person|man|woman|boy|girl|child|couple|model|face)\b/;
+const PERSON_SUBJECT =
+  /^(?:(?:a|an|the|young|beautiful|smiling|happy|stylish|local|elderly)\s+)*(?:woman|man|girl|boy|person|couple|model|bride|groom)\s+(?:in|at|on|with|by|beside|near|under|wearing|dressed|standing|sitting|walking|smiling|looking|holding|admiring|taking|enjoying|relaxing)\b/;
+const SCENE =
+  /\b(?:architectur\w*|buildings?|cityscape|skyline|streets?|streetscape|alleys?|coast\w*|beach\w*|landscap\w*|scener\w*|mountains?|forests?|lake\w*|rivers?|waterfall\w*|islands?|temples?|shrines?|landmarks?|panoram\w*|aerial|gardens?|parks?|harbou?rs?|bridges?|cathedrals?|castles?|palaces?|ruins?|interiors?|exteriors?|markets?|squares?|villages?)\b/;
+
+/**
+ * A conservative caption heuristic, not visual recognition. Use descriptive
+ * text and the photo slug, never photographer names or loose tags
+ * to decide the main subject. Missing captions remain usable fallbacks.
+ * A portrait gallery or a street with pedestrians is still a place photograph.
+ */
+export function editorialSceneScore(photo: EditorialPhotoEvidence): number {
+  const captions = [
+    photo.altText,
+    photo.description,
+    photo.title,
+    photo.name,
+    photoPath(photo.providerPageUrl).replace(/^\/photo\//, ''),
+  ].filter((value): value is string => Boolean(value?.trim()));
+  const descriptions = captions.map((caption) => normalizedTokens(caption).join(' '));
+  if (
+    descriptions.some(
+      (text) =>
+        /\b(?:selfies?|headshots?)\b/.test(text) ||
+        (PERSON.test(text) && PEOPLE_FOCUS.test(text)) ||
+        PERSON_CLOSE_UP.test(text) ||
+        PERSON_SUBJECT.test(text),
+    )
+  ) {
+    return -1;
+  }
+  return descriptions.some((text) => SCENE.test(text)) ? 1 : 0;
 }

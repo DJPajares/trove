@@ -6,19 +6,8 @@ import { PLAN_SCORE_RUBRIC_VERSION } from './plan-score-rules.js';
 import { parseLocalTime } from './itinerary-rules.js';
 import { parseDateOnly } from './trip-rules.js';
 
-/**
- * Where a draft day starts and ends, the same way the itinerary reads an
- * applied day: it starts at its stay and ends at its departure stay, else back
- * where it started.
- */
-export function draftDayStay(
-  day: Pick<AiPlannerDraft['days'][number], 'dailyBasePlaceRefId' | 'dailyBaseDeparturePlaceRefId'>,
-) {
-  return {
-    start: day.dailyBasePlaceRefId,
-    end: day.dailyBaseDeparturePlaceRefId ?? day.dailyBasePlaceRefId,
-  };
-}
+import { draftDayStay } from '@trove/types';
+export { draftDayStay } from '@trove/types';
 
 /**
  * The stored travel mode a draft leg becomes on Apply. A draft written before
@@ -31,7 +20,7 @@ export function draftLegMode(mode: AiPlannerLegMode | undefined): 'DRIVE' | 'TRA
 /** Binds an assessment to the final itinerary, not mutable review copy. */
 export function draftPlanScoreInputRevision(draft: AiPlannerDraft): string {
   const payload = {
-    version: 6,
+    version: 7,
     preferences: {
       pace: draft.trip.pace,
       paceSource: draft.trip.paceSource,
@@ -51,7 +40,7 @@ export function draftPlanScoreInputRevision(draft: AiPlannerDraft): string {
     days: draft.days.map((day) => ({
       date: day.date,
       dailyBase: day.dailyBasePlaceRefId,
-      departureBase: day.dailyBaseDeparturePlaceRefId,
+      departureBase: draftDayStay(day).end,
       startMode: draftLegMode(day.routeStartTravelMode),
       items: day.items.map((item) => ({
         id: item.id,
@@ -138,7 +127,9 @@ export function appliedDraftScoreInputsMatch(
       });
     }
     expectedDays.push({
-      dailyBaseDepartureTripPlaceId: ref(day.dailyBaseDeparturePlaceRefId),
+      stayStartMode: day.dailyBasePlaceRefId ? 'PLACE' : 'NONE',
+      stayEndMode: draftDayStay(day).end ? 'PLACE' : 'NONE',
+      dailyBaseDepartureTripPlaceId: ref(draftDayStay(day).end),
       dailyBaseTripPlaceId: ref(day.dailyBasePlaceRefId),
       date: parseDateOnly(day.date),
       defaultTimeZone: actualDay.defaultTimeZone,

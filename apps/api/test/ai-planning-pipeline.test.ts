@@ -1334,8 +1334,9 @@ test('named stays survive grounding as custom stays when the provider cannot ver
   ).toStrictEqual([
     [null, 'Park Hyatt Tokyo'],
     ['Park Hyatt Tokyo', 'Hoshinoya Tokyo'],
-    [null, null],
+    ['Hoshinoya Tokyo', null],
   ]);
+  expect(draft.days.at(-1)?.stayEndMode).toBe('none');
   expect(draft.places.find((place) => place.name === 'Hoshinoya Tokyo')).toMatchObject({
     resolution: 'custom',
   });

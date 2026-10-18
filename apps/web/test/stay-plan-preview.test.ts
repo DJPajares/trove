@@ -120,3 +120,18 @@ test('previews preserve independent day overrides, no stay, bookings and ambiguo
     ),
   ).toEqual({ start: 'ritz', end: 'ritz' });
 });
+
+test('the final day preview does not infer an evening at the main stay', () => {
+  expect(previewStayEndpoints(day('2026-10-20'), plan, '2026-10-18', '2026-10-20')).toEqual({
+    start: 'marina',
+    end: null,
+  });
+  expect(
+    previewStayEndpoints(
+      day('2026-10-20', { stayEndMode: 'SAME_AS_START' }),
+      plan,
+      '2026-10-18',
+      '2026-10-20',
+    ),
+  ).toEqual({ start: 'marina', end: 'marina' });
+});

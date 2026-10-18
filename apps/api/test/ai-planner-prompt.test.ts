@@ -173,10 +173,11 @@ test('the prompt preserves separate occurrences and optional destinations', () =
 test('the prompt turns a named stay into stay nights, not a stop', () => {
   const prompt = buildAiPlannerPrompt('Tokyo, staying at the Park Hyatt', context());
 
-  expect(prompt).toContain('list it in stays');
-  expect(prompt).toContain('firstNightDayIndex is the zero-based day they arrive');
+  expect(prompt).toContain('into places and stays before planning the days');
+  expect(prompt).toContain('firstNightDayIndex is the zero-based arrival day');
   expect(prompt).toContain('add no check-in, check-out, or return-to-hotel items');
-  expect(prompt).toContain('Never add a stay the traveller did not name');
+  expect(prompt).toContain('Unless the traveller declines lodging recommendations');
+  expect(prompt).toContain('use null for both night indexes');
   expect(prompt).not.toContain('unbooked arrival-day suggestion');
 });
 

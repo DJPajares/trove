@@ -497,6 +497,7 @@ export function StaySheet({
                                   revision,
                                 },
                                 itinerary.trip.startDate,
+                                itinerary.trip.endDate,
                               );
                               return (
                                 <p key={d.id} className="text-sm text-muted-foreground">

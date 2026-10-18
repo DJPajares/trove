@@ -702,8 +702,9 @@ export function AiPlanningReview({
   const stayNames = [
     ...new Set(
       draft.days.flatMap((day) => {
-        const stay = day.dailyBasePlaceRefId ? placeNames.get(day.dailyBasePlaceRefId) : undefined;
-        return stay ? [stay] : [];
+        return [day.dailyBasePlaceRefId, day.dailyBaseDeparturePlaceRefId].flatMap((id) =>
+          id && placeNames.has(id) ? [placeNames.get(id)!] : [],
+        );
       }),
     ),
   ];
@@ -960,7 +961,34 @@ export function AiPlanningReview({
               source={draft.trip.paceSource === 'user' ? 'you' : 'picked'}
               value={paceCopy(`paces.${draft.trip.pace}`)}
             />
-            {stayNames.length ? (
+            {draft.stays?.length ? (
+              draft.stays.map((stay, index) => (
+                <FilledInRow
+                  key={`${stay.placeRefId}:${index}`}
+                  label={t(stay.isMain ? 'stayDetails.main' : 'rows.stays')}
+                  source={stay.source === 'model' ? 'picked' : 'you'}
+                  value={placeNames.get(stay.placeRefId) ?? ''}
+                  detail={
+                    stay.arriveDate && stay.leaveDate
+                      ? t('stayDetails.dates', {
+                          arrive: rangeFormatter.format(
+                            new Date(`${stay.arriveDate}T00:00:00.000Z`),
+                          ),
+                          leave: rangeFormatter.format(new Date(`${stay.leaveDate}T00:00:00.000Z`)),
+                        }) +
+                        (stay.source === 'model' ? ` ${t('stayDetails.recommended')}` : '') +
+                        (stay.isMain && draft.mainStaySource === 'model'
+                          ? ` ${t('stayDetails.mainPicked')}`
+                          : '')
+                      : t(
+                          stay.assignmentIssue === 'dates_conflicting'
+                            ? 'stayDetails.conflicting'
+                            : 'stayDetails.unassigned',
+                        )
+                  }
+                />
+              ))
+            ) : stayNames.length ? (
               <FilledInRow label={t('rows.stays')} value={listFormatter.format(stayNames)} />
             ) : null}
             {otherAssumptions.map((assumption) => (

@@ -291,20 +291,31 @@ describe('traveller-named stays', () => {
     ).toHaveLength(1);
   });
 
-  test('drops lodging the traveller only asked for, or never mentioned', () => {
+  test('retains recommended lodging unless suggestions are declined', () => {
+    const recommended = withStays([{ name: 'Hotel Gracery Shinjuku' }], [[0, 0, 1]]);
+    recommended.stays![0]!.source = 'model';
+    const suggested = expandAiPlannerProposal(
+      recommended,
+      'Tokyo for three days, please find us a hotel in Tokyo',
+    );
+    expect(suggested.stays).toEqual([
+      expect.objectContaining({ source: 'model', firstNightDayIndex: 0, lastNightDayIndex: 1 }),
+    ]);
     expect(
       expandAiPlannerProposal(
-        withStays([{ name: 'Hotel Gracery Shinjuku' }], [[0, 0, 1]]),
-        'Tokyo for three days, please find us a hotel in Tokyo',
+        withStays([{ name: 'Hilton Tokyo' }], [[0, 0, 1]]),
+        'Plan Tokyo. Do not recommend hotels.',
       ).stays,
-    ).toStrictEqual([]);
-    expect(
-      expandAiPlannerProposal(withStays([{ name: 'Hilton Tokyo' }], [[0, 0, 1]]), 'Plan Tokyo')
-        .stays,
-    ).toStrictEqual([]);
+    ).toEqual([]);
+    const declined = withStays([{ name: 'Hilton Tokyo' }], [[0, 0, 1]]);
+    declined.stays![0]!.source = 'model';
+    declined.lodgingRecommendations = 'declined';
+    expect(expandAiPlannerProposal(declined, '東京。宿泊施設の提案はいりません。').stays).toEqual(
+      [],
+    );
   });
 
-  test('gives each night to one stay when the model overlaps them', () => {
+  test('retains both named hotels without silently rewriting conflicting dates', () => {
     const proposal = expandAiPlannerProposal(
       withStays(
         [{ name: 'Hoshinoya Tokyo' }, { name: 'Park Hyatt Tokyo' }],
@@ -315,7 +326,13 @@ describe('traveller-named stays', () => {
       ),
       'Tokyo, first at the Park Hyatt, then Hoshinoya',
     );
-    expect(stayedAt(proposal)).toStrictEqual([['Park Hyatt Tokyo', 0, 1]]);
+    expect(stayedAt(proposal)).toStrictEqual([
+      ['Hoshinoya Tokyo', null, null],
+      ['Park Hyatt Tokyo', null, null],
+    ]);
+    expect(proposal.stays?.every((stay) => stay.assignmentIssue === 'dates_conflicting')).toBe(
+      true,
+    );
   });
 
   test('a stay is not also a stop, unless the traveller asked for one there', () => {

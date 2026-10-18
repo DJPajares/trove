@@ -26,6 +26,8 @@ export type AiPlanningDraftItem = {
 };
 
 export type AiPlanningDraft = {
+  mainStaySource?: 'user' | 'model';
+  stays?: import('@trove/types').AiPlannerDraft['stays'];
   assumptions: Array<{
     code:
       | 'dates_defaulted'
@@ -43,6 +45,7 @@ export type AiPlanningDraft = {
     value: boolean | null | number | string | string[];
   }>;
   days: Array<{
+    stayEndMode?: 'none' | 'place' | 'same_as_start';
     dailyBaseDeparturePlaceRefId: string | null;
     dailyBasePlaceRefId: string | null;
     date: string;

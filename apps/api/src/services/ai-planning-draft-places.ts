@@ -1,6 +1,6 @@
 import type { AiPlannerDraft } from '@trove/types';
 
-type PlaceReferencingDraft = Pick<AiPlannerDraft, 'days' | 'trip' | 'unscheduledItems'>;
+type PlaceReferencingDraft = Pick<AiPlannerDraft, 'days' | 'trip' | 'unscheduledItems' | 'stays'>;
 
 type ReferencedPlaceOptions = {
   /** Trip destinations become TripDestination rows, so apply always needs them. */
@@ -22,7 +22,7 @@ export function referencedDraftPlaceIds(
   draft: PlaceReferencingDraft,
   options: ReferencedPlaceOptions = {},
 ) {
-  const ids = new Set<string>();
+  const ids = new Set<string>((draft.stays ?? []).map((stay) => stay.placeRefId));
   if (options.includeDestinations) {
     for (const destination of draft.trip.destinations) ids.add(destination.placeRefId);
   }
@@ -39,8 +39,8 @@ export function referencedDraftPlaceIds(
 
 /**
  * The places a finished generate run should look up: everything standing in the
- * day-to-day itinerary, plus the destinations apply needs. A place the model
- * proposed and the schedule dropped never reaches Google.
+ * day-to-day itinerary, destinations, and retained accommodations (including
+ * named stays with unknown dates). Other discarded suggestions never reach Google.
  */
 export function groundableDraftPlaceIds(draft: PlaceReferencingDraft) {
   return referencedDraftPlaceIds(draft, { includeDestinations: true, includeUnscheduled: false });

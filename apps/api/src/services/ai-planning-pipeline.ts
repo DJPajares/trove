@@ -34,6 +34,13 @@ import { createCanonicalPlacesService } from './canonical-places.js';
 import { finalizeDraftDayTitles } from './ai-planning-day-titles.js';
 import { readDraftPlanScore } from './ai-draft-score-reader.js';
 import { draftDayStay } from './ai-planning-plan-score.js';
+import {
+  normalizeProposedStays,
+  proposedStayNights,
+  mainStayCandidateId,
+  refreshDraftMainStay,
+} from './ai-planning-stays.js';
+import { shiftStayDate } from '@trove/types';
 import { preferredLegMode } from './ai-planning-travel-modes.js';
 import { mapWithConcurrency, PROVIDER_CONCURRENCY_LIMIT } from './concurrency.js';
 import { dayPartWindow } from './day-part-windows.js';
@@ -429,6 +436,7 @@ export function applyGroundingToDraft(draft: AiPlannerDraft, grounding: Grounded
       draft.warnings.push({ ...warning, itemIds: itemIds.get(result.place.id) ?? [] });
     }
   }
+  refreshDraftMainStay(draft);
 }
 
 function enforceBalancedPace(draft: AiPlannerDraft, proposal: AiPlannerModelProposal) {
@@ -568,30 +576,23 @@ function protectUnknownArrival(draft: AiPlannerDraft, proposal: AiPlannerModelPr
  * Turns the nights the traveller named into where each day starts and ends.
  * A night spent at a stay ends that day there and starts the next one there,
  * so a change-over day starts at one stay and ends at the next. The morning
- * after the last stay is left alone: ending it back at a hotel already
- * checked out of would invent a return trip.
+ * after the last night still starts there, with no evening return to a hotel
+ * the traveller has already checked out of.
  */
 function assignDraftStays(
   days: AiPlannerDraft['days'],
   proposal: AiPlannerModelProposal,
   candidateIds: ReadonlySet<string>,
 ) {
-  const start = new Map<number, string>();
-  const end = new Map<number, string>();
-  for (const stay of proposal.stays ?? []) {
-    if (!candidateIds.has(stay.candidatePlaceId)) continue;
-    for (let night = stay.firstNightDayIndex; night <= stay.lastNightDayIndex; night++) {
-      if (night >= days.length) break;
-      end.set(night, stay.candidatePlaceId);
-      if (night + 1 < days.length) start.set(night + 1, stay.candidatePlaceId);
-    }
-  }
+  const nights = proposedStayNights(
+    (proposal.stays ?? []).filter((stay) => candidateIds.has(stay.candidatePlaceId)),
+  );
   days.forEach((day, index) => {
-    const from = start.get(index) ?? null;
-    const to = end.get(index) ?? null;
-    if (!to) return;
+    const from = nights.get(index - 1) ?? null;
+    const to = nights.get(index) ?? null;
     day.dailyBasePlaceRefId = from;
-    day.dailyBaseDeparturePlaceRefId = from === to ? null : to;
+    day.dailyBaseDeparturePlaceRefId = to;
+    day.stayEndMode = to ? 'place' : 'none';
   });
 }
 
@@ -697,6 +698,16 @@ export function assembleAiPlanningDraft(
     maxItineraryDays,
   );
   const dates = enumerateDateRange(defaults.startDate, defaults.endDate);
+  proposal = {
+    ...proposal,
+    stays: normalizeProposedStays(
+      (proposal.stays ?? []).filter(
+        (stay) => proposal.lodgingRecommendations !== 'declined' || stay.source !== 'model',
+      ),
+      dates.length,
+    ),
+  };
+  const mainStay = mainStayCandidateId(proposal.stays ?? []);
   const candidateIds = new Set(proposal.places.map((candidate) => candidate.id));
   const destinationIds = new Map<string, string>();
   const destinations = proposal.destinations.map((destination, index) => {
@@ -750,6 +761,16 @@ export function assembleAiPlanningDraft(
     days,
     evidence: [],
     normalizedRequest: proposal.normalizedRequest,
+    mainStaySource: (proposal.stays ?? []).some((stay) => stay.isMain) ? 'user' : 'model',
+    stays: (proposal.stays ?? []).map((stay) => ({
+      placeRefId: stay.candidatePlaceId,
+      source: stay.source ?? 'user',
+      isMain: stay.candidatePlaceId === mainStay,
+      arriveDate: stay.firstNightDayIndex === null ? null : dates[stay.firstNightDayIndex]!,
+      leaveDate:
+        stay.lastNightDayIndex === null ? null : shiftStayDate(dates[stay.lastNightDayIndex]!, 1),
+      ...(stay.assignmentIssue ? { assignmentIssue: stay.assignmentIssue } : {}),
+    })),
     places: proposal.places.map((candidate) => ({
       id: candidate.id,
       name: candidate.name,

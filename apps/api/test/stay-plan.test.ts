@@ -344,3 +344,52 @@ test('contracts reject impossible dates, end-only start modes, overlapping and o
     ),
   ).toThrow();
 });
+
+test('main stays cover trip nights, with no invented final evening', () => {
+  const bounded = {
+    startDate: new Date('2026-10-14'),
+    endDate: new Date('2026-10-17'),
+    defaultStayTripPlace: a,
+  };
+  const final = { ...day, date: bounded.endDate };
+  expect(endpoints(resolveDayStay(final, [], bounded))).toEqual(['a', null]);
+  expect(
+    endpoints(resolveDayStay({ ...final, stayEndMode: 'SAME_AS_START' }, [], bounded)),
+  ).toEqual(['a', 'a']);
+  expect(
+    endpoints(
+      resolveDayStay(final, [{ ...booking, checkOutDate: new Date('2026-10-18') }], bounded),
+    ),
+  ).toEqual(['b', 'b']);
+});
+
+test('linked dated bookings honor arrival, transfer and checkout boundaries', () => {
+  const linked = { ...booking, linkedDayIds: ['day'] };
+  const start = { ...day, date: linked.checkInDate! };
+  const end = { ...day, date: linked.checkOutDate! };
+  expect(endpoints(resolveDayStay(start, [linked]))).toEqual([null, 'b']);
+  expect(endpoints(resolveDayStay(end, [linked]))).toEqual(['b', null]);
+  expect(
+    endpoints(
+      resolveDayStay(end, [
+        linked,
+        { ...linked, tripPlace: c, checkInDate: end.date, checkOutDate: new Date('2026-10-19') },
+      ]),
+    ),
+  ).toEqual(['b', 'c']);
+  expect(
+    endpoints(resolveDayStay(end, [{ ...linked, checkInDate: null, checkOutDate: null }])),
+  ).toEqual(['b', 'b']);
+});
+
+test('a linked checkout can hand over to a dated booking without a day link', () => {
+  const final = { ...day, date: booking.checkOutDate! };
+  expect(
+    endpoints(
+      resolveDayStay(final, [
+        { ...booking, linkedDayIds: ['day'] },
+        { ...booking, tripPlace: c, checkInDate: final.date, checkOutDate: new Date('2026-10-19') },
+      ]),
+    ),
+  ).toEqual(['b', 'c']);
+});

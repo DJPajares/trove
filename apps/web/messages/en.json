@@ -506,6 +506,14 @@
           "stays": "Where you stay",
           "countries": "Countries"
         },
+        "stayDetails": {
+          "main": "Main stay",
+          "mainPicked": "Trove chose this as your main stay based on the most planned nights.",
+          "dates": "Arrive {arrive}; leave {leave}.",
+          "recommended": "Suggested for your plan; availability and prices have not been checked.",
+          "unassigned": "Added to your trip places. Stay dates were not specified, so no nights are assigned.",
+          "conflicting": "Added to your trip places. The stay dates conflict, so no nights are assigned."
+        },
         "daysTitle": "Your {count, plural, one {# day} other {# days}}",
         "jumpToDay": "Jump to a day",
         "dayStops": "{count, plural, =0 {Nothing planned yet} one {# stop} other {# stops}}",

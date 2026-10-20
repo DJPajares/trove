@@ -13,6 +13,6 @@
 <!-- Replace this comment with exactly one declaration:
 Changelog: added
 Changelog: none — <why this change has no meaningful user-visible impact>
-Keep `Changelog: added` alone on its line; put the entry link under
-apps/web/changelog/<year>/ on a separate line. The catalog-only local check
+Keep `Changelog: added` alone on its line; put a link to the entry in
+apps/web/changelog.json on a separate line. The catalog-only local check
 does not validate this declaration; validate the live PR body with --pr too. -->

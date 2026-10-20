@@ -7,7 +7,7 @@ import { checkChangelogDeclaration } from '../lib/updates/pr-declaration.ts';
 import { createReleaseManifest } from '../lib/updates/release.ts';
 
 const release = createReleaseManifest(
-  readChangelogCatalog(fileURLToPath(new URL('../changelog/', import.meta.url))),
+  readChangelogCatalog(fileURLToPath(new URL('../changelog.json', import.meta.url))),
   'validation',
   createRequire(import.meta.url)('../package.json').version,
 );

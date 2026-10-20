@@ -38,7 +38,7 @@ checkVersions({
   versions,
   baseEntries: readChangelogAtRef(root, base),
   headEntries: readChangelogCatalog(
-    fileURLToPath(new URL('../apps/web/changelog/', import.meta.url)),
+    fileURLToPath(new URL('../apps/web/changelog.json', import.meta.url)),
   ),
 });
 console.log(`Versions valid (web ${versions.web.head}, api ${versions.api.head})`);

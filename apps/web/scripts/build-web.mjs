@@ -9,7 +9,7 @@ import { createReleaseManifest } from '../lib/updates/release.ts';
 const webRoot = fileURLToPath(new URL('../', import.meta.url));
 const require = createRequire(import.meta.url);
 const release = createReleaseManifest(
-  readChangelogCatalog(fileURLToPath(new URL('../changelog/', import.meta.url))),
+  readChangelogCatalog(fileURLToPath(new URL('../changelog.json', import.meta.url))),
   randomUUID(),
   require('../package.json').version,
 );

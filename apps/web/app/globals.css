@@ -538,6 +538,15 @@ body {
     padding-top: 0;
     padding-bottom: 0;
   }
+
+  /* A final Home story carries its paper through the remaining canvas below.
+     Paint rather than padding keeps the page height and navigation clearance
+     intact; clipping to the band's width prevents horizontal overflow. */
+  [data-slot='home-journey']:last-child,
+  [data-slot='home-returned']:last-child {
+    box-shadow: 0 100dvh 0 100dvh var(--paper);
+    clip-path: inset(0 0 -100dvh);
+  }
 }
 
 /* The journal is read on paper. The canvas behind it - the page and the shell,

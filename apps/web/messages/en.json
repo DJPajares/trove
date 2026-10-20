@@ -2005,6 +2005,7 @@
         "addCustomPlace": "Add “{name}” as a custom place",
         "savedBadge": "Saved",
         "editTitle": "Edit stop",
+        "nameFromPlace": "Place name",
         "time": "Time",
         "partOfDay": "Part of day",
         "fixedTime": "Fixed time",
@@ -2138,10 +2139,8 @@
     },
     "itemActions": "Actions for {name}",
     "stopTitle": {
-      "title": "Rename stop",
-      "label": "Stop title",
-      "description": "Choose how this stop appears in your itinerary. Its linked place stays the same.",
-      "labelOnlyDescription": "Choose how this stop appears in your itinerary.",
+      "label": "Name in itinerary",
+      "description": "Only changes how this stop reads in your itinerary. It stays linked to {place}.",
       "restore": "Use place name"
     },
     "itemMenu": {

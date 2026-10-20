@@ -25,12 +25,15 @@ export function EditRows({ children }: Readonly<{ children: ReactNode }>) {
 export function EditRow({
   children,
   defaultOpen = false,
+  emptyValue = '—',
   icon,
   label,
   value,
 }: Readonly<{
   children: ReactNode;
   defaultOpen?: boolean;
+  /** What an unset detail reads as, when it falls back to something rather than nothing. */
+  emptyValue?: string;
   icon: ReactNode;
   label: string;
   /** What the detail is set to, or nothing when it is not set. */
@@ -49,7 +52,7 @@ export function EditRow({
             value ? 'text-foreground' : 'text-muted-foreground',
           )}
         >
-          {value ?? '—'}
+          {value ?? emptyValue}
         </span>
         <ChevronDown
           aria-hidden="true"

@@ -1,5 +1,7 @@
 import type { AiPlannerDraft, AiPlannerModelProposal } from '@trove/types';
-import { describe, expect, test } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+
+import { emptyScoringCache } from './support/empty-scoring-cache.js';
 
 import {
   AiGenerationError,
@@ -39,6 +41,9 @@ import {
  * documents each one and why it is the right answer; changing a number here
  * without changing that document is the signal that a regression slipped in.
  */
+beforeEach(() => vi.stubGlobal('trovePrismaClient', emptyScoringCache()));
+afterEach(() => vi.unstubAllGlobals());
+
 const OWNER_ID = '00000000-0000-4000-8000-000000000001';
 const RUN_ID = '00000000-0000-4000-8000-000000000101';
 const SESSION_ID = '00000000-0000-4000-8000-000000000102';

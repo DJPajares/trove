@@ -114,5 +114,23 @@ export function useOnDemandPlaceSearch(
     [],
   );
 
-  return { asked, results, search, sessionToken, status, track };
+  /** Whether asking now would send a request: online, long enough, and not asked before. */
+  const canSearch = useCallback(
+    (query: string) =>
+      online &&
+      query.trim().length >= ON_DEMAND_SEARCH_MINIMUM &&
+      !cache.current.has(normalizeItineraryPlaceQuery(query)),
+    [online],
+  );
+
+  /** Forgets every answer, for a picker opened afresh: a session token does not outlive its search. */
+  const reset = useCallback(() => {
+    inFlight.current?.controller.abort();
+    inFlight.current = null;
+    cache.current.clear();
+    currentKey.current = '';
+    show(undefined);
+  }, [show]);
+
+  return { asked, canSearch, reset, results, search, sessionToken, status, track };
 }

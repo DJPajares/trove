@@ -38,6 +38,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Chip, ChipGroup } from '@/components/ui/chip';
 import {
@@ -48,15 +49,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemMedia,
-  ItemTitle,
-} from '@/components/ui/item';
 import { Label } from '@/components/ui/label';
 import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import {
@@ -77,9 +69,19 @@ import {
   unsavePlace,
   updateSavedPlaceNote,
 } from '@/lib/saved/api';
-import { PROVIDER_SEARCH_RESULT_LIMIT } from '@/lib/saved/search-results';
 import { useEditorialImageResolution, useEditorialImages } from '@/hooks/use-editorial-images';
-import { useProviderPlaceSearch } from '@/hooks/use-provider-place-search';
+import { useKnownPlaces } from '@/hooks/use-known-places';
+import { useOnDemandPlaceSearch } from '@/hooks/use-on-demand-place-search';
+import { GoogleSearchRow } from '@/components/place-search/google-search-row';
+import { PlaceRow, ResultGroup } from '@/components/place-search/result-list';
+import { useOnlineStatus } from '@/components/trip-sync-status';
+import {
+  knownExternalIds,
+  localPlaceAddress,
+  localPlaceName,
+  matchLocalPlaces,
+  providerResults,
+} from '@/lib/places/local-search';
 import {
   editorialSubjectKey,
   MAX_EDITORIAL_IMAGE_SUBJECTS,
@@ -204,10 +206,19 @@ export function SavedPlacesManager({
   const [addOpen, setAddOpen] = useState(false);
   const [addMode, setAddMode] = useState<'custom' | 'search'>('search');
   const [searchQuery, setSearchQuery] = useState('');
-  // Searches while the add sheet is open are billed as one Autocomplete session.
-  const search = useProviderPlaceSearch(searchQuery, null);
-  const searchResults = search.results.slice(0, PROVIDER_SEARCH_RESULT_LIMIT);
-  const searchStatus = search.status;
+  // Typing matches what Trove already knows; Google is asked only on request,
+  // and each answer is kept per query so asking twice costs nothing.
+  const online = useOnlineStatus();
+  const knownPlaces = useKnownPlaces();
+  const search = useOnDemandPlaceSearch(online);
+  const localResults = useMemo(
+    () => matchLocalPlaces(searchQuery, { known: knownPlaces, saved: savedPlaces }),
+    [knownPlaces, savedPlaces, searchQuery],
+  );
+  const searchResults = useMemo(
+    () => providerResults(search.results, knownExternalIds(localResults.saved, localResults.known)),
+    [localResults.known, localResults.saved, search.results],
+  );
   const [savingProviderId, setSavingProviderId] = useState<string | null>(null);
   const [customName, setCustomName] = useState('');
   const [customNote, setCustomNote] = useState('');
@@ -452,7 +463,7 @@ export function SavedPlacesManager({
     setCustomName('');
     setCustomNote('');
     setSearchQuery('');
-    search.endSession();
+    search.reset();
   }
 
   /**
@@ -496,10 +507,26 @@ export function SavedPlacesManager({
         suggestion.externalPlaceId,
         undefined,
         locale,
-        search.sessionToken(),
+        search.sessionToken ?? undefined,
         'saved',
       );
       const { savedPlace } = await saveCanonicalPlace(place.id);
+      setAddOpen(false);
+      resetAddForm();
+      await keepNewlySaved(savedPlace);
+    } catch (errorValue) {
+      setError(getErrorMessage(errorValue));
+    } finally {
+      setSavingProviderId(null);
+    }
+  }
+
+  /** A place from one of the traveller's trips is already in Trove: saving it asks Google for nothing. */
+  async function handleKnownSave(placeId: string) {
+    setSavingProviderId(placeId);
+    setError(null);
+    try {
+      const { savedPlace } = await saveCanonicalPlace(placeId);
       setAddOpen(false);
       resetAddForm();
       await keepNewlySaved(savedPlace);
@@ -1264,58 +1291,92 @@ export function SavedPlacesManager({
               <div className="space-y-5">
                 <SearchField
                   autoFocus
+                  enterKeyHint="search"
                   label={t('searchLabel')}
-                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onChange={(event) => {
+                    setSearchQuery(event.target.value);
+                    search.track(event.target.value);
+                  }}
+                  onKeyDown={(event) => {
+                    // Enter is the keyboard's way of asking to look further.
+                    if (event.key !== 'Enter') return;
+                    event.preventDefault();
+                    if (search.canSearch(searchQuery)) void search.search(searchQuery.trim());
+                  }}
                   placeholder={t('searchPlaceholder')}
                   value={searchQuery}
                 />
-                {!search.searchable ? (
+                {!searchQuery.trim() ? (
                   <p className="text-sm leading-6 text-muted-foreground">{t('searchHint')}</p>
-                ) : searchStatus === 'loading' ? (
-                  <p aria-live="polite" className="text-sm text-muted-foreground" role="status">
-                    {t('searching')}
-                  </p>
-                ) : searchStatus === 'unavailable' ? (
-                  <Alert role="alert" variant="destructive">
-                    <CircleAlert aria-hidden="true" />
-                    <AlertDescription>{t('searchUnavailable')}</AlertDescription>
-                  </Alert>
-                ) : searchStatus === 'empty' ? (
-                  <p className="text-sm leading-6 text-muted-foreground">{t('searchEmpty')}</p>
                 ) : (
-                  <ItemGroup aria-label={t('searchResults')} className="gap-2">
-                    {searchResults.map((suggestion) => (
-                      <Item
-                        className="px-3 py-3"
-                        key={suggestion.externalPlaceId}
-                        variant="outline"
-                      >
-                        <ItemMedia
-                          className="size-10 rounded-[var(--radius-md)] bg-brand/10 text-brand"
-                          variant="icon"
-                        >
-                          <Icons.Places aria-hidden="true" />
-                        </ItemMedia>
-                        <ItemContent className="min-w-0">
-                          <ItemTitle>{suggestion.name}</ItemTitle>
-                          <ItemDescription>
-                            {suggestion.description ?? t('providerPlace')}
-                          </ItemDescription>
-                        </ItemContent>
-                        <ItemActions>
-                          <Button
-                            disabled={savingProviderId === suggestion.externalPlaceId}
-                            onClick={() => void handleProviderSave(suggestion)}
-                            size="sm"
+                  <div className="space-y-5">
+                    {localResults.saved.length ? (
+                      <ResultGroup heading={t('alreadySavedHeading')}>
+                        {localResults.saved.map((savedPlace) => (
+                          <PlaceRow
+                            description={localPlaceAddress(savedPlace.place)}
+                            icon={<Icons.Saved aria-hidden="true" />}
+                            key={savedPlace.id}
+                            title={localPlaceName(savedPlace.place) ?? t('providerPlace')}
                           >
-                            {savingProviderId === suggestion.externalPlaceId
-                              ? t('saving')
-                              : t('save')}
-                          </Button>
-                        </ItemActions>
-                      </Item>
-                    ))}
-                  </ItemGroup>
+                            <Badge variant="muted">{t('alreadySaved')}</Badge>
+                          </PlaceRow>
+                        ))}
+                      </ResultGroup>
+                    ) : null}
+                    {localResults.known.length ? (
+                      <ResultGroup heading={t('knownResultsHeading')}>
+                        {localResults.known.map((known) => (
+                          <PlaceRow
+                            description={localPlaceAddress(known.place)}
+                            hint={
+                              known.lastTrip ? t('fromTrip', { trip: known.lastTrip.name }) : null
+                            }
+                            icon={<Icons.Trips aria-hidden="true" />}
+                            key={known.place.id}
+                            title={localPlaceName(known.place) ?? t('providerPlace')}
+                          >
+                            <Button
+                              disabled={savingProviderId === known.place.id}
+                              onClick={() => void handleKnownSave(known.place.id)}
+                              size="sm"
+                            >
+                              {savingProviderId === known.place.id ? t('saving') : t('save')}
+                            </Button>
+                          </PlaceRow>
+                        ))}
+                      </ResultGroup>
+                    ) : null}
+                    {searchResults.length ? (
+                      <ResultGroup heading={t('searchResults')}>
+                        {searchResults.map((suggestion) => (
+                          <PlaceRow
+                            description={suggestion.description ?? t('providerPlace')}
+                            icon={<Icons.Places aria-hidden="true" />}
+                            key={suggestion.externalPlaceId}
+                            provider
+                            title={suggestion.name}
+                          >
+                            <Button
+                              disabled={savingProviderId === suggestion.externalPlaceId}
+                              onClick={() => void handleProviderSave(suggestion)}
+                              size="sm"
+                            >
+                              {savingProviderId === suggestion.externalPlaceId
+                                ? t('saving')
+                                : t('save')}
+                            </Button>
+                          </PlaceRow>
+                        ))}
+                      </ResultGroup>
+                    ) : null}
+                    <GoogleSearchRow
+                      online={online}
+                      prominent={!localResults.total && !searchResults.length}
+                      query={searchQuery}
+                      search={search}
+                    />
+                  </div>
                 )}
                 <Button className="px-0" onClick={() => setAddMode('custom')} variant="link">
                   {t('createCustomPlace')}

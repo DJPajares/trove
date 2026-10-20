@@ -23,6 +23,9 @@ export function registerPlacesRoutes(app: FastifyInstance) {
     createPlacesService({ environment: process.env, logger: app.log, source: 'place-details' }),
   );
 
+  // What the traveller already knows, so a picker can answer before Google is
+  // asked. Database only, so it needs no provider rate limit.
+  app.get('/places/known', { preHandler: requireAuthenticatedUser }, controllers.known);
   app.get(
     '/places/:placeId/details',
     { config: PROVIDER_SEARCH_RATE_LIMIT, preHandler: requireAuthenticatedUser },

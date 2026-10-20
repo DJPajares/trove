@@ -57,7 +57,8 @@ function optionKey(option: PlaceOption) {
   return `${option.kind}-${option.label}`;
 }
 
-function tripPlaceName(tripPlace: ItineraryTripPlace) {
+/** A Trip Place as the traveller knows it: their own name for it first. */
+export function tripPlaceName(tripPlace: ItineraryTripPlace) {
   return (
     tripPlace.customName ??
     tripPlace.place.name ??

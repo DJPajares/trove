@@ -53,7 +53,6 @@ import {
 } from '@/components/planner/planner-context-bar';
 import { PlannerRibbon } from '@/components/planner/planner-ribbon';
 import { StaySheet } from '@/components/planner/stay-sheet';
-import { StopTitleDialog } from '@/components/planner/stop-title-dialog';
 import { TimingSheet } from '@/components/planner/timing-sheet';
 import {
   StopEditorSheet,
@@ -298,7 +297,6 @@ export function ItineraryManager({
     request: StopEditorRequest | null;
   }>({ id: 0, open: false, request: null });
   const [itemToDelete, setItemToDelete] = useState<ItineraryItem | null>(null);
-  const [itemToRename, setItemToRename] = useState<ItineraryItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [contextDay, setContextDay] = useState<ItineraryDay | null>(null);
@@ -1796,7 +1794,6 @@ export function ItineraryManager({
                 menuActions={{
                   onDeleteItem: setItemToDelete,
                   onEditItem: openEdit,
-                  onRenameItem: setItemToRename,
                   onMoveToDay: (item) => setMoveTarget({ allowUnscheduled: true, item }),
                   onSwapItem: setSwapTarget,
                   movementDisabled: !online || itineraryEditing || readOnly,
@@ -2014,16 +2011,6 @@ export function ItineraryManager({
             onOpenTripPlaces: openPlaces,
           }}
           title={dayOption(selectedDay, selectedIndex)}
-        />
-      ) : null}
-
-      {itemToRename ? (
-        <StopTitleDialog
-          item={itemToRename}
-          key={itemToRename.id}
-          onClose={() => setItemToRename(null)}
-          onSaved={refresh}
-          tripId={tripId}
         />
       ) : null}
 

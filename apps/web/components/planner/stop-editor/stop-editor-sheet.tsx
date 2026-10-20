@@ -1,15 +1,17 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { CircleAlert, NotebookPen, Trash2 } from 'lucide-react';
+import { CircleAlert, NotebookPen, TextCursorInput, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useEffect, useRef, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useMemo, useState, type FormEvent } from 'react';
 
 import { useSuggestedTime } from '@/components/itinerary-suggested-time';
 import { useOnlineStatus } from '@/components/trip-sync-status';
 import { useTripContext } from '@/components/trip-provider';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { FieldDescription } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -28,6 +30,7 @@ import {
   stopEditorCustomDuration,
   stopEditorForm,
   type StopEditorForm,
+  stopTitleInput,
 } from '@/lib/itinerary/item-editor';
 import type { ScheduledPlaceUse } from '@/lib/itinerary/places';
 import { queryKeys } from '@/lib/query/keys';
@@ -37,7 +40,7 @@ import type { TripPlace } from '@/lib/trip-places/api';
 import { savedPlacesNearTrip } from '@/lib/trip-places/saved-near-trip';
 
 import { EditRow, EditRows } from './edit-row';
-import { PlaceField } from './place-field';
+import { PlaceField, tripPlaceName } from './place-field';
 import { TimingField } from './timing-field';
 
 /**
@@ -114,6 +117,7 @@ function StopEditorBody({
   const [selecting, setSelecting] = useState(false);
   const [added, setAdded] = useState<ItineraryTripPlace[]>([]);
   const timingTouched = useRef(false);
+  const nameHintId = useId();
   const suggestedTime = useSuggestedTime(tripId, (slot, revision, saved) => {
     setForm((current) => ({
       ...acceptSuggestedSlot(current, slot, revision),
@@ -148,6 +152,10 @@ function StopEditorBody({
   );
 
   const hasIdentity = Boolean(form.customLabel.trim() || form.tripPlaceId);
+  const linkedTripPlace = form.tripPlaceId
+    ? (availableTripPlaces.find((tripPlace) => tripPlace.id === form.tripPlaceId) ?? null)
+    : null;
+  const linkedPlaceName = linkedTripPlace ? tripPlaceName(linkedTripPlace) : null;
   // A stop being inserted is not where the suggestion imagines it - the end of
   // the day - so it is not offered there; nor offline, where there is no day as
   // the server holds it to ask about.
@@ -238,7 +246,13 @@ function StopEditorBody({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const built = buildStopInput(form, customDuration, editing ? { identityChanged } : {});
+    // A name that matches the place's own is no rename: the stop follows the place again.
+    const named = linkedPlaceName ? stopTitleInput(form.customLabel, linkedPlaceName).input : null;
+    const built = buildStopInput(
+      named ? { ...form, customLabel: named.customLabel ?? '' } : form,
+      customDuration,
+      editing ? { identityChanged } : {},
+    );
     if ('error' in built) {
       setFormError(t(built.error));
       return;
@@ -329,6 +343,43 @@ function StopEditorBody({
               {/* The stop's details as a list that says what is set; each line
                   opens in place to change it. */}
               <EditRows>
+                {linkedPlaceName ? (
+                  // Naming the stop is part of editing it, not a menu action of
+                  // its own; the linked place underneath never changes.
+                  <EditRow
+                    emptyValue={plannerT('nameFromPlace')}
+                    icon={<TextCursorInput />}
+                    label={t('stopTitle.label')}
+                    value={form.customLabel.trim() || null}
+                  >
+                    <Input
+                      aria-describedby={nameHintId}
+                      aria-label={t('stopTitle.label')}
+                      enterKeyHint="done"
+                      maxLength={200}
+                      onChange={(event) => {
+                        const customLabel = event.target.value;
+                        setForm((current) => ({ ...current, customLabel }));
+                      }}
+                      placeholder={linkedPlaceName}
+                      value={form.customLabel}
+                    />
+                    <FieldDescription id={nameHintId}>
+                      {t('stopTitle.description', { place: linkedPlaceName })}
+                    </FieldDescription>
+                    {form.customLabel.trim() ? (
+                      <Button
+                        className="-ml-2.5"
+                        onClick={() => setForm((current) => ({ ...current, customLabel: '' }))}
+                        size="sm"
+                        type="button"
+                        variant="link"
+                      >
+                        {t('stopTitle.restore')}
+                      </Button>
+                    ) : null}
+                  </EditRow>
+                ) : null}
                 <TimingField
                   customDuration={customDuration}
                   form={form}

@@ -723,8 +723,8 @@
         "showAll": "Show all trips",
         "empty": {
           "upcoming": {
-            "title": "Nothing ahead yet",
-            "description": "Trips you're planning or taking will show here."
+            "title": "Nothing else ahead yet",
+            "description": "Other trips you're planning will show here."
           },
           "planning": {
             "title": "Every trip ahead is marked Ready",

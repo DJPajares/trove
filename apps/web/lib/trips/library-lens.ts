@@ -6,6 +6,9 @@ import { groupTripsForLibrary } from './lifecycle';
  * are lenses on it. Upcoming is the calendar of what is ahead, Needs planning
  * the to-do list within it - they overlap on purpose. Ready is the traveller's
  * own marker (PRD 6.2), so Needs planning never judges a plan on their behalf.
+ *
+ * The highlighted trip leads the page whatever the lens, so the lenses list
+ * what lies beyond it and never repeat it.
  */
 export type TripLens = 'all' | 'upcoming' | 'planning' | 'past';
 export const TRIP_LENSES: readonly TripLens[] = ['all', 'upcoming', 'planning', 'past'];
@@ -17,16 +20,16 @@ export function parseTripLens(value: string | null | undefined): TripLens {
   return TRIP_LENSES.includes(value as TripLens) ? (value as TripLens) : 'all';
 }
 
-/** The trips a lens shows, in the order that lens is read in. */
+/** The trips a lens shows beneath the highlighted trip, in reading order. */
 export function tripsForLens(trips: Trip[], lens: TripLens, now = new Date()): Trip[] {
-  const { ahead, featured, past } = groupTripsForLibrary(trips, now);
-  // Under way first, then soonest departure: the featured trip leads `ahead`.
-  const upcoming = featured ? [featured, ...ahead] : ahead;
+  const { ahead, past } = groupTripsForLibrary(trips, now);
+  // `ahead` is already under way first, then soonest departure, and leaves
+  // the featured trip out: it is shown above the lenses.
   switch (lens) {
     case 'upcoming':
-      return upcoming;
+      return ahead;
     case 'planning':
-      return upcoming
+      return ahead
         .filter((trip) => trip.lifecycle === 'planning' && trip.planningReadiness === 'in_progress')
         .toSorted((left, right) => left.startDate.localeCompare(right.startDate));
     case 'past':

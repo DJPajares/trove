@@ -2072,6 +2072,13 @@
       "conflictError": "This itinerary changed while the dialog was open. Review the updated days and try again."
     },
     "itemActions": "Actions for {name}",
+    "stopTitle": {
+      "title": "Rename stop",
+      "label": "Stop title",
+      "description": "Choose how this stop appears in your itinerary. Its linked place stays the same.",
+      "labelOnlyDescription": "Choose how this stop appears in your itinerary.",
+      "restore": "Use place name"
+    },
     "itemMenu": {
       "edit": "Edit",
       "duplicate": "Duplicate",

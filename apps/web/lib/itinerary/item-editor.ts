@@ -36,6 +36,13 @@ export function itineraryIdentityLegacyPatch(identityChanged: boolean) {
   return identityChanged ? { customLocation: null, priority: null } : {};
 }
 
+/** A title edit never submits identity, timing or other stop fields. */
+export function stopTitleInput(title: string, placeName: string | null) {
+  const label = title.trim();
+  if (!label && !placeName) return { error: 'minimumContentError' } as const;
+  return { input: { customLabel: label && label !== placeName ? label : null } };
+}
+
 export function normalizeItineraryPlaceQuery(value: string) {
   return value.trim().toLocaleLowerCase();
 }

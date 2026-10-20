@@ -63,6 +63,15 @@ test('the same day in the same order has the same route revision', () => {
   );
 });
 
+test('renaming a stop leaves the provider route revision unchanged', () => {
+  const original = day([item('a', 0), item('b', 1)]);
+  const renamed = {
+    ...original,
+    items: original.items.map((stop) => ({ ...stop, customLabel: 'Our walk' })),
+  };
+  expect(itineraryDayRouteRevision(renamed)).toBe(itineraryDayRouteRevision(original));
+});
+
 test('changing the day base changes the revision, since it moves the boundary legs', () => {
   const base = day([item('a', 0)]);
 

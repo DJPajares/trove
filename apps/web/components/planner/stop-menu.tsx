@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeftRight, Ellipsis, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, Ellipsis, Pencil, TextCursorInput, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ export type StopMenuActions = {
   movementDisabled?: boolean;
   onDeleteItem: (item: ItineraryItem) => void;
   onEditItem: (item: ItineraryItem) => void;
+  onRenameItem: (item: ItineraryItem) => void;
   /** Opens the sheet that moves the stop to another day or to Unscheduled. */
   onMoveToDay: (item: ItineraryItem) => void;
   onPlacePriorityChange?: (item: ItineraryItem, priority: ItineraryPriority | null) => void;
@@ -63,6 +64,7 @@ export function StopMenu({
         render={
           <Button
             aria-label={t('itemActions', { name })}
+            id={`stop-menu-${item.id}`}
             disabled={organizingItemId === item.id}
             size="icon-sm"
             type="button"
@@ -76,6 +78,10 @@ export function StopMenu({
         <DropdownMenuItem onClick={() => onEditItem(item)}>
           <Pencil aria-hidden="true" />
           {t('itemMenu.edit')}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => actions.onRenameItem(item)}>
+          <TextCursorInput aria-hidden="true" />
+          {t('stopTitle.title')}
         </DropdownMenuItem>
         {item.tripPlace && onPlacePriorityChange ? (
           <DropdownMenuSub>

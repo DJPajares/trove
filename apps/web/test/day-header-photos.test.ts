@@ -105,6 +105,16 @@ test('a title naming a known stop uses its canonical photo and requests it once'
   expect(candidates.length).toBeLessThanOrEqual(4);
 });
 
+test('a day title can name a personalized stop while photography retains its canonical place', () => {
+  const renamed = { ...stop('Sensoji'), customLabel: 'Our sunrise walk' };
+  const candidates = dayPhotoCandidates(day([renamed], 'Our sunrise walk'), [], trip);
+  expect(candidates[0]).toMatchObject({
+    origin: 'title',
+    subject: { name: 'Sensoji', placeId: 'Sensoji' },
+  });
+  expect(candidates.some((candidate) => candidate.subject.name === 'Our sunrise walk')).toBe(false);
+});
+
 test('grounded title themes lead, prominent stops follow, and generic titles do not search', () => {
   const candidates = dayPhotoCandidates(
     day([stop('First Cafe'), stop('Sensoji', 'Tokyo', 'must_go')], 'Markets and night lights'),

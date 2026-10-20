@@ -1,6 +1,8 @@
 import { expect, test } from 'vitest';
 
-import type { Itinerary } from '../lib/itinerary/api.ts';
+import type { Itinerary, ItineraryTripPlace } from '../lib/itinerary/api.ts';
+import { stopTitleInput } from '../lib/itinerary/item-editor.ts';
+import { resolveItineraryItemPlaceName } from '../lib/trip-places/place-name.ts';
 import { applyOfflineMutation } from '../lib/offline/trip-store.ts';
 
 function itinerary(): Itinerary {
@@ -33,6 +35,61 @@ function itinerary(): Itinerary {
     unscheduledItems: [],
   };
 }
+
+test('offline title edits preserve linked identity, timing and notes, and can restore the place name', () => {
+  const original = itinerary();
+  const linked = {
+    id: 'trip-place',
+    customName: null,
+    note: null,
+    priority: null,
+    place: {
+      id: 'canonical-place',
+      kind: 'provider',
+      name: null,
+      providerLabel: 'Museum',
+      providerAddress: 'Tokyo, Japan',
+      providerRefs: [{ provider: 'google', externalPlaceId: 'google-museum' }],
+      snapshot: null,
+    },
+  } as ItineraryTripPlace;
+  original.tripPlaces = [linked];
+  const created = applyOfflineMutation(original, {
+    clientItemId: 'museum',
+    kind: 'itinerary_item_create',
+    input: {
+      tripPlaceId: linked.id,
+      itineraryDayId: 'day',
+      durationMinutes: 90,
+      notes: 'Meet by the door',
+      schedule: { kind: 'exact', localTime: '09:00' },
+    },
+  });
+  const baseItem = created.days[0]!.items[0]!;
+  const patch = stopTitleInput('Our museum morning', 'Museum');
+  if (!patch.input) throw new Error('Expected a title patch');
+  const renamed = applyOfflineMutation(created, {
+    baseItem,
+    input: patch.input,
+    itemId: baseItem.id,
+    kind: 'itinerary_item_update',
+  });
+  const updated = renamed.days[0]!.items[0]!;
+  expect(updated).toEqual({
+    ...baseItem,
+    customLabel: 'Our museum morning',
+    updatedAt: updated.updatedAt,
+  });
+  expect(renamed.tripPlaces).toEqual(original.tripPlaces);
+  expect(resolveItineraryItemPlaceName(updated, 'Fallback')).toBe('Our museum morning');
+  const restored = applyOfflineMutation(renamed, {
+    baseItem: updated,
+    input: { customLabel: null },
+    itemId: updated.id,
+    kind: 'itinerary_item_update',
+  });
+  expect(resolveItineraryItemPlaceName(restored.days[0]!.items[0]!, 'Fallback')).toBe('Museum');
+});
 
 test('offline creation keeps an explicit end and derives its effective duration', () => {
   const result = applyOfflineMutation(itinerary(), {

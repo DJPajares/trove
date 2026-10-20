@@ -1,0 +1,8 @@
+{
+  "id": "compact-weather-header",
+  "date": "2026-10-20",
+  "version": "1.16.2",
+  "summaries": {
+    "en": ["Glance at your city’s weather and one useful temperature in a simpler Home header."]
+  }
+}

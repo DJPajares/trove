@@ -163,12 +163,16 @@ export function TripsManager() {
       {/* The highlighted trip leads every view: it is a highlight for a reason,
           so a lens narrows what lies beneath it and never replaces it. */}
       {status === 'idle' && trips.length > 0 && lead ? (
-        <LibraryLead
-          animateEntrance={view.animateEntrance}
-          editorial={editorialFor(lead)}
-          nextUp={resolveTripNextUp(tripModeContextQuery.data ?? null)}
-          trip={lead}
-        />
+        // Closer to the heading than sections are to each other: the highlight
+        // is the page's answer to it, not another section.
+        <div className="-mt-4 sm:-mt-5">
+          <LibraryLead
+            animateEntrance={view.animateEntrance}
+            editorial={editorialFor(lead)}
+            nextUp={resolveTripNextUp(tripModeContextQuery.data ?? null)}
+            trip={lead}
+          />
+        </div>
       ) : null}
 
       {status === 'idle' && filterable ? (
@@ -176,7 +180,7 @@ export function TripsManager() {
         // itself always one tap away. A lens with nothing in it is not offered.
         <ChipGroup
           aria-label={lensT('label')}
-          className="-mx-1 flex-nowrap overflow-x-auto px-1 pb-1"
+          className="-mx-1 mb-5 flex-nowrap overflow-x-auto px-1 pb-1 sm:mb-6"
           multiple={false}
           onValueChange={([value]) => chooseLens(parseTripLens(value))}
           value={[activeLens]}

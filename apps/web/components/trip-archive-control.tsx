@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { Archive, ArchiveRestore } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -135,38 +136,55 @@ export function TripArchiveControl({
   );
 }
 
-export function TripArchivedBanner({ trip }: Readonly<{ trip: Trip }>) {
+/**
+ * An archived trip, said quietly: one line under the trip's own navigation,
+ * so the trip still reads as itself and Restore is a tap away without the
+ * page turning into a status screen.
+ */
+export function TripArchivedNote({ trip }: Readonly<{ trip: Trip }>) {
   const t = useTranslations('trips.archive');
   const [copied, setCopied] = useState(false);
   return (
     <aside
-      className="mx-auto mb-5 flex max-w-5xl flex-wrap items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-border-subtle bg-surface-tint p-4"
-      role="status"
+      aria-label={t('badge')}
+      className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[var(--radius-lg)] border border-border-subtle bg-surface-sunken/60 py-2 pr-2 pl-3.5 text-sm"
     >
-      <div>
-        <p className="font-semibold">{t('badge')}</p>
-        <p className="text-sm text-muted-foreground">{t('readOnly')}</p>
-        <Link className="text-sm underline" href="/trips/archived">
-          {t('view')}
-        </Link>
+      <Archive aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+      <p className="min-w-0 flex-1 text-muted-foreground">
+        <span className="font-semibold text-foreground">{t('badge')}</span>
+        <span aria-hidden="true"> · </span>
+        {t('readOnly')}
+      </p>
+      <div className="flex shrink-0 items-center gap-1">
+        {trip.visibility === 'public' ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(`${window.location.origin}/shared/${trip.id}`);
+                setCopied(true);
+              } catch {
+                setCopied(false);
+              }
+            }}
+          >
+            {t(copied ? 'copied' : 'copyShared')}
+          </Button>
+        ) : null}
+        <TripArchiveControl trip={trip} />
       </div>
-      <TripArchiveControl trip={trip} />
-      {trip.visibility === 'public' ? (
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(`${window.location.origin}/shared/${trip.id}`);
-              setCopied(true);
-            } catch {
-              setCopied(false);
-            }
-          }}
-        >
-          {t(copied ? 'copied' : 'copyShared')}
-        </Button>
-      ) : null}
     </aside>
+  );
+}
+
+/** The archived mark on a trip's cover, beside its lifecycle. */
+export function TripArchivedBadge() {
+  const t = useTranslations('trips.archive');
+  return (
+    <Badge className="gap-1 bg-neutral-950/58 text-white shadow-sm backdrop-blur-sm">
+      <Archive aria-hidden="true" className="size-3" />
+      {t('badge')}
+    </Badge>
   );
 }

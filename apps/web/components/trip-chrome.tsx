@@ -6,6 +6,7 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from 're
 import { useTranslations } from 'next-intl';
 
 import { TripActionFeedback, TripActionsProvider } from '@/components/trip-actions-provider';
+import { TripArchivedNote } from '@/components/trip-archive-control';
 import { PageState } from '@/components/page-state';
 import { TripHubBar } from '@/components/trip-hub/trip-hub-bar';
 import { TripHubCover, TripHubCoverSkeleton } from '@/components/trip-hub/trip-hub-cover';
@@ -119,6 +120,7 @@ export function TripChrome({
           <div className="ml-auto flex shrink-0 items-center gap-2" ref={setActionsSlot} />
         </div>
       </header>
+      {trip?.archivedAt ? <TripArchivedNote trip={trip} /> : null}
       {trip ? <TripActionFeedback /> : null}
       <div className="mt-5 md:mt-7">{children}</div>
     </div>

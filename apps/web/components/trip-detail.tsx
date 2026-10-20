@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 
 import { PageState } from '@/components/page-state';
 import { TripActionsProvider, TripActionFeedback } from '@/components/trip-actions-provider';
+import { TripArchivedNote } from '@/components/trip-archive-control';
 import { TripDetailSkeleton } from '@/components/trip-detail-skeleton';
 import { TripHubBar } from '@/components/trip-hub/trip-hub-bar';
 import { TripNavigationSheet } from '@/components/trip-hub/trip-navigation-sheet';
@@ -129,6 +130,13 @@ export function TripDetail({ planScoreEnabled }: Readonly<{ planScoreEnabled: bo
           <TripNavigationSheet className="lg:mx-0 lg:mt-0 lg:rounded-none lg:bg-transparent lg:px-0 lg:pt-0 lg:[grid-area:bar]">
             <TripHubBar overview={overview} trip={trip} />
           </TripNavigationSheet>
+          {trip.archivedAt ? (
+            // Right under the trip's navigation, so it is the first thing read
+            // after the cover and never the first thing on the screen.
+            <div className="lg:col-span-2">
+              <TripArchivedNote trip={trip} />
+            </div>
+          ) : null}
           <div className="lg:flex lg:flex-col lg:[grid-area:chapter]">
             <TripHubChapter
               failed={!overview && Boolean(overviewQuery.error)}

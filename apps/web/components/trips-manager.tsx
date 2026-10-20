@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { CircleAlert, Plus } from 'lucide-react';
+import { Archive, ChevronRight, CircleAlert, Plus } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 
@@ -17,7 +17,7 @@ import { LibraryEmpty, LibraryNothingAhead } from '@/components/trips-library/li
 import { LibraryLead } from '@/components/trips-library/library-lead';
 import { LibraryRemembered } from '@/components/trips-library/library-remembered';
 import { LibrarySkeleton } from '@/components/trips-library/library-skeleton';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { Chip, ChipGroup } from '@/components/ui/chip';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { deviceTimeZone, fetchTripModeContext } from '@/lib/itinerary/api';
@@ -76,6 +76,7 @@ export function TripsManager() {
   const queryClient = useQueryClient();
   const tripsQuery = useQuery({ queryFn: () => fetchTrips(), queryKey: queryKeys.trips() });
   const trips = (tripsQuery.data?.trips ?? EMPTY_TRIPS).filter((trip) => !trip.archivedAt);
+  const archivedCount = tripsQuery.data?.archivedTripCount ?? 0;
   // A failed background refresh must not replace a usable library with an error.
   const status = tripsQuery.data ? 'idle' : tripsQuery.isPending ? 'loading' : 'error';
   const view = useLibraryView(tripsQuery.data !== undefined);
@@ -154,17 +155,10 @@ export function TripsManager() {
         actions={
           // A phone already carries Create at the centre of its bottom bar,
           // and the lead trip deserves the first screen more than a second one.
-          <>
-            <Link className={buttonVariants({ variant: 'ghost' })} href="/trips/archived">
-              {tripsQuery.data?.archivedTripCount
-                ? t('archive.viewCount', { count: tripsQuery.data.archivedTripCount })
-                : t('archive.view')}
-            </Link>
-            <Button className="max-md:hidden" onClick={openCreateTrip}>
-              <Plus aria-hidden="true" data-icon="inline-start" />
-              {t('newTrip')}
-            </Button>
-          </>
+          <Button className="max-md:hidden" onClick={openCreateTrip}>
+            <Plus aria-hidden="true" data-icon="inline-start" />
+            {t('newTrip')}
+          </Button>
         }
         description={libraryT('description')}
         eyebrow={t('eyebrow')}
@@ -287,6 +281,22 @@ export function TripsManager() {
           />
         </>
       )}
+
+      {/* Archived trips are kept, not shown: one quiet way in at the end of
+          the collection, where tidying a library naturally happens. */}
+      {status === 'idle' && archivedCount > 0 && (activeLens === 'all' || activeLens === 'past') ? (
+        <Link
+          className="group -mt-4 flex min-h-12 items-center gap-3 rounded-[var(--radius-lg)] px-1 text-sm text-muted-foreground outline-none transition-colors duration-[var(--motion-standard)] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 sm:-mt-6"
+          href="/trips/archived"
+        >
+          <Archive aria-hidden="true" className="size-4 shrink-0" />
+          <span className="flex-1">{t('archive.viewCount', { count: archivedCount })}</span>
+          <ChevronRight
+            aria-hidden="true"
+            className="size-4 shrink-0 transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
+          />
+        </Link>
+      ) : null}
     </section>
   );
 }

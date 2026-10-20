@@ -4,15 +4,18 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslations, useLocale } from 'next-intl';
 import Link from 'next/link';
 import { fetchTrips } from '@/lib/trips/api';
+import { tripDestinationSummary } from '@/lib/trips/summary';
 import { queryKeys } from '@/lib/query/keys';
 import { TripArchiveControl } from '@/components/trip-archive-control';
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
 import { Input } from '@/components/ui/input';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
+import { BackLink } from '@/components/back-link';
 
 export function ArchivedTripsManager() {
   const t = useTranslations('trips.archive');
+  const tripsT = useTranslations('trips');
   const locale = useLocale();
   const [query, setQuery] = useState('');
   const result = useQuery({
@@ -23,9 +26,11 @@ export function ArchivedTripsManager() {
     .filter((trip) => trip.archivedAt)
     .toSorted((a, b) => b.archivedAt!.localeCompare(a.archivedAt!) || a.id.localeCompare(b.id));
   const shown = all.filter((trip) =>
-    [trip.name, ...trip.destinations.map((place) => place.name)].some((text) =>
-      text.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)),
-    ),
+    [trip.name, ...trip.destinations.map((place) => place.name)]
+      .filter(Boolean)
+      .some((text) =>
+        text.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)),
+      ),
   );
   const date = (value: string) =>
     new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(
@@ -33,15 +38,15 @@ export function ArchivedTripsManager() {
     );
   return (
     <section className="mx-auto max-w-5xl space-y-6">
-      <PageHeader
-        title={t('view')}
-        description={t('description')}
-        actions={
-          <Link className={buttonVariants({ variant: 'outline' })} href="/trips">
-            {t('back')}
-          </Link>
-        }
-      />
+      <div>
+        <BackLink href="/trips" label={tripsT('title')} />
+        <PageHeader
+          description={t('description')}
+          eyebrow={tripsT('eyebrow')}
+          title={t('view')}
+          titleFont="journal"
+        />
+      </div>
       <Input
         aria-label={t('search')}
         placeholder={t('search')}
@@ -80,9 +85,9 @@ export function ArchivedTripsManager() {
                 >
                   {trip.name}
                 </Link>
-                <p className="text-sm text-muted-foreground">
-                  {trip.destinations.map((place) => place.name).join(', ')}
-                </p>
+                {tripDestinationSummary(trip) ? (
+                  <p className="text-sm text-muted-foreground">{tripDestinationSummary(trip)}</p>
+                ) : null}
                 <p className="text-xs text-muted-foreground">
                   {date(trip.startDate)} – {date(trip.endDate)}
                 </p>

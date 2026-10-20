@@ -912,9 +912,8 @@
       "restore": "Restore trip",
       "badge": "Archived",
       "view": "Archived trips",
-      "back": "Back to trips",
       "description": "Trips kept out of your collection, with everything still here.",
-      "readOnly": "Restore this trip to make changes or use Trip Mode.",
+      "readOnly": "View only until you restore it.",
       "confirmTitle": "Archive this trip?",
       "confirmDescription": "“{name}” will leave your trip collection and its reminders will stop. Everything is kept, and you can restore it at any time.",
       "saving": "Saving…",
@@ -936,7 +935,8 @@
       "open": "Open trip",
       "copyShared": "Copy shared link",
       "copied": "Shared link copied.",
-      "viewCount": "Archived trips ({count, number})"
+      "viewCount": "Archived · {count, plural, one {# trip} other {# trips}}",
+      "dismiss": "Dismiss"
     }
   },
   "tripMode": {

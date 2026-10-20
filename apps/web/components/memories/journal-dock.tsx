@@ -1,4 +1,5 @@
 'use client';
+import { useTripReadOnly } from '@/components/trip-provider';
 
 import { Ellipsis, ImagePlus, Plus, TableOfContents } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -28,6 +29,7 @@ function JournalStoryMenu({
   onChooseCover,
 }: Readonly<{ className?: string; hasCover: boolean; onChooseCover: () => void }>) {
   const t = useTranslations('memories.journal');
+  const readOnly = useTripReadOnly();
 
   return (
     <DropdownMenu>
@@ -45,7 +47,7 @@ function JournalStoryMenu({
         <Ellipsis aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-52">
-        <DropdownMenuItem onClick={onChooseCover}>
+        <DropdownMenuItem disabled={readOnly} onClick={onChooseCover}>
           <ImagePlus aria-hidden="true" />
           {hasCover ? t('changeCover') : t('chooseCover')}
         </DropdownMenuItem>
@@ -99,6 +101,7 @@ export function JournalDock({
   onContents,
 }: Readonly<Pick<JournalActionsProps, 'onAdd' | 'onContents'>>) {
   const t = useTranslations('memories.journal');
+  const readOnly = useTripReadOnly();
   const visible = useRevealOnScrollDown();
 
   return (
@@ -130,7 +133,7 @@ export function JournalDock({
             <TableOfContents aria-hidden="true" />
           </Button>
         ) : null}
-        <Button className="rounded-full px-5" onClick={onAdd} type="button">
+        <Button className="rounded-full px-5" disabled={readOnly} onClick={onAdd} type="button">
           <Plus aria-hidden="true" data-icon="inline-start" />
           {t('addMemory')}
         </Button>
@@ -148,6 +151,7 @@ export function JournalHeadActions({
   overCover,
 }: Readonly<JournalActionsProps & { overCover: boolean }>) {
   const t = useTranslations('memories.journal');
+  const readOnly = useTripReadOnly();
   const onImage = overCover
     ? 'text-media-fallback-foreground hover:bg-neutral-950/40 hover:text-media-fallback-foreground'
     : undefined;
@@ -171,7 +175,7 @@ export function JournalHeadActions({
         hasCover={hasCover}
         onChooseCover={onChooseCover}
       />
-      <Button className="rounded-full" onClick={onAdd} size="sm" type="button">
+      <Button className="rounded-full" disabled={readOnly} onClick={onAdd} size="sm" type="button">
         <Plus aria-hidden="true" data-icon="inline-start" />
         {t('addMemory')}
       </Button>

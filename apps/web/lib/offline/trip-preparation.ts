@@ -100,6 +100,8 @@ export async function prepareTripForOffline(tripId: string) {
   }
 
   try {
+    const current = await fetchTrip(tripId);
+    if (current.trip.archivedAt) throw new OfflineSyncError('trip_archived');
     await syncOfflineMutations();
     // The board covers every pair, so warming it makes the converter work for
     // any currency the trip turns out to need, not just the ones seen online.

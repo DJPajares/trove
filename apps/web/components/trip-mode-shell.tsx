@@ -24,7 +24,7 @@ import { TripModeExpenseProvider } from '@/components/trip-mode-expense-sheet';
 import { TripModeTasksProvider } from '@/components/trip-mode-tasks';
 import { tripModeCardClass } from '@/components/trip-mode-ui';
 import { useTripContext } from '@/components/trip-provider';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import {
   deviceTimeZone,
@@ -452,7 +452,8 @@ export function TripModeShell({
   );
 
   useEffect(() => {
-    if (!contextTrip || itineraryStatus !== 'idle' || !navigator.onLine) return;
+    if (!contextTrip || contextTrip.archivedAt || itineraryStatus !== 'idle' || !navigator.onLine)
+      return;
     const basePath = `/trips/${contextTrip.id}/mode`;
     for (const { path } of tripModeViews) router.prefetch(`${basePath}${path}`);
   }, [contextTrip, itineraryStatus, router]);
@@ -535,6 +536,20 @@ export function TripModeShell({
     year: 'numeric',
   });
   const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00.000Z`));
+
+  if (trip.archivedAt)
+    return (
+      <PageState
+        kind="empty"
+        title={itineraryT('archiveTripModeTitle')}
+        description={itineraryT('archiveTripModeDescription')}
+        actions={
+          <Link className={buttonVariants()} href={`/trips/${trip.id}`}>
+            {t('openPlanning')}
+          </Link>
+        }
+      />
+    );
 
   if (!isTripModeAvailable(trip.lifecycle, Boolean(previewSelection))) {
     return (

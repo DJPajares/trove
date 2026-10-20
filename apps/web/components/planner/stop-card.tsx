@@ -1,4 +1,5 @@
 'use client';
+import { useTripReadOnly } from '@/components/trip-provider';
 
 import { Clock3 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -155,6 +156,7 @@ export function StopCard({
   view: StopView;
 }>) {
   const t = useTranslations('itinerary');
+  const readOnly = useTripReadOnly();
   const plannerT = useTranslations('itinerary.planner.stop');
   const locale = useLocale();
   const { preferences } = usePreferences();
@@ -306,6 +308,7 @@ export function StopCard({
                     'relative z-10 max-w-full rounded-[var(--radius-sm)] text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40',
                     !timing && 'inline-flex items-center gap-1 font-medium text-primary',
                   )}
+                  disabled={readOnly}
                   onClick={onEditTiming}
                   type="button"
                 >

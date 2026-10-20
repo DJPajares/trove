@@ -1,4 +1,5 @@
 'use client';
+import { useTripReadOnly } from '@/components/trip-provider';
 
 import { ChevronRight, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -38,6 +39,7 @@ export function PlannerContextBar({
   stay: PlannerStaySummary;
 }>) {
   const t = useTranslations('itinerary.planner.context');
+  const readOnly = useTripReadOnly();
   const placesT = useTranslations('tripPlaces');
   const unset = stay.kind === 'unset';
   const value =
@@ -77,6 +79,7 @@ export function PlannerContextBar({
           'min-w-0 flex-1 justify-start overflow-hidden sm:max-w-sm sm:flex-none',
           unset && 'border-dashed border-border-strong text-accent-strong',
         )}
+        disabled={readOnly}
         onClick={onOpenStay}
         size="sm"
         type="button"

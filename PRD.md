@@ -437,6 +437,14 @@ The plan is anchored to the start date: **Day 1 stays Day 1**. Moving the start 
 - Day-only notes must be reassigned to a retained day or explicitly discarded before removal; a generic date-change confirmation is not consent to delete them. Day ratings and captured history remain accessible under their original dates even when those dates leave the itinerary range.
 - Removing a day must not delete its Tasks, Reservations, Expenses, or Memories. Preserve their dated context and detach invalid planning links. Removing the day assignment from a floating item clears its derived scheduled instant; it does not clear an authoritative event instant.
 
+### Trip archiving
+
+Archiving is an owner-controlled collection state independent of date-based lifecycle and readiness. All trip content and sharing preferences are preserved. Archived trips are excluded from Home, the normal Trips library and counts, global search (including their trip-owned records), selectors, reminders and push dispatch. Independently Saved Places and existing public itinerary links remain available.
+
+The trip actions menu offers Archive. Current/future trips confirm that reminders stop; past trips archive immediately with Undo. A dedicated Archived trips view supports name/destination filtering, browsing and Restore. Archived trips and owner bookmarks show a read-only banner; restore before changing content or entering Trip Mode/Preview. Existing confirmed permanent deletion remains a distinct management action. Restore uses the unchanged dates to determine current lifecycle and resumes ordinary future reminder eligibility without replaying missed pushes.
+
+Archive/restore require connectivity. Resolve pending local writes before archiving. Prepared data is retained for offline reading; archived content cannot accept edits or a new preparation/refresh. When another device archives a trip with queued edits, preserve them as a visible conflict and require restoration before retrying. Offline cleanup distinguishes archived trips from deleted trips using an authoritative index of all owned trip IDs, never the filtered normal collection.
+
 ## 6.2 Planning Readiness
 
 Planning readiness is separate from lifecycle:

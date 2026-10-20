@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
+import { useTripReadOnly } from '@/components/trip-provider';
 import { Button } from '@/components/ui/button';
 import type { ItineraryTripPlace } from '@/lib/itinerary/api';
 import * as Icons from '@/lib/icons';
@@ -42,6 +43,7 @@ export function DayEmpty({
   tripIsEmpty: boolean;
 }>) {
   const t = useTranslations('itinerary.planner.empty');
+  const readOnly = useTripReadOnly();
   const [adding, setAdding] = useState<string | null>(null);
 
   return (
@@ -70,7 +72,7 @@ export function DayEmpty({
             {mustGo.slice(0, MUST_GO_SHOWN).map((tripPlace) => (
               <li key={tripPlace.id}>
                 <Button
-                  disabled={adding !== null}
+                  disabled={readOnly || adding !== null}
                   onClick={async () => {
                     setAdding(tripPlace.id);
                     try {
@@ -93,7 +95,7 @@ export function DayEmpty({
       ) : null}
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button onClick={onAddStop} size="sm" type="button">
+        <Button disabled={readOnly} onClick={onAddStop} size="sm" type="button">
           <Plus aria-hidden="true" data-icon="inline-start" />
           {t('addStop')}
         </Button>

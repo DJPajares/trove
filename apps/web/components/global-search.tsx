@@ -217,7 +217,11 @@ export function GlobalSearch({
   const listRef = useRef<HTMLDivElement | null>(null);
   const trimmedQuery = query.trim();
   // The trip list is shared with the Trips library, so reading it here is free.
-  const trips = useQuery({ enabled: open, queryFn: fetchTrips, queryKey: queryKeys.trips() });
+  const trips = useQuery({
+    enabled: open,
+    queryFn: () => fetchTrips(),
+    queryKey: queryKeys.trips(),
+  });
   const trip = open ? nextTripForTools(trips.data?.trips ?? [], localToday()) : null;
 
   useEffect(() => {

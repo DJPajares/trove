@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
 import { useItineraryMovement } from '@/lib/itinerary/use-itinerary-movement';
 import { queuedMovement } from '@/lib/itinerary/queued-movement';
@@ -11,7 +12,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
 
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeading } from '@/components/ui/sheet';
 import {
   listUserMutations,
@@ -68,6 +69,7 @@ const MISSING_ERROR_CODES = [
 ];
 
 const NAMED_REASONS = [
+  'trip_archived',
   'itinerary_movement_review_required',
   'database_schema_outdated',
   'database_unavailable',
@@ -246,7 +248,26 @@ export function TripSyncStatus({ tripId }: Readonly<{ tripId: string }>) {
                   </div>
 
                   <div className="mt-3 flex flex-wrap justify-end gap-2">
-                    {isMovementOperation(mutation.operation) ? (
+                    {mutation.errorCode === 'trip_archived' ? (
+                      <>
+                        <Link
+                          className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                          href={`/trips/${mutation.tripId}`}
+                          onClick={() => setOpen(false)}
+                        >
+                          {t('openArchivedTrip')}
+                        </Link>
+                        <Button
+                          disabled={busyId === mutation.id || !online}
+                          size="sm"
+                          onClick={() =>
+                            void runAction(mutation.id, () => retryOfflineMutation(mutation.id))
+                          }
+                        >
+                          {t('retry')}
+                        </Button>
+                      </>
+                    ) : isMovementOperation(mutation.operation) ? (
                       <>
                         <Button
                           disabled={!online || movement.busy}

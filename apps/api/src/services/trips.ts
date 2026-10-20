@@ -13,6 +13,7 @@ import {
 import { hasShrinkContent, tripShrinkImpact } from './trip-shrink.js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getPrismaClient, Prisma } from '@trove/db';
+import { archiveWhere, type ArchiveFilter } from './trip-archive.js';
 
 import { floatingLocalTimeToInstant, formatLocalTime } from './itinerary-rules.js';
 import { MEMORY_PHOTOS_BUCKET } from './memories.js';
@@ -324,6 +325,7 @@ async function serializeTrip(
 
   return {
     planningPreferences: readTripPlanningPreferences(trip.planningPreferences),
+    archivedAt: trip.archivedAt?.toISOString() ?? null,
     effectivePace: effectiveTripPace(readTripPlanningPreferences(trip.planningPreferences)),
     countries: trip.countries,
     coverPhotoPath: trip.coverPhotoPath,
@@ -526,9 +528,13 @@ function toProfileHomeCandidate(profile: { homeTimeZone: string | null }) {
   return profile.homeTimeZone ? { placeId: null, timeZone: profile.homeTimeZone } : null;
 }
 
-export async function listTrips(userId: string, accessToken: string) {
+export async function listTrips(
+  userId: string,
+  accessToken: string,
+  archive: ArchiveFilter = 'exclude',
+) {
   const trips = await getPrismaClient().trip.findMany({
-    where: { ownerId: userId },
+    where: { ownerId: userId, ...archiveWhere(archive) },
     include: libraryTripInclude,
     orderBy: [{ startDate: 'asc' }, { createdAt: 'asc' }],
   });
@@ -545,6 +551,37 @@ export async function listTrips(userId: string, accessToken: string) {
       ),
     ),
   );
+}
+
+export async function setTripArchived(
+  userId: string,
+  accessToken: string,
+  tripId: string,
+  archived: boolean,
+) {
+  await getPrismaClient().$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<
+      Array<{ archived_at: Date | null }>
+    >`SELECT archived_at FROM trove.trips WHERE id = ${tripId}::uuid AND owner_id = ${userId}::uuid FOR UPDATE`;
+    if (!rows.length) throw new TripNotFoundError();
+    if (Boolean(rows[0]!.archived_at) === archived) return;
+    await tx.trip.update({
+      where: { id: tripId },
+      data: { archivedAt: archived ? new Date() : null },
+    });
+  });
+  return getTrip(userId, accessToken, tripId);
+}
+
+export async function tripArchiveIndex(userId: string) {
+  const rows = await getPrismaClient().trip.findMany({
+    where: { ownerId: userId },
+    select: { id: true, archivedAt: true },
+  });
+  return {
+    ownedTripIds: rows.map((trip) => trip.id),
+    archivedTripCount: rows.filter((trip) => trip.archivedAt).length,
+  };
 }
 
 export async function getTrip(userId: string, accessToken: string, tripId: string) {

@@ -32,7 +32,7 @@ export function AddSavedToTripSheet({
   const t = useTranslations('saved.addToTrip');
   const locale = useLocale();
   const queryClient = useQueryClient();
-  const trips = useQuery({ queryFn: fetchTrips, queryKey: queryKeys.trips() });
+  const trips = useQuery({ queryFn: () => fetchTrips(), queryKey: queryKeys.trips() });
   const options = useMemo(
     () => tripsForSavedPlace(savedPlace?.place.location, trips.data?.trips ?? [], localToday()),
     [savedPlace, trips.data],

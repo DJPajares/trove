@@ -75,7 +75,7 @@ export function TaskTemplatesManager() {
   });
   // The trip list is shared with the Trips library, so opening this screen
   // after visiting that one costs nothing.
-  const tripsQuery = useQuery({ queryFn: fetchTrips, queryKey: queryKeys.trips() });
+  const tripsQuery = useQuery({ queryFn: () => fetchTrips(), queryKey: queryKeys.trips() });
   const templates = templatesQuery.data?.templates ?? EMPTY_TEMPLATES;
   const trips = tripsQuery.data?.trips ?? EMPTY_TRIPS;
   const status =

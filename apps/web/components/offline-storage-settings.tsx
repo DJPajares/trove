@@ -43,6 +43,7 @@ import { getOfflineAuthContext } from '@/lib/offline/trip-sync';
 import { useInstallPrompt } from '@/lib/pwa/install';
 
 type PreparedTrip = {
+  archived: boolean;
   documentCount: number;
   name: string | null;
   pendingMediaBytes: number;
@@ -55,6 +56,7 @@ type LoadState = 'error' | 'loading' | 'ready';
 
 export function OfflineStorageSettings() {
   const t = useTranslations('offlineStorage');
+  const archiveT = useTranslations('trips.archive');
   const online = useOnlineStatus();
   const { availability, install } = useInstallPrompt();
   const [trips, setTrips] = useState<PreparedTrip[]>([]);
@@ -77,6 +79,7 @@ export function OfflineStorageSettings() {
             listOfflineMemoryMedia(userId, snapshot.tripId).catch(() => []),
           ]);
           return {
+            archived: Boolean(snapshot.trip?.archivedAt),
             documentCount: documents.length,
             name: snapshot.trip?.name ?? snapshot.itinerary?.trip.name ?? null,
             pendingMediaBytes: media.reduce((total, entry) => total + entry.sizeBytes, 0),
@@ -207,7 +210,7 @@ export function OfflineStorageSettings() {
                     <ItemTitle>{trip.name ?? t('untitledTrip')}</ItemTitle>
                     <ItemDescription>
                       {[
-                        t(`readiness.${trip.readiness}`),
+                        trip.archived ? archiveT('badge') : t(`readiness.${trip.readiness}`),
                         trip.documentCount
                           ? t('documentCount', { count: trip.documentCount })
                           : null,
@@ -226,7 +229,7 @@ export function OfflineStorageSettings() {
                   </ItemContent>
                   <div className="flex shrink-0 flex-wrap gap-1">
                     <Button
-                      disabled={!online || busyTripId === trip.tripId}
+                      disabled={trip.archived || !online || busyTripId === trip.tripId}
                       onClick={() => void refreshTrip(trip.tripId)}
                       size="xs"
                       variant="outline"

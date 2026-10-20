@@ -1,4 +1,5 @@
 'use client';
+import { useTripReadOnly } from '@/components/trip-provider';
 
 import type { TrovePlaceCategory } from '@/lib/place-categories';
 import { placeCategories } from '@/lib/trip-places/categories';
@@ -128,6 +129,7 @@ export function TripPlacesPanel({
   tripPlaces,
 }: Readonly<TripPlacesPanelProps>) {
   const t = useTranslations('tripPlaces');
+  const readOnly = useTripReadOnly();
   const categoryT = useTranslations('saved.categories');
   const nestedPlaceId = useRef<string | null>(null);
   const mediaTranslations = useTranslations('media');
@@ -255,6 +257,7 @@ export function TripPlacesPanel({
       <DropdownMenuTrigger
         render={
           <Button
+            disabled={readOnly}
             aria-label={t('actionsFor', { name })}
             size="icon-sm"
             type="button"
@@ -502,7 +505,7 @@ export function TripPlacesPanel({
 
               {/* Above the name's stretched hit area, or these would be unreachable. */}
               <ItemActions className="relative z-10 -mr-2 shrink-0 gap-0.5">
-                {day && onAddToDay ? (
+                {day && onAddToDay && !readOnly ? (
                   // One button in both states, so focus stays put when adding
                   // turns it into the check: a keyboard user is not dropped
                   // back to the top of the page for having added something.

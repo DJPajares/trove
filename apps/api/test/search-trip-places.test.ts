@@ -1,4 +1,4 @@
-import { beforeEach, expect, test } from 'vitest';
+import { beforeEach, expect, test, vi } from 'vitest';
 
 import { searchTrove } from '../src/services/search.js';
 import type { PlacesService } from '../src/services/places.js';
@@ -66,4 +66,44 @@ test('provider matches already on a trip use the same contextual destination', a
     .flatMap((group) => group.results)
     .find((place) => place.id === 'provider-place');
   expect(found?.href).toBe('/trips/trip-id?places=1');
+});
+
+test('global search excludes archived trip content but keeps independent Saved Places eligible', async () => {
+  const models = Object.fromEntries(
+    [
+      'trip',
+      'savedPlace',
+      'tripPlace',
+      'reservation',
+      'tripInfo',
+      'itineraryDay',
+      'itineraryItem',
+      'memory',
+      'placeProviderRef',
+    ].map((name) => [name, { findMany: vi.fn(async () => []) }]),
+  );
+  (globalThis as { trovePrismaClient?: unknown }).trovePrismaClient = models;
+  await searchTrove('owner', 'Museum');
+  expect(models.trip!.findMany).toHaveBeenCalledWith(
+    expect.objectContaining({
+      where: expect.objectContaining({ ownerId: 'owner', archivedAt: null }),
+    }),
+  );
+  for (const name of [
+    'tripPlace',
+    'reservation',
+    'tripInfo',
+    'itineraryDay',
+    'itineraryItem',
+    'memory',
+  ]) {
+    expect(models[name]!.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ trip: { ownerId: 'owner', archivedAt: null } }),
+      }),
+    );
+  }
+  expect(models.savedPlace!.findMany).toHaveBeenCalledWith(
+    expect.objectContaining({ where: expect.objectContaining({ ownerId: 'owner' }) }),
+  );
 });

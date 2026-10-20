@@ -1,4 +1,5 @@
 'use client';
+import { useTripReadOnly } from '@/components/trip-provider';
 
 import { CircleAlert, Layers, List, Pencil, Plus } from 'lucide-react';
 import Link from 'next/link';
@@ -89,6 +90,7 @@ function TaskSubGroup({
 
 export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tasks');
+  const readOnly = useTripReadOnly();
   const locale = useLocale();
   const { data, refresh, status } = useTripResource(queryKeys.tasks(tripId), () =>
     fetchTasks(tripId),
@@ -211,7 +213,7 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
             aria-label={t(completed ? 'markOpen' : 'markComplete', { label: task.label })}
             checked={completed}
             className="size-5 cursor-pointer accent-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 disabled:cursor-wait"
-            disabled={changingTaskId === task.id}
+            disabled={readOnly || changingTaskId === task.id}
             onChange={() => void handleCompletion(task)}
             type="checkbox"
           />
@@ -233,6 +235,7 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
         <ItemActions>
           <Button
             aria-label={t('editTask', { label: task.label })}
+            disabled={readOnly}
             onClick={() => openEdit(task)}
             size="icon-sm"
             variant="ghost"
@@ -370,7 +373,7 @@ export function TasksManager({ tripId }: Readonly<{ tripId: string }>) {
       ) : (
         <PageState
           actions={
-            <Button onClick={openCreate} variant="outline">
+            <Button disabled={readOnly} onClick={openCreate} variant="outline">
               <Plus aria-hidden="true" data-icon="inline-start" />
               {t('addFirstTask')}
             </Button>

@@ -90,3 +90,12 @@ test('offline storage failure cannot turn a confirmed server deletion into a fai
   await expect(deleteTripAndClearCaches(client, trip.id)).resolves.toBeUndefined();
   expect(client.getQueryData(queryKeys.trip(trip.id))).toBeUndefined();
 });
+
+test('permanent deletion also removes an archived trip from its separate collection', async () => {
+  const client = cachedTrips();
+  client.setQueryData(queryKeys.archivedTrips(), {
+    trips: [{ ...trip, archivedAt: '2026-10-20' }],
+  });
+  await deleteTripAndClearCaches(client, trip.id);
+  expect(client.getQueryData(queryKeys.archivedTrips())).toEqual({ trips: [] });
+});

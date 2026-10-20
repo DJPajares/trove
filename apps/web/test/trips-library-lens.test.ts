@@ -81,3 +81,17 @@ test('an unknown lens reads as the whole library', () => {
   expect(parseTripLens('bogus')).toBe('all');
   expect(parseTripLens(null)).toBe('all');
 });
+
+test('archived trips do not inflate any library lens count', () => {
+  const archived = {
+    ...trip({ id: 'hidden', lifecycle: 'active' }),
+    archivedAt: '2026-10-20T00:00:00Z',
+  };
+  expect(lensCounts([archived], new Date('2026-10-20'))).toEqual({
+    all: 0,
+    past: 0,
+    planning: 0,
+    upcoming: 0,
+  });
+  expect(tripsForLens([archived], 'all', new Date('2026-10-20'))).toEqual([]);
+});

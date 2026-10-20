@@ -1,4 +1,5 @@
 'use client';
+import { useTripReadOnly } from '@/components/trip-provider';
 
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import {
@@ -134,6 +135,7 @@ export function MomentViewer({
   tripId: string;
 }>) {
   const t = useTranslations('memories.journal.viewer');
+  const readOnly = useTripReadOnly();
   const trackRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(initialPhotoIndex);
   const [busy, setBusy] = useState(false);
@@ -314,7 +316,7 @@ export function MomentViewer({
             <div className="mt-4 flex items-center justify-center gap-1">
               <Button
                 className="rounded-full"
-                disabled={busy}
+                disabled={busy || readOnly}
                 onClick={() => onEdit(memory)}
                 size="sm"
                 type="button"
@@ -326,7 +328,7 @@ export function MomentViewer({
               <Button
                 aria-pressed={memory.isHighlight}
                 className={cn('rounded-full', memory.isHighlight && 'text-accent-strong')}
-                disabled={busy}
+                disabled={busy || readOnly}
                 onClick={() =>
                   void act(
                     () => updateMemory(tripId, memory.id, { isHighlight: !memory.isHighlight }),
@@ -350,7 +352,7 @@ export function MomentViewer({
                     <Button
                       aria-label={t('more')}
                       className="rounded-full"
-                      disabled={busy}
+                      disabled={busy || readOnly}
                       size="icon-sm"
                       type="button"
                       variant="ghost"
@@ -362,7 +364,7 @@ export function MomentViewer({
                 <DropdownMenuContent align="end" className="min-w-56">
                   {current && !localOnly ? (
                     <DropdownMenuItem
-                      disabled={Boolean(coverPhoto)}
+                      disabled={readOnly || Boolean(coverPhoto)}
                       onClick={() =>
                         void act(async () => {
                           onCoverChanged(await setStoryCoverPhoto(tripId, current.id));
@@ -376,7 +378,7 @@ export function MomentViewer({
                   {memory.isHighlight ? (
                     <>
                       <DropdownMenuItem
-                        disabled={highlightIndex <= 0}
+                        disabled={readOnly || highlightIndex <= 0}
                         onClick={() => {
                           const order = moveHighlightOrder(highlightOrder, memory.id, -1);
                           if (order) void act(() => reorderHighlights(tripId, order), t('moved'));
@@ -386,7 +388,11 @@ export function MomentViewer({
                         {t('moveEarlier')}
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        disabled={highlightIndex < 0 || highlightIndex >= highlightOrder.length - 1}
+                        disabled={
+                          readOnly ||
+                          highlightIndex < 0 ||
+                          highlightIndex >= highlightOrder.length - 1
+                        }
                         onClick={() => {
                           const order = moveHighlightOrder(highlightOrder, memory.id, 1);
                           if (order) void act(() => reorderHighlights(tripId, order), t('moved'));
@@ -398,7 +404,11 @@ export function MomentViewer({
                     </>
                   ) : null}
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setConfirmDelete(true)} variant="destructive">
+                  <DropdownMenuItem
+                    disabled={readOnly}
+                    onClick={() => setConfirmDelete(true)}
+                    variant="destructive"
+                  >
                     <Trash2 aria-hidden="true" />
                     {t('delete')}
                   </DropdownMenuItem>
@@ -419,7 +429,7 @@ export function MomentViewer({
               <AlertDialogFooter>
                 <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
                 <AlertDialogAction
-                  disabled={busy}
+                  disabled={busy || readOnly}
                   onClick={() => {
                     setBusy(true);
                     void deleteMemory(

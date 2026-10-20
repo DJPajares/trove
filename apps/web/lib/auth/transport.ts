@@ -20,6 +20,23 @@ export async function getProtectedSession(supabase: SupabaseClient) {
 
 /** Cancel departing-account reads and never publish an answer after sign-out starts. */
 export async function authenticatedFetch(input: string, init?: RequestInit) {
+  const target = new URL(input, 'http://localhost');
+  const match = target.pathname.match(/^\/trips\/([\da-f-]{36})(.*)$/i);
+  if (
+    match &&
+    init?.method &&
+    !['GET', 'HEAD', 'OPTIONS'].includes(init.method) &&
+    match[2] !== '/archive' &&
+    !(match[2] === '' && init.method === 'DELETE')
+  ) {
+    const { getRememberedOfflineUser, readTripSnapshot } = await import('@/lib/offline/trip-store');
+    const userId = getRememberedOfflineUser();
+    const snapshot = userId
+      ? await readTripSnapshot(userId, match[1]!).catch(() => undefined)
+      : null;
+    if (snapshot?.trip?.archivedAt)
+      return Response.json({ code: 'trip_archived' }, { status: 409 });
+  }
   const signal = authRequestSignal();
   const response = await fetch(input, {
     ...init,

@@ -1,4 +1,5 @@
 'use client';
+import { useTripReadOnly } from '@/components/trip-provider';
 
 import { ArrowLeftRight, Ellipsis, Pencil, TextCursorInput, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -48,6 +49,7 @@ export function StopMenu({
   name: string;
 }>) {
   const t = useTranslations('itinerary');
+  const readOnly = useTripReadOnly();
   const placesT = useTranslations('tripPlaces');
   const {
     onDeleteItem,
@@ -58,6 +60,7 @@ export function StopMenu({
     savingPriorityIds,
   } = actions;
 
+  if (readOnly) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger

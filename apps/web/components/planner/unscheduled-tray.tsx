@@ -3,6 +3,7 @@
 import { Copy, Ellipsis, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import { useTripReadOnly } from '@/components/trip-provider';
 import { Button } from '@/components/ui/button';
 import { ExpandableDescription } from '@/components/expandable-description';
 import {
@@ -45,6 +46,7 @@ export function UnscheduledTray({
   resolveItem: (item: ItineraryItem) => { category: TrovePlaceCategory | undefined; name: string };
 }>) {
   const t = useTranslations('itinerary');
+  const readOnly = useTripReadOnly();
   const trayT = useTranslations('itinerary.planner.unscheduled');
   if (!items.length) return null;
 
@@ -108,7 +110,7 @@ export function UnscheduledTray({
                     render={
                       <Button
                         aria-label={t('itemActions', { name: view.name })}
-                        disabled={organizingItemId === item.id}
+                        disabled={readOnly || organizingItemId === item.id}
                         size="icon-sm"
                         type="button"
                         variant="ghost"

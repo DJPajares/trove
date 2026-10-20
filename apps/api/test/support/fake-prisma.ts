@@ -48,6 +48,7 @@ export function resetStore() {
 function matches(row: Row, where: Where): boolean {
   if (!where) return true;
   return Object.entries(where).every(([key, value]) => {
+    if (value === null) return row[key] == null;
     if (key === 'OR') {
       return (value as Where[]).some((clause) => matches(row, clause));
     }

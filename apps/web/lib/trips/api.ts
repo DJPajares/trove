@@ -31,6 +31,7 @@ export type TripDestination = {
 };
 
 export type Trip = {
+  archivedAt?: string | null;
   planningPreferences?: TripPlanningPreferences;
   effectivePace?: { pace: 'relaxed' | 'balanced' | 'packed'; source: 'user' | 'default' };
   /**
@@ -208,20 +209,39 @@ async function tripRequest<T>(path: string, init?: RequestInit) {
   return response.json() as Promise<T>;
 }
 
-export async function fetchTrips() {
+export async function fetchTrips(archive: 'exclude' | 'only' | 'include' = 'exclude') {
   const { userId } = await getAuthContext();
-  const result = await tripRequest<{ trips: Trip[] }>('/trips');
+  const result = await tripRequest<{
+    trips: Trip[];
+    ownedTripIds?: string[];
+    archivedTripCount?: number;
+  }>(archive === 'exclude' ? '/trips' : `/trips?archived=${archive}`);
   // Reaching here means the server answered, so this list is authoritative and
   // anything held offline that is missing from it has been deleted - here or on
   // another device. Offline calls throw above and never get this far.
   //
   // Pruning is housekeeping, not part of the answer: it must not delay the list
   // or fail it.
-  void pruneOrphanedTripSnapshots(
-    userId,
-    result.trips.map((trip) => trip.id),
-  ).catch(() => undefined);
+  if (result.ownedTripIds)
+    void pruneOrphanedTripSnapshots(userId, result.ownedTripIds).catch(() => undefined);
 
+  return result;
+}
+
+export async function setTripArchived(tripId: string, archived: boolean) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine)
+    throw new TripApiError('archive_offline', 503);
+  const { userId } = await getAuthContext();
+  if (archived) {
+    const { listUserMutations } = await import('@/lib/offline/trip-store');
+    if ((await listUserMutations(userId, tripId)).length)
+      throw new TripApiError('archive_pending', 409);
+  }
+  const result = await tripRequest<{ trip: Trip }>(`/trips/${tripId}/archive`, {
+    method: 'PATCH',
+    body: JSON.stringify({ archived }),
+  });
+  await saveTripSnapshot(userId, result.trip);
   return result;
 }
 

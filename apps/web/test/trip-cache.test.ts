@@ -41,3 +41,23 @@ test('a saved trip does not invent an incomplete trip list', () => {
   expect(client.getQueryData(queryKeys.trip(saved.id))).toEqual({ trip: saved });
   expect(client.getQueryData(queryKeys.trips())).toBeUndefined();
 });
+
+test('archive and restore move a trip between existing collections without losing its record', () => {
+  const client = createQueryClient();
+  const trip = {
+    id: 'kept',
+    startDate: '2026-10-15',
+    createdAt: '2026-01-01',
+    archivedAt: null,
+  } as Trip;
+  client.setQueryData(queryKeys.trips(), { trips: [trip] });
+  client.setQueryData(queryKeys.archivedTrips(), { trips: [] });
+  const archived = { ...trip, archivedAt: '2026-10-20T00:00:00Z' };
+  cacheSavedTrip(client, archived);
+  expect(client.getQueryData(queryKeys.trips())).toEqual({ trips: [] });
+  expect(client.getQueryData(queryKeys.archivedTrips())).toEqual({ trips: [archived] });
+  expect(client.getQueryData(queryKeys.trip(trip.id))).toEqual({ trip: archived });
+  cacheSavedTrip(client, trip);
+  expect(client.getQueryData(queryKeys.trips())).toEqual({ trips: [trip] });
+  expect(client.getQueryData(queryKeys.archivedTrips())).toEqual({ trips: [] });
+});

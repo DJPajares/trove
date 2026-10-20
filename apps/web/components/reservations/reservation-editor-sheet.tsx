@@ -12,6 +12,7 @@ import {
 import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 
+import { useTripReadOnly } from '@/components/trip-provider';
 import { CurrencyCombobox } from '@/components/currency-combobox';
 import { DatePicker } from '@/components/date-picker';
 import { MoneyInput } from '@/components/money-input';
@@ -193,6 +194,7 @@ type ReservationEditorSheetProps = {
  */
 export function ReservationEditorSheet(props: Readonly<ReservationEditorSheetProps>) {
   const t = useTranslations('reservations');
+  const readOnly = useTripReadOnly();
   const open = props.editor.mode !== 'closed';
   const key =
     props.editor.mode === 'edit'
@@ -208,8 +210,20 @@ export function ReservationEditorSheet(props: Readonly<ReservationEditorSheetPro
         closeLabel={t('close')}
       >
         <SheetHeading
-          description={props.editor.mode === 'edit' ? undefined : t('createDescription')}
-          title={props.editor.mode === 'edit' ? t('editTitle') : t('createTitle')}
+          description={
+            readOnly
+              ? t('viewDescription')
+              : props.editor.mode === 'edit'
+                ? undefined
+                : t('createDescription')
+          }
+          title={
+            readOnly
+              ? t('viewTitle')
+              : props.editor.mode === 'edit'
+                ? t('editTitle')
+                : t('createTitle')
+          }
         />
         {props.editor.mode !== 'closed' ? <EditorForm key={key} {...props} /> : null}
       </SheetContent>
@@ -229,6 +243,7 @@ function EditorForm({
   tripId,
 }: Readonly<ReservationEditorSheetProps>) {
   const t = useTranslations('reservations');
+  const readOnly = useTripReadOnly();
   const locale = useLocale();
   const editing = editor.mode === 'edit' ? editor.reservation : null;
   const [form, setForm] = useState<Form>(() => {
@@ -334,7 +349,7 @@ function EditorForm({
     isJourney ? form.transportPickupLocation || form.transportDropoffLocation : '',
     isStay ? form.accommodationAddress : '',
   ].filter((value) => value.trim()).length;
-  const [moreOpen, setMoreOpen] = useState(() => filledDetails > 0);
+  const [moreOpen, setMoreOpen] = useState(() => readOnly || filledDetails > 0);
 
   function endpointInput(endpoint: Endpoint) {
     return {
@@ -347,6 +362,7 @@ function EditorForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (readOnly) return;
     const title = form.title.trim();
     if (!title) return setError(t('titleRequired'));
     const journeyLike = isFlight || isJourney;
@@ -452,7 +468,7 @@ function EditorForm({
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file || !editing) return;
+    if (readOnly || !file || !editing) return;
     setUploading(true);
     setError(null);
     try {
@@ -466,7 +482,7 @@ function EditorForm({
   }
 
   async function toggleOffline(attachment: Reservation['attachments'][number]) {
-    if (!editing) return;
+    if (readOnly || !editing) return;
     setOfflineDocumentId(attachment.id);
     setError(null);
     try {
@@ -485,7 +501,7 @@ function EditorForm({
   }
 
   async function deleteAttachment() {
-    if (!editing || !attachmentToDelete) return;
+    if (readOnly || !editing || !attachmentToDelete) return;
     setDeletingAttachment(true);
     try {
       await deleteReservationDocument(tripId, editing.id, attachmentToDelete);
@@ -507,510 +523,517 @@ function EditorForm({
 
   return (
     <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 pt-4 pb-6">
-        {error ? (
-          <Alert role="alert" variant="destructive">
-            <CircleAlert aria-hidden="true" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : null}
+      <fieldset disabled={readOnly} className="contents">
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 pt-4 pb-6">
+          {error ? (
+            <Alert role="alert" variant="destructive">
+              <CircleAlert aria-hidden="true" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
 
-        <fieldset className="min-w-0 space-y-2.5">
-          <legend className="pb-2.5 text-sm font-semibold">{t('whatDidYouBook')}</legend>
-          <ChipGroup
-            className="gap-2"
-            multiple={false}
-            onValueChange={([value]) =>
-              update('type', (value as ReservationType | undefined) ?? null)
-            }
-            value={form.type ? [form.type] : []}
-          >
-            {[...PRIMARY_TYPES, ...(showMoreTypes ? MORE_TYPES : [])].map((type) => (
-              <Chip className="h-9 px-3.5 text-[0.8125rem]" key={type} value={type}>
-                {t(`types.${type}`)}
-              </Chip>
-            ))}
-          </ChipGroup>
-          {showMoreTypes ? null : (
-            <Button
-              className="-ml-2 h-9 px-2 text-brand"
-              onClick={() => setShowMoreTypes(true)}
-              size="sm"
-              type="button"
-              variant="ghost"
+          <fieldset className="min-w-0 space-y-2.5">
+            <legend className="pb-2.5 text-sm font-semibold">{t('whatDidYouBook')}</legend>
+            <ChipGroup
+              className="gap-2"
+              multiple={false}
+              onValueChange={([value]) =>
+                update('type', (value as ReservationType | undefined) ?? null)
+              }
+              value={form.type ? [form.type] : []}
             >
-              {t('moreTypes')}
-            </Button>
-          )}
-        </fieldset>
+              {[...PRIMARY_TYPES, ...(showMoreTypes ? MORE_TYPES : [])].map((type) => (
+                <Chip className="h-9 px-3.5 text-[0.8125rem]" key={type} value={type}>
+                  {t(`types.${type}`)}
+                </Chip>
+              ))}
+            </ChipGroup>
+            {showMoreTypes ? null : (
+              <Button
+                className="-ml-2 h-9 px-2 text-brand"
+                onClick={() => setShowMoreTypes(true)}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                {t('moreTypes')}
+              </Button>
+            )}
+          </fieldset>
 
-        <Field>
-          <FieldLabel htmlFor="reservation-title">{t('reservationTitle')}</FieldLabel>
-          <Input
-            autoComplete="off"
-            id="reservation-title"
-            maxLength={300}
-            onChange={(event) => update('title', event.target.value)}
-            placeholder={titlePlaceholder}
-            value={form.title}
-          />
-        </Field>
-
-        {isFlight ? (
           <Field>
-            <FieldLabel htmlFor="flight-number">{t('flightNumber')}</FieldLabel>
+            <FieldLabel htmlFor="reservation-title">{t('reservationTitle')}</FieldLabel>
             <Input
               autoComplete="off"
-              id="flight-number"
-              maxLength={100}
-              onChange={(event) => update('flightNumber', event.target.value)}
-              placeholder={t('flightNumberPlaceholder')}
-              value={form.flightNumber}
+              id="reservation-title"
+              maxLength={300}
+              onChange={(event) => update('title', event.target.value)}
+              placeholder={titlePlaceholder}
+              value={form.title}
             />
           </Field>
-        ) : null}
 
-        {isFlight || isJourney ? (
-          <div className="grid gap-5 sm:grid-cols-2">
-            <DateTimePair
-              date={form.departure.date}
-              id="reservation-departure"
-              label={departLabel}
-              onDate={(date) => updateEndpoint('departure', { date })}
-              onTime={(time) => updateEndpoint('departure', { time })}
-              time={form.departure.time}
-            />
-            <DateTimePair
-              date={form.arrival.date}
-              id="reservation-arrival"
-              label={arriveLabel}
-              min={form.departure.date || undefined}
-              onDate={(date) => updateEndpoint('arrival', { date })}
-              onTime={(time) => updateEndpoint('arrival', { time })}
-              time={form.arrival.time}
-            />
-          </div>
-        ) : isStay ? (
-          <div className="grid grid-cols-2 gap-4">
+          {isFlight ? (
             <Field>
-              <FieldLabel>{t('checkIn')}</FieldLabel>
-              <DatePicker
-                id="reservation-check-in"
-                label={t('checkIn')}
-                onChange={(value) => update('checkInDate', value)}
-                value={form.checkInDate}
+              <FieldLabel htmlFor="flight-number">{t('flightNumber')}</FieldLabel>
+              <Input
+                autoComplete="off"
+                id="flight-number"
+                maxLength={100}
+                onChange={(event) => update('flightNumber', event.target.value)}
+                placeholder={t('flightNumberPlaceholder')}
+                value={form.flightNumber}
               />
             </Field>
-            <Field>
-              <FieldLabel>{t('checkOut')}</FieldLabel>
-              <DatePicker
-                id="reservation-check-out"
-                label={t('checkOut')}
-                min={form.checkInDate || undefined}
-                onChange={(value) => update('checkOutDate', value)}
-                value={form.checkOutDate}
+          ) : null}
+
+          {isFlight || isJourney ? (
+            <div className="grid gap-5 sm:grid-cols-2">
+              <DateTimePair
+                date={form.departure.date}
+                id="reservation-departure"
+                label={departLabel}
+                onDate={(date) => updateEndpoint('departure', { date })}
+                onTime={(time) => updateEndpoint('departure', { time })}
+                time={form.departure.time}
               />
-            </Field>
-          </div>
-        ) : (
-          <DateTimePair
-            date={form.localDate}
-            id="reservation-when"
-            label={t('when')}
-            onDate={(date) => update('localDate', date)}
-            onTime={(time) => update('localTime', time)}
-            time={form.localTime}
-          />
-        )}
-
-        <Field>
-          <FieldLabel htmlFor="reservation-reference">{t('bookingReference')}</FieldLabel>
-          <Input
-            autoCapitalize="characters"
-            autoComplete="off"
-            className="font-mono tracking-[0.04em]"
-            id="reservation-reference"
-            maxLength={300}
-            onChange={(event) => update('bookingReference', event.target.value)}
-            placeholder={t('bookingReferencePlaceholder')}
-            value={form.bookingReference}
-          />
-        </Field>
-
-        <Collapsible onOpenChange={setMoreOpen} open={moreOpen}>
-          <CollapsibleTrigger className="group/more min-h-11 w-full justify-between border-t border-border-subtle pt-3 text-base font-semibold text-foreground hover:text-foreground">
-            <span>
-              {filledDetails ? t('moreDetailsCount', { count: filledDetails }) : t('moreDetails')}
-            </span>
-            <ChevronDown
-              aria-hidden="true"
-              className="transition-transform duration-[var(--motion-standard)] group-data-[panel-open]/more:rotate-180 motion-reduce:transition-none"
+              <DateTimePair
+                date={form.arrival.date}
+                id="reservation-arrival"
+                label={arriveLabel}
+                min={form.departure.date || undefined}
+                onDate={(date) => updateEndpoint('arrival', { date })}
+                onTime={(time) => updateEndpoint('arrival', { time })}
+                time={form.arrival.time}
+              />
+            </div>
+          ) : isStay ? (
+            <div className="grid grid-cols-2 gap-4">
+              <Field>
+                <FieldLabel>{t('checkIn')}</FieldLabel>
+                <DatePicker
+                  id="reservation-check-in"
+                  label={t('checkIn')}
+                  onChange={(value) => update('checkInDate', value)}
+                  value={form.checkInDate}
+                />
+              </Field>
+              <Field>
+                <FieldLabel>{t('checkOut')}</FieldLabel>
+                <DatePicker
+                  id="reservation-check-out"
+                  label={t('checkOut')}
+                  min={form.checkInDate || undefined}
+                  onChange={(value) => update('checkOutDate', value)}
+                  value={form.checkOutDate}
+                />
+              </Field>
+            </div>
+          ) : (
+            <DateTimePair
+              date={form.localDate}
+              id="reservation-when"
+              label={t('when')}
+              onDate={(date) => update('localDate', date)}
+              onTime={(time) => update('localTime', time)}
+              time={form.localTime}
             />
-          </CollapsibleTrigger>
-          <CollapsiblePanel>
-            <div className="space-y-5 pt-4">
-              {placeOptions.length ? (
-                <Field>
-                  <FieldLabel htmlFor="reservation-place">{t('place')}</FieldLabel>
-                  <SearchSelect
-                    aria-describedby={isStay ? 'reservation-place-hint' : undefined}
-                    id="reservation-place"
-                    label={t('place')}
-                    onValueChange={(value) => update('tripPlaceId', value)}
-                    options={placeOptions}
-                    placeholder={t('notLinked')}
-                    value={form.tripPlaceId}
-                  />
-                  {isStay ? (
-                    <FieldDescription id="reservation-place-hint">
-                      {t('stayPlaceHint')}
-                    </FieldDescription>
-                  ) : null}
-                </Field>
-              ) : null}
+          )}
 
-              {stopOptions.length ? (
-                <Field>
-                  <FieldLabel htmlFor="reservation-stop">{t('itineraryStop')}</FieldLabel>
-                  <SearchSelect
-                    id="reservation-stop"
-                    label={t('itineraryStop')}
-                    onValueChange={(value) => update('itineraryItemId', value)}
-                    options={stopOptions}
-                    placeholder={t('notLinked')}
-                    value={form.itineraryItemId}
-                  />
-                </Field>
-              ) : null}
+          <Field>
+            <FieldLabel htmlFor="reservation-reference">{t('bookingReference')}</FieldLabel>
+            <Input
+              autoCapitalize="characters"
+              autoComplete="off"
+              className="font-mono tracking-[0.04em]"
+              id="reservation-reference"
+              maxLength={300}
+              onChange={(event) => update('bookingReference', event.target.value)}
+              placeholder={t('bookingReferencePlaceholder')}
+              value={form.bookingReference}
+            />
+          </Field>
 
-              {isStay ? (
-                <>
+          <Collapsible onOpenChange={setMoreOpen} open={readOnly || moreOpen}>
+            <CollapsibleTrigger className="group/more min-h-11 w-full justify-between border-t border-border-subtle pt-3 text-base font-semibold text-foreground hover:text-foreground">
+              <span>
+                {filledDetails ? t('moreDetailsCount', { count: filledDetails }) : t('moreDetails')}
+              </span>
+              <ChevronDown
+                aria-hidden="true"
+                className="transition-transform duration-[var(--motion-standard)] group-data-[panel-open]/more:rotate-180 motion-reduce:transition-none"
+              />
+            </CollapsibleTrigger>
+            <CollapsiblePanel>
+              <div className="space-y-5 pt-4">
+                {placeOptions.length ? (
                   <Field>
-                    <FieldLabel htmlFor="reservation-address">
-                      {t('accommodationAddress')}
-                    </FieldLabel>
-                    <Textarea
-                      id="reservation-address"
-                      maxLength={2_000}
-                      onChange={(event) => update('accommodationAddress', event.target.value)}
-                      placeholder={t('accommodationAddressPlaceholder')}
-                      rows={2}
-                      value={form.accommodationAddress}
+                    <FieldLabel htmlFor="reservation-place">{t('place')}</FieldLabel>
+                    <SearchSelect
+                      aria-describedby={isStay ? 'reservation-place-hint' : undefined}
+                      id="reservation-place"
+                      label={t('place')}
+                      onValueChange={(value) => update('tripPlaceId', value)}
+                      options={placeOptions}
+                      placeholder={t('notLinked')}
+                      value={form.tripPlaceId}
+                    />
+                    {isStay ? (
+                      <FieldDescription id="reservation-place-hint">
+                        {t('stayPlaceHint')}
+                      </FieldDescription>
+                    ) : null}
+                  </Field>
+                ) : null}
+
+                {stopOptions.length ? (
+                  <Field>
+                    <FieldLabel htmlFor="reservation-stop">{t('itineraryStop')}</FieldLabel>
+                    <SearchSelect
+                      id="reservation-stop"
+                      label={t('itineraryStop')}
+                      onValueChange={(value) => update('itineraryItemId', value)}
+                      options={stopOptions}
+                      placeholder={t('notLinked')}
+                      value={form.itineraryItemId}
                     />
                   </Field>
-                  {data.days.length ? (
-                    <fieldset className="min-w-0 space-y-2">
-                      <legend className="text-sm font-medium">{t('nights')}</legend>
-                      <p className="text-sm text-muted-foreground">
-                        {nightsChosen ? t('nightsChosenHint') : t('nightsFollowHint')}
-                      </p>
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        {data.days
-                          .toSorted((left, right) => left.date.localeCompare(right.date))
-                          .map((day) => {
-                            const on = stayDays.includes(day.id);
-                            return (
-                              <Button
-                                aria-pressed={on}
-                                className="h-9 rounded-full px-3 text-[0.8125rem] shadow-none"
-                                key={day.id}
-                                onClick={() => {
-                                  setNightsChosen(true);
-                                  update(
-                                    'applicableDayIds',
-                                    on
-                                      ? stayDays.filter((id) => id !== day.id)
-                                      : [...stayDays, day.id],
-                                  );
-                                }}
-                                size="sm"
-                                type="button"
-                                variant={on ? 'default' : 'outline'}
-                              >
-                                {dayLabel(day)}
-                              </Button>
-                            );
-                          })}
-                      </div>
-                      {nightsChosen && form.checkInDate ? (
-                        <Button
-                          className="-ml-2 h-9 px-2 text-brand"
-                          onClick={() => setNightsChosen(false)}
-                          size="sm"
-                          type="button"
-                          variant="ghost"
-                        >
-                          {t('matchStayDates')}
-                        </Button>
-                      ) : null}
-                    </fieldset>
-                  ) : null}
-                </>
-              ) : null}
+                ) : null}
 
-              {isFlight ? (
-                <>
-                  <Field>
-                    <FieldLabel htmlFor="flight-airline">{t('airline')}</FieldLabel>
-                    <Input
-                      id="flight-airline"
-                      maxLength={200}
-                      onChange={(event) => update('flightAirline', event.target.value)}
-                      placeholder={t('airlinePlaceholder')}
-                      value={form.flightAirline}
-                    />
-                  </Field>
-                  <div className="grid grid-cols-2 gap-4">
+                {isStay ? (
+                  <>
                     <Field>
-                      <FieldLabel htmlFor="flight-from">{t('fromAirport')}</FieldLabel>
-                      <Input
-                        id="flight-from"
-                        maxLength={100}
-                        onChange={(event) => update('flightDepartureAirport', event.target.value)}
-                        placeholder={t('airportPlaceholder')}
-                        value={form.flightDepartureAirport}
+                      <FieldLabel htmlFor="reservation-address">
+                        {t('accommodationAddress')}
+                      </FieldLabel>
+                      <Textarea
+                        id="reservation-address"
+                        maxLength={2_000}
+                        onChange={(event) => update('accommodationAddress', event.target.value)}
+                        placeholder={t('accommodationAddressPlaceholder')}
+                        rows={2}
+                        value={form.accommodationAddress}
                       />
                     </Field>
+                    {data.days.length ? (
+                      <fieldset className="min-w-0 space-y-2">
+                        <legend className="text-sm font-medium">{t('nights')}</legend>
+                        <p className="text-sm text-muted-foreground">
+                          {nightsChosen ? t('nightsChosenHint') : t('nightsFollowHint')}
+                        </p>
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {data.days
+                            .toSorted((left, right) => left.date.localeCompare(right.date))
+                            .map((day) => {
+                              const on = stayDays.includes(day.id);
+                              return (
+                                <Button
+                                  aria-pressed={on}
+                                  className="h-9 rounded-full px-3 text-[0.8125rem] shadow-none"
+                                  key={day.id}
+                                  onClick={() => {
+                                    setNightsChosen(true);
+                                    update(
+                                      'applicableDayIds',
+                                      on
+                                        ? stayDays.filter((id) => id !== day.id)
+                                        : [...stayDays, day.id],
+                                    );
+                                  }}
+                                  size="sm"
+                                  type="button"
+                                  variant={on ? 'default' : 'outline'}
+                                >
+                                  {dayLabel(day)}
+                                </Button>
+                              );
+                            })}
+                        </div>
+                        {nightsChosen && form.checkInDate ? (
+                          <Button
+                            className="-ml-2 h-9 px-2 text-brand"
+                            onClick={() => setNightsChosen(false)}
+                            size="sm"
+                            type="button"
+                            variant="ghost"
+                          >
+                            {t('matchStayDates')}
+                          </Button>
+                        ) : null}
+                      </fieldset>
+                    ) : null}
+                  </>
+                ) : null}
+
+                {isFlight ? (
+                  <>
                     <Field>
-                      <FieldLabel htmlFor="flight-to">{t('toAirport')}</FieldLabel>
+                      <FieldLabel htmlFor="flight-airline">{t('airline')}</FieldLabel>
                       <Input
-                        id="flight-to"
-                        maxLength={100}
-                        onChange={(event) => update('flightArrivalAirport', event.target.value)}
-                        placeholder={t('airportPlaceholder')}
-                        value={form.flightArrivalAirport}
+                        id="flight-airline"
+                        maxLength={200}
+                        onChange={(event) => update('flightAirline', event.target.value)}
+                        placeholder={t('airlinePlaceholder')}
+                        value={form.flightAirline}
                       />
                     </Field>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    {(
-                      [
-                        ['flightTerminal', 'terminal'],
-                        ['flightGate', 'gate'],
-                        ['flightSeat', 'seat'],
-                      ] as const
-                    ).map(([key, label]) => (
-                      <Field key={key}>
-                        <FieldLabel htmlFor={`reservation-${label}`}>{t(label)}</FieldLabel>
+                    <div className="grid grid-cols-2 gap-4">
+                      <Field>
+                        <FieldLabel htmlFor="flight-from">{t('fromAirport')}</FieldLabel>
                         <Input
-                          id={`reservation-${label}`}
+                          id="flight-from"
                           maxLength={100}
-                          onChange={(event) => update(key, event.target.value)}
-                          value={form[key]}
+                          onChange={(event) => update('flightDepartureAirport', event.target.value)}
+                          placeholder={t('airportPlaceholder')}
+                          value={form.flightDepartureAirport}
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="flight-to">{t('toAirport')}</FieldLabel>
+                        <Input
+                          id="flight-to"
+                          maxLength={100}
+                          onChange={(event) => update('flightArrivalAirport', event.target.value)}
+                          placeholder={t('airportPlaceholder')}
+                          value={form.flightArrivalAirport}
+                        />
+                      </Field>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      {(
+                        [
+                          ['flightTerminal', 'terminal'],
+                          ['flightGate', 'gate'],
+                          ['flightSeat', 'seat'],
+                        ] as const
+                      ).map(([key, label]) => (
+                        <Field key={key}>
+                          <FieldLabel htmlFor={`reservation-${label}`}>{t(label)}</FieldLabel>
+                          <Input
+                            id={`reservation-${label}`}
+                            maxLength={100}
+                            onChange={(event) => update(key, event.target.value)}
+                            value={form[key]}
+                          />
+                        </Field>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+
+                {isJourney ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <Field>
+                        <FieldLabel htmlFor="transport-operator">{t('operator')}</FieldLabel>
+                        <Input
+                          id="transport-operator"
+                          maxLength={200}
+                          onChange={(event) => update('transportOperator', event.target.value)}
+                          value={form.transportOperator}
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="transport-service">{t('serviceNumber')}</FieldLabel>
+                        <Input
+                          id="transport-service"
+                          maxLength={100}
+                          onChange={(event) => update('transportServiceNumber', event.target.value)}
+                          value={form.transportServiceNumber}
+                        />
+                      </Field>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <Field>
+                        <FieldLabel htmlFor="transport-pickup">{t('pickupLocation')}</FieldLabel>
+                        <Input
+                          id="transport-pickup"
+                          maxLength={300}
+                          onChange={(event) =>
+                            update('transportPickupLocation', event.target.value)
+                          }
+                          value={form.transportPickupLocation}
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="transport-dropoff">{t('dropoffLocation')}</FieldLabel>
+                        <Input
+                          id="transport-dropoff"
+                          maxLength={300}
+                          onChange={(event) =>
+                            update('transportDropoffLocation', event.target.value)
+                          }
+                          value={form.transportDropoffLocation}
+                        />
+                      </Field>
+                    </div>
+                  </>
+                ) : null}
+
+                {isFlight || isJourney ? (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {(['departure', 'arrival'] as const).map((side) => (
+                      <Field key={side}>
+                        <FieldLabel htmlFor={`reservation-${side}-zone`}>
+                          {t('timeZoneFor', {
+                            side: side === 'departure' ? departLabel : arriveLabel,
+                          })}
+                        </FieldLabel>
+                        <SearchSelect
+                          id={`reservation-${side}-zone`}
+                          label={t('timeZoneFor', {
+                            side: side === 'departure' ? departLabel : arriveLabel,
+                          })}
+                          onValueChange={(timeZone) => updateEndpoint(side, { timeZone })}
+                          options={zones}
+                          placeholder={defaultTimeZone.replaceAll('_', ' ')}
+                          value={form[side].timeZone}
                         />
                       </Field>
                     ))}
                   </div>
-                </>
-              ) : null}
+                ) : null}
 
-              {isJourney ? (
-                <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <Field>
-                      <FieldLabel htmlFor="transport-operator">{t('operator')}</FieldLabel>
-                      <Input
-                        id="transport-operator"
-                        maxLength={200}
-                        onChange={(event) => update('transportOperator', event.target.value)}
-                        value={form.transportOperator}
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="transport-service">{t('serviceNumber')}</FieldLabel>
-                      <Input
-                        id="transport-service"
-                        maxLength={100}
-                        onChange={(event) => update('transportServiceNumber', event.target.value)}
-                        value={form.transportServiceNumber}
-                      />
-                    </Field>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <Field>
-                      <FieldLabel htmlFor="transport-pickup">{t('pickupLocation')}</FieldLabel>
-                      <Input
-                        id="transport-pickup"
-                        maxLength={300}
-                        onChange={(event) => update('transportPickupLocation', event.target.value)}
-                        value={form.transportPickupLocation}
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="transport-dropoff">{t('dropoffLocation')}</FieldLabel>
-                      <Input
-                        id="transport-dropoff"
-                        maxLength={300}
-                        onChange={(event) => update('transportDropoffLocation', event.target.value)}
-                        value={form.transportDropoffLocation}
-                      />
-                    </Field>
-                  </div>
-                </>
-              ) : null}
+                {isFlight || isJourney ? null : (
+                  <Field>
+                    <FieldLabel htmlFor="reservation-provider">{t('provider')}</FieldLabel>
+                    <Input
+                      id="reservation-provider"
+                      maxLength={200}
+                      onChange={(event) => update('provider', event.target.value)}
+                      placeholder={t('providerPlaceholder')}
+                      value={form.provider}
+                    />
+                  </Field>
+                )}
 
-              {isFlight || isJourney ? (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {(['departure', 'arrival'] as const).map((side) => (
-                    <Field key={side}>
-                      <FieldLabel htmlFor={`reservation-${side}-zone`}>
-                        {t('timeZoneFor', {
-                          side: side === 'departure' ? departLabel : arriveLabel,
-                        })}
-                      </FieldLabel>
-                      <SearchSelect
-                        id={`reservation-${side}-zone`}
-                        label={t('timeZoneFor', {
-                          side: side === 'departure' ? departLabel : arriveLabel,
-                        })}
-                        onValueChange={(timeZone) => updateEndpoint(side, { timeZone })}
-                        options={zones}
-                        placeholder={defaultTimeZone.replaceAll('_', ' ')}
-                        value={form[side].timeZone}
-                      />
-                    </Field>
-                  ))}
+                <div className="grid grid-cols-[minmax(0,1fr)_8.5rem] gap-3">
+                  <Field>
+                    <FieldLabel htmlFor="reservation-cost">{t('plannedCost')}</FieldLabel>
+                    <MoneyInput
+                      id="reservation-cost"
+                      onValueChange={(value) => update('plannedCostAmount', value)}
+                      placeholder={t('plannedCostPlaceholder')}
+                      value={form.plannedCostAmount}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="reservation-currency">{t('currency')}</FieldLabel>
+                    <CurrencyCombobox
+                      aria-label={t('currency')}
+                      id="reservation-currency"
+                      onValueChange={(value) => update('plannedCostCurrencyCode', value)}
+                      placeholder={t('currencyPlaceholder')}
+                      value={form.plannedCostCurrencyCode}
+                    />
+                  </Field>
                 </div>
-              ) : null}
 
-              {isFlight || isJourney ? null : (
                 <Field>
-                  <FieldLabel htmlFor="reservation-provider">{t('provider')}</FieldLabel>
-                  <Input
-                    id="reservation-provider"
-                    maxLength={200}
-                    onChange={(event) => update('provider', event.target.value)}
-                    placeholder={t('providerPlaceholder')}
-                    value={form.provider}
-                  />
-                </Field>
-              )}
-
-              <div className="grid grid-cols-[minmax(0,1fr)_8.5rem] gap-3">
-                <Field>
-                  <FieldLabel htmlFor="reservation-cost">{t('plannedCost')}</FieldLabel>
-                  <MoneyInput
-                    id="reservation-cost"
-                    onValueChange={(value) => update('plannedCostAmount', value)}
-                    placeholder={t('plannedCostPlaceholder')}
-                    value={form.plannedCostAmount}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="reservation-currency">{t('currency')}</FieldLabel>
-                  <CurrencyCombobox
-                    aria-label={t('currency')}
-                    id="reservation-currency"
-                    onValueChange={(value) => update('plannedCostCurrencyCode', value)}
-                    placeholder={t('currencyPlaceholder')}
-                    value={form.plannedCostCurrencyCode}
+                  <FieldLabel htmlFor="reservation-notes">{t('notes')}</FieldLabel>
+                  <Textarea
+                    id="reservation-notes"
+                    maxLength={5_000}
+                    onChange={(event) => update('notes', event.target.value)}
+                    placeholder={t('notesPlaceholder')}
+                    rows={3}
+                    value={form.notes}
                   />
                 </Field>
               </div>
+            </CollapsiblePanel>
+          </Collapsible>
 
-              <Field>
-                <FieldLabel htmlFor="reservation-notes">{t('notes')}</FieldLabel>
-                <Textarea
-                  id="reservation-notes"
-                  maxLength={5_000}
-                  onChange={(event) => update('notes', event.target.value)}
-                  placeholder={t('notesPlaceholder')}
-                  rows={3}
-                  value={form.notes}
-                />
-              </Field>
-            </div>
-          </CollapsiblePanel>
-        </Collapsible>
-
-        <section aria-labelledby="reservation-documents" className="space-y-2.5">
-          <h3 className="text-base font-semibold" id="reservation-documents">
-            {t('documents')}
-          </h3>
-          {latest ? (
-            <>
-              <p className="text-sm text-muted-foreground">{t('documentsHint')}</p>
-              <ul className="space-y-2">
-                {latest.attachments.map((attachment) => (
-                  <li
-                    className="flex items-center gap-2 rounded-[var(--radius-lg)] border border-border-subtle bg-card p-2 pl-3"
-                    key={attachment.id}
-                  >
-                    <FileText
-                      aria-hidden="true"
-                      className="size-4 shrink-0 text-muted-foreground"
-                    />
-                    {attachment.url ? (
-                      <a
-                        className="min-w-0 flex-1 truncate text-sm underline-offset-4 hover:underline"
-                        href={attachment.url}
-                        rel="noreferrer"
-                        target="_blank"
-                      >
-                        {attachment.fileName}
-                      </a>
-                    ) : (
-                      <span className="min-w-0 flex-1 truncate text-sm">{attachment.fileName}</span>
-                    )}
-                    {attachment.offlineAvailable ? (
-                      <span className="shrink-0 text-xs text-status-success">
-                        {t('availableOffline')}
-                      </span>
-                    ) : null}
-                    <Button
-                      aria-label={t(
-                        attachment.offlineSelected
-                          ? 'removeDocumentOffline'
-                          : 'saveDocumentOffline',
-                        { fileName: attachment.fileName },
-                      )}
-                      aria-pressed={attachment.offlineSelected}
-                      disabled={offlineDocumentId === attachment.id}
-                      onClick={() => void toggleOffline(attachment)}
-                      size="icon-sm"
-                      type="button"
-                      variant="ghost"
+          <section aria-labelledby="reservation-documents" className="space-y-2.5">
+            <h3 className="text-base font-semibold" id="reservation-documents">
+              {t('documents')}
+            </h3>
+            {latest ? (
+              <>
+                <p className="text-sm text-muted-foreground">{t('documentsHint')}</p>
+                <ul className="space-y-2">
+                  {latest.attachments.map((attachment) => (
+                    <li
+                      className="flex items-center gap-2 rounded-[var(--radius-lg)] border border-border-subtle bg-card p-2 pl-3"
+                      key={attachment.id}
                     >
-                      {attachment.offlineSelected ? (
-                        <CloudOff aria-hidden="true" />
+                      <FileText
+                        aria-hidden="true"
+                        className="size-4 shrink-0 text-muted-foreground"
+                      />
+                      {attachment.url ? (
+                        <a
+                          className="min-w-0 flex-1 truncate text-sm underline-offset-4 hover:underline"
+                          href={attachment.url}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          {attachment.fileName}
+                        </a>
                       ) : (
-                        <CloudDownload aria-hidden="true" />
+                        <span className="min-w-0 flex-1 truncate text-sm">
+                          {attachment.fileName}
+                        </span>
                       )}
-                    </Button>
-                    <Button
-                      aria-label={t('deleteDocument', { fileName: attachment.fileName })}
-                      onClick={() => setAttachmentToDelete(attachment.id)}
-                      size="icon-sm"
-                      type="button"
-                      variant="ghost"
-                    >
-                      <Trash2 aria-hidden="true" />
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-              <label className="inline-flex">
-                <input
-                  accept="application/pdf,image/jpeg,image/png,image/webp"
-                  className="peer sr-only"
-                  disabled={uploading}
-                  onChange={handleUpload}
-                  type="file"
-                />
-                <span className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border border-border-strong px-4 text-sm font-semibold peer-focus-visible:ring-3 peer-focus-visible:ring-ring/40">
-                  <Upload aria-hidden="true" className="size-4" />
-                  {uploading ? t('uploading') : t('addDocument')}
-                </span>
-              </label>
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">{t('documentsAfterSave')}</p>
-          )}
-        </section>
-      </div>
-
+                      {attachment.offlineAvailable ? (
+                        <span className="shrink-0 text-xs text-status-success">
+                          {t('availableOffline')}
+                        </span>
+                      ) : null}
+                      <Button
+                        aria-label={t(
+                          attachment.offlineSelected
+                            ? 'removeDocumentOffline'
+                            : 'saveDocumentOffline',
+                          { fileName: attachment.fileName },
+                        )}
+                        aria-pressed={attachment.offlineSelected}
+                        disabled={offlineDocumentId === attachment.id}
+                        onClick={() => void toggleOffline(attachment)}
+                        size="icon-sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        {attachment.offlineSelected ? (
+                          <CloudOff aria-hidden="true" />
+                        ) : (
+                          <CloudDownload aria-hidden="true" />
+                        )}
+                      </Button>
+                      <Button
+                        aria-label={t('deleteDocument', { fileName: attachment.fileName })}
+                        onClick={() => setAttachmentToDelete(attachment.id)}
+                        size="icon-sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Trash2 aria-hidden="true" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+                <label className="inline-flex">
+                  <input
+                    accept="application/pdf,image/jpeg,image/png,image/webp"
+                    className="peer sr-only"
+                    disabled={uploading}
+                    onChange={handleUpload}
+                    type="file"
+                  />
+                  <span className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border border-border-strong px-4 text-sm font-semibold peer-focus-visible:ring-3 peer-focus-visible:ring-ring/40">
+                    <Upload aria-hidden="true" className="size-4" />
+                    {uploading ? t('uploading') : t('addDocument')}
+                  </span>
+                </label>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">{t('documentsAfterSave')}</p>
+            )}
+          </section>
+        </div>
+      </fieldset>
       <SheetFooter className="flex-row items-center gap-2 px-5 pt-4">
-        {editing ? (
+        {editing && !readOnly ? (
           <Button
             aria-label={t('deleteReservation')}
             className="size-12 shrink-0 rounded-full"
@@ -1022,7 +1045,11 @@ function EditorForm({
             <Trash2 aria-hidden="true" />
           </Button>
         ) : null}
-        <Button className="h-12 flex-1 rounded-full text-base" disabled={saving} type="submit">
+        <Button
+          className="h-12 flex-1 rounded-full text-base"
+          disabled={readOnly || saving}
+          type="submit"
+        >
           {saving ? t('saving') : editing ? t('saveChanges') : t('createReservation')}
         </Button>
       </SheetFooter>
@@ -1039,7 +1066,7 @@ function EditorForm({
           <AlertDialogFooter>
             <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction
-              disabled={deletingAttachment}
+              disabled={readOnly || deletingAttachment}
               onClick={() => void deleteAttachment()}
               variant="destructive"
             >

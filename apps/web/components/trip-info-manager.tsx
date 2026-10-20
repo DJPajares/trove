@@ -1,4 +1,5 @@
 'use client';
+import { useTripReadOnly } from '@/components/trip-provider';
 
 import {
   CircleAlert,
@@ -80,6 +81,7 @@ function createForm(entry: TripInfoEntry | null): TripInfoForm {
 
 export function TripInfoManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('tripInfo');
+  const readOnly = useTripReadOnly();
   const { data, refresh, status } = useTripResource(queryKeys.tripInfo(tripId), () =>
     fetchTripInfo(tripId),
   );
@@ -230,6 +232,7 @@ export function TripInfoManager({ tripId }: Readonly<{ tripId: string }>) {
           ) : null}
           <Button
             aria-label={t('editEntry', { label: entry.label })}
+            disabled={readOnly}
             onClick={() => openEdit(entry)}
             size="icon-sm"
             variant="ghost"
@@ -279,7 +282,7 @@ export function TripInfoManager({ tripId }: Readonly<{ tripId: string }>) {
       {data.entries.length === 0 ? (
         <PageState
           actions={
-            <Button onClick={openCreate} variant="outline">
+            <Button disabled={readOnly} onClick={openCreate} variant="outline">
               <Plus aria-hidden="true" data-icon="inline-start" />
               {t('addFirstEntry')}
             </Button>
@@ -425,7 +428,7 @@ export function TripInfoManager({ tripId }: Readonly<{ tripId: string }>) {
                 <Button onClick={closeEditor} type="button" variant="outline">
                   {t('cancel')}
                 </Button>
-                <Button disabled={saving} type="submit">
+                <Button disabled={saving || readOnly} type="submit">
                   {saving
                     ? t('saving')
                     : editor.mode === 'edit'

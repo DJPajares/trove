@@ -1,4 +1,5 @@
 'use client';
+import { useTripReadOnly } from '@/components/trip-provider';
 
 import { Plus } from 'lucide-react';
 import { useSyncExternalStore, type ReactNode } from 'react';
@@ -74,6 +75,7 @@ export function TripSectionHeader({
   primaryAction,
 }: Readonly<TripSectionHeaderProps>) {
   const chrome = useTripChrome();
+  const readOnly = useTripReadOnly();
   const wideEnoughForGuidance = useMediaQuery(WIDE_ENOUGH_FOR_GUIDANCE);
   const withoutBottomBar = useMediaQuery(WITHOUT_BOTTOM_BAR);
 
@@ -95,7 +97,7 @@ export function TripSectionHeader({
       </p>
     ) : null);
   const primaryButton =
-    primaryAction && withoutBottomBar ? (
+    primaryAction && withoutBottomBar && !readOnly ? (
       <Button onClick={primaryAction.onSelect} type="button">
         {primaryAction.icon ?? <Plus aria-hidden="true" data-icon="inline-start" />}
         {primaryAction.label}

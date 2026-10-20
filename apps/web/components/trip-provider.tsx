@@ -11,6 +11,7 @@ import { apiErrorStatus } from '@/lib/query/client';
 import { queryKeys } from '@/lib/query/keys';
 import { fetchTrip, type Trip } from '@/lib/trips/api';
 import { cacheSavedTrip } from '@/lib/trips/cache';
+import { TripArchivedBanner } from '@/components/trip-archive-control';
 import { tripEditorialSubject, tripSecondaryEditorialSubject } from '@/lib/trips/summary';
 
 export type TripLoadStatus = 'error' | 'loading' | 'missing' | 'ready';
@@ -52,6 +53,8 @@ export function TripProvider({
 }: Readonly<{ children: ReactNode; tripId: string }>) {
   const queryClient = useQueryClient();
   const { data, error, isPending } = useQuery({
+    // Opening a trip rechecks reversible archive state changed on another device.
+    refetchOnMount: 'always',
     queryFn: () => fetchTrip(tripId),
     queryKey: queryKeys.trip(tripId),
   });
@@ -139,7 +142,12 @@ export function TripProvider({
     ],
   );
 
-  return <TripContext.Provider value={value}>{children}</TripContext.Provider>;
+  return (
+    <TripContext.Provider value={value}>
+      {trip?.archivedAt ? <TripArchivedBanner trip={trip} /> : null}
+      {children}
+    </TripContext.Provider>
+  );
 }
 
 /**
@@ -148,4 +156,9 @@ export function TripProvider({
  */
 export function useTripContext() {
   return useContext(TripContext);
+}
+
+export function useTripReadOnly() {
+  const context = useTripContext();
+  return Boolean(context && (context.status !== 'ready' || context.trip?.archivedAt));
 }

@@ -20,6 +20,7 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import { useTripActions } from '@/components/trip-actions-provider';
+import { TripArchiveControl } from '@/components/trip-archive-control';
 import { OfflineReadyStatus } from '@/components/offline-ready-status';
 import { TripTabs } from '@/components/trip-tabs';
 import { Button } from '@/components/ui/button';
@@ -193,12 +194,12 @@ export function TripHubBar({
             )}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-56" sideOffset={8}>
-            <DropdownMenuItem onClick={onEdit}>
+            <DropdownMenuItem disabled={Boolean(trip.archivedAt)} onClick={onEdit}>
               <Pencil aria-hidden="true" />
               {t('editTrip')}
             </DropdownMenuItem>
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger disabled={movingDates}>
+              <DropdownMenuSubTrigger disabled={movingDates || Boolean(trip.archivedAt)}>
                 <CalendarSync aria-hidden="true" />
                 {t('moveDates.action')}
               </DropdownMenuSubTrigger>
@@ -210,13 +211,13 @@ export function TripHubBar({
                 ))}
               </DropdownMenuSubContent>
             </DropdownMenuSub>
-            <DropdownMenuItem onClick={onShare}>
+            <DropdownMenuItem disabled={Boolean(trip.archivedAt)} onClick={onShare}>
               <Share2 aria-hidden="true" />
               {share('action')}
             </DropdownMenuItem>
             {/* Readiness is the traveller's to declare, and only while the plan
               is still the thing being worked on. */}
-            {trip.lifecycle === 'planning' ? (
+            {trip.lifecycle === 'planning' && !trip.archivedAt ? (
               <DropdownMenuItem disabled={readinessPending} onClick={onToggleReadiness}>
                 {trip.planningReadiness === 'ready' ? (
                   <RotateCcw aria-hidden="true" />
@@ -228,11 +229,15 @@ export function TripHubBar({
             ) : null}
             {/* Keeping a copy on this device is something done to the trip, not
               a section of it, so it lives here rather than on the page. */}
-            <DropdownMenuItem onClick={() => setOfflineOpen(true)}>
+            <DropdownMenuItem
+              disabled={Boolean(trip.archivedAt)}
+              onClick={() => setOfflineOpen(true)}
+            >
               <CloudDownload aria-hidden="true" />
               {offline('title')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
+            <TripArchiveControl trip={trip} menu />
             <DropdownMenuItem onClick={onDelete} variant="destructive">
               <Trash2 aria-hidden="true" />
               {t('deleteTrip')}

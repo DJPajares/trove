@@ -19,7 +19,7 @@ import {
   type ReservationEditor,
 } from '@/components/reservations/reservation-editor-sheet';
 import { TripSectionHeader } from '@/components/trip-section-header';
-import { useTripContext } from '@/components/trip-provider';
+import { useTripContext, useTripReadOnly } from '@/components/trip-provider';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -74,6 +74,7 @@ function deviceTimeZone() {
  */
 export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
   const t = useTranslations('reservations');
+  const readOnly = useTripReadOnly();
   const locale = useLocale();
   const { preferredCurrency } = usePreferences();
   const tripContext = useTripContext();
@@ -106,7 +107,9 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
   const [reservationToDelete, setReservationToDelete] = useState<Reservation | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const openCreate = (type: ReservationType | null = null) => setEditor({ mode: 'create', type });
+  const openCreate = (type: ReservationType | null = null) => {
+    if (!readOnly) setEditor({ mode: 'create', type });
+  };
   const openEdit = (reservation: Reservation) => setEditor({ mode: 'edit', reservation });
 
   // The Plan Score links straight to a booking (`?reservation=<id>`); open it
@@ -153,7 +156,7 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
   const formatDay = (date: string) => dayFormat.format(new Date(`${date}T00:00:00.000Z`));
 
   async function handleDelete() {
-    if (!reservationToDelete) return;
+    if (readOnly || !reservationToDelete) return;
     setDeleting(true);
     try {
       await deleteReservation(tripId, reservationToDelete.id);
@@ -223,6 +226,7 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
               <Button
                 className="h-11 rounded-full pr-4 pl-1.5"
                 key={type}
+                disabled={readOnly}
                 onClick={() => openCreate(type)}
                 type="button"
                 variant="outline"
@@ -232,7 +236,12 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
               </Button>
             ))}
           </div>
-          <Button className="h-11 px-2 text-brand" onClick={() => openCreate()} variant="ghost">
+          <Button
+            disabled={readOnly}
+            className="h-11 px-2 text-brand"
+            onClick={() => openCreate()}
+            variant="ghost"
+          >
             {t('addSomethingElse')}
           </Button>
         </section>
@@ -345,7 +354,7 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
           <AlertDialogFooter>
             <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction
-              disabled={deleting}
+              disabled={readOnly || deleting}
               onClick={() => void handleDelete()}
               variant="destructive"
             >

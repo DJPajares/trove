@@ -87,7 +87,7 @@ export function CurrencyConverter() {
   const { preferredCurrency, status: preferencesStatus } = usePreferences();
   const home = preferredCurrency ?? FALLBACK_HOME;
   const currencyMetadata = useCurrencyMetadata();
-  const trips = useQuery({ queryFn: fetchTrips, queryKey: queryKeys.trips() });
+  const trips = useQuery({ queryFn: () => fetchTrips(), queryKey: queryKeys.trips() });
   const [amount, setAmount] = useState('');
   const [source, setSource] = useState('');
   const [target, setTarget] = useState('');

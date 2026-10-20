@@ -906,6 +906,37 @@
         "info": "Numbers and details to keep close",
         "infoPinned": "{count, plural, one {# fact pinned to the overview} other {# facts pinned to the overview}}"
       }
+    },
+    "archive": {
+      "action": "Archive trip",
+      "restore": "Restore trip",
+      "badge": "Archived",
+      "view": "Archived trips",
+      "back": "Back to trips",
+      "description": "Trips kept out of your collection, with everything still here.",
+      "readOnly": "Restore this trip to make changes or use Trip Mode.",
+      "confirmTitle": "Archive this trip?",
+      "confirmDescription": "“{name}” will leave your trip collection and its reminders will stop. Everything is kept, and you can restore it at any time.",
+      "saving": "Saving…",
+      "error": "The trip could not be updated. Please try again.",
+      "pendingError": "Sync or resolve this trip’s pending changes before archiving.",
+      "offlineError": "Connect to the internet to archive or restore a trip.",
+      "syncLink": "Offline & Storage",
+      "success": "Trip archived. Everything is kept.",
+      "undo": "Undo",
+      "search": "Search archived trips",
+      "count": "{count} of {total} archived trips",
+      "loading": "Loading archived trips…",
+      "retry": "Try again",
+      "empty": "No archived trips",
+      "noMatches": "No matching archived trips",
+      "emptyDescription": "Archived trips stay here until you restore or delete them.",
+      "browse": "View itinerary",
+      "restored": "Trip restored.",
+      "open": "Open trip",
+      "copyShared": "Copy shared link",
+      "copied": "Shared link copied.",
+      "viewCount": "Archived trips ({count, number})"
     }
   },
   "tripMode": {
@@ -958,7 +989,8 @@
         "memory_storage_full": "This device has no room left for more photos.",
         "trip_missing": "This trip is no longer in your account, so the change cannot be applied.",
         "unknown": "Reported reason: {code}",
-        "itinerary_movement_review_required": "This saved move needs a fresh timing review before it can be applied."
+        "itinerary_movement_review_required": "This saved move needs a fresh timing review before it can be applied.",
+        "trip_archived": "This trip was archived on another device. Restore it before retrying these changes; your local work is kept."
       },
       "operations": {
         "itinerary_item_create": "Add itinerary item",
@@ -986,7 +1018,8 @@
       "syncNow": "Sync now",
       "useCloud": "Use cloud version",
       "keepMine": "Keep my change",
-      "reviewMove": "Review move"
+      "reviewMove": "Review move",
+      "openArchivedTrip": "Open trip to restore"
     },
     "offlineReady": {
       "title": "Ready Offline",
@@ -1586,6 +1619,9 @@
     "deleteDescription": "{title} and its documents will be permanently removed.",
     "deleting": "Deleting…",
     "deleteError": "We couldn't delete this reservation. Try again.",
+    "viewTitle": "Reservation details",
+    "viewDescription": "Restore the trip to change these saved details.",
+    "viewRecord": "View {title}",
     "picker": {
       "open": "Open {label}",
       "clear": "Clear {label}",
@@ -1730,7 +1766,10 @@
     "deleteError": "We couldn't delete that expense. Try again.",
     "untitledExpense": "Expense",
     "unassignedDatedExpense": "This date is outside the trip days, so it only counts toward the trip total.",
-    "approximateHome": "Approx. {amount} in your home currency"
+    "approximateHome": "Approx. {amount} in your home currency",
+    "viewTitle": "Expense details",
+    "viewDescription": "Restore the trip to change these saved details.",
+    "viewRecord": "View {title}"
   },
   "tools": {
     "eyebrow": "Utilities",
@@ -2547,7 +2586,9 @@
       "conflict": "Stays changed elsewhere. Close and reopen this sheet to load the latest settings.",
       "offline": "Connect to the internet to change stays. Your prepared stays remain available offline.",
       "noDefault": "No trip default"
-    }
+    },
+    "archiveTripModeTitle": "This trip is archived",
+    "archiveTripModeDescription": "Restore it to use Trip Mode or Preview. You can still browse the saved trip."
   },
   "tasks": {
     "title": "Tasks for {trip}",

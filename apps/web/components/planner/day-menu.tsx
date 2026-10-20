@@ -1,4 +1,5 @@
 'use client';
+import { useTripReadOnly } from '@/components/trip-provider';
 
 import { ArrowLeftRight, ListOrdered, SlidersHorizontal } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -51,9 +52,11 @@ export function DayMenu({
   onSuggestTimes: () => void;
 }>) {
   const t = useTranslations('itinerary');
+  const readOnly = useTripReadOnly();
   const menuT = useTranslations('itinerary.planner.dayMenu');
   const dayContextT = useTranslations('dayPlanningContext');
 
+  if (readOnly) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger

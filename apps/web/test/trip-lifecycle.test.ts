@@ -117,3 +117,11 @@ test('a long-finished trip leads nothing', () => {
 test('no trips means no primary trip', () => {
   expect(selectPrimaryTrip([])).toBeNull();
 });
+
+test('archive excludes active and recent trips without changing their date-derived lifecycle', () => {
+  const archived = trip({ id: 'hidden', lifecycle: 'active', archivedAt: '2026-09-01T00:00:00Z' });
+  const upcoming = trip({ id: 'next', lifecycle: 'planning' });
+  expect(selectPrimaryTrip([archived, upcoming])?.id).toBe('next');
+  expect(selectPrimaryTrip([archived])).toBeNull();
+  expect(archived.lifecycle).toBe('active');
+});

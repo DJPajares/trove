@@ -11,7 +11,6 @@ import { apiErrorStatus } from '@/lib/query/client';
 import { queryKeys } from '@/lib/query/keys';
 import { fetchTrip, type Trip } from '@/lib/trips/api';
 import { cacheSavedTrip } from '@/lib/trips/cache';
-import { TripArchivedBanner } from '@/components/trip-archive-control';
 import { tripEditorialSubject, tripSecondaryEditorialSubject } from '@/lib/trips/summary';
 
 export type TripLoadStatus = 'error' | 'loading' | 'missing' | 'ready';
@@ -142,12 +141,7 @@ export function TripProvider({
     ],
   );
 
-  return (
-    <TripContext.Provider value={value}>
-      {trip?.archivedAt ? <TripArchivedBanner trip={trip} /> : null}
-      {children}
-    </TripContext.Provider>
-  );
+  return <TripContext.Provider value={value}>{children}</TripContext.Provider>;
 }
 
 /**

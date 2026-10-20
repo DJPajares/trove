@@ -10,6 +10,7 @@ import { ExperienceRatingMark } from '@/components/experience-rating';
 import { TripCountries } from '@/components/trip-countries';
 import { TripDaySegments } from '@/components/trip-day-segments';
 import { TripMedia } from '@/components/trip-media';
+import { TripArchivedBadge } from '@/components/trip-archive-control';
 import { TripStatusBadge } from '@/components/trip-status-badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
@@ -205,11 +206,14 @@ export function TripHubCover({
           layout === 'hub' ? 'lg:pb-9' : 'lg:pb-14',
         )}
       >
-        <TripStatusBadge
-          lifecycle={trip.lifecycle}
-          readiness={trip.planningReadiness}
-          tone="onMedia"
-        />
+        <div className="flex flex-wrap items-center gap-1.5">
+          <TripStatusBadge
+            lifecycle={trip.lifecycle}
+            readiness={trip.planningReadiness}
+            tone="onMedia"
+          />
+          {trip.archivedAt ? <TripArchivedBadge /> : null}
+        </div>
         {trip.countries?.length ? (
           <TripCountries
             className="mt-2 text-xs font-semibold tracking-[0.12em] text-white/90 uppercase"

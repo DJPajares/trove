@@ -144,7 +144,7 @@ export function FloatingActionStack() {
   return (
     <>
       <div
-        className="fixed top-[calc(0.75rem+var(--safe-top))] right-[max(0.75rem,var(--safe-right))] z-[var(--layer-notice)] flex flex-col items-end gap-3 transition-transform duration-[var(--motion-standard)] ease-[var(--ease-standard)]"
+        className="fixed top-[calc(0.75rem+var(--safe-top))] right-[max(0.75rem,var(--safe-right))] z-[var(--layer-notice)] flex flex-col items-end gap-3 transition-[opacity,transform] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none"
         onFocusCapture={reveal}
         onKeyDown={(event) => {
           if (event.key !== 'Escape' || !expanded) return;
@@ -154,9 +154,13 @@ export function FloatingActionStack() {
         }}
         ref={wrapperRef}
         style={
-          hidden
-            ? { transform: 'translateY(calc(-100% - 0.75rem - var(--safe-top)))' }
-            : { transform: 'none' }
+          // Moving the button to the edge alone leaves its ambient shadow visible.
+          // Opacity hides that paint while focus can still reveal the control.
+          {
+            opacity: hidden ? 0 : 1,
+            pointerEvents: hidden ? 'none' : undefined,
+            transform: hidden ? 'translateY(calc(-100% - 0.75rem - var(--safe-top)))' : 'none',
+          }
         }
       >
         <Button

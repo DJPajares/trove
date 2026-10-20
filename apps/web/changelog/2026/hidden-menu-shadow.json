@@ -1,0 +1,10 @@
+{
+  "id": "hidden-menu-shadow",
+  "date": "2026-10-20",
+  "version": "1.16.5",
+  "summaries": {
+    "en": [
+      "The quick-actions button now disappears cleanly as you scroll down, without leaving a shadow at the top of the screen."
+    ]
+  }
+}

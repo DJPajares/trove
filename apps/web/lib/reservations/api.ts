@@ -112,7 +112,16 @@ export type ReservationInput = {
 
 export type ReservationsResponse = {
   days: Array<{ date: string; id: string }>;
-  itineraryItems: Array<{ id: string; label: string | null }>;
+  /**
+   * The trip's stops, by day then position. `date` and `dayId` arrived later,
+   * so a cached answer from before them still reads; an unscheduled stop has none.
+   */
+  itineraryItems: Array<{
+    date?: string | null;
+    dayId?: string | null;
+    id: string;
+    label: string | null;
+  }>;
   reservations: Reservation[];
   trip: { id: string; name: string };
   tripPlaces: Array<{ id: string; name: string | null; placeId: string }>;

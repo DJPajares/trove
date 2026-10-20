@@ -10,7 +10,12 @@ import {
 import { refreshDayDefaultTimeZone } from './itineraries.js';
 import { markTripPlacesAsStay } from './place-category-signals.js';
 import { resolvedPlaceTimeZone } from './place-data.js';
-import { placeProviderRefInclude } from './place-serializer.js';
+import {
+  placeProviderRefInclude,
+  resolveCanonicalPlaceName,
+  resolveItineraryItemName,
+  serializeCanonicalPlace,
+} from './place-serializer.js';
 import { createAuthenticatedSupabaseClient } from './supabase-auth.js';
 import { formatDateOnly, isValidIanaTimeZone } from './trip-rules.js';
 
@@ -112,11 +117,52 @@ export class ReservationValidationError extends Error {
 const reservationInclude = {
   accommodationDays: { include: { itineraryDay: { select: { date: true, id: true } } } },
   attachments: true,
-  itineraryItem: { select: { customLabel: true, id: true } },
-  tripPlace: { include: { place: true } },
+  itineraryItem: {
+    select: {
+      customLabel: true,
+      customLocation: true,
+      id: true,
+      tripPlace: { select: { customName: true, place: { include: placeProviderRefInclude } } },
+    },
+  },
+  tripPlace: { include: { place: { include: placeProviderRefInclude } } },
 } as const;
 
 type ReservationRecord = Prisma.ReservationGetPayload<{ include: typeof reservationInclude }>;
+
+type NamedTripPlace = {
+  customName: string | null;
+  place: Parameters<typeof serializeCanonicalPlace>[0];
+};
+
+/**
+ * What a reservation calls its Trip Place: this trip's own name for it, then
+ * the Place's. A Google Place has no custom name, so stopping at
+ * `place.customName` - as this service once did - named every one "Unnamed".
+ */
+export function reservationPlaceName(tripPlace: NamedTripPlace) {
+  return (
+    tripPlace.customName ?? resolveCanonicalPlaceName(serializeCanonicalPlace(tripPlace.place))
+  );
+}
+
+/** What a reservation calls an itinerary stop, by the same chain the itinerary uses. */
+export function reservationItemLabel(item: {
+  customLabel: string | null;
+  customLocation: string | null;
+  tripPlace: NamedTripPlace | null;
+}) {
+  return resolveItineraryItemName({
+    customLabel: item.customLabel,
+    customLocation: item.customLocation ? { label: item.customLocation } : null,
+    tripPlace: item.tripPlace
+      ? {
+          customName: item.tripPlace.customName,
+          place: serializeCanonicalPlace(item.tripPlace.place),
+        }
+      : null,
+  });
+}
 
 function parseDateOnly(value: string) {
   const date = new Date(`${value}T00:00:00.000Z`);
@@ -652,7 +698,7 @@ async function serializeReservation(
     createdAt: reservation.createdAt.toISOString(),
     id: reservation.id,
     itineraryItem: reservation.itineraryItem
-      ? { id: reservation.itineraryItem.id, label: reservation.itineraryItem.customLabel }
+      ? { id: reservation.itineraryItem.id, label: reservationItemLabel(reservation.itineraryItem) }
       : null,
     localDate: reservation.localDate ? formatDateOnly(reservation.localDate) : null,
     localTime: formatLocalTime(reservation.localTime),
@@ -673,7 +719,7 @@ async function serializeReservation(
     tripPlace: reservation.tripPlace
       ? {
           id: reservation.tripPlace.id,
-          name: reservation.tripPlace.place.customName,
+          name: reservationPlaceName(reservation.tripPlace),
           placeId: reservation.tripPlace.placeId,
         }
       : null,
@@ -699,9 +745,23 @@ export async function listReservations(userId: string, tripId: string, accessTok
     select: {
       id: true,
       itineraryDays: { orderBy: { date: 'asc' }, select: { date: true, id: true } },
-      itineraryItems: { orderBy: { position: 'asc' }, select: { customLabel: true, id: true } },
+      itineraryItems: {
+        orderBy: { position: 'asc' },
+        select: {
+          customLabel: true,
+          customLocation: true,
+          id: true,
+          itineraryDay: { select: { date: true, id: true } },
+          tripPlace: {
+            select: { customName: true, place: { include: placeProviderRefInclude } },
+          },
+        },
+      },
       name: true,
-      tripPlaces: { include: { place: true }, orderBy: { createdAt: 'asc' } },
+      tripPlaces: {
+        include: { place: { include: placeProviderRefInclude } },
+        orderBy: { createdAt: 'asc' },
+      },
     },
   });
   if (!trip) throw new ReservationNotFoundError('trip_not_found');
@@ -713,14 +773,31 @@ export async function listReservations(userId: string, tripId: string, accessTok
   const supabase = accessToken ? createAuthenticatedSupabaseClient(accessToken) : null;
   return {
     days: trip.itineraryDays.map((day) => ({ date: formatDateOnly(day.date), id: day.id })),
-    itineraryItems: trip.itineraryItems.map((item) => ({ id: item.id, label: item.customLabel })),
+    // Stops read in the order the trip does: by day, then by position, with
+    // unscheduled ones last. Each carries its day so a picker can group them.
+    itineraryItems: trip.itineraryItems
+      .map((item) => ({
+        date: item.itineraryDay ? formatDateOnly(item.itineraryDay.date) : null,
+        dayId: item.itineraryDay?.id ?? null,
+        id: item.id,
+        label: reservationItemLabel(item),
+      }))
+      .toSorted((left, right) =>
+        left.date === right.date
+          ? 0
+          : left.date === null
+            ? 1
+            : right.date === null
+              ? -1
+              : left.date.localeCompare(right.date),
+      ),
     reservations: await Promise.all(
       reservations.map((reservation) => serializeReservation(reservation, supabase)),
     ),
     trip: { id: trip.id, name: trip.name },
     tripPlaces: trip.tripPlaces.map((tripPlace) => ({
       id: tripPlace.id,
-      name: tripPlace.place.customName,
+      name: reservationPlaceName(tripPlace),
       placeId: tripPlace.placeId,
     })),
   };

@@ -54,7 +54,7 @@ export function HomeComingUp({
         </Link>
       </div>
 
-      <ul className="grid gap-3 md:grid-cols-3">
+      <ul className="grid grid-cols-1 gap-3 md:grid-cols-3">
         {trips.map((trip) => {
           const editorial = editorialFor(trip);
           const countdown = resolveCountdown(daysUntilTripStart(trip));

@@ -50,8 +50,9 @@ const library = [
 ];
 const ids = (trips: Trip[]) => trips.map((entry) => entry.id);
 
-test('upcoming is the trip under way, then every departure soonest first', () => {
-  expect(ids(tripsForLens(library, 'upcoming'))).toEqual(['hanoi', 'kyoto', 'danang', 'lisbon']);
+test('upcoming is every departure beyond the highlighted trip, soonest first', () => {
+  // Hanoi is under way, so it is the highlight and sits above the lenses.
+  expect(ids(tripsForLens(library, 'upcoming'))).toEqual(['kyoto', 'danang', 'lisbon']);
 });
 
 test('needs planning is only trips ahead not yet marked Ready, soonest first', () => {
@@ -63,7 +64,7 @@ test('past is finished trips, most recent first', () => {
 });
 
 test('counts follow the lenses, overlap included', () => {
-  expect(lensCounts(library)).toEqual({ all: 6, past: 2, planning: 2, upcoming: 4 });
+  expect(lensCounts(library)).toEqual({ all: 6, past: 2, planning: 2, upcoming: 3 });
 });
 
 test('a small library, or one with only one way to narrow it, offers no lenses', () => {

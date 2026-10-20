@@ -102,6 +102,7 @@ export const queryKeys = {
   profile: () => ['profile'] as const,
   reservations: (tripId: string) => ['reservations', tripId] as const,
   savedPlaces: () => ['saved', PLACES_CONTRACT_VERSION] as const,
+  knownPlaces: () => ['places', 'known', PLACES_CONTRACT_VERSION] as const,
   taskTemplates: () => ['task-templates'] as const,
   tasks: (tripId: string) => ['tasks', tripId] as const,
   tripOverview: (tripId: string, clockTimeZone: string) =>

@@ -134,7 +134,6 @@ export class SavedApiError extends Error {
 }
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
-export const GOOGLE_PLACES_SEARCH_DEBOUNCE_MS = 600;
 
 async function getAuthContext() {
   const supabase = createBrowserSupabaseClient();
@@ -178,6 +177,21 @@ export type SavedPlacesResponse = {
 
 export function fetchSavedPlaces() {
   return savedRequest<SavedPlacesResponse>('/saved');
+}
+
+/**
+ * A Place the traveller has already reached for, on any trip or in Saved. The
+ * list comes from Trove's own database, so matching it costs no provider request.
+ */
+export type KnownPlace = {
+  lastTrip: { id: string; name: string } | null;
+  place: CanonicalPlace;
+  /** What the traveller called it on that trip, when they renamed it. */
+  tripName: string | null;
+};
+
+export function fetchKnownPlaces() {
+  return savedRequest<{ places: KnownPlace[] }>('/places/known');
 }
 
 export function saveCanonicalPlace(placeId: string) {

@@ -15,10 +15,8 @@ import {
   ComboboxList,
 } from '@/components/ui/combobox';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
-import {
-  ON_DEMAND_SEARCH_MINIMUM,
-  useOnDemandPlaceSearch,
-} from '@/hooks/use-on-demand-place-search';
+import { GoogleSearchRow } from '@/components/place-search/google-search-row';
+import { useOnDemandPlaceSearch } from '@/hooks/use-on-demand-place-search';
 import type { ItineraryTripPlace } from '@/lib/itinerary/api';
 import {
   filterItineraryTripPlaces,
@@ -395,39 +393,8 @@ export function PlaceField({
                 )}
               </ComboboxList>
               {typed ? (
-                <div className="space-y-2 border-t p-2">
-                  {search.results.length ? (
-                    <p className="px-1 text-right text-xs font-normal tracking-normal text-muted-foreground">
-                      <span translate="no">{t('googleMapsAttribution')}</span>
-                    </p>
-                  ) : search.status === 'loading' ? (
-                    <p className="px-1 text-xs text-muted-foreground" role="status">
-                      {t('searchingPlaces')}
-                    </p>
-                  ) : search.status === 'unavailable' ? (
-                    <p className="px-1 text-xs text-muted-foreground" role="status">
-                      {t('providerSearchUnavailable')}
-                    </p>
-                  ) : search.asked(typed) ? (
-                    <p className="px-1 text-xs text-muted-foreground" role="status">
-                      {t('googleSearchEmpty')}
-                    </p>
-                  ) : !online ? (
-                    <p className="px-1 text-xs text-muted-foreground">{t('googleSearchOffline')}</p>
-                  ) : typed.length < ON_DEMAND_SEARCH_MINIMUM ? (
-                    <p className="px-1 text-xs text-muted-foreground">{t('googleSearchMinimum')}</p>
-                  ) : (
-                    <Button
-                      className="w-full justify-start"
-                      onClick={() => void search.search(typed)}
-                      size="sm"
-                      type="button"
-                      variant="ghost"
-                    >
-                      <Search aria-hidden="true" />
-                      {t('searchGoogle', { query: typed })}
-                    </Button>
-                  )}
+                <div className="border-t p-2">
+                  <GoogleSearchRow online={online} query={typed} search={search} />
                 </div>
               ) : null}
             </ComboboxContent>

@@ -7,6 +7,7 @@ import {
   createCanonicalPlacesService,
   type CanonicalPlacesService,
 } from '../services/canonical-places.js';
+import { listKnownPlaces } from '../services/known-places.js';
 import type { PlaceLocationCandidatesService } from '../services/place-location-candidates.js';
 import {
   PLACE_PROVIDERS,
@@ -199,6 +200,12 @@ export function createPlacesControllers(
   placeDetailsService: PlacesService | null = placesService,
 ) {
   return {
+    /** The traveller's own places, from the database alone: no provider request. */
+    async known(request: FastifyRequest, reply: FastifyReply) {
+      const userId = getAuthenticatedUserId(request, reply);
+      if (!userId) return;
+      return reply.send({ places: await listKnownPlaces(userId) });
+    },
     async photo(request: FastifyRequest, reply: FastifyReply) {
       const userId = getAuthenticatedUserId(request, reply);
       if (!userId) return;

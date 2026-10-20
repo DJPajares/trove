@@ -607,8 +607,21 @@ export function StaySheet({
           }
           tripId={tripId}
           tripPlaces={itinerary.tripPlaces}
+          purpose="stay"
           onOpenChange={(open) => {
             if (!open) setAdding(null);
+          }}
+          onUseExisting={(tripPlaceId) => {
+            const target = adding;
+            const existing = itinerary.tripPlaces.find((place) => place.id === tripPlaceId);
+            setAdding(null);
+            if (!existing) return;
+            // Already on the trip: it only needs to become somewhere to stay.
+            void takeAsStay(target, {
+              id: existing.id,
+              manualCategories: existing.manualCategories,
+              name: placeName(existing) ?? t('unnamed'),
+            });
           }}
           onAdded={(place) => {
             const target = adding;

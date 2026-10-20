@@ -1,0 +1,749 @@
+[
+  {
+    "id": "trip-library-filters",
+    "date": "2026-10-20",
+    "version": "1.14.0",
+    "summaries": {
+      "en": [
+        "Narrow your trips to what's upcoming, what still needs planning, or where you've been."
+      ]
+    }
+  },
+  {
+    "id": "reservations-redesign",
+    "date": "2026-10-20",
+    "version": "1.15.0",
+    "summaries": {
+      "en": [
+        "Adding a booking now asks only what matters for a flight, a stay or a train; everything else waits under More details.",
+        "Reservations read by trip day, with your next booking and its reference ready to copy.",
+        "Linked places and itinerary stops now show their real names."
+      ]
+    }
+  },
+  {
+    "id": "rename-stop-in-edit",
+    "date": "2026-10-20",
+    "version": "1.16.7",
+    "summaries": {
+      "en": [
+        "Rename an itinerary stop right inside Edit. It stays linked to its place, and one tap brings back the place's own name."
+      ]
+    }
+  },
+  {
+    "id": "rename-itinerary-stops",
+    "date": "2026-10-20",
+    "version": "1.14.2",
+    "summaries": {
+      "en": [
+        "Rename stops from your itinerary while keeping their place details and directions. Use the place name again whenever you like."
+      ]
+    }
+  },
+  {
+    "id": "quiet-archive",
+    "date": "2026-10-20",
+    "version": "1.16.1",
+    "summaries": {
+      "en": [
+        "Archiving a trip now shows a small message with Undo instead of pushing your trips down.",
+        "Archived trips keep their cover and sit quietly at the end of your library, one tap from Restore."
+      ]
+    }
+  },
+  {
+    "id": "quick-actions-order",
+    "date": "2026-10-20",
+    "version": "1.16.3",
+    "summaries": {
+      "en": [
+        "Find quick actions in a consistent order: Search, Notifications, Appearance, then Account."
+      ]
+    }
+  },
+  {
+    "id": "home-memories-background",
+    "date": "2026-10-20",
+    "version": "1.16.6",
+    "summaries": {
+      "en": [
+        "When Memories ends your Home page, its paper background now continues smoothly to the bottom on your phone."
+      ]
+    }
+  },
+  {
+    "id": "home-fits-mobile",
+    "date": "2026-10-20",
+    "version": "1.16.4",
+    "summaries": {
+      "en": [
+        "Home now fits your phone without sideways scrolling, even when upcoming trips have long names."
+      ]
+    }
+  },
+  {
+    "id": "hidden-menu-shadow",
+    "date": "2026-10-20",
+    "version": "1.16.5",
+    "summaries": {
+      "en": [
+        "The quick-actions button now disappears cleanly as you scroll down, without leaving a shadow at the top of the screen."
+      ]
+    }
+  },
+  {
+    "id": "compact-weather-header",
+    "date": "2026-10-20",
+    "version": "1.16.2",
+    "summaries": {
+      "en": ["Glance at your city’s weather and one useful temperature in a simpler Home header."]
+    }
+  },
+  {
+    "id": "archive-trips",
+    "date": "2026-10-20",
+    "version": "1.16.0",
+    "summaries": {
+      "en": [
+        "Keep your trip collection tidy by archiving trips. Everything stays safe to browse, and you can restore a trip whenever you need it."
+      ]
+    }
+  },
+  {
+    "id": "place-first-editorial-photos",
+    "date": "2026-10-18",
+    "version": "1.13.1",
+    "summaries": {
+      "en": [
+        "New travel photos favor wide views of the places you’re exploring, with fewer portraits and posed people."
+      ]
+    }
+  },
+  {
+    "id": "multi-stay-checkout",
+    "date": "2026-10-18",
+    "version": "1.13.0",
+    "summaries": {
+      "en": [
+        "Plan multi-hotel trips with clearer stays, suggested lodging, and checkout days that take you to the right place."
+      ]
+    }
+  },
+  {
+    "id": "expenses-by-day",
+    "date": "2026-10-18",
+    "version": "1.12.0",
+    "summaries": {
+      "en": [
+        "Expenses now show what you spent each day, even after your trip dates change.",
+        "A clearer summary shows your budget pace, and one page shows where your money went."
+      ]
+    }
+  },
+  {
+    "id": "stay-in-planner-bar",
+    "date": "2026-10-17",
+    "version": "1.8.2",
+    "summaries": {
+      "en": [
+        "Places and Stay now sit together under the day strip, in All days and in every day.",
+        "Stay shows where you’re sleeping, and asks for it when nothing is set yet."
+      ]
+    }
+  },
+  {
+    "id": "readable-dropdown-options",
+    "date": "2026-10-17",
+    "version": "1.8.3",
+    "summaries": {
+      "en": [
+        "Dropdown options stay readable, with room for longer labels and the selected checkmark."
+      ]
+    }
+  },
+  {
+    "id": "quiet-mobile-category-scrollbars",
+    "date": "2026-10-17",
+    "version": "1.11.1",
+    "summaries": {
+      "en": ["Browse place categories on mobile without a scrollbar lingering beneath the filters."]
+    }
+  },
+  {
+    "id": "place-local-timing-checks",
+    "date": "2026-10-17",
+    "version": "1.10.0",
+    "summaries": {
+      "en": [
+        "Plan each stop by its local clock, without timezone shifts or false timing warnings.",
+        "Get matching time suggestions and apply fixes directly from your itinerary."
+      ]
+    }
+  },
+  {
+    "id": "place-categories",
+    "date": "2026-10-17",
+    "version": "1.11.0",
+    "summaries": {
+      "en": [
+        "Stay now offers only places to stay, and any other trip place can be used as one in a tap.",
+        "Filter your trip’s places by category, and mark any place as accommodation from its menu."
+      ]
+    }
+  },
+  {
+    "id": "edit-day-in-place",
+    "date": "2026-10-17",
+    "version": "1.8.4",
+    "summaries": {
+      "en": [
+        "Rename a day or write its note right where you read them.",
+        "Day options now sit on the day’s photo, grouped into planning, moving and view."
+      ]
+    }
+  },
+  {
+    "id": "day-summary-route-card",
+    "date": "2026-10-17",
+    "version": "1.8.5",
+    "summaries": {
+      "en": [
+        "Each day now shows its planned time with a simple bar of time at stops against travel.",
+        "The day’s route preview follows the roads when they’re known and shows stops that aren’t on the map yet."
+      ]
+    }
+  },
+  {
+    "id": "current-timing-review-notices",
+    "date": "2026-10-17",
+    "version": "1.8.1",
+    "summaries": {
+      "en": [
+        "Timing notices now name the day needing attention and clear resolved warnings when you link places or travel estimates arrive.",
+        "Finish reviewing saved timing changes with Done to clear their notice while keeping unresolved issues visible."
+      ]
+    }
+  },
+  {
+    "id": "calmer-provider-details",
+    "date": "2026-10-17",
+    "version": "1.8.6",
+    "summaries": {
+      "en": [
+        "See useful travel details without distracting cache labels or retrieval dates across routes, places, weather, and currency tools."
+      ]
+    }
+  },
+  {
+    "id": "apply-connected-timing-suggestions",
+    "date": "2026-10-17",
+    "version": "1.9.1",
+    "summaries": {
+      "en": [
+        "Resolve timing conflicts with one shared suggestion, then review and apply the connected stops together."
+      ]
+    }
+  },
+  {
+    "id": "all-days-long-titles",
+    "date": "2026-10-17",
+    "version": "1.10.1",
+    "summaries": {
+      "en": [
+        "All days no longer stretches wider than your screen when a day or stop has a long title."
+      ]
+    }
+  },
+  {
+    "id": "ai-planner-keeps-your-stay",
+    "date": "2026-10-17",
+    "version": "1.11.2",
+    "summaries": {
+      "en": [
+        "Tell the AI Planner where you're staying and your hotel becomes the Stay for those nights, even with more than one stay.",
+        "A stay that can't be found on the map is still kept as your own place."
+      ]
+    }
+  },
+  {
+    "id": "actionable-timing-conflicts",
+    "date": "2026-10-17",
+    "version": "1.9.0",
+    "summaries": {
+      "en": [
+        "Timing warnings and suggestions now agree, with a quick action to use a valid time and quieter local-time displays."
+      ]
+    }
+  },
+  {
+    "id": "review-timing-suggestions",
+    "date": "2026-10-16",
+    "version": "1.6.0",
+    "summaries": {
+      "en": [
+        "Review current and suggested times side by side, open each stop, and apply timing suggestions when you’re ready.",
+        "Keep your current times, or apply related suggestions together with clear control over what changes."
+      ]
+    }
+  },
+  {
+    "id": "read-place-descriptions",
+    "date": "2026-10-16",
+    "version": "1.7.0",
+    "summaries": {
+      "en": [
+        "Expand long stop descriptions without leaving your itinerary, then collapse them to keep your plan easy to scan.",
+        "Opening-hours summaries are clearer, without extra checked-date labels."
+      ]
+    }
+  },
+  {
+    "id": "quick-edit-stop",
+    "date": "2026-10-16",
+    "version": "1.7.2",
+    "summaries": {
+      "en": [
+        "Editing a stop is quicker: its time, duration and note show as a short list, and each opens only when you change it.",
+        "Delete now sits apart from Save, so it is harder to tap by mistake."
+      ]
+    }
+  },
+  {
+    "id": "map-route-highlighting",
+    "date": "2026-10-16",
+    "version": "1.8.0",
+    "summaries": {
+      "en": [
+        "Tap a stop or route to follow one leg clearly, even where paths cross or share a road.",
+        "Choose routes by name and see their stops, travel time and distance across your day maps."
+      ]
+    }
+  },
+  {
+    "id": "located-stops-and-stay-suggestions",
+    "date": "2026-10-16",
+    "version": "1.5.3",
+    "summaries": {
+      "en": [
+        "Link a stop to its location and see travel warnings update without saving it again.",
+        "Fill a gap and rainy-day suggestions now leave out places you’re staying."
+      ]
+    }
+  },
+  {
+    "id": "lean-stop-menu",
+    "date": "2026-10-16",
+    "version": "1.7.3",
+    "summaries": {
+      "en": ["A stop’s menu is shorter, with Edit at the top."]
+    }
+  },
+  {
+    "id": "itinerary-day-layout",
+    "date": "2026-10-16",
+    "version": "1.5.1",
+    "summaries": {
+      "en": [
+        "Each itinerary day is more compact, with its actions grouped in one place and its options tucked behind the “more” button.",
+        "Trip-wide stays now live in All days, and the trip overview focuses on the trip rather than repeating the days."
+      ]
+    }
+  },
+  {
+    "id": "explain-timing-conflicts",
+    "date": "2026-10-16",
+    "version": "1.7.1",
+    "summaries": {
+      "en": [
+        "Timing warnings now name the preceding stop and compare both times in the day’s time zone, making overlaps easier to understand.",
+        "The move action in timing warnings now shows its proper label."
+      ]
+    }
+  },
+  {
+    "id": "day-facts-at-a-glance",
+    "date": "2026-10-16",
+    "version": "1.5.2",
+    "summaries": {
+      "en": [
+        "Each day shows its stops, planned time, travel and distance at a glance, next to its map.",
+        "All days keeps its view switch, Places and Stay in one tidy row."
+      ]
+    }
+  },
+  {
+    "id": "trip-stays",
+    "date": "2026-10-15",
+    "version": "1.4.0",
+    "summaries": {
+      "en": [
+        "Set one stay for your whole trip, add different stays for selected days, and make day-by-day exceptions when you need them."
+      ]
+    }
+  },
+  {
+    "id": "stay-arrival-departure",
+    "date": "2026-10-15",
+    "version": "1.5.0",
+    "summaries": {
+      "en": [
+        "Set when you arrive and leave a stay. Days when you move now start at your previous stay and end at your next, for hotels and homes alike.",
+        "Stay dates stay within your trip. Your first morning stays open unless you set a starting stay or a booking provides one."
+      ]
+    }
+  },
+  {
+    "id": "day-cards-and-weather",
+    "date": "2026-10-15",
+    "version": "1.3.0",
+    "summaries": {
+      "en": [
+        "Your trip page and planner now share the same day cards, pinned under the tabs, so moving between them feels like one place.",
+        "Each day shows its own forecast under its photo, and All days shows the weather across the whole trip."
+      ]
+    }
+  },
+  {
+    "id": "saved-collections",
+    "date": "2026-10-14",
+    "version": "1.2.0",
+    "summaries": {
+      "en": [
+        "Collections are easier to find in Saved, and a new one opens straight onto choosing its places.",
+        "Opening a collection now works every time, and its cover shows photos of the places inside."
+      ]
+    }
+  },
+  {
+    "id": "safe-itinerary-movement",
+    "date": "2026-10-14",
+    "version": "1.1.0",
+    "summaries": {
+      "en": [
+        "Review timing changes before moving or swapping stops, and keep your original plan if you cancel.",
+        "Enter your own times to resolve conflicts before a move is saved."
+      ]
+    }
+  },
+  {
+    "id": "reliable-api-startup",
+    "date": "2026-10-14",
+    "version": "1.1.1",
+    "summaries": {
+      "en": [
+        "Fixed an issue that prevented trips and saved places from loading after the latest update."
+      ]
+    }
+  },
+  {
+    "id": "journal-day-prints",
+    "date": "2026-10-14",
+    "version": "1.2.1",
+    "summaries": {
+      "en": ["Days with photos now show their picture in the Memories journal's day strip."]
+    }
+  },
+  {
+    "id": "dialog-actions-in-reach",
+    "date": "2026-10-14",
+    "version": "1.2.2",
+    "summaries": {
+      "en": [
+        "Long dialogs keep their title and close button at the top and their buttons at the bottom while you scroll."
+      ]
+    }
+  },
+  {
+    "id": "steady-page-headers",
+    "date": "2026-10-12",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "Saved and Tools pages keep the same heading while they load, so nothing jumps when your places appear."
+      ]
+    }
+  },
+  {
+    "id": "search-redesign",
+    "date": "2026-10-12",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "Search opens straight to the field, with shortcuts into your current trip and your recent searches.",
+        "Narrow results by trips, places, bookings, memories or notes, and see the matching words at a glance."
+      ]
+    }
+  },
+  {
+    "id": "restore-ai-place-matching",
+    "date": "2026-10-12",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "AI trip plans now recognise more places across languages and name variations, with destination countries filled in more reliably."
+      ]
+    }
+  },
+  {
+    "id": "pinned-trip-tabs",
+    "date": "2026-10-12",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "A trip's tabs now stay pinned on every section as you scroll, and sit flush at the top without rounded corners."
+      ]
+    }
+  },
+  {
+    "id": "consistent-page-headings",
+    "date": "2026-10-12",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "Trips, Saved and Tools now share the same heading style, with clearer one-line descriptions."
+      ]
+    }
+  },
+  {
+    "id": "consistent-drawer-headers",
+    "date": "2026-10-12",
+    "version": "1.0.0",
+    "summaries": {
+      "en": ["Drawers across Trove now open with the same calm, consistent header."]
+    }
+  },
+  {
+    "id": "collection-pages",
+    "date": "2026-10-12",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "Collections now open on their own page, with their places, filters and options in one place."
+      ]
+    }
+  },
+  {
+    "id": "calmer-ai-planner",
+    "date": "2026-10-12",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "The AI Planner is calmer to look at, with fewer choices up front and ideas a tap away."
+      ]
+    }
+  },
+  {
+    "id": "app-versions",
+    "date": "2026-10-12",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "See which version of Trove you’re using at the bottom of your Profile.",
+        "What’s new now shows which version each improvement arrives in."
+      ]
+    }
+  },
+  {
+    "id": "ai-planner-longer-trips-and-retry",
+    "date": "2026-10-12",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "Keep your brief when you cancel AI planning, ready to edit or try again.",
+        "Plan longer trips within your plan’s allowance, with countries filled in more reliably."
+      ]
+    }
+  },
+  {
+    "id": "update-details",
+    "date": "2026-10-11",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "See what’s new before you update Trove, with a quick look at the improvements waiting for you."
+      ]
+    }
+  },
+  {
+    "id": "trip-mode-live-companion",
+    "date": "2026-10-11",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "Trip Mode now shows one moment at a time: where you are, and a clear countdown to your next move.",
+        "When it’s time to go, directions come first. Free time suggests nearby places from your trip.",
+        "Preview keeps its day and time controls in view, with a slider to scrub through the day."
+      ]
+    }
+  },
+  {
+    "id": "trip-mode-clearer-day",
+    "date": "2026-10-11",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "Today in Trip Mode reads like a timeline, with times down the side and travel time between your stops.",
+        "Tap any stop to mark it done, skip it or get directions.",
+        "In Preview, step through your trip day by day and drag to change the time."
+      ]
+    }
+  },
+  {
+    "id": "trip-mode-calm-today",
+    "date": "2026-10-11",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "Today in Trip Mode keeps just what you need on the move, with a quick way to edit the day in the planner.",
+        "Log an expense without leaving Trip Mode.",
+        "The map’s day drawer now sits neatly above the tab bar and never hides behind Preview."
+      ]
+    }
+  },
+  {
+    "id": "trip-header-and-day-scroll",
+    "date": "2026-10-11",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "Enjoy clearer trip tabs on tablets and a quieter day-card strip, with the scrollbar tucked away until you need it."
+      ]
+    }
+  },
+  {
+    "id": "tools-shelf",
+    "date": "2026-10-11",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "Tools is now a compact shelf that shows your last currency pair and checklists at a glance.",
+        "When a trip is coming up, convert to its currency or add a checklist to it in one tap."
+      ]
+    }
+  },
+  {
+    "id": "steady-trips-navigation",
+    "date": "2026-10-11",
+    "version": "1.0.0",
+    "summaries": {
+      "en": ["Return to Trips without losing your place or waiting for your library to load again."]
+    }
+  },
+  {
+    "id": "steady-trip-overview",
+    "date": "2026-10-11",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "Return from your itinerary to the trip overview without waiting for your trip to appear again."
+      ]
+    }
+  },
+  {
+    "id": "smooth-sign-out",
+    "date": "2026-10-11",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "Sign out with a clear transition to the sign-in screen, without flashes of trip data or loading errors."
+      ]
+    }
+  },
+  {
+    "id": "reliable-update-details",
+    "date": "2026-10-11",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "See what’s new before installing an update, even after reopening Trove.",
+        "Refresh an older open tab when another tab has installed the latest update."
+      ]
+    }
+  },
+  {
+    "id": "polished-update-toast",
+    "date": "2026-10-11",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "Enjoy a quieter update prompt, with what’s new just a tap away and more room to read at your own pace."
+      ]
+    }
+  },
+  {
+    "id": "places-saved-redesign",
+    "date": "2026-10-11",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "Trip places now opens on the day you're planning, with what's nearby first and one clear line about each place.",
+        "Saved is now a visual collection with covers, search, and a quick way to add places to your next trip."
+      ]
+    }
+  },
+  {
+    "id": "intelligent-itinerary-moves",
+    "date": "2026-10-11",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "Move stops with timing that adjusts around your day while keeping bookings and fixed activities safe.",
+        "When a stop cannot fit, see one clear conflict instead of repeated warnings across the day."
+      ]
+    }
+  },
+  {
+    "id": "easier-trip-cards",
+    "date": "2026-10-11",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "Open any trip from its card, with a friendlier Trips introduction and a clearer highlight for your current trip tool."
+      ]
+    }
+  },
+  {
+    "id": "currency-and-templates-redesign",
+    "date": "2026-10-11",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "Currency puts the amount first, offers your next trip's currency in one tap, and shows common price tags at a glance.",
+        "Task templates now start from ready-made checklists and show which trips you can add them to before you do."
+      ]
+    }
+  },
+  {
+    "id": "ai-planner-brief-choices",
+    "date": "2026-10-11",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "Choices you add to an AI brief now sit beside your own words, and each one can be switched off with a tap.",
+        "Setting a trip up yourself now leads straight back to planning with AI."
+      ]
+    }
+  },
+  {
+    "id": "ai-planner-brief",
+    "date": "2026-10-11",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "Plan a trip with AI from a calmer brief: start from an idea, or add when, who and pace with a tap.",
+        "Review your AI plan at a glance, see what Trove picked for you, and adjust the brief to see what changed."
+      ]
+    }
+  },
+  {
+    "id": "ai-place-reconciliation",
+    "date": "2026-10-11",
+    "version": "1.0.0",
+    "summaries": {
+      "en": [
+        "AI plans find more places by their local and alternate names, so fewer stops need locating by hand."
+      ]
+    }
+  }
+]

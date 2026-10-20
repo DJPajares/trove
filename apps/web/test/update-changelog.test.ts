@@ -1,10 +1,11 @@
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
-import { readChangelogCatalog } from '../lib/updates/catalog.ts';
+import { readChangelogAtRef, readChangelogCatalog } from '../lib/updates/catalog.ts';
 import {
   INSTALLED_CHANGELOG_KEY,
   parseInstalledHistory,
@@ -79,14 +80,94 @@ describe('catalog integrity', () => {
     expect(isSemver('01.0.0')).toBe(false);
   });
 
-  test('requires filenames and year folders to match the entry', () => {
+  test('reads one catalog across years and validates its shape and entries', () => {
     const directory = mkdtempSync(join(tmpdir(), 'trove-changelog-'));
     try {
-      mkdirSync(join(directory, '2026'));
-      writeFileSync(join(directory, '2026', 'trip-days.json'), JSON.stringify(note('trip-days')));
-      expect(readChangelogCatalog(directory)).toEqual([note('trip-days')]);
-      writeFileSync(join(directory, '2026', 'wrong-name.json'), JSON.stringify(note('other')));
-      expect(() => readChangelogCatalog(directory)).toThrow(/filename\/year/);
+      const file = join(directory, 'changelog.json');
+      const entries = [note('trip-days'), note('older-trip', '2025-01-01')];
+      writeFileSync(file, JSON.stringify(entries));
+      expect(readChangelogCatalog(file)).toEqual(entries);
+      writeFileSync(file, JSON.stringify(entries[0]));
+      expect(() => readChangelogCatalog(file)).toThrow(/JSON array/);
+      writeFileSync(file, JSON.stringify([{ ...note('trip-days'), version: 'bad' }]));
+      expect(() => readChangelogCatalog(file)).toThrow(/version/);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test('preserves PR history checks across the migration and later single-file additions', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'trove-changelog-history-'));
+    const git = (...args: string[]) =>
+      execFileSync('git', args, { cwd: directory, encoding: 'utf8' }).trim();
+    const commit = () => {
+      git('add', '.');
+      git(
+        '-c',
+        'user.name=Test',
+        '-c',
+        'user.email=test@example.com',
+        'commit',
+        '--no-gpg-sign',
+        '-m',
+        'Catalog fixture',
+      );
+      return git('rev-parse', 'HEAD');
+    };
+    try {
+      git('init', '-b', 'catalog-fixture');
+      const legacy = join(directory, 'apps/web/changelog/2026');
+      mkdirSync(legacy, { recursive: true });
+      const { version: _version, ...unversioned } = note('unversioned');
+      writeFileSync(join(legacy, 'unversioned.json'), JSON.stringify(unversioned));
+      writeFileSync(join(legacy, 'trip-days.json'), JSON.stringify(note('trip-days')));
+      const legacyRef = commit();
+      expect(readChangelogAtRef(directory, legacyRef)).toEqual([
+        { id: 'trip-days', version: '1.0.0' },
+        { id: 'unversioned' },
+      ]);
+
+      const file = join(directory, 'apps/web/changelog.json');
+      const entries = [note('trip-days'), note('unversioned')];
+      rmSync(join(directory, 'apps/web/changelog'), { recursive: true });
+      writeFileSync(file, JSON.stringify(entries));
+      const migratedRef = commit();
+      const migrated = readChangelogAtRef(directory, migratedRef);
+      expect(migrated).toEqual(entries.map(({ id, version }) => ({ id, version })));
+      expect(() =>
+        checkChangelogDeclaration(
+          'Changelog: none — Consolidate storage',
+          readChangelogAtRef(directory, legacyRef).map(({ id }) => id),
+          readChangelogCatalog(file).map(({ id }) => id),
+        ),
+      ).not.toThrow();
+
+      writeFileSync(file, JSON.stringify([...entries, note('new-trip')]));
+      const currentIds = readChangelogCatalog(file).map(({ id }) => id);
+      expect(() =>
+        checkChangelogDeclaration(
+          'Changelog: added',
+          migrated.map(({ id }) => id),
+          currentIds,
+        ),
+      ).not.toThrow();
+      expect(() =>
+        checkChangelogDeclaration(
+          'Changelog: none — Internal',
+          migrated.map(({ id }) => id),
+          currentIds,
+        ),
+      ).toThrow(/require/);
+      expect(() =>
+        checkChangelogDeclaration(
+          'Changelog: none — Internal',
+          migrated.map(({ id }) => id),
+          ['trip-days'],
+        ),
+      ).toThrow(/Preserve/);
+
+      writeFileSync(file, '{}');
+      expect(() => readChangelogAtRef(directory, commit())).toThrow(/JSON array/);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

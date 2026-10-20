@@ -713,6 +713,29 @@
     "markReady": "Mark as ready",
     "markInProgress": "Move back to in progress",
     "library": {
+      "lenses": {
+        "label": "Show trips",
+        "all": "All",
+        "upcoming": "Upcoming",
+        "planning": "Needs planning",
+        "past": "Past",
+        "count": "{label} · {count}",
+        "showAll": "Show all trips",
+        "empty": {
+          "upcoming": {
+            "title": "Nothing ahead yet",
+            "description": "Trips you're planning or taking will show here."
+          },
+          "planning": {
+            "title": "Every trip ahead is marked Ready",
+            "description": "Trips you haven't marked Ready yet will show here."
+          },
+          "past": {
+            "title": "No finished trips yet",
+            "description": "Trips gather here once you've been."
+          }
+        }
+      },
       "description": "Every trip you're planning, taking or looking back on.",
       "ledger": {
         "ahead": "{count} ahead",

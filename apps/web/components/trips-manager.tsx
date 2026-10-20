@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { CircleAlert, Plus } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { Suspense, useEffect, useMemo } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 
 import { AiPlanningDraftCard } from '@/components/ai-planning-draft-card';
 import { PageHeader } from '@/components/page-header';
@@ -16,11 +16,20 @@ import { LibraryLead } from '@/components/trips-library/library-lead';
 import { LibraryRemembered } from '@/components/trips-library/library-remembered';
 import { LibrarySkeleton } from '@/components/trips-library/library-skeleton';
 import { Button } from '@/components/ui/button';
+import { Chip, ChipGroup } from '@/components/ui/chip';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { deviceTimeZone, fetchTripModeContext } from '@/lib/itinerary/api';
 import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
 import { queryKeys } from '@/lib/query/keys';
 import { fetchTrips, type Trip } from '@/lib/trips/api';
+import {
+  lensCounts,
+  parseTripLens,
+  showLensFilter,
+  TRIP_LENSES,
+  tripsForLens,
+  type TripLens,
+} from '@/lib/trips/library-lens';
 import { groupTripsForLibrary } from '@/lib/trips/lifecycle';
 import { resolveTripNextUp } from '@/lib/trips/next-up';
 import { libraryEditorialSubjects, tripEditorialSubject } from '@/lib/trips/summary';
@@ -58,6 +67,9 @@ function TripCreationIntent() {
 export function TripsManager() {
   const t = useTranslations('trips');
   const libraryT = useTranslations('trips.library');
+  const lensT = useTranslations('trips.library.lenses');
+  const pathname = usePathname();
+  const router = useRouter();
   const { latestCreatedTrip, openCreateTrip } = useTripCreation();
   const queryClient = useQueryClient();
   const tripsQuery = useQuery({ queryFn: fetchTrips, queryKey: queryKeys.trips() });
@@ -68,6 +80,27 @@ export function TripsManager() {
 
   const library = useMemo(() => groupTripsForLibrary(trips), [trips]);
   const lead = library.featured;
+
+  // The lens lives in the URL, so Back from a trip returns to it while the
+  // Trips tab - and a new session - starts on the whole library, where the
+  // trip under way leads. Read once on arrival, replaced on change.
+  const [lens, setLens] = useState<TripLens>('all');
+  useEffect(() => {
+    setLens(parseTripLens(new URLSearchParams(window.location.search).get('show')));
+  }, []);
+  const filterable = useMemo(() => showLensFilter(trips), [trips]);
+  const counts = useMemo(() => lensCounts(trips), [trips]);
+  const activeLens: TripLens = filterable ? lens : 'all';
+  const lensTrips = useMemo(() => tripsForLens(trips, activeLens), [activeLens, trips]);
+
+  function chooseLens(next: TripLens) {
+    setLens(next);
+    const params = new URLSearchParams(window.location.search);
+    if (next === 'all') params.delete('show');
+    else params.set('show', next);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
 
   // Only the lead trip says what is next, and only a trip actually under way
   // has a next. The key and its options match Home's and Trip Mode's, so moving
@@ -127,6 +160,28 @@ export function TripsManager() {
         titleFont="journal"
       />
 
+      {status === 'idle' && filterable ? (
+        // Chips, not tabs (PRD 10): a light way to narrow, with the library
+        // itself always one tap away. A lens with nothing in it is not offered.
+        <ChipGroup
+          aria-label={lensT('label')}
+          className="-mx-1 -mt-5 flex-nowrap overflow-x-auto px-1 pb-1 sm:-mt-7"
+          multiple={false}
+          onValueChange={([value]) => chooseLens(parseTripLens(value))}
+          value={[activeLens]}
+        >
+          {TRIP_LENSES.filter(
+            (option) => option === 'all' || counts[option] > 0 || option === activeLens,
+          ).map((option) => (
+            <Chip key={option} value={option}>
+              {option === 'all'
+                ? lensT('all')
+                : lensT('count', { count: counts[option], label: lensT(option) })}
+            </Chip>
+          ))}
+        </ChipGroup>
+      ) : null}
+
       {status === 'loading' ? (
         <LibrarySkeleton label={t('loading')} />
       ) : status === 'error' ? (
@@ -138,6 +193,40 @@ export function TripsManager() {
           kind="error"
           title={t('loadError')}
         />
+      ) : activeLens !== 'all' ? (
+        lensTrips.length === 0 ? (
+          <PageState
+            actions={
+              <>
+                <Button onClick={() => chooseLens('all')} variant="outline">
+                  {lensT('showAll')}
+                </Button>
+                {activeLens === 'upcoming' ? (
+                  <Button onClick={openCreateTrip}>{t('newTrip')}</Button>
+                ) : null}
+              </>
+            }
+            description={lensT(`empty.${activeLens}.description`)}
+            headingLevel={2}
+            kind="empty"
+            title={lensT(`empty.${activeLens}.title`)}
+          />
+        ) : activeLens === 'past' ? (
+          <LibraryRemembered
+            editorialFor={editorialFor}
+            expanded
+            foldable={false}
+            onExpandedChange={view.setExpanded}
+            trips={lensTrips}
+          />
+        ) : (
+          <LibraryAhead
+            editorialFor={editorialFor}
+            onCreateTrip={openCreateTrip}
+            title={lensT(activeLens)}
+            trips={lensTrips}
+          />
+        )
       ) : trips.length === 0 ? (
         <>
           {/* A draft is reachable on a traveller's very first visit, before

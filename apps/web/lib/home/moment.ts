@@ -85,6 +85,7 @@ export function resolveHomeMoment(
   now = new Date(),
   today = getLocalDate(now, Intl.DateTimeFormat().resolvedOptions().timeZone),
 ): HomeMoment {
+  trips = trips.filter((trip) => !trip.archivedAt);
   const lead = selectPrimaryTrip([...trips], now);
 
   const comingUp = trips

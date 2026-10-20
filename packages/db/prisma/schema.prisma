@@ -747,6 +747,7 @@ enum StayEndpointMode {
 }
 
 model Trip {
+  archivedAt                    DateTime?             @map("archived_at") @db.Timestamptz(3)
   dayExperiences                 DayExperience[]
   id                             String                @id @default(uuid(7)) @db.Uuid
   ownerId                        String                @map("owner_id") @db.Uuid
@@ -819,6 +820,7 @@ model Trip {
   aiPlanningSession            AiPlanningSession?           @relation("AiPlanningAppliedTrip")
 
   @@unique([id, ownerId])
+  @@index([ownerId, archivedAt])
   @@index([ownerId])
   @@index([creatorId])
   @@index([startingPlaceId])

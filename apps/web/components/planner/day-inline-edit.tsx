@@ -1,4 +1,5 @@
 'use client';
+import { useTripReadOnly } from '@/components/trip-provider';
 
 import { Pencil, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -46,6 +47,7 @@ export function DayTitle({
 }>) {
   const t = useTranslations('itinerary.planner.inlineEdit');
   const common = useTranslations('itinerary');
+  const readOnly = useTripReadOnly();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
@@ -125,6 +127,7 @@ export function DayTitle({
           pencilClassName,
           'pointer-events-auto mt-0.5 bg-white/15 focus-visible:ring-white/70',
         )}
+        disabled={readOnly}
         onClick={() => {
           settled.current = false;
           setValue(name ?? '');
@@ -153,6 +156,7 @@ export function DayNote({
 }>) {
   const t = useTranslations('itinerary.planner.inlineEdit');
   const common = useTranslations('itinerary');
+  const readOnly = useTripReadOnly();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
@@ -227,6 +231,7 @@ export function DayNote({
     return (
       <Button
         className="-ml-2.5 text-muted-foreground"
+        disabled={readOnly}
         onClick={start}
         size="sm"
         type="button"
@@ -245,6 +250,7 @@ export function DayNote({
       <button
         aria-label={t('editNote')}
         className={cn(pencilClassName, 'text-muted-foreground focus-visible:ring-ring/50')}
+        disabled={readOnly}
         onClick={start}
         type="button"
       >

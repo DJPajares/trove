@@ -1,4 +1,5 @@
 'use client';
+import { useTripReadOnly } from '@/components/trip-provider';
 
 import { useLocale, useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
@@ -47,6 +48,7 @@ export function TripSpendPanel({
   onEditBudget: () => void;
 }>) {
   const t = useTranslations('expenses');
+  const readOnly = useTripReadOnly();
   const locale = useLocale();
   const trip = useTripContext()?.trip ?? null;
   const now = useNowTick(true);
@@ -57,7 +59,7 @@ export function TripSpendPanel({
     return (
       <EmptyPosition
         action={
-          <Button onClick={onEditBudget} size="sm" variant="outline">
+          <Button disabled={readOnly} onClick={onEditBudget} size="sm" variant="outline">
             {t('setBudget')}
           </Button>
         }
@@ -115,7 +117,13 @@ export function TripSpendPanel({
           <TotalAmount reference={reference.code} total={actual} />
         </div>
         {budget ? (
-          <Button className="-mr-2 shrink-0" onClick={onEditBudget} size="sm" variant="ghost">
+          <Button
+            className="-mr-2 shrink-0"
+            disabled={readOnly}
+            onClick={onEditBudget}
+            size="sm"
+            variant="ghost"
+          >
             {t('editBudget')}
           </Button>
         ) : null}
@@ -164,6 +172,7 @@ export function TripSpendPanel({
       {budget ? null : (
         <Button
           className="w-full border-dashed"
+          disabled={readOnly}
           onClick={onEditBudget}
           size="sm"
           type="button"

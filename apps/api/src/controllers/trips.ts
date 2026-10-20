@@ -11,6 +11,8 @@ import {
   deleteTrip,
   getTrip,
   listTrips,
+  setTripArchived,
+  tripArchiveIndex,
   TripDateShrinkConfirmationError,
   TripDateConflictError,
   TripDateMoveInvalidLocalTimeError,
@@ -169,7 +171,31 @@ function parseTripId(request: FastifyRequest, reply: FastifyReply) {
 export async function listTripsController(request: FastifyRequest, reply: FastifyReply) {
   const context = getRequestContext(request, reply);
   if (!context) return;
-  return { trips: await listTrips(context.userId, context.accessToken) };
+  const query = z
+    .object({ archived: z.enum(['exclude', 'only', 'include']).default('exclude') })
+    .strict()
+    .safeParse(request.query);
+  if (!query.success) return reply.code(400).send({ code: 'invalid_archive_filter' });
+  const [trips, index] = await Promise.all([
+    listTrips(context.userId, context.accessToken, query.data.archived),
+    tripArchiveIndex(context.userId),
+  ]);
+  return { trips, ...index };
+}
+
+export async function archiveTripController(request: FastifyRequest, reply: FastifyReply) {
+  const context = getRequestContext(request, reply);
+  const tripId = parseTripId(request, reply);
+  if (!context || !tripId) return;
+  const body = z.object({ archived: z.boolean() }).strict().safeParse(request.body);
+  if (!body.success) return reply.code(400).send({ code: 'invalid_archive_request' });
+  try {
+    return {
+      trip: await setTripArchived(context.userId, context.accessToken, tripId, body.data.archived),
+    };
+  } catch (error) {
+    return handleTripError(error, reply);
+  }
 }
 
 export async function getTripController(request: FastifyRequest, reply: FastifyReply) {

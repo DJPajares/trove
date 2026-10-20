@@ -1,4 +1,5 @@
 'use client';
+import { useTripReadOnly } from '@/components/trip-provider';
 
 import { Plus } from 'lucide-react';
 
@@ -17,6 +18,8 @@ export function InsertButton({
   label,
   onInsert,
 }: Readonly<{ className?: string; label: string; onInsert: () => void }>) {
+  const readOnly = useTripReadOnly();
+  if (readOnly) return null;
   return (
     <button
       aria-label={label}

@@ -20,9 +20,12 @@ export function tripEditMovesPlan(before: Trip, after: Trip) {
 /** Clear local copies only after the server confirms the trip was deleted. */
 export async function deleteTripAndClearCaches(queryClient: QueryClient, tripId: string) {
   await deleteTrip(tripId);
-  queryClient.setQueryData(queryKeys.trips(), (current: { trips: Trip[] } | undefined) =>
-    current ? { trips: current.trips.filter((trip) => trip.id !== tripId) } : current,
+  queryClient.setQueriesData(
+    { queryKey: queryKeys.trips() },
+    (current: { trips: Trip[] } | undefined) =>
+      current ? { ...current, trips: current.trips.filter((trip) => trip.id !== tripId) } : current,
   );
+  void queryClient.invalidateQueries({ queryKey: queryKeys.trips() });
   queryClient.removeQueries({ queryKey: queryKeys.trip(tripId) });
   removeTripQueries(queryClient, tripId);
   // A failed storage cleanup cannot undo a successful server deletion.

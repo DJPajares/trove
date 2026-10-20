@@ -1,4 +1,5 @@
 'use client';
+import { useTripReadOnly } from '@/components/trip-provider';
 
 import {
   createContext,
@@ -75,6 +76,8 @@ export function useRegisterPrimaryAction({
   onTrigger,
 }: Readonly<RegisterPrimaryActionOptions>) {
   const register = useContext(PrimaryActionContext)?.registerPrimaryAction;
+  const readOnly = useTripReadOnly();
+  enabled = enabled && !readOnly;
   const ownerRef = useRef<symbol | null>(null);
   ownerRef.current ??= Symbol('primary-action');
   const owner = ownerRef.current;

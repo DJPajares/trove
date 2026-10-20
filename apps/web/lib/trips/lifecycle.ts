@@ -165,6 +165,7 @@ export function selectPrimaryTrip(
   now = new Date(),
   { includeRecentlyCompleted = true }: SelectPrimaryTripOptions = {},
 ): Trip | null {
+  trips = trips.filter((trip) => !trip.archivedAt);
   const active = trips
     .filter((trip) => trip.lifecycle === 'active')
     .toSorted((left, right) => left.endDate.localeCompare(right.endDate));
@@ -206,6 +207,7 @@ export type TripLibraryGroups = {
  * finished trip belongs in the archive here even if it ended yesterday.
  */
 export function groupTripsForLibrary(trips: Trip[], now = new Date()): TripLibraryGroups {
+  trips = trips.filter((trip) => !trip.archivedAt);
   const featured = selectPrimaryTrip(trips, now, { includeRecentlyCompleted: false });
 
   const ahead = trips

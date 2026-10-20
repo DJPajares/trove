@@ -1,8 +1,9 @@
 'use client';
 
-import { CalendarPlus, Pencil, X } from 'lucide-react';
+import { CalendarPlus, Eye, Pencil, X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
+import { useTripReadOnly } from '@/components/trip-provider';
 import { EditorialSection } from '@/components/editorial-section';
 import { Button } from '@/components/ui/button';
 import {
@@ -47,6 +48,7 @@ export function ExpenseLedger({
   onEdit: (expense: Expense) => void;
 }>) {
   const t = useTranslations('expenses');
+  const readOnly = useTripReadOnly();
   const locale = useLocale();
 
   const visible = expenses.filter((expense) => matchesSpendFilter(expense, filter, days));
@@ -140,12 +142,14 @@ export function ExpenseLedger({
         </ItemContent>
         <ItemActions className="shrink-0">
           <Button
-            aria-label={t('editExpense', { title: expenseTitle(expense) })}
+            aria-label={t(readOnly ? 'viewRecord' : 'editExpense', {
+              title: expenseTitle(expense),
+            })}
             onClick={() => onEdit(expense)}
             size="icon-sm"
             variant="ghost"
           >
-            <Pencil aria-hidden="true" />
+            {readOnly ? <Eye aria-hidden="true" /> : <Pencil aria-hidden="true" />}
           </Button>
         </ItemActions>
       </Item>

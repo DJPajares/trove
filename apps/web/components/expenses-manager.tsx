@@ -1,4 +1,5 @@
 'use client';
+import { useTripReadOnly } from '@/components/trip-provider';
 
 import { CircleAlert, Plus } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -48,6 +49,7 @@ export function ExpensesManager({
   tripId: string;
 }>) {
   const t = useTranslations('expenses');
+  const readOnly = useTripReadOnly();
   const locale = useLocale();
   const { preferredCurrency } = usePreferences();
   const { data, refresh, status } = useTripResource(queryKeys.expenses(tripId), () =>
@@ -287,7 +289,7 @@ export function ExpensesManager({
       {data.expenses.length === 0 ? (
         <PageState
           actions={
-            <Button onClick={openCreate} variant="outline">
+            <Button disabled={readOnly} onClick={openCreate} variant="outline">
               <Plus aria-hidden="true" data-icon="inline-start" />
               {t('addFirstExpense')}
             </Button>

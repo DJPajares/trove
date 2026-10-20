@@ -92,7 +92,7 @@ export function libraryLedger(trips: readonly Trip[]): LibraryLedger {
   let ahead = 0;
   let remembered = 0;
 
-  for (const trip of trips) {
+  for (const trip of trips.filter((trip) => !trip.archivedAt)) {
     if (trip.lifecycle === 'completed') remembered += 1;
     else ahead += 1;
     if (trip.lifecycle !== 'planning') {

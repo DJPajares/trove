@@ -72,7 +72,7 @@ export function HomeExperience() {
   const { latestCreatedTrip, openCreateTrip } = useTripCreation();
   const queryClient = useQueryClient();
   // Shared with the Trips library, so arriving at Home from it costs nothing.
-  const tripsQuery = useQuery({ queryFn: fetchTrips, queryKey: queryKeys.trips() });
+  const tripsQuery = useQuery({ queryFn: () => fetchTrips(), queryKey: queryKeys.trips() });
   const [dismissedPrompts, setDismissedPrompts] = useState<string[]>([]);
 
   useEffect(() => {
@@ -91,7 +91,7 @@ export function HomeExperience() {
     });
   }
 
-  const trips = tripsQuery.data?.trips ?? EMPTY_TRIPS;
+  const trips = (tripsQuery.data?.trips ?? EMPTY_TRIPS).filter((trip) => !trip.archivedAt);
   const status = tripsQuery.isPending ? 'loading' : tripsQuery.error ? 'error' : 'idle';
 
   useEffect(() => {

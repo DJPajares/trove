@@ -1,4 +1,5 @@
 'use client';
+import { useTripReadOnly } from '@/components/trip-provider';
 
 import { useLocale, useTranslations } from 'next-intl';
 
@@ -46,6 +47,7 @@ export function LegConnector({
   segment: ItineraryRouteSegment;
 }>) {
   const t = useTranslations('itinerary.routes');
+  const readOnly = useTripReadOnly();
   const locale = useLocale();
   const originLabel = segment.origin.label ?? t(`point.${segment.origin.kind}`);
   const leavesStay = segment.modeOwner.kind === 'day_start' && segment.origin.kind === 'daily_base';
@@ -96,6 +98,7 @@ export function LegConnector({
           value={segment.mode}
         >
           <SelectTrigger
+            disabled={readOnly}
             aria-label={t('changeMode', { origin: originLabel })}
             className={cn('w-auto gap-1 bg-background', saving && 'opacity-70')}
             size="sm"

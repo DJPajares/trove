@@ -37,7 +37,7 @@ export function SavedReadyForTrip({
   const t = useTranslations('saved.readyForTrip');
   const locale = useLocale();
   const queryClient = useQueryClient();
-  const trips = useQuery({ queryFn: fetchTrips, queryKey: queryKeys.trips() });
+  const trips = useQuery({ queryFn: () => fetchTrips(), queryKey: queryKeys.trips() });
   const trip = useMemo(() => nextTripForSaved(trips.data?.trips ?? [], localToday()), [trips.data]);
   const tripPlaces = useQuery({
     enabled: Boolean(trip),

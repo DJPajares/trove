@@ -75,6 +75,7 @@ test('pre-send review suppresses muted, completed, moved, and expired tasks', as
     expect.objectContaining({
       where: expect.objectContaining({
         ownerId: 'owner-1',
+        archivedAt: null,
         owner: { notificationsEnabled: true, browserNotificationsEnabled: true },
         notificationPreferences: { none: { ownerId: 'owner-1', muted: true } },
       }),

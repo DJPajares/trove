@@ -1,4 +1,5 @@
 'use client';
+import { useTripReadOnly } from '@/components/trip-provider';
 
 import { ChevronDown, Plus, Search } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
@@ -81,6 +82,7 @@ export function TripPlacesDrawer({
 }: Readonly<TripPlacesDrawerProps>) {
   const locale = useLocale();
   const t = useTranslations('tripPlaces');
+  const readOnly = useTripReadOnly();
   const places = useTripPlaces(tripId);
   const addButton = useRef<HTMLButtonElement | null>(null);
   const editedId = useRef<string | null>(null);
@@ -193,7 +195,7 @@ export function TripPlacesDrawer({
       busyPlaceIds={addingIds}
       day={dayContext ? { date: dayContext.date, number: dayContext.dayNumber } : undefined}
       justAddedIds={view.kept}
-      onAddToDay={dayContext ? (tripPlace) => void addToDay(tripPlace) : undefined}
+      onAddToDay={!readOnly && dayContext ? (tripPlace) => void addToDay(tripPlace) : undefined}
       onEditPlace={(place) => {
         editedId.current = place.id;
         setEditPlace(place);
@@ -273,6 +275,7 @@ export function TripPlacesDrawer({
                 aria-label={t('addPlace')}
                 className="shrink-0 rounded-full"
                 ref={addButton}
+                disabled={readOnly}
                 onClick={() => setAddQuery('')}
                 size="icon"
                 type="button"
@@ -320,7 +323,12 @@ export function TripPlacesDrawer({
           {places.status === 'idle' && !places.places.length ? (
             <PageState
               actions={
-                <Button ref={addButton} onClick={() => setAddQuery('')} type="button">
+                <Button
+                  ref={addButton}
+                  disabled={readOnly}
+                  onClick={() => setAddQuery('')}
+                  type="button"
+                >
                   <Plus aria-hidden="true" data-icon="inline-start" />
                   {t('addFirstPlace')}
                 </Button>

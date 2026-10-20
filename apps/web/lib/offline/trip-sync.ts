@@ -23,6 +23,7 @@ import {
   removeOfflineMemoryMedia,
   removeOfflineMutation,
   saveItinerarySnapshot,
+  saveTripSnapshot,
   saveSupportingSnapshot,
   setOfflineApiReachable,
 } from './trip-store';
@@ -676,11 +677,15 @@ async function replayItineraryMutation(
     await removeOfflineMutation(mutation.id);
     return;
   }
+  const body = (await response.json().catch(() => ({}))) as { code?: string };
   if (response.status === 409) {
-    await updateMutationState(mutation, 'conflict', 'itinerary_item_conflict');
+    await updateMutationState(
+      mutation,
+      'conflict',
+      body.code === 'trip_archived' ? 'trip_archived' : 'itinerary_item_conflict',
+    );
     return;
   }
-  const body = (await response.json().catch(() => ({}))) as { code?: string };
   await updateMutationState(
     mutation,
     'failed',
@@ -740,7 +745,11 @@ async function fetchServerMemories(accessToken: string, tripId: string) {
 
 async function failMemoryMutation(mutation: OfflineMutation, response: Response, fallback: string) {
   const body = (await response.json().catch(() => ({}))) as { code?: string };
-  await updateMutationState(mutation, 'failed', body.code ?? fallback);
+  await updateMutationState(
+    mutation,
+    body.code === 'trip_archived' ? 'conflict' : 'failed',
+    body.code ?? fallback,
+  );
 }
 
 /**
@@ -917,8 +926,31 @@ export async function syncOfflineMutations(options: { mutationId?: string; force
     ? mutations.filter((mutation) => mutation.id === options.mutationId)
     : mutations.filter((mutation) => mutation.state === 'pending');
   const touchedTrips = new Set<string>();
+  const archivedTrips = new Set<string>();
+  const missingTrips = new Set<string>();
+  for (const tripId of new Set(selected.map((mutation) => mutation.tripId))) {
+    const response = await authenticatedFetch(`${apiUrl}/trips/${tripId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (response.status === 404) {
+      missingTrips.add(tripId);
+      continue;
+    }
+    if (!response.ok) throw new OfflineSyncError('offline_sync_failed');
+    const { trip } = await response.json();
+    await saveTripSnapshot(userId, trip);
+    if (trip.archivedAt) archivedTrips.add(tripId);
+  }
 
   for (const mutation of selected) {
+    if (archivedTrips.has(mutation.tripId) || missingTrips.has(mutation.tripId)) {
+      await updateMutationState(
+        mutation,
+        'conflict',
+        archivedTrips.has(mutation.tripId) ? 'trip_archived' : 'trip_missing',
+      );
+      continue;
+    }
     touchedTrips.add(mutation.tripId);
     try {
       await replayMutation(mutation, accessToken, options.force ?? false);
@@ -941,7 +973,10 @@ export async function syncOfflineMutations(options: { mutationId?: string; force
       // The optimistic snapshot remains valid until the next successful refresh.
     }
   }
-  if (touchedTrips.size && typeof window !== 'undefined') {
+  if (
+    (touchedTrips.size || archivedTrips.size || missingTrips.size) &&
+    typeof window !== 'undefined'
+  ) {
     window.dispatchEvent(new Event(OFFLINE_DATA_REFRESH_EVENT));
   }
 }

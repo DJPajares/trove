@@ -1,0 +1,10 @@
+{
+  "id": "archive-trips",
+  "date": "2026-10-20",
+  "version": "1.15.0",
+  "summaries": {
+    "en": [
+      "Keep your trip collection tidy by archiving trips. Everything stays safe to browse, and you can restore a trip whenever you need it."
+    ]
+  }
+}

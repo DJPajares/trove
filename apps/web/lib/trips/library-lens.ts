@@ -35,13 +35,13 @@ export function tripsForLens(trips: Trip[], lens: TripLens, now = new Date()): T
     case 'past':
       return past;
     default:
-      return trips;
+      return trips.filter((trip) => !trip.archivedAt);
   }
 }
 
 export function lensCounts(trips: Trip[], now = new Date()): Record<TripLens, number> {
   return {
-    all: trips.length,
+    all: trips.filter((trip) => !trip.archivedAt).length,
     past: tripsForLens(trips, 'past', now).length,
     planning: tripsForLens(trips, 'planning', now).length,
     upcoming: tripsForLens(trips, 'upcoming', now).length,
@@ -50,7 +50,7 @@ export function lensCounts(trips: Trip[], now = new Date()): Record<TripLens, nu
 
 /** Lenses are offered once there is enough to narrow, and more than one way to. */
 export function showLensFilter(trips: Trip[], now = new Date()): boolean {
-  if (trips.length < LENS_MIN_TRIPS) return false;
+  if (trips.filter((trip) => !trip.archivedAt).length < LENS_MIN_TRIPS) return false;
   const counts = lensCounts(trips, now);
   return (['upcoming', 'planning', 'past'] as const).filter((lens) => counts[lens] > 0).length >= 2;
 }

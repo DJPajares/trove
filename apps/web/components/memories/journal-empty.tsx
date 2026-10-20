@@ -1,4 +1,5 @@
 'use client';
+import { useTripReadOnly } from '@/components/trip-provider';
 
 import { Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -17,6 +18,7 @@ export function JournalEmpty({
   onAdd,
 }: Readonly<{ lifecycle: Trip['lifecycle']; onAdd: () => void }>) {
   const t = useTranslations('memories.journal');
+  const readOnly = useTripReadOnly();
 
   return (
     <section
@@ -32,7 +34,7 @@ export function JournalEmpty({
       <p className="text-base leading-7 text-pretty text-muted-foreground">
         {lifecycle === 'planning' ? t('emptyBefore') : t('emptyAfter')}
       </p>
-      <Button className="rounded-full px-5" onClick={onAdd} type="button">
+      <Button className="rounded-full px-5" disabled={readOnly} onClick={onAdd} type="button">
         <Plus aria-hidden="true" data-icon="inline-start" />
         {t('addFirstMemory')}
       </Button>

@@ -67,6 +67,9 @@ function originMatches(allowedOrigin: string, origin: string) {
  * database behind on migrations reads very differently from a real bug.
  */
 function describeError(error: unknown) {
+  if (error instanceof Error && /trip_archived/.test(error.message)) {
+    return { code: 'trip_archived', isKnownPrismaFailure: false, statusCode: 409 };
+  }
   const { code, statusCode } = (error ?? {}) as { code?: unknown; statusCode?: unknown };
   const known: Record<string, string> = {
     P1001: 'database_unavailable',

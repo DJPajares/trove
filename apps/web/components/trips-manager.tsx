@@ -8,6 +8,8 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 
 import { AiPlanningDraftCard } from '@/components/ai-planning-draft-card';
 import { PageHeader } from '@/components/page-header';
+import Link from 'next/link';
+import { TripArchiveFeedback } from '@/components/trip-archive-feedback';
 import { PageState } from '@/components/page-state';
 import { useTripCreation } from '@/components/trip-creation-provider';
 import { LibraryAhead } from '@/components/trips-library/library-ahead';
@@ -15,7 +17,7 @@ import { LibraryEmpty, LibraryNothingAhead } from '@/components/trips-library/li
 import { LibraryLead } from '@/components/trips-library/library-lead';
 import { LibraryRemembered } from '@/components/trips-library/library-remembered';
 import { LibrarySkeleton } from '@/components/trips-library/library-skeleton';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Chip, ChipGroup } from '@/components/ui/chip';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { deviceTimeZone, fetchTripModeContext } from '@/lib/itinerary/api';
@@ -72,8 +74,8 @@ export function TripsManager() {
   const router = useRouter();
   const { latestCreatedTrip, openCreateTrip } = useTripCreation();
   const queryClient = useQueryClient();
-  const tripsQuery = useQuery({ queryFn: fetchTrips, queryKey: queryKeys.trips() });
-  const trips = tripsQuery.data?.trips ?? EMPTY_TRIPS;
+  const tripsQuery = useQuery({ queryFn: () => fetchTrips(), queryKey: queryKeys.trips() });
+  const trips = (tripsQuery.data?.trips ?? EMPTY_TRIPS).filter((trip) => !trip.archivedAt);
   // A failed background refresh must not replace a usable library with an error.
   const status = tripsQuery.data ? 'idle' : tripsQuery.isPending ? 'loading' : 'error';
   const view = useLibraryView(tripsQuery.data !== undefined);
@@ -145,14 +147,24 @@ export function TripsManager() {
       <Suspense fallback={null}>
         <TripCreationIntent />
       </Suspense>
+      <Suspense fallback={null}>
+        <TripArchiveFeedback />
+      </Suspense>
       <PageHeader
         actions={
           // A phone already carries Create at the centre of its bottom bar,
           // and the lead trip deserves the first screen more than a second one.
-          <Button className="max-md:hidden" onClick={openCreateTrip}>
-            <Plus aria-hidden="true" data-icon="inline-start" />
-            {t('newTrip')}
-          </Button>
+          <>
+            <Link className={buttonVariants({ variant: 'ghost' })} href="/trips/archived">
+              {tripsQuery.data?.archivedTripCount
+                ? t('archive.viewCount', { count: tripsQuery.data.archivedTripCount })
+                : t('archive.view')}
+            </Link>
+            <Button className="max-md:hidden" onClick={openCreateTrip}>
+              <Plus aria-hidden="true" data-icon="inline-start" />
+              {t('newTrip')}
+            </Button>
+          </>
         }
         description={libraryT('description')}
         eyebrow={t('eyebrow')}

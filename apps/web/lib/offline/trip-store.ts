@@ -674,6 +674,10 @@ export async function queueOfflineMutation(mutation: OfflineMutation) {
     transaction.abort();
     throw new Error('offline_trip_not_prepared');
   }
+  if (snapshot.trip?.archivedAt) {
+    transaction.abort();
+    throw new Error('trip_archived');
+  }
   snapshotStore.put({
     ...snapshot,
     ...applyOperationToSnapshot(snapshot, mutation.operation),
@@ -1069,6 +1073,11 @@ export async function queueOfflineMemoryCapture(
   if (!snapshot) {
     transaction.abort();
     throw new Error('offline_trip_not_prepared');
+  }
+
+  if (snapshot.trip?.archivedAt) {
+    transaction.abort();
+    throw new Error('trip_archived');
   }
 
   const memories = mutations.reduce(

@@ -117,7 +117,11 @@ async function searchOwnedContent(userId: string, input: string) {
   const [trips, savedPlaces, tripPlaces, reservations, tripInfo, days, itineraryItems, memories] =
     await Promise.all([
       prisma.trip.findMany({
-        where: { ownerId: userId, OR: [{ name: contains }, { description: contains }] },
+        where: {
+          ownerId: userId,
+          archivedAt: null,
+          OR: [{ name: contains }, { description: contains }],
+        },
         select: { description: true, id: true, name: true },
         orderBy: { updatedAt: 'desc' },
         take: CANDIDATE_LIMIT,
@@ -141,7 +145,7 @@ async function searchOwnedContent(userId: string, input: string) {
       }),
       prisma.tripPlace.findMany({
         where: {
-          trip: { ownerId: userId },
+          trip: { ownerId: userId, archivedAt: null },
           OR: [
             { note: contains },
             { place: { customName: contains } },
@@ -159,7 +163,7 @@ async function searchOwnedContent(userId: string, input: string) {
       }),
       prisma.reservation.findMany({
         where: {
-          trip: { ownerId: userId },
+          trip: { ownerId: userId, archivedAt: null },
           OR: [
             { title: contains },
             { provider: contains },
@@ -198,7 +202,7 @@ async function searchOwnedContent(userId: string, input: string) {
       }),
       prisma.tripInfo.findMany({
         where: {
-          trip: { ownerId: userId },
+          trip: { ownerId: userId, archivedAt: null },
           OR: [
             { label: contains },
             { value: contains },
@@ -220,13 +224,13 @@ async function searchOwnedContent(userId: string, input: string) {
         take: CANDIDATE_LIMIT,
       }),
       prisma.itineraryDay.findMany({
-        where: { notes: contains, trip: { ownerId: userId } },
+        where: { notes: contains, trip: { ownerId: userId, archivedAt: null } },
         select: { date: true, id: true, notes: true, trip: { select: { id: true, name: true } } },
         orderBy: { updatedAt: 'desc' },
         take: CANDIDATE_LIMIT,
       }),
       prisma.itineraryItem.findMany({
-        where: { notes: contains, trip: { ownerId: userId } },
+        where: { notes: contains, trip: { ownerId: userId, archivedAt: null } },
         select: {
           customLabel: true,
           customLocation: true,
@@ -242,7 +246,7 @@ async function searchOwnedContent(userId: string, input: string) {
       // Memories are private: scoped to trips this user owns, like every other result here.
       prisma.memory.findMany({
         where: {
-          trip: { ownerId: userId },
+          trip: { ownerId: userId, archivedAt: null },
           OR: [{ note: contains }, { tripPlace: { place: { customName: contains } } }],
         },
         select: {
@@ -494,7 +498,7 @@ async function resolveOwnedProviderResults(
       place: {
         OR: [
           { savedPlaces: { some: { ownerId: userId } } },
-          { tripPlaces: { some: { trip: { ownerId: userId } } } },
+          { tripPlaces: { some: { trip: { ownerId: userId, archivedAt: null } } } },
         ],
       },
     },
@@ -504,7 +508,7 @@ async function resolveOwnedProviderResults(
         select: {
           savedPlaces: { where: { ownerId: userId }, select: { id: true } },
           tripPlaces: {
-            where: { trip: { ownerId: userId } },
+            where: { trip: { ownerId: userId, archivedAt: null } },
             select: { id: true, trip: { select: { id: true, name: true } } },
           },
         },

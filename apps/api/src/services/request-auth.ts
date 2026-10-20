@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { getAuthenticatedUserId } from './supabase-auth.js';
+import { requireUnarchivedTrip } from './trip-archive.js';
 
 export function getBearerToken(authorization: string | undefined) {
   const match = authorization?.match(/^Bearer\s+(.+)$/i);
@@ -26,4 +27,5 @@ export async function requireAuthenticatedUser(request: FastifyRequest, reply: F
   }
 
   request.authUserId = authentication.userId;
+  await requireUnarchivedTrip(request, reply);
 }

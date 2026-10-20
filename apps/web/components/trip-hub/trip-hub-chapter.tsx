@@ -133,45 +133,47 @@ function ExperienceDoors({ trip }: Readonly<{ trip: Trip }>) {
   const destinations = tripOverviewDestinations(trip.id, trip.lifecycle, trip.startDate);
   return (
     <nav aria-label={t('tripExperiences')} className="grid grid-cols-2 gap-2.5">
-      {destinations.secondary.map((destination) => {
-        const Icon =
-          destination.displayLabelKey === 'preview' ||
-          destination.descriptionKey === 'previewCompleted'
-            ? Icons.Preview
-            : doorIcons[destination.section];
-        return (
-          <Link
-            className="group flex min-w-0 flex-col gap-3 rounded-[var(--radius-xl)] border border-border-subtle p-3.5 outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none"
-            data-slot="trip-overview-secondary-action"
-            href={destination.href}
-            key={destination.section}
-          >
-            <span className="flex items-center justify-between">
-              <span
-                aria-hidden="true"
-                className={cn(
-                  'grid size-9 place-items-center rounded-full bg-surface-tint',
-                  destination.section === 'memories' ? 'text-accent-strong' : 'text-brand',
-                )}
-              >
-                <Icon className="size-[1.125rem]" />
+      {destinations.secondary
+        .filter((destination) => !trip.archivedAt || destination.section !== 'mode')
+        .map((destination) => {
+          const Icon =
+            destination.displayLabelKey === 'preview' ||
+            destination.descriptionKey === 'previewCompleted'
+              ? Icons.Preview
+              : doorIcons[destination.section];
+          return (
+            <Link
+              className="group flex min-w-0 flex-col gap-3 rounded-[var(--radius-xl)] border border-border-subtle p-3.5 outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none"
+              data-slot="trip-overview-secondary-action"
+              href={destination.href}
+              key={destination.section}
+            >
+              <span className="flex items-center justify-between">
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'grid size-9 place-items-center rounded-full bg-surface-tint',
+                    destination.section === 'memories' ? 'text-accent-strong' : 'text-brand',
+                  )}
+                >
+                  <Icon className="size-[1.125rem]" />
+                </span>
+                <ChevronRight
+                  aria-hidden="true"
+                  className="size-4 text-text-subtle transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
+                />
               </span>
-              <ChevronRight
-                aria-hidden="true"
-                className="size-4 text-text-subtle transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
-              />
-            </span>
-            <span>
-              <span className="block text-[0.9375rem] font-semibold">
-                {t(destination.displayLabelKey)}
+              <span>
+                <span className="block text-[0.9375rem] font-semibold">
+                  {t(destination.displayLabelKey)}
+                </span>
+                <span className="mt-0.5 block text-[0.8125rem] leading-snug text-muted-foreground">
+                  {t(`experienceDescription.${destination.descriptionKey}`)}
+                </span>
               </span>
-              <span className="mt-0.5 block text-[0.8125rem] leading-snug text-muted-foreground">
-                {t(`experienceDescription.${destination.descriptionKey}`)}
-              </span>
-            </span>
-          </Link>
-        );
-      })}
+            </Link>
+          );
+        })}
     </nav>
   );
 }
@@ -275,6 +277,7 @@ export function TripHubChapter({
   trip: Trip;
 }>) {
   const t = useTranslations('trips.hub');
+  const archiveT = useTranslations('trips.archive');
   const locale = useLocale();
   const day = overview?.day ?? null;
   const days = overview?.days ?? [];
@@ -288,12 +291,14 @@ export function TripHubChapter({
     trip.memoryCount || trip.hasStoryContent || overview?.memories.note || photos.length,
   );
   const remember = stage === 'remember';
-  const href =
-    stage === 'plan' || stage === 'soon'
+  const href = trip.archivedAt
+    ? `/trips/${trip.id}/itinerary`
+    : stage === 'plan' || stage === 'soon'
       ? overviewPlannerHref(trip.id, day?.id ?? null)
       : destinations.primary.href;
-  const action =
-    stage === 'remember'
+  const action = trip.archivedAt
+    ? archiveT('browse')
+    : stage === 'remember'
       ? t(hasStory ? 'openMemories' : 'addMemories')
       : stage === 'live'
         ? t('continueTrip')
@@ -442,7 +447,7 @@ export function TripHubChapter({
               {t('planBody')}
             </p>
           )}
-          {showReadiness ? <TripReadinessPrompt trip={trip} /> : null}
+          {showReadiness && !trip.archivedAt ? <TripReadinessPrompt trip={trip} /> : null}
         </>
       )}
 

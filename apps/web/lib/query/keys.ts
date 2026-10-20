@@ -110,6 +110,7 @@ export const queryKeys = {
   tripInfo: (tripId: string) => ['trip-info', tripId] as const,
   tripPlaces: (tripId: string) => ['trip-places', tripId, PLACES_CONTRACT_VERSION] as const,
   trips: () => ['trips'] as const,
+  archivedTrips: () => ['trips', 'archived'] as const,
 
   /**
    * Date and time are in the key on purpose: Preview day-stepping asks a

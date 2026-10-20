@@ -562,6 +562,7 @@ export async function listItinerary(
     select: {
       ...tripStayInclude({ select: { id: true } }),
       stayPlanRevision: true,
+      archivedAt: true,
       defaultStayTripPlaceId: true,
       endDate: true,
       id: true,
@@ -638,7 +639,7 @@ export async function listItinerary(
     {
       languageCode,
       // Supporting tools need scheduled-use data without buying a snapshot refresh.
-      placesService: readOptions.cachedOnly ? null : undefined,
+      placesService: readOptions.cachedOnly || trip.archivedAt ? null : undefined,
       source: 'itinerary',
     },
   );

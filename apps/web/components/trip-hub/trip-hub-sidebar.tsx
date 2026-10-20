@@ -98,7 +98,7 @@ export function TripHubCloseAtHand({
           <label className="mt-2 flex cursor-pointer items-start gap-3 rounded-[var(--radius-xl)] border border-border-subtle bg-card px-4 py-3.5 transition-colors duration-[var(--motion-standard)] has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/40 hover:bg-surface-hover motion-reduce:transition-none">
             <input
               className="mt-0.5 size-5 shrink-0 accent-primary"
-              disabled={completing === next.id}
+              disabled={Boolean(trip.archivedAt) || completing === next.id}
               onChange={() => void complete(next.id)}
               type="checkbox"
             />

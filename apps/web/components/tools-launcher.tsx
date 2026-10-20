@@ -41,7 +41,7 @@ export function ToolsLauncher() {
   const { preferredCurrency } = usePreferences();
   const home = preferredCurrency ?? FALLBACK_SOURCE;
   const { board } = useRateBoard();
-  const trips = useQuery({ queryFn: fetchTrips, queryKey: queryKeys.trips() });
+  const trips = useQuery({ queryFn: () => fetchTrips(), queryKey: queryKeys.trips() });
   const templates = useQuery({ queryFn: fetchTaskTemplates, queryKey: queryKeys.taskTemplates() });
   const [recentPairs, setRecentPairs] = useState<CurrencyPair[]>([]);
   useEffect(() => setRecentPairs(readRecentCurrencyPairs()), []);

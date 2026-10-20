@@ -18,6 +18,10 @@ class FakeTransaction extends EventTarget {
   private completionScheduled = false;
   private active = true;
   private queued: (() => void)[] = [];
+  abort() {
+    this.queued = [];
+    this.finishSoon();
+  }
   block() {
     this.active = false;
   }

@@ -1,4 +1,5 @@
 'use client';
+import { useTripReadOnly } from '@/components/trip-provider';
 
 import { CircleAlert, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -93,6 +94,7 @@ export function ExpenseEditorSheet({
   tripStartDate: string;
 }>) {
   const t = useTranslations('expenses');
+  const readOnly = useTripReadOnly();
 
   return (
     <>
@@ -103,59 +105,65 @@ export function ExpenseEditorSheet({
         >
           <SheetHeading
             title={
-              editor.kind === 'budget'
-                ? t('budgetTitle')
-                : editor.kind === 'edit'
-                  ? t('editTitle')
-                  : t('createTitle')
+              readOnly
+                ? t('viewTitle')
+                : editor.kind === 'budget'
+                  ? t('budgetTitle')
+                  : editor.kind === 'edit'
+                    ? t('editTitle')
+                    : t('createTitle')
             }
             description={
-              editor.kind === 'budget'
-                ? t('budgetDescriptionEditor')
-                : editor.kind === 'edit'
-                  ? t('editDescription')
-                  : t('createDescription')
+              readOnly
+                ? t('viewDescription')
+                : editor.kind === 'budget'
+                  ? t('budgetDescriptionEditor')
+                  : editor.kind === 'edit'
+                    ? t('editDescription')
+                    : t('createDescription')
             }
           />
 
           {editor.kind === 'budget' ? (
             <form className="flex min-h-0 flex-1 flex-col" onSubmit={onBudgetSubmit}>
-              <div className="min-h-0 flex-1 overflow-y-auto p-5">
-                <FieldGroup>
-                  {formError ? (
-                    <Alert role="alert" variant="destructive">
-                      <CircleAlert aria-hidden="true" />
-                      <AlertDescription>{formError}</AlertDescription>
-                    </Alert>
-                  ) : null}
-                  <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_9rem]">
-                    <Field>
-                      <FieldLabel htmlFor="budget-amount">{t('amount')}</FieldLabel>
-                      <MoneyInput
-                        id="budget-amount"
-                        onValueChange={(value) => onBudgetFieldChange('amount', value)}
-                        placeholder={t('amountPlaceholder')}
-                        value={budgetForm.amount}
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="budget-currency">{t('currency')}</FieldLabel>
-                      <CurrencyCombobox
-                        aria-label={t('currency')}
-                        id="budget-currency"
-                        onValueChange={(value) => onBudgetFieldChange('currencyCode', value)}
-                        placeholder={t('currencyPlaceholder')}
-                        value={budgetForm.currencyCode}
-                      />
-                    </Field>
-                  </div>
-                </FieldGroup>
-              </div>
+              <fieldset disabled={readOnly} className="contents">
+                <div className="min-h-0 flex-1 overflow-y-auto p-5">
+                  <FieldGroup>
+                    {formError ? (
+                      <Alert role="alert" variant="destructive">
+                        <CircleAlert aria-hidden="true" />
+                        <AlertDescription>{formError}</AlertDescription>
+                      </Alert>
+                    ) : null}
+                    <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_9rem]">
+                      <Field>
+                        <FieldLabel htmlFor="budget-amount">{t('amount')}</FieldLabel>
+                        <MoneyInput
+                          id="budget-amount"
+                          onValueChange={(value) => onBudgetFieldChange('amount', value)}
+                          placeholder={t('amountPlaceholder')}
+                          value={budgetForm.amount}
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="budget-currency">{t('currency')}</FieldLabel>
+                        <CurrencyCombobox
+                          aria-label={t('currency')}
+                          id="budget-currency"
+                          onValueChange={(value) => onBudgetFieldChange('currencyCode', value)}
+                          placeholder={t('currencyPlaceholder')}
+                          value={budgetForm.currencyCode}
+                        />
+                      </Field>
+                    </div>
+                  </FieldGroup>
+                </div>
+              </fieldset>
               <SheetFooter>
                 <Button onClick={onClose} type="button" variant="outline">
                   {t('cancel')}
                 </Button>
-                <Button disabled={saving} type="submit">
+                <Button disabled={saving || readOnly} type="submit">
                   {saving
                     ? t('saving')
                     : budgetForm.amount || budgetForm.currencyCode
@@ -166,134 +174,141 @@ export function ExpenseEditorSheet({
             </form>
           ) : editor.kind !== 'closed' ? (
             <form className="flex min-h-0 flex-1 flex-col" onSubmit={onExpenseSubmit}>
-              <div className="min-h-0 flex-1 overflow-y-auto p-5">
-                <FieldGroup>
-                  {formError ? (
-                    <Alert role="alert" variant="destructive">
-                      <CircleAlert aria-hidden="true" />
-                      <AlertDescription>{formError}</AlertDescription>
-                    </Alert>
-                  ) : null}
-                  <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_9rem]">
+              <fieldset disabled={readOnly} className="contents">
+                <div className="min-h-0 flex-1 overflow-y-auto p-5">
+                  <FieldGroup>
+                    {formError ? (
+                      <Alert role="alert" variant="destructive">
+                        <CircleAlert aria-hidden="true" />
+                        <AlertDescription>{formError}</AlertDescription>
+                      </Alert>
+                    ) : null}
+                    <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_9rem]">
+                      <Field>
+                        <FieldLabel htmlFor="expense-amount">{t('amount')}</FieldLabel>
+                        <MoneyInput
+                          id="expense-amount"
+                          onValueChange={(value) => onExpenseFieldChange('amount', value)}
+                          placeholder={t('amountPlaceholder')}
+                          required
+                          value={expenseForm.amount}
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="expense-currency">{t('currency')}</FieldLabel>
+                        <CurrencyCombobox
+                          aria-label={t('currency')}
+                          id="expense-currency"
+                          onValueChange={(value) => onExpenseFieldChange('currencyCode', value)}
+                          placeholder={t('currencyPlaceholder')}
+                          required
+                          value={expenseForm.currencyCode}
+                        />
+                      </Field>
+                    </div>
                     <Field>
-                      <FieldLabel htmlFor="expense-amount">{t('amount')}</FieldLabel>
-                      <MoneyInput
-                        id="expense-amount"
-                        onValueChange={(value) => onExpenseFieldChange('amount', value)}
-                        placeholder={t('amountPlaceholder')}
-                        required
-                        value={expenseForm.amount}
+                      <FieldLabel htmlFor="expense-title">{t('expenseTitle')}</FieldLabel>
+                      <Input
+                        id="expense-title"
+                        maxLength={300}
+                        onChange={(event) => onExpenseFieldChange('title', event.target.value)}
+                        placeholder={t('expenseTitlePlaceholder')}
+                        value={expenseForm.title}
                       />
                     </Field>
                     <Field>
-                      <FieldLabel htmlFor="expense-currency">{t('currency')}</FieldLabel>
-                      <CurrencyCombobox
-                        aria-label={t('currency')}
-                        id="expense-currency"
-                        onValueChange={(value) => onExpenseFieldChange('currencyCode', value)}
-                        placeholder={t('currencyPlaceholder')}
-                        required
-                        value={expenseForm.currencyCode}
-                      />
-                    </Field>
-                  </div>
-                  <Field>
-                    <FieldLabel htmlFor="expense-title">{t('expenseTitle')}</FieldLabel>
-                    <Input
-                      id="expense-title"
-                      maxLength={300}
-                      onChange={(event) => onExpenseFieldChange('title', event.target.value)}
-                      placeholder={t('expenseTitlePlaceholder')}
-                      value={expenseForm.title}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel>{t('category')}</FieldLabel>
-                    {/* Six chips rather than a Select: on a phone, categorising an
+                      <FieldLabel>{t('category')}</FieldLabel>
+                      {/* Six chips rather than a Select: on a phone, categorising an
                         expense is one tap instead of three, and the tints match the
                         bars the traveller reads them back on. */}
-                    <ChipGroup
-                      aria-label={t('category')}
-                      multiple={false}
-                      onValueChange={([value]) =>
-                        onExpenseFieldChange(
-                          'category',
-                          (value ?? 'none') as ExpenseCategory | 'none',
-                        )
-                      }
-                      value={[expenseForm.category]}
-                    >
-                      {categories.map((category) => {
-                        const { Icon } = resolveExpenseCategory(category);
+                      <ChipGroup
+                        aria-label={t('category')}
+                        multiple={false}
+                        onValueChange={([value]) =>
+                          onExpenseFieldChange(
+                            'category',
+                            (value ?? 'none') as ExpenseCategory | 'none',
+                          )
+                        }
+                        value={[expenseForm.category]}
+                      >
+                        {categories.map((category) => {
+                          const { Icon } = resolveExpenseCategory(category);
 
-                        return (
-                          <Chip icon={<Icon aria-hidden="true" />} key={category} value={category}>
-                            {t(`categories.${category}`)}
-                          </Chip>
-                        );
-                      })}
-                      <Chip value="none">{t('noCategory')}</Chip>
-                    </ChipGroup>
-                  </Field>
-                  <Field>
-                    <FieldLabel>{t('date')}</FieldLabel>
-                    {/* Bounded by the trip so a date can only ever name a trip day.
+                          return (
+                            <Chip
+                              icon={<Icon aria-hidden="true" />}
+                              key={category}
+                              value={category}
+                            >
+                              {t(`categories.${category}`)}
+                            </Chip>
+                          );
+                        })}
+                        <Chip value="none">{t('noCategory')}</Chip>
+                      </ChipGroup>
+                    </Field>
+                    <Field>
+                      <FieldLabel>{t('date')}</FieldLabel>
+                      {/* Bounded by the trip so a date can only ever name a trip day.
                         Still clearable: an expense with no date counts toward the
                         trip total without claiming to belong to any one day. */}
-                    <DatePicker
-                      id="expense-date"
-                      label={t('date')}
-                      max={tripEndDate}
-                      min={tripStartDate}
-                      onChange={(value) => onExpenseFieldChange('localDate', value)}
-                      value={expenseForm.localDate}
-                    />
-                    <FieldDescription>{t('dateHint')}</FieldDescription>
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="expense-place">{t('linkedPlace')}</FieldLabel>
-                    <Select
-                      onValueChange={(value) =>
-                        onExpenseFieldChange('tripPlaceId', value ?? 'none')
-                      }
-                      value={expenseForm.tripPlaceId}
-                    >
-                      <SelectTrigger id="expense-place" className="w-full">
-                        <SelectValue>
-                          {expenseForm.tripPlaceId === 'none'
-                            ? t('noLinkedPlace')
-                            : resolvePlaceLabel(
-                                tripPlaces.find((place) => place.id === expenseForm.tripPlaceId) ??
-                                  null,
-                                t('unnamedPlace'),
-                              )}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">{t('noLinkedPlace')}</SelectItem>
-                        {tripPlaces.map((place) => (
-                          <SelectItem key={place.id} value={place.id}>
-                            {resolvePlaceLabel(place, t('unnamedPlace'))}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="expense-note">{t('note')}</FieldLabel>
-                    <Textarea
-                      id="expense-note"
-                      maxLength={5_000}
-                      onChange={(event) => onExpenseFieldChange('note', event.target.value)}
-                      placeholder={t('notePlaceholder')}
-                      rows={3}
-                      value={expenseForm.note}
-                    />
-                  </Field>
-                </FieldGroup>
-              </div>
+                      <DatePicker
+                        id="expense-date"
+                        label={t('date')}
+                        max={tripEndDate}
+                        min={tripStartDate}
+                        onChange={(value) => onExpenseFieldChange('localDate', value)}
+                        value={expenseForm.localDate}
+                      />
+                      <FieldDescription>{t('dateHint')}</FieldDescription>
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="expense-place">{t('linkedPlace')}</FieldLabel>
+                      <Select
+                        onValueChange={(value) =>
+                          onExpenseFieldChange('tripPlaceId', value ?? 'none')
+                        }
+                        value={expenseForm.tripPlaceId}
+                      >
+                        <SelectTrigger id="expense-place" className="w-full">
+                          <SelectValue>
+                            {expenseForm.tripPlaceId === 'none'
+                              ? t('noLinkedPlace')
+                              : resolvePlaceLabel(
+                                  tripPlaces.find(
+                                    (place) => place.id === expenseForm.tripPlaceId,
+                                  ) ?? null,
+                                  t('unnamedPlace'),
+                                )}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">{t('noLinkedPlace')}</SelectItem>
+                          {tripPlaces.map((place) => (
+                            <SelectItem key={place.id} value={place.id}>
+                              {resolvePlaceLabel(place, t('unnamedPlace'))}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="expense-note">{t('note')}</FieldLabel>
+                      <Textarea
+                        id="expense-note"
+                        maxLength={5_000}
+                        onChange={(event) => onExpenseFieldChange('note', event.target.value)}
+                        placeholder={t('notePlaceholder')}
+                        rows={3}
+                        value={expenseForm.note}
+                      />
+                    </Field>
+                  </FieldGroup>
+                </div>
+              </fieldset>
               <SheetFooter>
-                {editor.kind === 'edit' ? (
+                {editor.kind === 'edit' && !readOnly ? (
                   <Button
                     className="sm:mr-auto"
                     onClick={() => onExpenseToDeleteChange(editor.expense)}
@@ -307,7 +322,7 @@ export function ExpenseEditorSheet({
                 <Button onClick={onClose} type="button" variant="outline">
                   {t('cancel')}
                 </Button>
-                <Button disabled={saving} type="submit">
+                <Button disabled={saving || readOnly} type="submit">
                   {saving
                     ? t('saving')
                     : editor.kind === 'edit'
@@ -338,7 +353,7 @@ export function ExpenseEditorSheet({
           <AlertDialogFooter>
             <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
             <AlertDialogAction
-              disabled={deleting}
+              disabled={deleting || readOnly}
               onClick={() => void onConfirmDelete()}
               variant="destructive"
             >

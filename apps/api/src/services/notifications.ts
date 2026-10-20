@@ -229,6 +229,7 @@ export async function listDueNotificationCandidates(now = new Date()) {
       browserNotificationsEnabled: true,
       pushSubscriptions: { some: {} },
     },
+    archivedAt: null,
     notificationPreferences: { none: { muted: true } },
   } as const;
   const [tasks, reservations, timedItems] = await Promise.all([
@@ -388,6 +389,7 @@ export async function currentDueCandidate(
       id: candidate.tripId,
       ownerId,
       owner: { notificationsEnabled: true, browserNotificationsEnabled: true },
+      archivedAt: null,
       notificationPreferences: { none: { ownerId, muted: true } },
     },
     select: { id: true, name: true },
@@ -478,6 +480,7 @@ export async function listNotifications(userId: string, now = new Date()) {
   const trips = await prisma.trip.findMany({
     where: {
       ownerId: userId,
+      archivedAt: null,
       notificationPreferences: { none: { muted: true, ownerId: userId } },
     },
     select: {
@@ -544,6 +547,7 @@ export async function listNotifications(userId: string, now = new Date()) {
     where: {
       trip: {
         ownerId: userId,
+        archivedAt: null,
         notificationPreferences: { none: { ownerId: userId, muted: true } },
       },
       travelStatus: 'UPCOMING',

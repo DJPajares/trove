@@ -51,7 +51,7 @@ export function TripReadinessPrompt({
       </p>
       <Button
         className={cn('shrink-0', inverse && 'text-white hover:bg-white/15 hover:text-white')}
-        disabled={pendingTripId === trip.id}
+        disabled={Boolean(trip.archivedAt) || pendingTripId === trip.id}
         onClick={() => void setReadiness(trip, 'ready')}
         size="sm"
         variant={inverse ? 'ghost' : 'outline'}

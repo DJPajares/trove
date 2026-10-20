@@ -105,7 +105,7 @@ import {
   updateItineraryItemRouteMode,
 } from '@/lib/itinerary/api';
 import { useOnlineStatus } from '@/components/trip-sync-status';
-import { useTripContext } from '@/components/trip-provider';
+import { useTripContext, useTripReadOnly } from '@/components/trip-provider';
 import { useCompactItinerary } from '@/hooks/use-compact-itinerary';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { useDayHeaderPhotos } from '@/hooks/use-day-header-photos';
@@ -235,6 +235,7 @@ export function ItineraryManager({
   tripId,
 }: Readonly<{ planScoreEnabled: boolean; tripId: string }>) {
   const t = useTranslations('itinerary');
+  const readOnly = useTripReadOnly();
   const tripPlacesTranslations = useTranslations('tripPlaces');
   const plannerT = useTranslations('itinerary.planner');
   const planScoreTranslations = useTranslations('planScore');
@@ -464,12 +465,12 @@ export function ItineraryManager({
       selectedDay?.id,
       timingAssessmentRevision(selectedDay),
     ),
-    enabled: online && !itineraryEditing && !timingPending && Boolean(selectedDay),
+    enabled: online && !readOnly && !itineraryEditing && !timingPending && Boolean(selectedDay),
     queryFn: ({ signal }) => fetchItineraryDayTimeSuggestions(tripId, selectedDay!.id, { signal }),
   });
 
   useTimingReviewRefresh({
-    enabled: online && !itineraryEditing && !timingPending,
+    enabled: online && !readOnly && !itineraryEditing && !timingPending,
     itinerary,
     outcome: timingReview,
     tripId,
@@ -962,6 +963,7 @@ export function ItineraryManager({
 
   /** A new stop at the end of a day - already at a Trip Place when one was asked for. */
   function openCreate(day: ItineraryDay, options: { tripPlaceId?: string | null } = {}) {
+    if (readOnly) return;
     const number = (itinerary?.days.findIndex((candidate) => candidate.id === day.id) ?? -1) + 1;
     setStopEditor((current) => ({
       id: current.id + 1,
@@ -977,6 +979,7 @@ export function ItineraryManager({
 
   /** A new stop between two others: `position` among the day's stops, after `afterName`. */
   function openInsert(day: ItineraryDay, position: number, afterName: string | null) {
+    if (readOnly) return;
     const number = (itinerary?.days.findIndex((candidate) => candidate.id === day.id) ?? -1) + 1;
     setStopEditor((current) => ({
       id: current.id + 1,
@@ -991,6 +994,7 @@ export function ItineraryManager({
   }
 
   function openEdit(item: ItineraryItem, focus?: 'place' | 'timing') {
+    if (readOnly) return;
     const dayId = item.itineraryDayId;
     if (!dayId) return;
     setStopEditor((current) => ({
@@ -1006,6 +1010,7 @@ export function ItineraryManager({
 
   /** What a stop is missing that one tap can add: its Place, or a location for it. */
   function stopPartial(item: ItineraryItem) {
+    if (readOnly) return null;
     // A plan meant to be somewhere can be given its Place; a free afternoon, a
     // transfer, a call or a workday is not missing one.
     if (!item.tripPlace) {
@@ -1022,7 +1027,7 @@ export function ItineraryManager({
   function resolveScoreAction(
     explanation: import('@trove/types').PlanScoreExplanation,
   ): import('@/lib/plan-score/presentation').ScoreAction | null {
-    if (!explanation.action || !itinerary) return null;
+    if (readOnly || !explanation.action || !itinerary) return null;
     for (const reference of explanation.references) {
       const item = [
         ...itinerary.days.flatMap((day) => day.items),
@@ -1625,15 +1630,22 @@ export function ItineraryManager({
             <DayMasthead
               actions={
                 // A phone adds a stop with the bottom bar's plus button.
-                <Button onClick={() => openCreate(selectedDay)} size="sm" type="button">
+                <Button
+                  disabled={readOnly}
+                  onClick={() => openCreate(selectedDay)}
+                  size="sm"
+                  type="button"
+                >
                   <Plus aria-hidden="true" data-icon="inline-start" />
                   {plannerT('masthead.addStop')}
                 </Button>
               }
               dayMenu={
                 <DayMenu
-                  movementDisabled={!online || itineraryEditing}
-                  canCheckOrder={online && !itineraryEditing && selectedDay.items.length > 1}
+                  movementDisabled={!online || itineraryEditing || readOnly}
+                  canCheckOrder={
+                    online && !readOnly && !itineraryEditing && selectedDay.items.length > 1
+                  }
                   canSuggestTimes={online && untimedItems(selectedDay).length > 0}
                   compact={compact}
                   day={selectedDay}
@@ -1776,17 +1788,17 @@ export function ItineraryManager({
                   onEditItem: openEdit,
                   onMoveToDay: (item) => setMoveTarget({ allowUnscheduled: true, item }),
                   onSwapItem: setSwapTarget,
-                  movementDisabled: !online || itineraryEditing,
+                  movementDisabled: !online || itineraryEditing || readOnly,
                   onPlacePriorityChange: (item, priority) =>
                     void changePlacePriority(item, priority),
                   organizingItemId,
                   savingPriorityIds,
                 }}
                 onInsert={(position, afterName) => openInsert(selectedDay, position, afterName)}
-                onEditTiming={setTimingItem}
+                onEditTiming={readOnly ? undefined : setTimingItem}
                 onModeChange={(segment, mode) => void handleRouteModeChange(segment, mode)}
                 onReorder={
-                  !online || itineraryEditing
+                  !online || itineraryEditing || readOnly
                     ? undefined
                     : (item, position) => void handleOrganize(item, selectedDay.id, position)
                 }
@@ -1853,13 +1865,15 @@ export function ItineraryManager({
               />
             )}
 
-            <ItineraryGapSuggestions
-              dayId={selectedDay.id}
-              onAdded={refresh}
-              placeName={(tripPlace) => placeName(tripPlace) ?? t('providerPlace')}
-              tripId={tripId}
-              tripPlaces={itinerary.tripPlaces}
-            />
+            {!readOnly ? (
+              <ItineraryGapSuggestions
+                dayId={selectedDay.id}
+                onAdded={refresh}
+                placeName={(tripPlace) => placeName(tripPlace) ?? t('providerPlace')}
+                tripId={tripId}
+                tripPlaces={itinerary.tripPlaces}
+              />
+            ) : null}
             <div aria-hidden="true" className="h-px" ref={insightsSentinelRef} />
             <TripInsights
               dayId={selectedDay.id}
@@ -1872,7 +1886,7 @@ export function ItineraryManager({
         </div>
       ) : null}
 
-      {activeView === 'overview' ? (
+      {activeView === 'overview' && !readOnly ? (
         <ItineraryPlaceGroups
           dayLabel={(day) => t('dayNumber', { number: itinerary.days.indexOf(day) + 1 })}
           days={itinerary.days}
@@ -1893,7 +1907,7 @@ export function ItineraryManager({
       ) : null}
 
       <UnscheduledTray
-        movementDisabled={!online || itineraryEditing}
+        movementDisabled={!online || itineraryEditing || readOnly}
         items={itinerary.unscheduledItems}
         onDelete={setItemToDelete}
         onDuplicate={(item) => void handleDuplicate(item)}
@@ -1906,7 +1920,7 @@ export function ItineraryManager({
         })}
       />
 
-      {stayOpen ? (
+      {stayOpen && !readOnly ? (
         <StaySheet
           itinerary={itinerary}
           day={selectedDay}
@@ -1922,7 +1936,7 @@ export function ItineraryManager({
       {selectedDay ? (
         <TimingSheet
           dayId={selectedDay.id}
-          item={timingItem}
+          item={readOnly ? null : timingItem}
           name={timingItem ? itemName(timingItem) : ''}
           onClose={() => setTimingItem(null)}
           onSaved={async ({ scheduling }) => {

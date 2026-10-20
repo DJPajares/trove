@@ -282,3 +282,23 @@ test('a trip under way or finished asks nothing of this list', () => {
     ).toStrictEqual([]);
   }
 });
+
+test('archived trips never lead Home, appear as upcoming trips, or become anniversaries', () => {
+  const hidden = [
+    trip({
+      id: 'active',
+      lifecycle: 'active',
+      startDate: '2026-10-07',
+      archivedAt: NOW.toISOString(),
+    }),
+    trip({ id: 'soon', lifecycle: 'planning', archivedAt: NOW.toISOString() }),
+    trip({
+      id: 'old',
+      lifecycle: 'completed',
+      startDate: '2025-10-09',
+      endDate: '2025-10-11',
+      archivedAt: NOW.toISOString(),
+    }),
+  ];
+  expect(resolveHomeMoment(hidden, NOW, TODAY)).toEqual(resolveHomeMoment([], NOW, TODAY));
+});

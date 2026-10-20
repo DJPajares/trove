@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 
 import {
   createTripController,
+  archiveTripController,
   deleteTripController,
   getTripController,
   getTripOverviewController,
@@ -14,6 +15,11 @@ import { requireAuthenticatedUser } from '../services/request-auth.js';
 
 export function registerTripRoutes(app: FastifyInstance) {
   app.get('/trips', { preHandler: requireAuthenticatedUser }, listTripsController);
+  app.patch(
+    '/trips/:tripId/archive',
+    { preHandler: requireAuthenticatedUser },
+    archiveTripController,
+  );
   app.post('/trips', { preHandler: requireAuthenticatedUser }, createTripController);
   app.get('/trips/:tripId', { preHandler: requireAuthenticatedUser }, getTripController);
   app.get(

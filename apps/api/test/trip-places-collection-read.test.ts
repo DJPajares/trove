@@ -41,9 +41,11 @@ const tripPlace = {
   priority: 'MUST_GO',
 };
 let owned = true;
+let archived = false;
 
 beforeEach(() => {
   owned = true;
+  archived = false;
   provider.getDetails.mockReset().mockResolvedValue({ status: 'unavailable' });
   (globalThis as { trovePrismaClient?: unknown }).trovePrismaClient = {
     placeProviderRef: { findMany: async () => [reference] },
@@ -53,6 +55,7 @@ beforeEach(() => {
         owned
           ? {
               id: 'trip-id',
+              archivedAt: archived ? new Date() : null,
               name: 'Kyoto',
               startDate: new Date('2026-10-10'),
               endDate: new Date('2026-10-12'),
@@ -107,4 +110,11 @@ test('the itinerary endpoint honors cache-only reads and rejects invalid options
   expect((await app.inject(`${url}?cachedOnly=0`)).statusCode).toBe(400);
   expect(provider.getDetails).not.toHaveBeenCalled();
   await app.close();
+});
+
+test('an archived itinerary reads saved provider evidence without refreshing it', async () => {
+  archived = true;
+  const result = await listItinerary('owner', 'trip-id', 'en');
+  expect(result.tripPlaces[0]).toMatchObject({ id: 'trip-place-id', customName: 'Our museum' });
+  expect(provider.getDetails).not.toHaveBeenCalled();
 });

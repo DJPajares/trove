@@ -1,4 +1,5 @@
 'use client';
+import { useTripReadOnly } from '@/components/trip-provider';
 
 import { useTranslations } from 'next-intl';
 
@@ -142,6 +143,7 @@ export function ExperienceRatingControl({
   wordClassName?: string;
 }>) {
   const t = useTranslations('experienceRating');
+  const readOnly = useTripReadOnly();
   const onImage = tone === 'onImage';
   const word = experienceRatingWord(rating);
 
@@ -156,6 +158,7 @@ export function ExperienceRatingControl({
         onImage ? 'hover:bg-white/12' : 'hover:bg-surface-hover/70',
         className,
       )}
+      disabled={readOnly}
       onClick={onOpen}
       type="button"
     >

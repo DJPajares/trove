@@ -146,6 +146,8 @@ function Postcard({
 
 export type LibraryRememberedProps = {
   expanded: boolean;
+  /** False shows every trip with no fold: someone who chose Past wants all of it. */
+  foldable?: boolean;
   onExpandedChange: (expanded: boolean) => void;
   editorialFor: (trip: Trip) => EditorialImageReference | null;
   /** Finished trips, most recent first. Empty shows where they will gather. */
@@ -164,6 +166,7 @@ export type LibraryRememberedProps = {
 export function LibraryRemembered({
   editorialFor,
   expanded,
+  foldable = true,
   onExpandedChange,
   trips,
 }: Readonly<LibraryRememberedProps>) {
@@ -172,7 +175,7 @@ export function LibraryRemembered({
   // Folding away one or two prints saves less than the button that replaces
   // them costs, so the album only folds when it would hide a real handful.
   const preview = PAST_TRIPS_PREVIEW_COUNT - 1;
-  const folds = older.length - preview >= MIN_FOLDED;
+  const folds = foldable && older.length - preview >= MIN_FOLDED;
   const shown = folds && !expanded ? older.slice(0, preview) : older;
   const hiddenCount = older.length - shown.length;
 

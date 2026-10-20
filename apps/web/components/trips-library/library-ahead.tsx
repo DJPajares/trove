@@ -216,6 +216,8 @@ export type LibraryAheadProps = {
   /** Rendered first, before any month - the AI draft waiting to become a trip. */
   leading?: ReactNode;
   onCreateTrip: () => void;
+  /** The section's heading; a lens names itself, the library calls it Ahead. */
+  title?: string;
   trips: Trip[];
 };
 
@@ -232,6 +234,7 @@ export function LibraryAhead({
   editorialFor,
   leading,
   onCreateTrip,
+  title,
   trips,
 }: Readonly<LibraryAheadProps>) {
   const t = useTranslations('trips.library.ahead');
@@ -249,7 +252,7 @@ export function LibraryAhead({
         className="text-[length:var(--text-section-title)] leading-[1.18] font-semibold tracking-[-0.022em] text-foreground"
         id="library-ahead-heading"
       >
-        {t('title')}
+        {title ?? t('title')}
       </h2>
 
       {leading}

@@ -96,7 +96,7 @@ export function buildApp() {
   // requests never reach the handler at all.
   const app = Fastify({
     logger: { redact: ['req.headers.authorization', 'headers.authorization'] },
-    maxParamLength: 512,
+    routerOptions: { maxParamLength: 512 },
   });
   const allowedOrigins = getWebOrigins();
 

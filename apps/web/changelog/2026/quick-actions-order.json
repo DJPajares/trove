@@ -1,0 +1,10 @@
+{
+  "id": "quick-actions-order",
+  "date": "2026-10-20",
+  "version": "1.16.3",
+  "summaries": {
+    "en": [
+      "Find quick actions in a consistent order: Search, Notifications, Appearance, then Account."
+    ]
+  }
+}

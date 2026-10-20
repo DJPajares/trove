@@ -9,7 +9,7 @@ const run = promisify(execFile);
 test('the real API entrypoint initializes in a fresh native ESM process', async () => {
   // Vitest transforms imports and can mask ESM initialization-order failures.
   // Load the same entrypoint as tsx dev and Vercel, without test mocks or a DB.
-  const { stdout } = await run(
+  const { stdout, stderr } = await run(
     process.execPath,
     [
       '--import',
@@ -26,12 +26,15 @@ test('the real API entrypoint initializes in a fresh native ESM process', async 
           assert.match(health.json().version, /^\\d+\\.\\d+\\.\\d+$/);
           for (const request of [
             { method: 'GET', url: '/trips' },
+            { method: 'GET', url: '/places/' + 'a'.repeat(512) + '/details' },
             { method: 'GET', url: '/trips/00000000-0000-4000-8000-000000000001/itinerary' },
             { method: 'POST', url: '/trips/00000000-0000-4000-8000-000000000001/itinerary/movements/preview', payload: {} },
           ]) {
             const response = await app.inject(request);
             assert.equal(response.statusCode, 401);
           }
+          const tooLong = await app.inject({ method: 'GET', url: '/places/' + 'a'.repeat(513) + '/details' });
+          assert.equal(tooLong.statusCode, 414);
           console.log('API startup verified');
         } finally {
           await app.close();
@@ -45,4 +48,5 @@ test('the real API entrypoint initializes in a fresh native ESM process', async 
     },
   );
   expect(stdout).toContain('API startup verified');
+  expect(stderr).not.toContain('FSTDEP022');
 }, 20_000);

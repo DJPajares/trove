@@ -36,6 +36,8 @@ export async function generateMetadata(): Promise<Metadata> {
     // with dark text, which is what `statusBarColor` asks Android for.
     appleWebApp: { statusBarStyle, title: t('name') },
     description: t('description'),
+    // Brand previews always use the public site, including links to private trips.
+    metadataBase: new URL('https://trove.wndrhive.com'),
     icons: {
       // iOS ignores SVG for the home-screen icon. Give it the dedicated opaque
       // 180px export rather than making it resample an Android launcher asset.

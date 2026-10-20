@@ -130,6 +130,9 @@ function EditorialImage({
   calmLoading?: boolean;
 }>) {
   const [loaded, setLoaded] = useState(false);
+  // A fixed thumbnail gets Next's density srcset instead of a full-width fill
+  // fallback. This also keeps its lazy URL distinct from a preloaded hero.
+  const fixedSize = sizes && /^\d+px$/.test(sizes) ? Number.parseInt(sizes, 10) : undefined;
 
   return (
     <>
@@ -145,19 +148,21 @@ function EditorialImage({
       <Image
         alt={alt}
         className={cn(
-          'object-cover transition-opacity ease-[var(--ease-standard)]',
+          'absolute inset-0 size-full object-cover transition-opacity ease-[var(--ease-standard)]',
           calmLoading
             ? 'duration-[var(--motion-slow)] motion-reduce:transition-none'
             : 'duration-[var(--motion-standard)]',
           loaded ? 'opacity-100' : 'opacity-0',
         )}
-        fill
+        fill={!fixedSize}
+        height={fixedSize}
         loader={pexelsImageLoader}
         onError={onError}
         onLoad={() => setLoaded(true)}
         preload={preload}
-        sizes={sizes}
+        sizes={fixedSize ? undefined : sizes}
         src={reference.sourceUrl}
+        width={fixedSize}
       />
     </>
   );

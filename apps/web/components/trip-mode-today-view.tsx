@@ -924,7 +924,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                           <button
                             aria-label={itineraryT('viewDetailsFor', { name })}
                             className="block w-full min-w-0 rounded-[var(--radius-sm)] text-left outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
-                            onClick={() => openPlaceDetails(tripPlace, day.date)}
+                            onClick={() => openPlaceDetails(tripPlace, day.date, item.customLabel)}
                             type="button"
                           >
                             {where}

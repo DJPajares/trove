@@ -1103,6 +1103,8 @@ Relationship rules:
 
 None of these itinerary flows automatically create a global Saved relationship. Planner additions, including quick-add and first/between/last insertion, use the connected timing rules in §17.2.2. An explicit insertion position remains authoritative.
 
+A scheduled stop's contextual menu offers **Rename stop** as a compact title-only edit. The title belongs to that itinerary item; it does not rename its Trip Place or canonical/provider Place. **Use place name** restores the linked place's display name. Planner cards, stop details, Trip Mode and itinerary summaries use the stop title where appropriate, while routing, hours, ratings, photos and reconciliation retain the original place identity. A label-only stop must keep a non-empty title.
+
 ## 16.3 Global Search
 
 Global Trove Search is part of the MVP and should find Trove-owned information such as:

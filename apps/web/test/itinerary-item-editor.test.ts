@@ -13,9 +13,20 @@ import {
   stopEditorCustomDuration,
   stopEditorForm,
   stopTimingInput,
+  stopTitleInput,
 } from '../lib/itinerary/item-editor.ts';
 import { formatItineraryTimeRange, itineraryLocalEndTime } from '../lib/itinerary/item-timing.ts';
 import type { ProviderSuggestion } from '../lib/saved/api.ts';
+
+test('renaming a stop patches only its display label, never its place or timing', () => {
+  expect(stopTitleInput('  Our sunrise walk  ', 'Sensō-ji')).toStrictEqual({
+    input: { customLabel: 'Our sunrise walk' },
+  });
+  expect(stopTitleInput('Sensō-ji', 'Sensō-ji')).toStrictEqual({ input: { customLabel: null } });
+  expect(stopTitleInput('  ', 'Sensō-ji')).toStrictEqual({ input: { customLabel: null } });
+  expect(stopTitleInput('  ', null)).toStrictEqual({ error: 'minimumContentError' });
+  expect(stopTitleInput('Picnic', null)).toStrictEqual({ input: { customLabel: 'Picnic' } });
+});
 
 test('local Trip Place filtering has no arbitrary result cap', () => {
   const places = Array.from({ length: 12 }, (_, index) => ({

@@ -399,6 +399,7 @@ export function TripModeMapView({
                   openPlaceDetails(
                     tripPlace,
                     point.kind === 'considered' ? placeVisitDate(placeUse[tripPlace.id]) : day.date,
+                    point.name,
                   );
               }}
               points={mapPoints}

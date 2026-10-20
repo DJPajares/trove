@@ -3,7 +3,9 @@ import { creditModels } from './support/fake-ai-credits.js';
 import { draftPlanScoreInputRevision } from '../src/services/ai-planning-plan-score.js';
 import Fastify from 'fastify';
 import { Prisma } from '@trove/db';
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+
+import { emptyScoringCache } from './support/empty-scoring-cache.js';
 
 import { registerAiPlanningSessionRoutes } from '../src/routes/ai-planning-sessions.js';
 import {
@@ -34,6 +36,9 @@ import {
   countryCorrectionChangesTimeContext,
   suggestedDraftCountries,
 } from '../src/services/ai-planning-countries.js';
+
+beforeEach(() => vi.stubGlobal('trovePrismaClient', emptyScoringCache()));
+afterEach(() => vi.unstubAllGlobals());
 
 const OWNER_ID = '00000000-0000-4000-8000-000000000001';
 const OTHER_OWNER_ID = '00000000-0000-4000-8000-000000000002';

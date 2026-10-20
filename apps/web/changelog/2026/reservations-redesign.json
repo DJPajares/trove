@@ -1,0 +1,12 @@
+{
+  "id": "reservations-redesign",
+  "date": "2026-10-20",
+  "version": "1.15.0",
+  "summaries": {
+    "en": [
+      "Adding a booking now asks only what matters for a flight, a stay or a train; everything else waits under More details.",
+      "Reservations read by trip day, with your next booking and its reference ready to copy.",
+      "Linked places and itinerary stops now show their real names."
+    ]
+  }
+}

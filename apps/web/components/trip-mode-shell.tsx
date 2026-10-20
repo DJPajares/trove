@@ -76,7 +76,11 @@ export function useTripModePreview() {
 }
 
 type TripModePlaceDetailsContextValue = {
-  openPlaceDetails: (tripPlace: ItineraryTripPlace, visitDate?: string | null) => void;
+  openPlaceDetails: (
+    tripPlace: ItineraryTripPlace,
+    visitDate?: string | null,
+    title?: string | null,
+  ) => void;
 };
 
 const TripModePlaceDetailsContext = createContext<TripModePlaceDetailsContextValue>({
@@ -338,6 +342,7 @@ export function TripModeShell({
   } = useTripResource(queryKeys.itinerary(tripId), () => fetchItinerary(tripId));
   const [detailsPlace, setDetailsPlace] = useState<ItineraryTripPlace | null>(null);
   const [detailsVisitDate, setDetailsVisitDate] = useState<string | null>();
+  const [detailsTitle, setDetailsTitle] = useState<string | null>(null);
   // The Map view is built here rather than by its route, so a map already paid
   // for survives a trip to Today and back instead of being built again.
   const onMapView = isNavigationPathActive(pathname, `/trips/${tripId}/mode/map`);
@@ -362,9 +367,10 @@ export function TripModeShell({
     ? (detailsImages.get(editorialSubjectKey(detailsSubjects[0])) ?? [])
     : [];
   const openPlaceDetails = useCallback(
-    (tripPlace: ItineraryTripPlace, visitDate?: string | null) => {
+    (tripPlace: ItineraryTripPlace, visitDate?: string | null, title?: string | null) => {
       setDetailsPlace(tripPlace);
       setDetailsVisitDate(visitDate);
+      setDetailsTitle(title?.trim() || null);
     },
     [],
   );
@@ -664,11 +670,19 @@ export function TripModeShell({
                     ? { label: itineraryT('notes'), value: detailsPlace.note }
                     : null,
                 ].filter((row): row is PlaceDetailsRow => row !== null)}
-                name={resolveTripPlaceName(detailsPlace, {
-                  custom: itineraryT('customPlace'),
-                  provider: itineraryT('providerPlace'),
-                })}
-                officialName={detailsPlace.customName?.trim() ? detailsProviderName : null}
+                name={
+                  detailsTitle ??
+                  resolveTripPlaceName(detailsPlace, {
+                    custom: itineraryT('customPlace'),
+                    provider: itineraryT('providerPlace'),
+                  })
+                }
+                officialName={
+                  (detailsTitle || detailsPlace.customName?.trim()) &&
+                  detailsTitle !== detailsProviderName
+                    ? detailsProviderName
+                    : null
+                }
                 onOpenChange={(open) => !open && setDetailsPlace(null)}
                 place={detailsPlace.place}
                 visitDate={detailsVisitDate}

@@ -53,6 +53,7 @@ import {
 } from '@/components/planner/planner-context-bar';
 import { PlannerRibbon } from '@/components/planner/planner-ribbon';
 import { StaySheet } from '@/components/planner/stay-sheet';
+import { StopTitleDialog } from '@/components/planner/stop-title-dialog';
 import { TimingSheet } from '@/components/planner/timing-sheet';
 import {
   StopEditorSheet,
@@ -297,6 +298,7 @@ export function ItineraryManager({
     request: StopEditorRequest | null;
   }>({ id: 0, open: false, request: null });
   const [itemToDelete, setItemToDelete] = useState<ItineraryItem | null>(null);
+  const [itemToRename, setItemToRename] = useState<ItineraryItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [contextDay, setContextDay] = useState<ItineraryDay | null>(null);
@@ -647,9 +649,15 @@ export function ItineraryManager({
    */
   const [detailsPlace, setDetailsPlace] = useState<ItineraryTripPlace | null>(null);
   const [detailsVisitDate, setDetailsVisitDate] = useState<string | null>();
-  function openPlaceDetails(tripPlace: ItineraryTripPlace | null, visitDate?: string | null) {
+  const [detailsTitle, setDetailsTitle] = useState<string | null>(null);
+  function openPlaceDetails(
+    tripPlace: ItineraryTripPlace | null,
+    visitDate?: string | null,
+    title?: string | null,
+  ) {
     setDetailsPlace(tripPlace);
     setDetailsVisitDate(visitDate);
+    setDetailsTitle(title?.trim() || null);
   }
   const [locatePlace, setLocatePlace] = useState<ItineraryTripPlace | null>(null);
 
@@ -1556,6 +1564,7 @@ export function ItineraryManager({
                       openPlaceDetails(
                         tripPlace,
                         focusDate ?? placeVisitDate(placeUse[tripPlace.id]),
+                        point.name,
                       );
                   }}
                   resolveItemName={itemName}
@@ -1616,6 +1625,7 @@ export function ItineraryManager({
                         point.kind === 'considered'
                           ? placeVisitDate(placeUse[tripPlace.id])
                           : selectedDay.date,
+                        point.name,
                       );
                   }}
                   points={mapPoints}
@@ -1786,6 +1796,7 @@ export function ItineraryManager({
                 menuActions={{
                   onDeleteItem: setItemToDelete,
                   onEditItem: openEdit,
+                  onRenameItem: setItemToRename,
                   onMoveToDay: (item) => setMoveTarget({ allowUnscheduled: true, item }),
                   onSwapItem: setSwapTarget,
                   movementDisabled: !online || itineraryEditing || readOnly,
@@ -1807,7 +1818,9 @@ export function ItineraryManager({
                 onViewBaseDetails={(tripPlaceId) =>
                   openPlaceDetails(tripPlaceById(tripPlaceId) ?? null, selectedDay.date)
                 }
-                onViewItemDetails={(item) => openPlaceDetails(item.tripPlace, selectedDay.date)}
+                onViewItemDetails={(item) =>
+                  openPlaceDetails(item.tripPlace, selectedDay.date, item.customLabel)
+                }
                 resolveBase={(tripPlaceId) => {
                   const tripPlace = tripPlaceById(tripPlaceId);
                   if (!tripPlace) return null;
@@ -1912,7 +1925,7 @@ export function ItineraryManager({
         onDelete={setItemToDelete}
         onDuplicate={(item) => void handleDuplicate(item)}
         onSchedule={(item) => setMoveTarget({ allowUnscheduled: false, item })}
-        onViewDetails={(item) => openPlaceDetails(item.tripPlace)}
+        onViewDetails={(item) => openPlaceDetails(item.tripPlace, undefined, item.customLabel)}
         organizingItemId={organizingItemId}
         resolveItem={(item) => ({
           category: item.tripPlace?.place.snapshot?.category,
@@ -2001,6 +2014,16 @@ export function ItineraryManager({
             onOpenTripPlaces: openPlaces,
           }}
           title={dayOption(selectedDay, selectedIndex)}
+        />
+      ) : null}
+
+      {itemToRename ? (
+        <StopTitleDialog
+          item={itemToRename}
+          key={itemToRename.id}
+          onClose={() => setItemToRename(null)}
+          onSaved={refresh}
+          tripId={tripId}
         />
       ) : null}
 
@@ -2248,8 +2271,12 @@ export function ItineraryManager({
           key={detailsPlace.place.id}
           editorialImages={detailsEditorialImages}
           meta={detailsMeta(detailsPlace)}
-          name={placeName(detailsPlace) ?? t('providerPlace')}
-          officialName={detailsPlace.customName?.trim() ? detailsProviderName : null}
+          name={detailsTitle ?? placeName(detailsPlace) ?? t('providerPlace')}
+          officialName={
+            (detailsTitle ?? placeName(detailsPlace)) !== detailsProviderName
+              ? detailsProviderName
+              : null
+          }
           onLocate={
             canLocate(detailsPlace)
               ? () => {

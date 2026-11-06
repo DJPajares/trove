@@ -28,7 +28,37 @@ export type TimingIssue = {
     earliestStartLocal: string;
     scheduledStartLocal: string;
   };
+  /**
+   * Why a connection does not fit, named by its two stops rather than by whichever
+   * stop the issue sits on: the travel from one to the next needs more time than
+   * the gap between them leaves, and what stops the later stop from starting later.
+   */
+  travelShortfall?: {
+    fromItemId: string;
+    toItemId: string;
+    travelMinutes: number;
+    /** Negative when the later stop would have to start before the earlier one ends. */
+    availableMinutes: number;
+    limitedBy: TimingShortfallLimit;
+    /** The stop whose own time sets the limit; absent when the day itself does. */
+    limitItemId?: string;
+    /** Local calendar date and clock, YYYY-MM-DDTHH:mm, with no offset. */
+    limitLocal: string;
+  };
+  /**
+   * A traveller-fixed stop overlaps a booking that is not linked to it. Trove cannot
+   * tell which of the two is wrong - often they are the same plan - so it says
+   * which booking and when, and suggests no new time.
+   */
+  bookingOverlap?: {
+    reservationId: string;
+    title: string | null;
+    /** Local calendar date and clock, YYYY-MM-DDTHH:mm, with no offset. */
+    startLocal: string;
+    endLocal: string | null;
+  };
 };
+export type TimingShortfallLimit = 'fixed_start' | 'closing_time' | 'day_end';
 export type TimingChange = {
   itemId: string;
   itineraryDayId: string;

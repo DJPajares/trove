@@ -1,4 +1,5 @@
-import type { TimingIssue } from '@trove/types';
+import type { TimingIssue, TimingShortfallLimit } from '@trove/types';
+import { openingHoursApply } from './place-opening-hours.js';
 import type {
   PlanScoreDayItem,
   PlanScoreFixedCommitment,
@@ -9,6 +10,18 @@ import type { SuggestedTimeWindow } from './itinerary-time-suggestions-rules.js'
 export type SchedulingItem = PlanScoreDayItem & {
   protected?: boolean;
   preferredWindows?: readonly SuggestedTimeWindow[] | null;
+  /** The time a retimed stop had. A repair stays as close to it as fits, not the day's first slot. */
+  anchorMinute?: number;
+};
+/** A connection that needs more travel than the gap before the next stop leaves. */
+export type TravelShortfall = {
+  fromItemId: string;
+  toItemId: string;
+  travelMinutes: number;
+  availableMinutes: number;
+  limitedBy: TimingShortfallLimit;
+  limitItemId?: string;
+  limitMinute: number;
 };
 export type SchedulingInput = {
   items: SchedulingItem[];
@@ -32,6 +45,10 @@ export type SchedulingResult = {
   slots: Map<string, ScheduledSlot>;
   issues: TimingIssue[];
   orderConflicts: Map<string, { previousItemId: string; earliest: number; scheduled: number }>;
+  /** Keyed by the stop the issue sits on. */
+  shortfalls: Map<string, TravelShortfall>;
+  /** A fixed stop and the unlinked booking it overlaps, keyed by the stop. */
+  bookingOverlaps: Map<string, PlanScoreFixedCommitment>;
 };
 const roundUp = (minute: number) => Math.ceil(minute / 5) * 5;
 const roundDown = (minute: number) => Math.floor(minute / 5) * 5;
@@ -83,6 +100,19 @@ function fitting(
     }
   }
   return null;
+}
+/** The feasible start closest to `target`, either side of it. */
+function nearest(
+  input: SchedulingInput,
+  item: SchedulingItem,
+  low: number,
+  high: number,
+  target: number,
+): number | null {
+  const after = fitting(input, item, Math.max(low, target), high);
+  const before = fitting(input, item, low, Math.min(high, target), true);
+  if (after === null || before === null) return after ?? before;
+  return after - target <= target - before ? after : before;
 }
 function valid(
   input: SchedulingInput,
@@ -136,9 +166,13 @@ function groupSlots(
     let start: number | null = null;
     if (item.start && valid(input, item, item.start.minutes, earliest, latest))
       start = item.start.minutes;
+    // Prefer breathing room before a fixed activity, without making it a hard constraint.
+    const comfortableLatest = next?.start ? latest - 15 : latest;
+    if (start === null && item.anchorMinute !== undefined)
+      start =
+        nearest(input, item, earliest, comfortableLatest, item.anchorMinute) ??
+        nearest(input, item, earliest, latest, item.anchorMinute);
     if (start === null) {
-      // Prefer breathing room before a fixed activity, without making it a hard constraint.
-      const comfortableLatest = next?.start ? latest - 15 : latest;
       const preferred = (item.preferredWindows ?? []).flatMap((window) => {
         const minute = Math.max(earliest, window.typicalMinute ?? window.startMinute);
         return minute + item.duration!.minutes <= window.endMinute &&
@@ -158,11 +192,76 @@ function groupSlots(
   return slots;
 }
 
+/**
+ * Why a block of flexible stops has no plan, in the traveller's terms: the first
+ * connection whose earliest arrival is after the latest start the rest of the
+ * day allows, and what sets that latest start - a fixed stop, a closing time or
+ * the end of the day. Null when the block fails for another reason, such as a
+ * stop that fits nowhere at all.
+ */
+function diagnoseGroup(input: SchedulingInput, from: number, to: number): TravelShortfall | null {
+  const previous = input.items[from - 1];
+  if (!previous?.start || !previous.duration) return null;
+  const next = input.items[to];
+  const dayEnd = input.availability?.endMinute ?? input.dayEndMinute;
+  let latestEnd = next?.start
+    ? next.start.minutes - (next.inboundTravel?.minutes ?? 0)
+    : dayEnd - (input.returnTravel.required ? (input.returnTravel.minutes ?? 0) : 0);
+  let bound: Pick<TravelShortfall, 'limitedBy' | 'limitItemId' | 'limitMinute'> = next?.start
+    ? { limitedBy: 'fixed_start', limitItemId: next.id, limitMinute: next.start.minutes }
+    : { limitedBy: 'day_end', limitMinute: dayEnd };
+  const latest = new Map<string, { minute: number; bound: typeof bound }>();
+  for (let index = to - 1; index >= from; index--) {
+    const item = input.items[index]!;
+    const duration = item.duration!.minutes;
+    const upper = latestEnd - duration;
+    const start = fitting(input, item, -Infinity, upper, true);
+    if (start === null) return null;
+    if (item.openingHours.status === 'KNOWN') {
+      const open = { ...item, openingHours: { status: 'UNKNOWN' as const } };
+      const unbounded = fitting(input, open, -Infinity, upper, true);
+      if (unbounded !== null && unbounded > start)
+        bound = {
+          limitedBy: 'closing_time',
+          limitItemId: item.id,
+          limitMinute:
+            item.openingHours.intervals.find(
+              (interval) => start >= interval.startMinute && start + duration <= interval.endMinute,
+            )?.endMinute ?? start + duration,
+        };
+    }
+    latest.set(item.id, { minute: start, bound });
+    latestEnd = start - (item.inboundTravel?.minutes ?? 0);
+  }
+  let running = previous.start.minutes + previous.duration.minutes;
+  let before = previous;
+  for (let index = from; index < to; index++) {
+    const item = input.items[index]!;
+    const travel = item.inboundTravel?.minutes ?? 0;
+    const limit = latest.get(item.id)!;
+    if (running + travel > limit.minute)
+      return {
+        fromItemId: before.id,
+        toItemId: item.id,
+        travelMinutes: travel,
+        availableMinutes: limit.minute - running,
+        ...limit.bound,
+      };
+    const start = fitting(input, item, running + travel, limit.minute);
+    if (start === null) return null;
+    running = start + item.duration!.minutes;
+    before = item;
+  }
+  return null;
+}
+
 /** One planner pass: fixed anchors bound independently solvable flexible blocks. No I/O. */
 export function scheduleItinerary(input: SchedulingInput): SchedulingResult {
   const slots = new Map<string, ScheduledSlot>();
   const issues: TimingIssue[] = [];
   const orderConflicts: SchedulingResult['orderConflicts'] = new Map();
+  const shortfalls: SchedulingResult['shortfalls'] = new Map();
+  const bookingOverlaps: SchedulingResult['bookingOverlaps'] = new Map();
   const issue = (item: SchedulingItem, code: TimingIssue['code'], references: string[] = []) => {
     issues.push({
       code,
@@ -197,6 +296,7 @@ export function scheduleItinerary(input: SchedulingInput): SchedulingResult {
         (id) => id !== subject.id,
       ),
     );
+    return subject;
   };
   let from = 0;
   while (from < input.items.length) {
@@ -233,26 +333,52 @@ export function scheduleItinerary(input: SchedulingInput): SchedulingResult {
         previousStart + previous.duration.minutes + (first.inboundTravel?.minutes ?? 0) >
           first.start!.minutes
       ) {
-        issue(first, 'FIXED_CONFLICT', [previous.id]);
-        if (!first.inboundRequired || first.inboundTravel)
-          orderConflicts.set(first.id, {
-            previousItemId: previous.id,
-            earliest:
-              previousStart + previous.duration.minutes + (first.inboundTravel?.minutes ?? 0),
-            scheduled: first.start!.minutes,
+        const previousEnd = previousStart + previous.duration.minutes;
+        // The stop just placed before a fixed one is what no longer fits, so the
+        // conflict is told about it rather than the stop that did not move.
+        const moved = input.targetIds.has(previous.id) && !input.targetIds.has(first.id);
+        const subject = moved ? previous : first;
+        issue(subject, 'FIXED_CONFLICT', [moved ? first.id : previous.id]);
+        if (!first.inboundRequired || first.inboundTravel) {
+          shortfalls.set(subject.id, {
+            fromItemId: previous.id,
+            toItemId: first.id,
+            travelMinutes: first.inboundTravel?.minutes ?? 0,
+            availableMinutes: first.start!.minutes - previousEnd,
+            limitedBy: 'fixed_start',
+            limitItemId: first.id,
+            limitMinute: first.start!.minutes,
           });
+          if (!moved)
+            orderConflicts.set(first.id, {
+              previousItemId: previous.id,
+              earliest: previousEnd + (first.inboundTravel?.minutes ?? 0),
+              scheduled: first.start!.minutes,
+            });
+        }
       }
-      if (
-        first.duration &&
-        !valid(
-          input,
+      if (first.duration) {
+        const start = first.start!.minutes;
+        const inWindow = windows(
           first,
-          first.start!.minutes,
           input.availability?.startMinute ?? -Infinity,
           (input.availability?.endMinute ?? input.dayEndMinute) - first.duration.minutes,
-        )
-      )
-        issue(first, first.openingHours.status === 'KNOWN' ? 'OPENING_HOURS' : 'FIXED_CONFLICT');
+        ).some((window) => start >= window.low && start <= window.high);
+        const booking = inWindow ? clash(input, first, start) : undefined;
+        if (!inWindow)
+          issue(first, first.openingHours.status === 'KNOWN' ? 'OPENING_HOURS' : 'FIXED_CONFLICT');
+        else if (booking) {
+          // A booking that is not linked to this stop. Often the two are the same
+          // plan, so Trove names the booking and asks for a check, not a new time.
+          issues.push({
+            code: 'FIXED_CONFLICT',
+            itemId: first.id,
+            references: [booking.id],
+            severity: 'review',
+          });
+          bookingOverlaps.set(first.id, booking);
+        }
+      }
       from++;
       continue;
     }
@@ -302,6 +428,7 @@ export function scheduleItinerary(input: SchedulingInput): SchedulingResult {
       from = to;
       continue;
     }
+    let attempted = input;
     let planned = groupSlots(input, from, to, true) ?? groupSlots(input, from, to, false);
     if (
       !planned &&
@@ -333,6 +460,7 @@ export function scheduleItinerary(input: SchedulingInput): SchedulingResult {
             : item,
         ),
       };
+      attempted = relaxed;
       planned = groupSlots(relaxed, from, to, true) ?? groupSlots(relaxed, from, to, false);
     }
     if (!planned) {
@@ -343,7 +471,14 @@ export function scheduleItinerary(input: SchedulingInput): SchedulingResult {
             (interval) => interval.endMinute - interval.startMinute >= item.duration!.minutes,
           ),
       );
-      blockIssue(group, closed ? 'OPENING_HOURS' : 'NO_ROOM', next ? [next.id] : [], closed);
+      const subject = blockIssue(
+        group,
+        closed ? 'OPENING_HOURS' : 'NO_ROOM',
+        next ? [next.id] : [],
+        closed,
+      );
+      const shortfall = closed ? null : diagnoseGroup(attempted, from, to);
+      if (shortfall) shortfalls.set(subject.id, shortfall);
       from = to;
       continue;
     }
@@ -357,7 +492,11 @@ export function scheduleItinerary(input: SchedulingInput): SchedulingResult {
         (item === input.items.at(-1) && input.returnTravel.estimated)
       )
         caveats.push('TRAVEL_ESTIMATED');
-      if (item.placeId && item.openingHours.status === 'UNKNOWN')
+      if (
+        item.placeId &&
+        openingHoursApply(item.blockType) &&
+        item.openingHours.status === 'UNKNOWN'
+      )
         caveats.push('OPENING_HOURS_UNKNOWN');
       const index = input.items.indexOf(item);
       const references = input.items[index - 1] ? [input.items[index - 1]!.id] : [];
@@ -407,7 +546,7 @@ export function scheduleItinerary(input: SchedulingInput): SchedulingResult {
     }
     from = to;
   }
-  return { slots, issues, orderConflicts };
+  return { slots, issues, orderConflicts, shortfalls, bookingOverlaps };
 }
 
 /** A personal stop can be explicitly retimed; bookings and travel history stay protected.
@@ -422,6 +561,7 @@ export function suggestScheduledTarget(input: SchedulingInput, targetId: string)
     if (item.id !== targetId || item.protected) return item;
     return {
       ...item,
+      ...(item.start ? { anchorMinute: item.start.minutes } : {}),
       fixed: false,
       start: null,
       startWindow: item.start ? null : item.startWindow,

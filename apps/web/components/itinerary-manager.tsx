@@ -122,12 +122,9 @@ import {
   DuplicateAttemptTracker,
   refreshedItineraryContainsCopy,
 } from '@/lib/itinerary/duplicate-attempt';
-import {
-  itineraryTripPlaceFromTripPlace,
-  placeVisitDate,
-  scheduledPlaceUse,
-} from '@/lib/itinerary/places';
+import { placeVisitDate, scheduledPlaceUse } from '@/lib/itinerary/places';
 import { itineraryDayRouteRevision } from '@/lib/itinerary/routes';
+import { rememberAddedTripPlace } from '@/lib/trip-places/cache';
 import { itineraryViewHref, resolveItineraryView } from '@/lib/itinerary/view';
 import {
   buildItineraryMapPoints,
@@ -2025,16 +2022,7 @@ export function ItineraryManager({
           closeEditor();
           await refresh();
         }}
-        onTripPlaceAdded={(tripPlace) =>
-          setItinerary((current) =>
-            current && !current.tripPlaces.some((place) => place.id === tripPlace.id)
-              ? {
-                  ...current,
-                  tripPlaces: [...current.tripPlaces, itineraryTripPlaceFromTripPlace(tripPlace)],
-                }
-              : current,
-          )
-        }
+        onTripPlaceAdded={(tripPlace) => rememberAddedTripPlace(queryClient, tripId, tripPlace)}
         open={stopEditor.open}
         placeUse={placeUse}
         request={stopEditor.request}

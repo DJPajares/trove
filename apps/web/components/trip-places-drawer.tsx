@@ -23,17 +23,13 @@ import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/
 import { journalSerif } from '@/components/memories/journal-font';
 import { Sheet, SheetContent, SheetHeading } from '@/components/ui/sheet';
 import { useTripPlaceSignals } from '@/hooks/use-trip-place-signals';
-import { fetchItinerary, type Itinerary } from '@/lib/itinerary/api';
-import {
-  mergeItineraryTripPlace,
-  scheduledPlaceUse,
-  type ScheduledPlaceUse,
-} from '@/lib/itinerary/places';
+import { fetchItinerary } from '@/lib/itinerary/api';
+import { scheduledPlaceUse, type ScheduledPlaceUse } from '@/lib/itinerary/places';
 import { queryKeys } from '@/lib/query/keys';
 import { useTripResource } from '@/lib/query/use-trip-resource';
-import { invalidateTripQueries } from '@/lib/query/trip-invalidation';
 import type { Coordinate } from '@/lib/maps/haversine';
 import type { TripPlace } from '@/lib/trip-places/api';
+import { rememberAddedTripPlace } from '@/lib/trip-places/cache';
 import { groupTripPlacesForDay } from '@/lib/trip-places/list-view';
 import { resolveTripPlaceName } from '@/lib/trip-places/place-name';
 import { tripPlaceDaySorts } from '@/lib/trip-places/signals';
@@ -178,13 +174,7 @@ export function TripPlacesDrawer({
   }
 
   function placeAdded(tripPlace: TripPlace) {
-    places.setPlaces((current) =>
-      current.some((entry) => entry.id === tripPlace.id) ? current : [...current, tripPlace],
-    );
-    queryClient.setQueryData<Itinerary>(queryKeys.itinerary(tripId), (current) =>
-      current ? mergeItineraryTripPlace(current, tripPlace) : current,
-    );
-    void invalidateTripQueries(queryClient, tripId, ['trip-overview', 'plan-score']);
+    rememberAddedTripPlace(queryClient, tripId, tripPlace);
   }
 
   const hasPlaces = places.status === 'idle' && places.places.length > 0;

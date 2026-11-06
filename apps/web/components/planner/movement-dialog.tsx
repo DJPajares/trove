@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { TimeInput } from '@/components/time-input';
 import { Input } from '@/components/ui/input';
 import { usePreferences } from '@/components/preferences-provider';
+import { describeTimingIssue } from '@/lib/itinerary/timing-issue-description';
 import { formatSuggestedClock } from '@/lib/itinerary/day-time-suggestions';
 
 export function MovementDialog({
@@ -41,7 +42,7 @@ export function MovementDialog({
 }>) {
   const id = useId();
   const t = useTranslations('itinerary.movement');
-  const issueT = useTranslations('itinerary.connectedTiming.issue');
+  const itineraryT = useTranslations('itinerary');
   const locale = useLocale();
   const { preferences } = usePreferences();
   const [draft, setDraft] = useState<
@@ -131,7 +132,13 @@ export function MovementDialog({
                   issue.blocking ? 'text-sm text-destructive' : 'text-sm text-muted-foreground'
                 }
               >
-                {nameFor(issue.itemId)}: {issueT(issue.code)}
+                {nameFor(issue.itemId)}:{' '}
+                {describeTimingIssue(issue, {
+                  locale,
+                  hour12: preferences.timeFormat === '12h',
+                  nameFor,
+                  t: itineraryT,
+                })}
               </li>
             ))}
           </ul>

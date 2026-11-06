@@ -764,5 +764,16 @@
     "summaries": {
       "en": ["Places you add while planning a day now show up right away in your trip's Places."]
     }
+  },
+  {
+    "id": "clearer-timing-conflicts",
+    "date": "2026-11-06",
+    "version": "1.17.1",
+    "summaries": {
+      "en": [
+        "Timing warnings now say what they clash with: a booking, the travel to your next stop, or a closing time.",
+        "A stop that overlaps one of your bookings is flagged for a check instead of being moved to an unrelated time."
+      ]
+    }
   }
 ]

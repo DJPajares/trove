@@ -784,3 +784,26 @@ test('an unknown loose duration cannot hide an impossible known return journey',
   const p = await previewItineraryMovement('user', 'trip', move('b', 1));
   expect(p.issues.some((i) => i.blocking && i.code === 'FIXED_CONFLICT')).toBe(true);
 });
+test('a move that leaves too little room is explained on the stop that moved', async () => {
+  seed();
+  item('a', 0, '10:00', false);
+  item('b', 1, '14:00', false);
+  const input = { ...move('b', 0), overrides: [{ itemId: 'b', localTime: '09:30' }] };
+  const p = await previewItineraryMovement('user', 'trip', input);
+  const blocking = p.issues.filter((i) => i.blocking);
+  expect(blocking).toEqual([
+    expect.objectContaining({
+      code: 'FIXED_CONFLICT',
+      itemId: 'b',
+      references: expect.arrayContaining(['a']),
+      travelShortfall: expect.objectContaining({
+        fromItemId: 'b',
+        toItemId: 'a',
+        availableMinutes: -30,
+        limitedBy: 'fixed_start',
+        limitItemId: 'a',
+        limitLocal: '2026-09-05T10:00',
+      }),
+    }),
+  ]);
+});

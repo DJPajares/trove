@@ -1,6 +1,10 @@
 import { formatLocalTime } from './itinerary-rules.js';
 import { planningDateMinute, planningMinute } from './planning-clock.js';
-import { openingIntervalsForWeekday, weekdayForLocalDate } from './place-opening-hours.js';
+import {
+  openingHoursApply,
+  openingIntervalsForWeekday,
+  weekdayForLocalDate,
+} from './place-opening-hours.js';
 import type { PlaceOpeningPeriod } from './places.js';
 import type {
   PlanScoreDayItem,
@@ -161,9 +165,7 @@ export function normalizeScoringItems(
   return items.map((item) => {
     const linked = options.commitments?.find((c) => c.itemId === item.id);
     const hours =
-      (!item.blockType || item.blockType === 'activity') &&
-      item.placeId &&
-      options.hours?.has(item.placeId)
+      openingHoursApply(item.blockType) && item.placeId && options.hours?.has(item.placeId)
         ? scoringOpeningHours({
             date,
             hours: options.hours.get(item.placeId)!,

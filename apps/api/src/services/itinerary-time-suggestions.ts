@@ -406,6 +406,46 @@ export async function assessDay(
       ? suggestScheduledTarget(schedulingInput, targetId)
       : scheduleItinerary(schedulingInput);
   for (const issue of result.issues) {
+    const shortfall = result.shortfalls.get(issue.itemId);
+    // Only the connection issue it explains; a stop's other conflicts keep their own words.
+    if (
+      shortfall &&
+      issue.severity === 'conflict' &&
+      (issue.code === 'NO_ROOM' ||
+        (issue.code === 'FIXED_CONFLICT' &&
+          issue.references.some((id) => id === shortfall.fromItemId || id === shortfall.toItemId)))
+    )
+      issue.travelShortfall = {
+        fromItemId: shortfall.fromItemId,
+        toItemId: shortfall.toItemId,
+        travelMinutes: Math.ceil(shortfall.travelMinutes),
+        availableMinutes: Math.floor(shortfall.availableMinutes),
+        limitedBy: shortfall.limitedBy,
+        ...(shortfall.limitItemId ? { limitItemId: shortfall.limitItemId } : {}),
+        limitLocal: planningLocalDateTime(day.date, shortfall.limitMinute),
+      };
+    const booking = result.bookingOverlaps.get(issue.itemId);
+    if (booking && issue.severity === 'review' && issue.references[0] === booking.id) {
+      // A date-line arrival is its own commitment, named after the same booking.
+      const reservationId = booking.id.replace(/:arrival$/, '');
+      issue.bookingOverlap = {
+        reservationId,
+        // Read only when there is an overlap, so the title stays out of the
+        // planning revision every score is cached against.
+        title:
+          (
+            await prisma.reservation.findFirst({
+              where: { id: reservationId, tripId: trip.id },
+              select: { title: true },
+            })
+          )?.title ?? null,
+        startLocal: planningLocalDateTime(day.date, booking.startMinute),
+        endLocal:
+          booking.endKnown !== false && booking.endMinute > booking.startMinute
+            ? planningLocalDateTime(day.date, booking.endMinute)
+            : null,
+      };
+    }
     if (issue.code !== 'FIXED_CONFLICT' || issue.references.length !== 1) continue;
     const conflict = result.orderConflicts.get(issue.itemId);
     if (!conflict) continue;

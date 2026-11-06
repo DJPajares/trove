@@ -1,7 +1,7 @@
 import { dayPartWindow } from './day-part-windows.js';
 import { formatLocalTime } from './itinerary-rules.js';
 import type { ItineraryDayRoutes } from './itinerary-routes.js';
-import { resolveOpeningHoursForDay } from './place-opening-hours.js';
+import { openingHoursApply, resolveOpeningHoursForDay } from './place-opening-hours.js';
 import type { PlaceOpeningPeriod } from './places.js';
 import type { PlanScoreDayItem, PlanScoreOpeningHours } from './plan-score-factors.js';
 
@@ -138,7 +138,7 @@ export function toDayEvidenceItems(
     const travelMinutes = inboundTravelMinutes(routes, item.id);
     const window = dayPartWindow(item.dayPart);
     const placeHours =
-      (!item.blockType || item.blockType === 'activity') && item.tripPlaceId
+      openingHoursApply(item.blockType) && item.tripPlaceId
         ? hours.get(item.tripPlaceId)
         : undefined;
     const openingHours: PlanScoreOpeningHours = placeHours

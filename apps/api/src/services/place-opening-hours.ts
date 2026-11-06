@@ -90,3 +90,11 @@ export function resolveOpeningHoursForDay(input: {
     status: 'KNOWN',
   };
 }
+
+/**
+ * Opening hours only bound a visit. A transfer, a meal block or a stay is not
+ * looked up against them, so their hours are never "unknown" - they do not apply.
+ */
+export function openingHoursApply(blockType: string | null | undefined) {
+  return !blockType || blockType === 'activity';
+}

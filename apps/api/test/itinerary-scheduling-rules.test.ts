@@ -286,3 +286,86 @@ test('dependent suggestions keep prior starts, durations, known hours and return
   day.availability!.endMinute = 1020;
   expect(suggestScheduledTarget(day, 'shelf').slots.has('shelf')).toBe(false);
 });
+
+const booking = (id: string, startMinute: number, endMinute: number, itemId?: string) => ({
+  id,
+  startMinute,
+  endMinute,
+  source: 'USER_OWNED' as const,
+  ...(itemId ? { itemId } : {}),
+});
+test('a fixed stop over an unlinked booking is named for review, with no new time', () => {
+  const day = input([stop('airport', 1020, 165, 0, true)]);
+  day.availability = null;
+  day.commitments = [booking('flight', 1020, 1125)];
+  const overlap = scheduleItinerary(day);
+  expect(overlap.issues).toEqual([
+    { code: 'FIXED_CONFLICT', itemId: 'airport', references: ['flight'], severity: 'review' },
+  ]);
+  expect(overlap.bookingOverlaps.get('airport')?.id).toBe('flight');
+  // Once linked, the booking is the stop's own time and nothing overlaps.
+  day.commitments = [booking('flight', 1020, 1125, 'airport')];
+  expect(scheduleItinerary(day).issues).toEqual([]);
+});
+test('flexible stops are still kept out of a booking', () => {
+  const day = input([stop('museum', null, 60)], ['museum']);
+  day.commitments = [booking('tour', 480, 600)];
+  expect(start(scheduleItinerary(day), 'museum')).toBe(600);
+});
+test('a stop moved before a fixed one is told why the connection does not fit', () => {
+  // B ends 3:45 PM, needs 18 min to reach A at 4:00 PM, which leaves 15 min.
+  const day = input([stop('b', 900, 45, 0, true), stop('a', 960, 90, 18, true)], ['b']);
+  const result = scheduleItinerary(day);
+  expect(result.issues).toContainEqual(
+    expect.objectContaining({ code: 'FIXED_CONFLICT', itemId: 'b', references: ['a'] }),
+  );
+  expect(result.shortfalls.get('b')).toEqual({
+    fromItemId: 'b',
+    toItemId: 'a',
+    travelMinutes: 18,
+    availableMinutes: 15,
+    limitedBy: 'fixed_start',
+    limitItemId: 'a',
+    limitMinute: 960,
+  });
+});
+test('a stop that cannot start later names its closing time as the limit', () => {
+  const a = {
+    ...stop('a', 960, 90, 18),
+    openingHours: {
+      status: 'KNOWN' as const,
+      source: 'CACHED_PROVIDER' as const,
+      intervals: [{ startMinute: 540, endMinute: 1050 }],
+    },
+  };
+  const day = input([stop('b', 900, 45, 0, true), a], ['a']);
+  const result = scheduleItinerary(day);
+  expect(result.slots.size).toBe(0);
+  expect([...result.shortfalls.values()]).toEqual([
+    {
+      fromItemId: 'b',
+      toItemId: 'a',
+      travelMinutes: 18,
+      availableMinutes: 15,
+      limitedBy: 'closing_time',
+      limitItemId: 'a',
+      limitMinute: 1050,
+    },
+  ]);
+});
+test('opening hours are only a caveat for visits, not transfers', () => {
+  const transfer = { ...stop('transfer', null, 60), placeId: 'airport', blockType: 'transport' };
+  const visit = { ...stop('visit', null, 60), placeId: 'museum' };
+  const result = scheduleItinerary(input([transfer, visit], ['transfer', 'visit']));
+  expect(result.slots.get('transfer')?.caveats).not.toContain('OPENING_HOURS_UNKNOWN');
+  expect(result.slots.get('visit')?.caveats).toContain('OPENING_HOURS_UNKNOWN');
+});
+test('retiming a stop keeps it as close to its time as fits, not the first slot of the day', () => {
+  const day = input([stop('b', 1000, 90)]);
+  day.commitments = [booking('show', 960, 1080)];
+  // 4:40 PM clashes with a 4:00-6:00 PM show. 6:00 PM is nearest; 8:00 AM was the old answer.
+  expect(start(suggestScheduledTarget(day, 'b'), 'b')).toBe(1080);
+  day.commitments = [booking('show', 960, 1200)];
+  // With the evening taken, the nearest fit ends as the show starts.
+  expect(start(suggestScheduledTarget(day, 'b'), 'b')).toBe(870);
+});

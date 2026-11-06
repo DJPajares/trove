@@ -1732,7 +1732,9 @@ export function ItineraryManager({
                       !(
                         problem.factor === 'FEASIBILITY' &&
                         issues.some(
-                          (issue) => issue.severity === 'conflict' && issue.itemId === item.id,
+                          (issue) =>
+                            issue.itemId === item.id &&
+                            (issue.severity === 'conflict' || Boolean(issue.bookingOverlap)),
                         )
                       ),
                   );

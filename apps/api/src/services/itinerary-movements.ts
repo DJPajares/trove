@@ -2,6 +2,7 @@ import { planningMinute, planningTime } from './planning-clock.js';
 import { derivedPlanInstant } from './itinerary-local-timing.js';
 import { resolveDayStay, toStayAccommodations } from './day-stay.js';
 import { movementConnectionConflicts } from './itinerary-movement-constraints.js';
+import { openingHoursApply } from './place-opening-hours.js';
 import { createHash } from 'node:crypto';
 import { getPrismaClient, type Prisma } from '@trove/db';
 import type {
@@ -271,6 +272,25 @@ function resolveZones(
   }
 }
 
+/**
+ * A conflict a move causes is about the stop that moved. When the planner found it
+ * on the stop that kept its time - the next one, which the moved stop can no longer
+ * reach - the traveller is told about the stop they actually moved.
+ */
+function towardMovedStop(issue: TimingIssue, moved: ReadonlySet<string>): TimingIssue {
+  const shortfall = issue.travelShortfall;
+  if (!shortfall || moved.has(issue.itemId) || !moved.has(shortfall.fromItemId)) return issue;
+  const { orderConflict: _replaced, ...rest } = issue;
+  return {
+    ...rest,
+    itemId: shortfall.fromItemId,
+    references: [
+      issue.itemId,
+      ...issue.references.filter((id) => id !== shortfall.fromItemId && id !== issue.itemId),
+    ],
+  };
+}
+
 // Constraint identity includes the actual connection and values; equal issue codes alone
 // never grandfather a newly introduced or worsened conflict.
 function issueKey(trip: TimingTrip, issue: TimingIssue) {
@@ -389,7 +409,11 @@ async function calculate(
     const day = next.itineraryDays.find((d) => d.id === dayId)!;
     for (const i of day.items) {
       const normalized = result.items.find((row) => row.id === i.id)!;
-      if (normalized.openingHours.status === 'UNKNOWN' && i.tripPlaceId)
+      if (
+        normalized.openingHours.status === 'UNKNOWN' &&
+        i.tripPlaceId &&
+        openingHoursApply(i.blockType)
+      )
         limitations.add('OPENING_HOURS_UNKNOWN');
       if (normalized.inboundRequired && !normalized.inboundTravel)
         limitations.add('TRAVEL_UNKNOWN');
@@ -428,6 +452,8 @@ async function calculate(
     }
   }
   const issues: MovementProposal['issues'] = [];
+  const moved = new Set([...targets, ...overrides.keys()]);
+  const seen = new Set<string>();
   for (const dayId of affected) {
     if (!dayId) continue;
     const validation = await assessDay(userId, tripId, dayId, {}, client, now, true, {
@@ -454,15 +480,12 @@ async function calculate(
         ['DURATION_UNKNOWN', 'CONTEXT_UNKNOWN', 'TRAVEL_UNKNOWN'].includes(issue.code),
       );
       const blocking = !unchanged && (issue.severity === 'conflict' || exactNeedsInput);
-      if (
-        !issues.some(
-          (row) =>
-            row.itemId === issue.itemId &&
-            row.code === issue.code &&
-            hash(row.references) === hash(issue.references),
-        )
-      )
-        issues.push({ ...issue, blocking });
+      // Identity is the planner's own, before the issue is turned toward the moved stop.
+      const identity = `${issue.itemId}:${issue.code}:${hash(issue.references)}`;
+      if (!seen.has(identity)) {
+        seen.add(identity);
+        issues.push({ ...towardMovedStop(issue, moved), blocking });
+      }
     }
   }
   const rows = allItems(next).filter((i) => affected.has(i.itineraryDayId));

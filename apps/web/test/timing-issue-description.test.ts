@@ -84,3 +84,70 @@ test('legacy instant-only warnings fall back to current localized copy without t
     'connectedTiming.issue.FIXED_CONFLICT',
   );
 });
+test('names the booking a fixed stop overlaps, with its local times', () => {
+  const overlap: TimingIssue = {
+    code: 'FIXED_CONFLICT',
+    itemId: 'airport',
+    references: ['flight'],
+    severity: 'review',
+    bookingOverlap: {
+      reservationId: 'flight',
+      title: 'Singapore Airlines',
+      startLocal: '2026-11-05T17:00',
+      endLocal: '2026-11-05T18:45',
+    },
+  };
+  expect(JSON.parse(describeTimingIssue(overlap, options))).toEqual({
+    key: 'connectedTiming.bookingOverlap',
+    hasTitle: 'yes',
+    booking: 'Singapore Airlines',
+    start: '5:00 PM',
+    end: '6:45 PM',
+  });
+  const untitled = {
+    ...overlap,
+    bookingOverlap: { ...overlap.bookingOverlap!, title: null, endLocal: null },
+  };
+  expect(JSON.parse(describeTimingIssue(untitled, options))).toMatchObject({
+    key: 'connectedTiming.bookingOverlapAt',
+    hasTitle: 'no',
+  });
+});
+test('explains a short connection by its two stops and what limits the later one', () => {
+  const names: Record<string, string> = { b: 'Market', a: 'Museum' };
+  const shortfall: TimingIssue = {
+    code: 'FIXED_CONFLICT',
+    itemId: 'b',
+    references: ['a'],
+    severity: 'conflict',
+    travelShortfall: {
+      fromItemId: 'b',
+      toItemId: 'a',
+      travelMinutes: 18,
+      availableMinutes: 15,
+      limitedBy: 'closing_time',
+      limitItemId: 'a',
+      limitLocal: '2026-09-08T17:30',
+    },
+  };
+  const text = JSON.parse(
+    describeTimingIssue(shortfall, { ...options, nameFor: (id: string) => names[id]! }),
+  );
+  expect(text).toMatchObject({
+    key: 'connectedTiming.travelShortfall',
+    from: 'Market',
+    to: 'Museum',
+    limit: 'closing_time',
+    limitName: 'Museum',
+    limitTime: '5:30 PM',
+  });
+  expect(JSON.parse(text.travel)).toEqual({ key: 'connectedTiming.minutes', minutes: '18' });
+  expect(JSON.parse(text.available)).toEqual({ key: 'connectedTiming.minutes', minutes: '15' });
+  const overlapping = {
+    ...shortfall,
+    travelShortfall: { ...shortfall.travelShortfall!, availableMinutes: -30 },
+  };
+  expect(JSON.parse(describeTimingIssue(overlapping, options)).key).toBe(
+    'connectedTiming.travelShortfallOverlap',
+  );
+});

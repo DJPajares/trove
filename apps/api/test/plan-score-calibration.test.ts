@@ -772,6 +772,33 @@ test('Auckland café timing uses local clock experience windows', () => {
   expect(assessCafe(2 * 60).experience.timeOfDay).toEqual(['cafe']);
 });
 
+test('a place that is several kinds suits any time one of its kinds does', () => {
+  const date = '2026-11-08';
+  const assessAt = (minute: number, types: string[]) =>
+    assess({
+      date,
+      items: normalizeScoringItems(date, [
+        visit('venue', { placeId: 'venue', start: at(minute), duration: at(60) }),
+      ]),
+      places: [
+        {
+          tripPlaceId: 'venue',
+          timeZone: 'Asia/Ho_Chi_Minh',
+          coordinates: { latitude: 15.877, longitude: 108.327 },
+          types,
+          rating: { status: 'UNKNOWN' },
+        },
+      ],
+    }).experience.timeOfDay;
+  // Google lists this café as a coffee shop, cocktail bar and restaurant at once.
+  const cafeBar = ['coffee_shop', 'cafe', 'cocktail_bar', 'bar', 'restaurant', 'food'];
+  expect(assessAt(8 * 60, cafeBar)).toEqual([]);
+  expect(assessAt(22 * 60, cafeBar)).toEqual([]);
+  expect(assessAt(4 * 60, cafeBar)).toEqual(['venue']);
+  // A dinner spot in the morning is still worth a word.
+  expect(assessAt(8 * 60, ['restaurant'])).toEqual(['venue']);
+});
+
 test('a local night window crossing a DST boundary remains usable', () => {
   const date = '2026-09-26';
   const result = assess({

@@ -775,5 +775,15 @@
         "A stop that overlaps one of your bookings is flagged for a check instead of being moved to an unrelated time."
       ]
     }
+  },
+  {
+    "id": "multi-purpose-place-timing",
+    "date": "2026-11-06",
+    "version": "1.17.3",
+    "summaries": {
+      "en": [
+        "Cafés that also serve meals or drinks are no longer flagged as badly timed when you plan a morning visit."
+      ]
+    }
   }
 ]

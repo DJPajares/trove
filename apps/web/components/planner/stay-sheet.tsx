@@ -3,11 +3,13 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { useQueryClient } from '@tanstack/react-query';
 import { replaceStayRange, shiftStayDate, type DayStayUpdate, type StayRange } from '@trove/types';
 import { previewStayEndpoints } from '@/lib/itinerary/stay-plan';
 import type { TrovePlaceCategory } from '@/lib/place-categories';
 import { stayOptions } from '@/lib/trip-places/categories';
 import { updateTripPlace } from '@/lib/trip-places/api';
+import { rememberAddedTripPlace } from '@/lib/trip-places/cache';
 import * as Icons from '@/lib/icons';
 import { AddTripPlaceSheet } from '@/components/add-trip-place-sheet';
 import { DatePicker } from '@/components/date-picker';
@@ -77,6 +79,7 @@ export function StaySheet({
   const [different, setDifferent] = useState(
     () => endpoint('end') !== 'same_as_start' && !(endpoint('start') === endpoint('end')),
   );
+  const queryClient = useQueryClient();
   const [adding, setAdding] = useState<'default' | 'range' | 'start' | 'end' | null>(null);
   const [added, setAdded] = useState<Array<{ id: string; name: string }>>([]);
   const [revision] = useState(itinerary.stayPlan?.revision ?? 0);
@@ -624,6 +627,7 @@ export function StaySheet({
             });
           }}
           onAdded={(place) => {
+            rememberAddedTripPlace(queryClient, tripId, place);
             const target = adding;
             setAdding(null);
             // Found from Stay, so it is somewhere to stay.

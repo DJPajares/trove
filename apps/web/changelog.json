@@ -756,5 +756,13 @@
         "AI plans find more places by their local and alternate names, so fewer stops need locating by hand."
       ]
     }
+  },
+  {
+    "id": "day-places-in-trip-places",
+    "date": "2026-11-06",
+    "version": "1.17.1",
+    "summaries": {
+      "en": ["Places you add while planning a day now show up right away in your trip's Places."]
+    }
   }
 ]

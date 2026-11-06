@@ -337,3 +337,28 @@ export function placeProfile(types: readonly string[] | null | undefined): Place
   for (const rule of RULES) if (types.some((type) => matches(rule, type))) return rule.profile;
   return null;
 }
+
+/**
+ * When a place suits a visit, from every kind it is rather than only the first.
+ * A café that is also a bar and a restaurant suits breakfast, lunch and a late
+ * drink alike, so judging it by its restaurant hours alone flags a morning
+ * coffee as a dinner spot in the morning. Duration and kind still come from
+ * `placeProfile`; only experience windows are pooled here.
+ */
+export function placeTimeWindowSets(
+  types: readonly string[] | null | undefined,
+): PlaceTimeWindows[] {
+  if (!types?.length) return [];
+  const sets: PlaceTimeWindows[] = [];
+  for (const rule of RULES) {
+    const { windows, windowKind } = rule.profile;
+    if (
+      windows &&
+      windowKind === 'EXPERIENCE' &&
+      !sets.includes(windows) &&
+      types.some((type) => matches(rule, type))
+    )
+      sets.push(windows);
+  }
+  return sets;
+}

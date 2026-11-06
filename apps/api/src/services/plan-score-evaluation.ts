@@ -35,7 +35,11 @@ import {
   type PlanScoreFactorResult,
 } from './plan-score-rules.js';
 import { inferDurations, seasonalDayFit, type ScoringClimate } from './plan-score-estimates.js';
-import { interestsForPlaceTypes, placeProfile } from './plan-score-place-types.js';
+import {
+  interestsForPlaceTypes,
+  placeProfile,
+  placeTimeWindowSets,
+} from './plan-score-place-types.js';
 export { interestsForPlaceTypes } from './plan-score-place-types.js';
 
 export type ScoringPlace = PlanScorePlace & {
@@ -512,13 +516,18 @@ export function evaluateScoredDay(input: ScoredDayInput) {
           satisfied: timingSource ? true : untimed,
         });
     } else if (profile.windows) {
-      const light = profile.windows === 'DAYLIGHT' ? daylightWindow(place?.coordinates) : null;
-      const windows =
-        profile.windows === 'DAYLIGHT'
-          ? light
-            ? [{ startMinute: light.startMinute - 30, endMinute: light.endMinute + 30 }]
-            : null
-          : profile.windows;
+      // A place suits any time one of its kinds does: a café that is also a bar
+      // and a restaurant suits a morning coffee. Access windows stand alone.
+      const sets =
+        profile.windowKind === 'EXPERIENCE' ? placeTimeWindowSets(place?.types) : [profile.windows];
+      const resolved = (sets.length ? sets : [profile.windows]).flatMap((set) => {
+        if (set !== 'DAYLIGHT') return [set];
+        const light = daylightWindow(place?.coordinates);
+        return light
+          ? [[{ startMinute: light.startMinute - 30, endMinute: light.endMinute + 30 }]]
+          : [];
+      });
+      const windows = resolved.length ? resolved.flat() : null;
       const satisfied =
         !timingSource || !windows
           ? untimed

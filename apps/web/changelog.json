@@ -805,5 +805,16 @@
         "Log what something cost straight from Trip Mode's Now screen, for the stop you're at or anything in between."
       ]
     }
+  },
+  {
+    "id": "clearer-expense-rows",
+    "date": "2026-11-07",
+    "version": "1.17.6",
+    "summaries": {
+      "en": [
+        "Expenses are easier to scan: what you bought and what it cost come first, with the place, your note and the category each on their own line.",
+        "Tap anywhere on an expense to open it."
+      ]
+    }
   }
 ]

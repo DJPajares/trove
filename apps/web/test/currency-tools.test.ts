@@ -2,6 +2,7 @@ import { expect, test } from 'vitest';
 
 import { isSavedRateStale } from '@/lib/currency/api';
 import { countriesUsingCurrency } from '@/lib/currency/country-currency';
+import { formatCurrencyAmount, formatCurrencyAmountParts } from '@/lib/currency/money';
 import { priceTagCurrency, priceTagSteps } from '@/lib/currency/price-tags';
 import { tripCurrencySuggestions } from '@/lib/tools/shelf';
 
@@ -52,4 +53,14 @@ test('trips ahead suggest their currencies, soonest first and each once', () => 
       (entry) => `${entry.currency}:${entry.trip.name}`,
     ),
   ).toEqual(['JPY:Kyoto', 'GBP:Scotland']);
+});
+
+test("an amount splits into its code and figure in the locale's own order", () => {
+  const join = (parts: Array<{ value: string }>) => parts.map((part) => part.value).join('');
+  for (const locale of ['en', 'de', 'vi']) {
+    const parts = formatCurrencyAmountParts(locale, '9870000', 'VND');
+    // Same text as the plain formatter, so nothing is rebuilt by hand.
+    expect(join(parts)).toBe(formatCurrencyAmount(locale, '9870000', 'VND'));
+    expect(parts.filter((part) => part.currency).map((part) => part.value)).toEqual(['VND']);
+  }
 });

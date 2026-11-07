@@ -1,7 +1,7 @@
 import { DAY_PHOTO_THEME_TERMS, normalizeEditorialText, type DayPhotoTheme } from '@trove/types';
 
 import type { ItineraryDay, ItineraryTripPlace } from '@/lib/itinerary/api';
-import { localityFromAddress } from '@/lib/itinerary/day-place';
+import { localityFromAddress, sameTown } from '@/lib/itinerary/day-place';
 import { resolvePlacePhotoName } from '@/lib/trip-places/place-name';
 import type { Trip } from '@/lib/trips/api';
 
@@ -59,10 +59,41 @@ export function dayPhotoTheme(title: string | null): DayPhotoTheme | undefined {
   return undefined;
 }
 
-function placeArea(tripPlace: ItineraryTripPlace | undefined | null) {
+/** The town or neighbourhood a stop is in, read from its stored address. */
+export function placeArea(tripPlace: ItineraryTripPlace | undefined | null) {
   return localityFromAddress(
     tripPlace?.place.snapshot?.address ?? tripPlace?.place.providerAddress,
   );
+}
+
+/**
+ * The areas a stop is in, nearest first: its own town, then the wider city the
+ * address files it under. A Hội An address reads "Hội An, Đà Nẵng", and a photo
+ * of Đà Nẵng is not where the traveller is standing. The town is read with the
+ * same guards as the city, by asking again with the city's segment removed.
+ */
+export function placeAreas(tripPlace: ItineraryTripPlace | undefined | null): string[] {
+  const address = tripPlace?.place.snapshot?.address ?? tripPlace?.place.providerAddress;
+  const locality = localityFromAddress(address);
+  if (!address || !locality) return [];
+  const segments = address
+    .split(',')
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  const index = segments.findLastIndex((segment) => segment.includes(locality));
+  const town =
+    index > 0
+      ? localityFromAddress([...segments.slice(0, index), segments.at(-1)].join(', '))
+      : null;
+  return town && !sameTown(town, locality) ? [town, locality] : [locality];
+}
+
+/**
+ * A photograph of an area rather than of one place in it. Every surface asks
+ * for an area the same way, so they share one cached answer per area.
+ */
+export function areaPhotoSubject(area: string, countryCode?: string): EditorialSubject {
+  return { category: 'destination', name: area, context: { area, countryCode } };
 }
 
 /** Photography may use one located stop without changing the stricter day-heading rules. */
@@ -157,11 +188,7 @@ export function dayPhotoCandidates(
     candidates.push({ origin: 'stop', subject: stop.subject });
     if (++stopCount === 2) break;
   }
-  if (area)
-    candidates.push({
-      origin: 'area',
-      subject: { category: 'destination', name: area, context: { area, countryCode } },
-    });
+  if (area) candidates.push({ origin: 'area', subject: areaPhotoSubject(area, countryCode) });
   return candidates.slice(0, 4);
 }
 

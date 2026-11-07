@@ -785,5 +785,15 @@
         "Cafés that also serve meals or drinks are no longer flagged as badly timed when you plan a morning visit."
       ]
     }
+  },
+  {
+    "id": "trip-mode-area-photo",
+    "date": "2026-11-07",
+    "version": "1.17.4",
+    "summaries": {
+      "en": [
+        "When there's no photo of the place you're at, Trip Mode now shows a photo of the town you're in instead of a plain tile."
+      ]
+    }
   }
 ]

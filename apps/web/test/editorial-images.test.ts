@@ -15,6 +15,7 @@ vi.mock('@/lib/supabase/client', () => ({
 const {
   editorialCoverImage,
   editorialSubjectKey,
+  placeOrAreaPhoto,
   MAX_EDITORIAL_IMAGE_SUBJECTS,
   primaryEditorialImage,
   readCachedEditorialImages,
@@ -377,4 +378,29 @@ test('a shared fallback pool is drawn from by seed, stably and with spread', () 
   expect(seeds.every((seed) => images.some((entry) => entry.externalPhotoId === pick(seed)))).toBe(
     true,
   );
+});
+
+test('the Trip Mode hero takes the place itself, then its area, never a generic stand-in', () => {
+  const photo = (id: string, matchKind?: 'exact' | 'contextual' | 'generic') => ({
+    altText: null,
+    attribution: {
+      photographerName: 'P',
+      photographerUrl: 'https://example.com/p',
+      providerName: 'Pexels',
+      providerPageUrl: 'https://example.com/photo',
+    },
+    dominantColor: null,
+    externalPhotoId: id,
+    height: null,
+    matchKind,
+    sourceUrl: `https://example.com/${id}.jpg`,
+    width: null,
+  });
+  const shop = [photo('shop', 'exact')];
+  const genericShops = [photo('mall', 'generic')];
+  const town = [photo('old-town', 'contextual')];
+  expect(placeOrAreaPhoto(shop, town)?.externalPhotoId).toBe('shop');
+  expect(placeOrAreaPhoto(genericShops, town)?.externalPhotoId).toBe('old-town');
+  expect(placeOrAreaPhoto(undefined, town)?.externalPhotoId).toBe('old-town');
+  expect(placeOrAreaPhoto(genericShops, [photo('anywhere', 'generic')])).toBeNull();
 });

@@ -9,6 +9,7 @@ import {
   dayPhotoTheme,
   tripSecondaryImages,
   settleDayHeaderPhotos,
+  placeAreas,
 } from '../lib/media/day-header-photos.ts';
 import {
   editorialCoverImage,
@@ -286,4 +287,22 @@ test('confirmed misses publish the existing fallback ladder only after resolutio
     settleDayHeaderPhotos(pending, { photos: sources, isResolving: false, resolutionKey: 'miss' })
       .photos,
   ).toEqual([local]);
+});
+
+test("a stop's areas run from its own town to the wider city", () => {
+  const at = (address: string) =>
+    placeAreas({ place: { providerAddress: address, snapshot: null } } as never);
+  // Since the 2025 merger a Hội An address files the town under Đà Nẵng.
+  expect(at('32 Trần Phú, 112 Trần Phú, Old Town, Hội An, Đà Nẵng 53000, Vietnam')).toEqual([
+    'Hội An',
+    'Đà Nẵng',
+  ]);
+  expect(at('Ray Emery Drive, Māngere, Auckland 2022, New Zealand')).toEqual([
+    'Māngere',
+    'Auckland',
+  ]);
+  // Too short to tell a town from a street before the city: the city alone.
+  expect(at('Hội An, Đà Nẵng, Vietnam')).toEqual(['Đà Nẵng']);
+  expect(at('12 Queen Street, Auckland 1010, New Zealand')).toEqual(['Auckland']);
+  expect(at('370J Alexandra Rd, Singapore 159953')).toEqual([]);
 });

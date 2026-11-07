@@ -19,12 +19,13 @@ import {
   useTripModeTasks,
 } from '@/components/trip-mode-tasks';
 import { TripModeActionButton, tripModeCardClass } from '@/components/trip-mode-ui';
+import { useTripContext } from '@/components/trip-provider';
 import { useOnlineStatus } from '@/components/trip-sync-status';
 import { TripWeatherContext } from '@/components/trip-weather-context';
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useEditorialImages } from '@/hooks/use-editorial-images';
+import { useEditorialImageResolution, useEditorialImages } from '@/hooks/use-editorial-images';
 import { useNowTick } from '@/hooks/use-now-tick';
 import { useTripPlaceHours } from '@/lib/trip-places/use-trip-place-hours';
 import {
@@ -42,9 +43,11 @@ import { haversineMeters } from '@/lib/maps/haversine';
 import {
   editorialCoverImage,
   editorialSubjectKey,
-  type EditorialImageReference,
+  exactEditorialPhoto,
+  placeOrAreaPhoto,
   type EditorialSubject,
 } from '@/lib/media/editorial-images';
+import { areaPhotoSubject, placeAreas } from '@/lib/media/day-header-photos';
 import { resolvePlaceMediaSource } from '@/lib/media/trip-media';
 import { cn } from '@/lib/utils';
 import type { Reservation } from '@/lib/reservations/api';
@@ -186,16 +189,6 @@ function photoSubject(item: ItineraryItem | null): EditorialSubject | null {
   };
 }
 
-/**
- * The hero above a place's name is a claim about that place, so it takes only a
- * photograph of it. A generic or contextual match would be a picture of
- * somewhere else under the words naming here; the branded tile for the place's
- * category is the honest stand-in.
- */
-function exactPhoto(images: readonly EditorialImageReference[] | undefined) {
-  return images?.find((image) => (image.matchKind ?? 'exact') === 'exact') ?? null;
-}
-
 /** One of the four things a traveller does at a stop, a thumb's width each. */
 function QuickAction({
   children,
@@ -303,7 +296,23 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
   const photoSubjects = [currentSubject, nextSubject].filter(
     (subject): subject is EditorialSubject => subject !== null,
   );
-  const editorialImages = useEditorialImages(photoSubjects);
+  const placePhotos = useEditorialImageResolution(photoSubjects);
+  const editorialImages = placePhotos.images;
+  // Only once the stop's own photograph is known to be missing: its town, then
+  // the wider city, shared with the day header's area photographs by key.
+  const tripCountries = useTripContext()?.trip?.countries;
+  const currentAreas = placeAreas(currentItem?.tripPlace);
+  const needsArea =
+    currentAreas.length > 0 &&
+    (!currentSubject ||
+      (placePhotos.isResolved &&
+        !exactEditorialPhoto(editorialImages.get(editorialSubjectKey(currentSubject)))));
+  const areaSubjects = needsArea
+    ? currentAreas.map((area) =>
+        areaPhotoSubject(area, tripCountries?.length === 1 ? tripCountries[0] : undefined),
+      )
+    : [];
+  const areaImages = useEditorialImages(areaSubjects);
 
   if (status === 'loading') return <TripModeNowSkeleton label={t('loading')} />;
 
@@ -531,7 +540,10 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
 
   const subjectPhoto = (subject: EditorialSubject | null) =>
     subject ? editorialImages.get(editorialSubjectKey(subject)) : undefined;
-  const currentPhoto = exactPhoto(subjectPhoto(currentSubject));
+  const currentPhoto = placeOrAreaPhoto(
+    subjectPhoto(currentSubject),
+    areaSubjects.flatMap((subject) => areaImages.get(editorialSubjectKey(subject)) ?? []),
+  );
   const nextThumb = nextSubject
     ? editorialCoverImage(subjectPhoto(nextSubject), nextSubject.placeId ?? nextSubject.name)
     : null;

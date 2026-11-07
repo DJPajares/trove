@@ -169,6 +169,30 @@ export function editorialCoverImage(
   return images[seedIndex(seed, images.length)] ?? null;
 }
 
+/**
+ * A photograph of this place, never of a lookalike. Above a place's name a
+ * generic or contextual match would be a picture of somewhere else.
+ */
+export function exactEditorialPhoto(images: readonly EditorialImageReference[] | undefined) {
+  return images?.find((image) => (image.matchKind ?? 'exact') === 'exact') ?? null;
+}
+
+/**
+ * The place itself when there is a photograph of it; otherwise the area it is
+ * in, which is somewhere the traveller really is. A generic stand-in is neither,
+ * so the caller keeps its category tile.
+ */
+export function placeOrAreaPhoto(
+  placeImages: readonly EditorialImageReference[] | undefined,
+  areaImages: readonly EditorialImageReference[] | undefined,
+) {
+  return (
+    exactEditorialPhoto(placeImages) ??
+    areaImages?.find((image) => image.matchKind !== 'generic') ??
+    null
+  );
+}
+
 async function getAccessToken() {
   const session = await getBrowserSession();
   return session?.access_token ?? null;

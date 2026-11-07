@@ -795,5 +795,15 @@
         "When there's no photo of the place you're at, Trip Mode now shows a photo of the town you're in instead of a plain tile."
       ]
     }
+  },
+  {
+    "id": "trip-mode-now-expense",
+    "date": "2026-11-07",
+    "version": "1.17.5",
+    "summaries": {
+      "en": [
+        "Log what something cost straight from Trip Mode's Now screen, for the stop you're at or anything in between."
+      ]
+    }
   }
 ]

@@ -12,6 +12,7 @@ import { usePreferences } from '@/components/preferences-provider';
 import { TripLegBar } from '@/components/trip-leg-bar';
 import { TripModeMemorySheet } from '@/components/trip-mode-memory-sheet';
 import { useTripModeData } from '@/components/trip-mode-data';
+import { useTripModeExpense } from '@/components/trip-mode-expense-sheet';
 import { useTripModePlaceDetails, useTripModePreview } from '@/components/trip-mode-shell';
 import {
   TripModeTaskList,
@@ -278,6 +279,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
     status,
   } = useTripModeData();
   const tripModeTasks = useTripModeTasks();
+  const tripModeExpense = useTripModeExpense();
   // Stored hours for the day being shown; nothing is bought to fill a gap.
   const placeHours = useTripPlaceHours(tripId, context?.selectedDate ?? null, Boolean(context));
   const reservations = loadedReservations ?? [];
@@ -591,6 +593,14 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
       : currentItem && tripModeTasks.openCreate({ itineraryItemId: currentItem.id, kind: 'item' });
 
   const currentName = currentItem ? itemName(currentItem, t('placeFallback')) : null;
+  // Logged over Trip Mode, the same sheet Today opens, for the stop on screen
+  // or for whatever the traveller spent between stops.
+  const logExpense = (itineraryItemId?: string) =>
+    tripModeExpense.openCreate({
+      itineraryItemId,
+      localDate: day?.date,
+      onSaved: () => setFeedback({ message: t('expenseAdded') }),
+    });
   const currentSchedule = currentItem ? formatSchedule(currentItem) : null;
   const hereRow = Boolean(currentItem && leavingSoon && hasNext);
 
@@ -773,6 +783,13 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
                   onClick={() => setMemoryOpen(true)}
                 >
                   {t('capture')}
+                </QuickAction>
+                <QuickAction
+                  icon={<Icons.Expenses aria-hidden="true" className="size-5" />}
+                  label={t('expenseFor', { name: currentName ?? t('placeFallback') })}
+                  onClick={() => logExpense(currentItem.id)}
+                >
+                  {t('expense')}
                 </QuickAction>
                 {canComplete ? (
                   <QuickAction
@@ -1256,6 +1273,12 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
           <TripModeActionButton onClick={() => setMemoryOpen(true)}>
             <Icons.Memories aria-hidden="true" data-icon="inline-start" />
             {memoryTranslations('quickAction')}
+          </TripModeActionButton>
+        ) : null}
+        {day && !currentItem ? (
+          <TripModeActionButton onClick={() => logExpense()}>
+            <Icons.Expenses aria-hidden="true" data-icon="inline-start" />
+            {t('expense')}
           </TripModeActionButton>
         ) : null}
       </div>

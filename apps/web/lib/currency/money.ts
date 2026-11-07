@@ -127,6 +127,33 @@ export function formatCurrencyAmount(
   }
 }
 
+/**
+ * The same text as `formatCurrencyAmount`, in pieces, so a surface can set the
+ * currency apart from the figure. The locale still decides the order - the code
+ * leads in some and trails in others - so nothing is rebuilt by hand.
+ */
+export function formatCurrencyAmountParts(
+  locale: string,
+  amount: number | string,
+  currencyCode: string,
+): Array<{ currency: boolean; value: string }> {
+  const value = typeof amount === 'string' ? Number(amount) : amount;
+  try {
+    return new Intl.NumberFormat(locale, {
+      currency: currencyCode,
+      currencyDisplay: 'code',
+      style: 'currency',
+    })
+      .formatToParts(value)
+      .map((part) => ({ currency: part.type === 'currency', value: part.value }));
+  } catch {
+    return [
+      { currency: true, value: currencyCode },
+      { currency: false, value: ` ${amount}` },
+    ];
+  }
+}
+
 export function formatMinorUnits(
   locale: string,
   minorUnits: number,

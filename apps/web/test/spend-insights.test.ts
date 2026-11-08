@@ -3,6 +3,7 @@ import { expect, test } from 'vitest';
 import type { CachedCurrencyRateBoard } from '../lib/currency/api.ts';
 import { sumByCurrency } from '../lib/currency/money.ts';
 import {
+  approximateInReference,
   budgetPerRemainingDay,
   buildSpendBreakdown,
   convertTotals,
@@ -611,4 +612,25 @@ test('a dated expense lands on its day even when it was never linked to one', ()
   ]);
   expect(result.days.map((day) => day.actual.minorUnits)).toEqual([0, 1200, 800]);
   expect(result.offDay.count).toBe(1);
+});
+
+test('an expense shows its home-currency figure only when it adds something true', () => {
+  const rates = board();
+  const paid = [{ amount: '15.00', currencyCode: 'SGD' }];
+  // Converted the same way the headline is, so a row and the total never disagree.
+  expect(approximateInReference(paid, 'EUR', rates)).toBe(
+    convertTotals(paid, 'EUR', rates).minorUnits,
+  );
+  expect(approximateInReference(paid, 'EUR', rates)).not.toBeNull();
+  // Already in the reference currency: nothing to add.
+  expect(
+    approximateInReference([{ amount: '10.00', currencyCode: 'eur' }], 'EUR', rates),
+  ).toBeNull();
+  // No rate for one part: no figure that silently leaves it out.
+  expect(
+    approximateInReference([...paid, { amount: '100000', currencyCode: 'VND' }], 'EUR', rates),
+  ).toBeNull();
+  // Offline with no board at all.
+  expect(approximateInReference(paid, 'EUR', null)).toBeNull();
+  expect(approximateInReference([], 'EUR', rates)).toBeNull();
 });

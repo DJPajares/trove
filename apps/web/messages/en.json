@@ -1770,6 +1770,7 @@
     "untitledExpense": "Expense",
     "unassignedDatedExpense": "This date is outside the trip days, so it only counts toward the trip total.",
     "placeLabel": "Place",
+    "approximateAmount": "About {amount}",
     "approximateHome": "Approx. {amount} in your home currency",
     "viewTitle": "Expense details",
     "viewDescription": "Restore the trip to change these saved details.",

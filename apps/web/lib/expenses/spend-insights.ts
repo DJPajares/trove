@@ -266,6 +266,26 @@ export function resolveBudgetPosition(input: {
   };
 }
 
+/**
+ * What some spending comes to in the reference currency, beside the currency it
+ * was paid in. Null when there is nothing worth adding: every part is already
+ * in that currency, or some part has no rate - a figure that left part of the
+ * spending out would look exact and be wrong.
+ */
+export function approximateInReference(
+  amounts: readonly CurrencyAmount[],
+  referenceCurrency: string,
+  board: CachedCurrencyRateBoard | null,
+): number | null {
+  const reference = referenceCurrency.trim().toUpperCase();
+  if (!amounts.length || amounts.every((entry) => entry.currencyCode.toUpperCase() === reference))
+    return null;
+  const converted = convertTotals(amounts, reference, board);
+  return converted.minorUnits !== null && converted.unconvertible.length === 0
+    ? converted.minorUnits
+    : null;
+}
+
 /** Re-exported so callers converting for display need only this module. */
 export { fromMinorUnits };
 

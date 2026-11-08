@@ -8,7 +8,13 @@ import { EditorialSection } from '@/components/editorial-section';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Item, ItemContent, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item';
-import { formatCurrencyAmount, formatCurrencyAmountParts } from '@/lib/currency/money';
+import type { CachedCurrencyRateBoard } from '@/lib/currency/api';
+import {
+  formatCurrencyAmount,
+  formatCurrencyAmountParts,
+  formatMinorUnits,
+  sumByCurrency,
+} from '@/lib/currency/money';
 import type { CurrencyTotal, Expense, ExpensePlace } from '@/lib/expenses/api';
 import {
   expenseTitle as resolveExpenseTitle,
@@ -16,7 +22,12 @@ import {
 } from '@/lib/expenses/labels';
 import { resolveExpenseCategory } from '@/lib/expenses/categories';
 import * as Icons from '@/lib/icons';
-import { expenseDayId, matchesSpendFilter, type SpendFilter } from '@/lib/expenses/spend-insights';
+import {
+  approximateInReference,
+  expenseDayId,
+  matchesSpendFilter,
+  type SpendFilter,
+} from '@/lib/expenses/spend-insights';
 
 /**
  * Every recorded expense, grouped by the day it belongs to.
@@ -32,6 +43,8 @@ export function ExpenseLedger({
   filterLabel,
   onClearFilter,
   onEdit,
+  board,
+  reference,
 }: Readonly<{
   days: ReadonlyArray<{ actualSpend: CurrencyTotal[]; date: string; id: string }>;
   expenses: readonly Expense[];
@@ -40,6 +53,10 @@ export function ExpenseLedger({
   filterLabel: string | null;
   onClearFilter: () => void;
   onEdit: (expense: Expense) => void;
+  /** The rates the screen's headline already converts with; null when none were needed. */
+  board: CachedCurrencyRateBoard | null;
+  /** The one currency the screen's totals are in, usually the traveller's home currency. */
+  reference: string | null;
 }>) {
   const t = useTranslations('expenses');
   const readOnly = useTripReadOnly();
@@ -79,22 +96,33 @@ export function ExpenseLedger({
   /**
    * A day's summary is the sum of what is on screen, not of the whole day - a
    * filtered day showing four expenses under a total covering nine would read as
-   * arithmetic the traveller could not follow.
+   * arithmetic the traveller could not follow. Summed per currency, so two dong
+   * dinners read as one dong total rather than a list of both.
    */
-  const daySummary = (day: (typeof daySections)[number]) =>
+  const dayAmounts = (day: (typeof daySections)[number]): CurrencyTotal[] =>
     filter
-      ? totals(
+      ? sumByCurrency(
           day.expenses.map((expense) => ({
             amount: expense.amount,
             currencyCode: expense.currencyCode,
           })),
-          t('noActualSpend'),
         )
-      : totals(day.actualSpend, t('noActualSpend'));
+      : day.actualSpend;
+
+  /** Roughly what something cost in the screen's own currency, beside what was paid. */
+  const approximate = (amounts: readonly CurrencyTotal[]) => {
+    const minorUnits = reference ? approximateInReference(amounts, reference, board) : null;
+    return minorUnits === null || !reference
+      ? null
+      : formatMinorUnits(locale, minorUnits, reference);
+  };
 
   const renderExpense = (expense: Expense) => {
     const { Icon } = resolveExpenseCategory(expense.category);
     const onDay = Boolean(expenseDayId(expense, days));
+    const rowApproximate = approximate([
+      { amount: expense.amount, currencyCode: expense.currencyCode },
+    ]);
     return (
       <Item
         className="relative flex-nowrap items-start px-3 py-3.5 hover:bg-surface-hover"
@@ -125,18 +153,29 @@ export function ExpenseLedger({
               </button>
             </ItemTitle>
             {/* The figure carries the weight; the code is quieter, so the
-                amount column stays narrow and the number reads first. */}
-            <span className="text-base leading-snug font-semibold whitespace-nowrap tabular-nums">
-              {formatCurrencyAmountParts(locale, expense.amount, expense.currencyCode).map(
-                (part, index) =>
-                  part.currency ? (
-                    <span className="text-xs font-medium text-muted-foreground" key={index}>
-                      {part.value}
-                    </span>
-                  ) : (
-                    part.value
-                  ),
-              )}
+                amount column stays narrow and the number reads first. What was
+                paid stays the record; the home-currency figure is a quiet aside. */}
+            <span className="flex flex-col items-end">
+              <span className="text-base leading-snug font-semibold whitespace-nowrap tabular-nums">
+                {formatCurrencyAmountParts(locale, expense.amount, expense.currencyCode).map(
+                  (part, index) =>
+                    part.currency ? (
+                      <span className="text-xs font-medium text-muted-foreground" key={index}>
+                        {part.value}
+                      </span>
+                    ) : (
+                      part.value
+                    ),
+                )}
+              </span>
+              {rowApproximate ? (
+                <span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">
+                  <span aria-hidden="true">≈ {rowApproximate}</span>
+                  <span className="sr-only">
+                    {t('approximateAmount', { amount: rowApproximate })}
+                  </span>
+                </span>
+              ) : null}
             </span>
           </div>
           {expense.tripPlace ? (
@@ -210,9 +249,13 @@ export function ExpenseLedger({
           {daySections.map((day) => (
             <EditorialSection
               actions={
-                <p className="text-sm font-medium text-muted-foreground">
-                  {t('dayActualSummary', { total: daySummary(day) })}
-                </p>
+                <DaySummary
+                  approximate={approximate(dayAmounts(day))}
+                  label={t('dayActualSummary', {
+                    total: totals(dayAmounts(day), t('noActualSpend')),
+                  })}
+                  srApproximate={(amount) => t('approximateAmount', { amount })}
+                />
               }
               key={day.id}
               title={dateOnly(day.date)}
@@ -235,5 +278,27 @@ export function ExpenseLedger({
         </>
       )}
     </div>
+  );
+}
+
+function DaySummary({
+  approximate,
+  label,
+  srApproximate,
+}: Readonly<{
+  approximate: string | null;
+  label: string;
+  srApproximate: (amount: string) => string;
+}>) {
+  return (
+    <p className="text-sm font-medium text-muted-foreground">
+      {label}
+      {approximate ? (
+        <>
+          <span aria-hidden="true"> · ≈ {approximate}</span>
+          <span className="sr-only">, {srApproximate(approximate)}</span>
+        </>
+      ) : null}
+    </p>
   );
 }

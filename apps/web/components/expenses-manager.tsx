@@ -319,6 +319,8 @@ export function ExpensesManager({
             filterLabel={filterLabel}
             onClearFilter={() => setFilter(null)}
             onEdit={openEdit}
+            board={board}
+            reference={reference?.code ?? null}
           />
         </>
       )}

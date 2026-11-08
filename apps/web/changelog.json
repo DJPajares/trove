@@ -827,5 +827,16 @@
         "Delete is set apart on its own line, so it's never right beside Save."
       ]
     }
+  },
+  {
+    "id": "expense-home-currency",
+    "date": "2026-11-08",
+    "version": "1.17.8",
+    "summaries": {
+      "en": [
+        "Each expense now also shows roughly what it cost in your home currency, right under what you paid.",
+        "Filtered day totals now add up correctly."
+      ]
+    }
   }
 ]

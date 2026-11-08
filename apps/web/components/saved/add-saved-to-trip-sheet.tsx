@@ -130,20 +130,36 @@ export function AddSavedToTripSheet({
               </p>
             ) : null}
           </div>
-          <SheetFooter className="gap-2">
-            <p className="text-[length:var(--text-metadata)] text-muted-foreground">{t('note')}</p>
+          <SheetFooter>
+            <p
+              className="text-[length:var(--text-metadata)] text-muted-foreground"
+              data-footer-lead
+            >
+              {t('note')}
+            </p>
             {status === 'added' ? (
-              <Button onClick={() => close(false)} type="button" variant="outline">
+              <Button onClick={() => close(false)} type="button">
                 {t('done')}
               </Button>
             ) : (
-              <Button disabled={!selected || status === 'saving'} type="submit">
-                {status === 'saving'
-                  ? t('adding')
-                  : selected
-                    ? t('submit', { trip: selected.name })
-                    : t('submitNoTrip')}
-              </Button>
+              <>
+                <Button onClick={() => close(false)} type="button" variant="outline">
+                  {t('cancel')}
+                </Button>
+                <Button
+                  className="max-w-full"
+                  disabled={!selected || status === 'saving'}
+                  type="submit"
+                >
+                  <span className="min-w-0 truncate">
+                    {status === 'saving'
+                      ? t('adding')
+                      : selected
+                        ? t('submit', { trip: selected.name })
+                        : t('submitNoTrip')}
+                  </span>
+                </Button>
+              </>
             )}
           </SheetFooter>
         </form>

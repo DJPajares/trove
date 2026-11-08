@@ -16,6 +16,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { footerDeleteClassName } from '@/components/ui/footer-actions';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/date-picker';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
@@ -560,23 +561,25 @@ export function MemoryEditorSheet({
             ) : null}
           </div>
 
-          <SheetFooter className="sm:flex-row sm:items-center sm:justify-between">
+          <SheetFooter>
             {!isCreate ? (
-              <Button onClick={() => setConfirmDelete(true)} type="button" variant="ghost">
+              <Button
+                className={footerDeleteClassName}
+                data-footer-lead
+                onClick={() => setConfirmDelete(true)}
+                type="button"
+                variant="ghost"
+              >
                 <Trash2 aria-hidden="true" data-icon="inline-start" />
                 {t('deleteMemory')}
               </Button>
-            ) : (
-              <span />
-            )}
-            <div className="flex flex-col-reverse gap-2 sm:flex-row">
-              <Button onClick={onClose} type="button" variant="outline">
-                {t('cancel')}
-              </Button>
-              <Button disabled={!canSave} onClick={() => void handleSave()} type="button">
-                {saving ? t('saving') : t('save')}
-              </Button>
-            </div>
+            ) : null}
+            <Button onClick={onClose} type="button" variant="outline">
+              {t('cancel')}
+            </Button>
+            <Button disabled={!canSave} onClick={() => void handleSave()} type="button">
+              {saving ? t('saving') : t('save')}
+            </Button>
           </SheetFooter>
         </SheetContent>
       </Sheet>

@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { Drawer as SheetPrimitive } from '@base-ui/react/drawer';
 
+import { footerActionsClassName } from '@/components/ui/footer-actions';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { XIcon } from 'lucide-react';
@@ -163,7 +164,7 @@ function SheetFooter({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="sheet-footer"
-      className={cn('mt-auto flex flex-col gap-2 border-t border-border-subtle p-6', className)}
+      className={cn('mt-auto border-t border-border-subtle p-6', footerActionsClassName, className)}
       {...props}
     />
   );

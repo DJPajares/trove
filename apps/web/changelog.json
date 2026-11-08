@@ -816,5 +816,16 @@
         "Tap anywhere on an expense to open it."
       ]
     }
+  },
+  {
+    "id": "consistent-panel-buttons",
+    "date": "2026-11-08",
+    "version": "1.17.7",
+    "summaries": {
+      "en": [
+        "Buttons in every panel and dialog now sit in the same place: Cancel on the left, the main action on the right.",
+        "Delete is set apart on its own line, so it's never right beside Save."
+      ]
+    }
   }
 ]

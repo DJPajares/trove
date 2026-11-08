@@ -175,7 +175,7 @@ export function TimingSuggestionReview({
             )
           ) : null}
         </div>
-        <SheetFooter className="sm:flex-row sm:justify-end">
+        <SheetFooter>
           <Button type="button" variant="outline" disabled={saving} onClick={onClose}>
             {t('cancel')}
           </Button>

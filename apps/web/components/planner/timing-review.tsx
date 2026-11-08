@@ -353,7 +353,15 @@ function TimingReviewBody({
           </>
         )}
       </div>
-      <SheetFooter className="gap-3 px-5 py-4">
+      <SheetFooter className="px-5 py-4">
+        <Button
+          disabled={busy}
+          onClick={() => void (canKeepCurrent ? discard() : acknowledge())}
+          type="button"
+          variant="outline"
+        >
+          {t(canKeepCurrent ? 'connectedTiming.keepCurrent' : 'connectedTiming.done')}
+        </Button>
         {proposed && remaining > 1
           ? current.proposals?.map((proposal) => {
               const ids = current.changes
@@ -373,14 +381,6 @@ function TimingReviewBody({
               ) : null;
             })
           : null}
-        <Button
-          disabled={busy}
-          onClick={() => void (canKeepCurrent ? discard() : acknowledge())}
-          type="button"
-          variant="outline"
-        >
-          {t(canKeepCurrent ? 'connectedTiming.keepCurrent' : 'connectedTiming.done')}
-        </Button>
       </SheetFooter>
     </>
   );

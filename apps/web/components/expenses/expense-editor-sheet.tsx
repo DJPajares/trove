@@ -20,6 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { footerDeleteClassName } from '@/components/ui/footer-actions';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -310,7 +311,8 @@ export function ExpenseEditorSheet({
               <SheetFooter>
                 {editor.kind === 'edit' && !readOnly ? (
                   <Button
-                    className="sm:mr-auto"
+                    className={footerDeleteClassName}
+                    data-footer-lead
                     onClick={() => onExpenseToDeleteChange(editor.expense)}
                     type="button"
                     variant="ghost"

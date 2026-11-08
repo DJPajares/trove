@@ -128,7 +128,7 @@ export function EditTripPlaceSheet({
           ) : null}
         </div>
 
-        <SheetFooter className="flex-col-reverse sm:flex-row sm:justify-end">
+        <SheetFooter>
           <Button disabled={saving} onClick={() => onOpenChange(false)} variant="outline">
             {t('cancel')}
           </Button>

@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 
+import { footerActionsClassName } from '@/components/ui/footer-actions';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { XIcon } from 'lucide-react';
@@ -130,7 +131,8 @@ function DialogFooter({ className, children, ...props }: React.ComponentProps<'d
     <div
       data-slot="dialog-footer"
       className={cn(
-        'sticky -bottom-6 z-10 -mx-6 -mb-6 flex flex-col-reverse gap-2 border-t border-border-subtle bg-popover p-6 sm:-bottom-8 sm:-mx-8 sm:-mb-8 sm:flex-row sm:justify-end sm:p-8',
+        'sticky -bottom-6 z-10 -mx-6 -mb-6 border-t border-border-subtle bg-popover p-6 sm:-bottom-8 sm:-mx-8 sm:-mb-8 sm:p-8',
+        footerActionsClassName,
         className,
       )}
       {...props}

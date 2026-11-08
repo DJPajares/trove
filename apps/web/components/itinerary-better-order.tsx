@@ -131,7 +131,7 @@ export function ItineraryBetterOrder({
             </>
           )}
         </div>
-        <SheetFooter className="sm:flex-row sm:justify-end">
+        <SheetFooter>
           <Button
             disabled={status === 'applying'}
             onClick={() => onOpenChange(false)}

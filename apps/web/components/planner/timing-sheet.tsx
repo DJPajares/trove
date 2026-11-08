@@ -153,7 +153,7 @@ function TimingBody({
             </EditRows>
           </FieldGroup>
         </div>
-        <SheetFooter className="sm:flex-row sm:justify-end">
+        <SheetFooter>
           <Button disabled={saving} onClick={onClose} type="button" variant="outline">
             {t('cancel')}
           </Button>

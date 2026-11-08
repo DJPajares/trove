@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { DatePicker } from '@/components/date-picker';
 import { TimeInput } from '@/components/time-input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { footerDeleteClassName } from '@/components/ui/footer-actions';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -367,28 +368,30 @@ export function TaskEditorSheet({
               </Field>
             </FieldGroup>
           </div>
-          <SheetFooter className="sm:flex-row sm:items-center sm:justify-between">
+          <SheetFooter>
             {task && onDeleteRequest ? (
-              <Button onClick={() => onDeleteRequest(task)} type="button" variant="destructive">
+              <Button
+                className={footerDeleteClassName}
+                data-footer-lead
+                onClick={() => onDeleteRequest(task)}
+                type="button"
+                variant="ghost"
+              >
                 <Trash2 aria-hidden="true" data-icon="inline-start" />
                 {t('deleteTask')}
               </Button>
-            ) : (
-              <span />
-            )}
-            <div className="flex flex-col-reverse gap-2 sm:flex-row">
-              <Button
-                disabled={saving}
-                onClick={() => onOpenChange(false)}
-                type="button"
-                variant="outline"
-              >
-                {t('cancel')}
-              </Button>
-              <Button disabled={saving} type="submit">
-                {saving ? t('saving') : task ? t('save') : t('addTask')}
-              </Button>
-            </div>
+            ) : null}
+            <Button
+              disabled={saving}
+              onClick={() => onOpenChange(false)}
+              type="button"
+              variant="outline"
+            >
+              {t('cancel')}
+            </Button>
+            <Button disabled={saving} type="submit">
+              {saving ? t('saving') : task ? t('save') : t('addTask')}
+            </Button>
           </SheetFooter>
         </form>
       </SheetContent>

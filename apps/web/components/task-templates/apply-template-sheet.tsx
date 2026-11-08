@@ -7,7 +7,7 @@ import { useMemo, useState } from 'react';
 import { localToday } from '@/components/saved/saved-ready-for-trip';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
+import { Sheet, SheetClose, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { applyTaskTemplate, type TaskTemplate } from '@/lib/tasks/api';
 import { formatTripDateRange } from '@/lib/trips/format';
 import type { Trip } from '@/lib/trips/api';
@@ -188,15 +188,20 @@ function ApplyForm({
         )}
       </div>
 
-      <SheetFooter className="gap-3 px-5 pt-4">
-        <p className="text-[0.8125rem] leading-5 text-muted-foreground">{t('applyNote')}</p>
+      <SheetFooter className="px-5 pt-4">
+        <p className="text-[0.8125rem] leading-5 text-muted-foreground" data-footer-lead>
+          {t('applyNote')}
+        </p>
+        <SheetClose render={<Button disabled={applying} type="button" variant="outline" />}>
+          {t('cancel')}
+        </SheetClose>
         <Button
-          className="h-12 rounded-full text-base"
+          className="max-w-full"
           disabled={applying || !selected}
           onClick={() => void apply()}
           type="button"
         >
-          <span className="truncate">
+          <span className="min-w-0 truncate">
             {applying
               ? t('applying')
               : selected

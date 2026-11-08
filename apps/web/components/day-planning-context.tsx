@@ -114,7 +114,7 @@ export function DayPlanningContextSheet({
             </Button>
             {error ? <FieldError role="alert">{error}</FieldError> : null}
           </div>
-          <SheetFooter className="flex-col-reverse sm:flex-row sm:justify-end">
+          <SheetFooter>
             <Button type="button" variant="outline" disabled={saving} onClick={onClose}>
               {t('cancel')}
             </Button>

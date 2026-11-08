@@ -2164,7 +2164,7 @@ export function ItineraryManager({
                   </Alert>
                 ) : null}
               </div>
-              <SheetFooter className="flex-col-reverse sm:flex-row sm:justify-end">
+              <SheetFooter>
                 <Button
                   disabled={movingDay}
                   onClick={() => setDayMoveSourceId(null)}

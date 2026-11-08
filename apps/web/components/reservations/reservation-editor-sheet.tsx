@@ -29,12 +29,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { footerDeleteClassName } from '@/components/ui/footer-actions';
 import { Button } from '@/components/ui/button';
 import { Chip, ChipGroup } from '@/components/ui/chip';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
+import { Sheet, SheetClose, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import {
   createReservation,
@@ -1032,24 +1033,21 @@ function EditorForm({
           </section>
         </div>
       </fieldset>
-      <SheetFooter className="flex-row items-center gap-2 px-5 pt-4">
+      <SheetFooter className="px-5 pt-4">
         {editing && !readOnly ? (
           <Button
-            aria-label={t('deleteReservation')}
-            className="size-12 shrink-0 rounded-full"
+            className={footerDeleteClassName}
+            data-footer-lead
             onClick={() => onDelete(editing)}
-            size="icon"
             type="button"
-            variant="destructive"
+            variant="ghost"
           >
-            <Trash2 aria-hidden="true" />
+            <Trash2 aria-hidden="true" data-icon="inline-start" />
+            {t('deleteReservation')}
           </Button>
         ) : null}
-        <Button
-          className="h-12 flex-1 rounded-full text-base"
-          disabled={readOnly || saving}
-          type="submit"
-        >
+        <SheetClose render={<Button type="button" variant="outline" />}>{t('cancel')}</SheetClose>
+        <Button disabled={readOnly || saving} type="submit">
           {saving ? t('saving') : editing ? t('saveChanges') : t('createReservation')}
         </Button>
       </SheetFooter>

@@ -4,6 +4,7 @@ import * as React from 'react';
 import { AlertDialog as AlertDialogPrimitive } from '@base-ui/react/alert-dialog';
 
 import { Button } from '@/components/ui/button';
+import { footerActionsClassName } from '@/components/ui/footer-actions';
 import { cn } from '@/lib/utils';
 
 function AlertDialog({ ...props }: AlertDialogPrimitive.Root.Props) {
@@ -72,7 +73,8 @@ function AlertDialogFooter({ className, ...props }: React.ComponentProps<'div'>)
     <div
       data-slot="alert-dialog-footer"
       className={cn(
-        '-mx-5 -mb-5 flex flex-col-reverse gap-2 rounded-b-[var(--radius-xl)] border-t bg-muted/50 p-5 group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2 sm:-mx-6 sm:-mb-6 sm:flex-row sm:justify-end sm:p-6',
+        '-mx-5 -mb-5 rounded-b-[var(--radius-xl)] border-t bg-muted/50 p-5 sm:-mx-6 sm:-mb-6 sm:p-6',
+        footerActionsClassName,
         className,
       )}
       {...props}

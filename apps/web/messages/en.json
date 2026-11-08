@@ -2976,6 +2976,7 @@
       "added": "Added to {trip}.",
       "openTripPlaces": "Open trip places",
       "done": "Done",
+      "cancel": "Cancel",
       "close": "Close",
       "note": "Not on a day yet, and still in your Saved.",
       "error": "That couldn't be added. Try again."

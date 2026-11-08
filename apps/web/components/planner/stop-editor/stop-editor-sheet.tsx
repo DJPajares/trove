@@ -433,18 +433,11 @@ function StopEditorBody({
             </div>
           ) : null}
         </div>
-        <SheetFooter className="flex-row px-5 py-4 sm:justify-end">
-          <Button
-            className="flex-1 sm:flex-none"
-            disabled={saving}
-            onClick={onClose}
-            type="button"
-            variant="outline"
-          >
+        <SheetFooter className="px-5 py-4">
+          <Button disabled={saving} onClick={onClose} type="button" variant="outline">
             {t('cancel')}
           </Button>
           <Button
-            className="flex-1 sm:flex-none"
             disabled={saving || selecting || suggestedTime.loading || !hasIdentity}
             type="submit"
           >

@@ -149,7 +149,7 @@ export function ItineraryDayTimeSuggestions({
             </ul>
           )}
         </div>
-        <SheetFooter className="sm:flex-row sm:justify-end">
+        <SheetFooter>
           <Button
             disabled={status === 'applying'}
             onClick={() => onOpenChange(false)}

@@ -29,6 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { footerDeleteClassName } from '@/components/ui/footer-actions';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -416,7 +417,8 @@ export function TripInfoManager({ tripId }: Readonly<{ tripId: string }>) {
               <SheetFooter>
                 {editor.mode === 'edit' ? (
                   <Button
-                    className="sm:mr-auto"
+                    className={footerDeleteClassName}
+                    data-footer-lead
                     onClick={() => setEntryToDelete(editor.entry)}
                     type="button"
                     variant="ghost"

@@ -13,6 +13,7 @@ import { TripOptionalDetails } from '@/components/trip-optional-details';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { footerDeleteClassName } from '@/components/ui/footer-actions';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import {
   editorialCoverImage,
@@ -611,10 +612,11 @@ export function TripForm({ alternative, onCancel, onDelete, onSaved, trip }: Tri
           </section>
         </div>
 
-        <SheetFooter className="gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <SheetFooter>
           {onDelete ? (
             <Button
-              className="self-start text-destructive hover:bg-destructive/10 hover:text-destructive"
+              className={footerDeleteClassName}
+              data-footer-lead
               disabled={status === 'saving'}
               onClick={onDelete}
               type="button"
@@ -623,55 +625,41 @@ export function TripForm({ alternative, onCancel, onDelete, onSaved, trip }: Tri
               <Trash2 aria-hidden="true" data-icon="inline-start" />
               {t('deleteTrip')}
             </Button>
-          ) : trip ? (
-            <span />
           ) : null}
-          <div
-            className={cn(
-              alternative ? 'flex w-full gap-2' : 'flex flex-col-reverse gap-2 sm:flex-row',
-              !trip && !alternative && 'w-full sm:justify-end',
-            )}
-          >
-            {alternative ? (
-              <Button
-                className="h-12 rounded-full px-5"
-                disabled={status === 'saving'}
-                onClick={alternative.onClick}
-                type="button"
-                variant="outline"
-              >
-                {alternative.icon}
-                {alternative.label}
-              </Button>
-            ) : (
-              <Button
-                disabled={status === 'saving'}
-                onClick={onCancel}
-                type="button"
-                variant="outline"
-              >
-                {t('cancel')}
-              </Button>
-            )}
+          {alternative ? (
             <Button
-              className={cn(alternative && 'h-12 flex-1 rounded-full')}
               disabled={status === 'saving'}
-              type="submit"
+              onClick={alternative.onClick}
+              type="button"
+              variant="outline"
             >
-              {/* Moving a trip re-dates every day of it and every time on those
-                  days, which on a long trip is long enough that a label going
-                  grey reads as a screen that has stopped rather than one that
-                  is working. */}
-              {status === 'saving' ? (
-                <RefreshCw
-                  aria-hidden="true"
-                  className="animate-spin motion-reduce:animate-none"
-                  data-icon="inline-start"
-                />
-              ) : null}
-              {status === 'saving' ? t('saving') : trip ? t('saveChanges') : t('createTrip')}
+              {alternative.icon}
+              {alternative.label}
             </Button>
-          </div>
+          ) : (
+            <Button
+              disabled={status === 'saving'}
+              onClick={onCancel}
+              type="button"
+              variant="outline"
+            >
+              {t('cancel')}
+            </Button>
+          )}
+          <Button disabled={status === 'saving'} type="submit">
+            {/* Moving a trip re-dates every day of it and every time on those
+                days, which on a long trip is long enough that a label going
+                grey reads as a screen that has stopped rather than one that
+                is working. */}
+            {status === 'saving' ? (
+              <RefreshCw
+                aria-hidden="true"
+                className="animate-spin motion-reduce:animate-none"
+                data-icon="inline-start"
+              />
+            ) : null}
+            {status === 'saving' ? t('saving') : trip ? t('saveChanges') : t('createTrip')}
+          </Button>
         </SheetFooter>
       </form>
 

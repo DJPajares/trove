@@ -39,6 +39,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
+import { footerDeleteClassName } from '@/components/ui/footer-actions';
 import { Button } from '@/components/ui/button';
 import { Chip, ChipGroup } from '@/components/ui/chip';
 import {
@@ -1459,14 +1460,16 @@ export function SavedPlacesManager({
                 />
               </div>
             </div>
-            <SheetFooter className="flex-col-reverse sm:flex-row sm:justify-end">
+            <SheetFooter>
               {collectionEditor.mode === 'rename' ? (
                 <Button
-                  className="sm:mr-auto"
+                  className={footerDeleteClassName}
+                  data-footer-lead
                   onClick={() => setCollectionToDelete(collectionEditor.collection)}
                   type="button"
-                  variant="destructive"
+                  variant="ghost"
                 >
+                  <Trash2 aria-hidden="true" data-icon="inline-start" />
                   {t('deleteCollection')}
                 </Button>
               ) : null}
@@ -1555,7 +1558,7 @@ export function SavedPlacesManager({
               <p className="text-sm leading-6 text-muted-foreground">{t('noCollections')}</p>
             )}
           </div>
-          <SheetFooter className="flex-col-reverse sm:flex-row sm:justify-end">
+          <SheetFooter>
             <Button
               onClick={() => {
                 const target = collectionPickerPlace;
@@ -1620,7 +1623,7 @@ export function SavedPlacesManager({
                 />
               </div>
             </div>
-            <SheetFooter className="flex-col-reverse sm:flex-row sm:justify-end">
+            <SheetFooter>
               <Button
                 disabled={savingNote}
                 onClick={() => setNoteEditorPlace(null)}

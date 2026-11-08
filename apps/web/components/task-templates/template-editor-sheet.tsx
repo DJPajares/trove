@@ -5,10 +5,11 @@ import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { footerDeleteClassName } from '@/components/ui/footer-actions';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
+import { Sheet, SheetClose, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import type { TaskTemplateInput } from '@/lib/tasks/api';
 
 export const MAX_TEMPLATE_TASKS = 20;
@@ -211,24 +212,25 @@ function EditorForm({
       </div>
 
       <SheetFooter className="px-5 pt-4">
-        <div className="flex gap-2">
-          {editing && onDelete ? (
-            <Button
-              aria-label={t('deleteTemplate')}
-              className="size-12 rounded-full"
-              disabled={saving}
-              onClick={onDelete}
-              size="icon"
-              type="button"
-              variant="destructive"
-            >
-              <Trash2 aria-hidden="true" />
-            </Button>
-          ) : null}
-          <Button className="h-12 flex-1 rounded-full text-base" disabled={saving} type="submit">
-            {saving ? t('saving') : t('save')}
+        {editing && onDelete ? (
+          <Button
+            className={footerDeleteClassName}
+            data-footer-lead
+            disabled={saving}
+            onClick={onDelete}
+            type="button"
+            variant="ghost"
+          >
+            <Trash2 aria-hidden="true" data-icon="inline-start" />
+            {t('deleteTemplate')}
           </Button>
-        </div>
+        ) : null}
+        <SheetClose render={<Button disabled={saving} type="button" variant="outline" />}>
+          {t('cancel')}
+        </SheetClose>
+        <Button disabled={saving} type="submit">
+          {saving ? t('saving') : t('save')}
+        </Button>
       </SheetFooter>
     </form>
   );

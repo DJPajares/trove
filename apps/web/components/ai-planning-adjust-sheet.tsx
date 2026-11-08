@@ -7,7 +7,7 @@ import type { FormEvent } from 'react';
 import { AiPlanningAllowance } from '@/components/ai-planning-allowance';
 import { AiPlanningBriefField } from '@/components/ai-planning-brief-field';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetHeading } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import type { AiPlanningAvailability } from '@/lib/ai-planning/api';
 import {
   composeAiPlanningBrief,
@@ -94,23 +94,18 @@ export function AiPlanningAdjustSheet({
               </div>
             </div>
           </div>
-          <div className="space-y-2.5 border-t border-border-subtle bg-background px-4 pt-3 pb-4 sm:px-6">
-            <AiPlanningAllowance availability={availability} className="px-1" spending />
-            <div className="flex gap-2">
-              <Button
-                className="h-12 rounded-full px-5"
-                onClick={() => onOpenChange(false)}
-                type="button"
-                variant="outline"
-              >
-                {t('keepPlan')}
-              </Button>
-              <Button className="h-12 flex-1 rounded-full" disabled={!canSubmit} type="submit">
-                <Icons.Ai aria-hidden="true" data-icon="inline-start" />
-                {t('planAgain')}
-              </Button>
+          <SheetFooter className="bg-background px-4 pt-3 pb-4 sm:px-6">
+            <div data-footer-lead>
+              <AiPlanningAllowance availability={availability} className="px-1" spending />
             </div>
-          </div>
+            <Button onClick={() => onOpenChange(false)} type="button" variant="outline">
+              {t('keepPlan')}
+            </Button>
+            <Button disabled={!canSubmit} type="submit">
+              <Icons.Ai aria-hidden="true" data-icon="inline-start" />
+              {t('planAgain')}
+            </Button>
+          </SheetFooter>
         </form>
       </SheetContent>
     </Sheet>

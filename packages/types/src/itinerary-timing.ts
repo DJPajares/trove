@@ -40,6 +40,8 @@ export type TimingIssue = {
     /** Negative when the later stop would have to start before the earlier one ends. */
     availableMinutes: number;
     limitedBy: TimingShortfallLimit;
+    /** When the earlier stop starts, local YYYY-MM-DDTHH:mm; later than `limitLocal` means the two are out of time order. */
+    fromStartLocal?: string;
     /** The stop whose own time sets the limit; absent when the day itself does. */
     limitItemId?: string;
     /** Local calendar date and clock, YYYY-MM-DDTHH:mm, with no offset. */

@@ -423,6 +423,9 @@ export async function assessDay(
         limitedBy: shortfall.limitedBy,
         ...(shortfall.limitItemId ? { limitItemId: shortfall.limitItemId } : {}),
         limitLocal: planningLocalDateTime(day.date, shortfall.limitMinute),
+        ...(shortfall.fromStartMinute !== undefined
+          ? { fromStartLocal: planningLocalDateTime(day.date, shortfall.fromStartMinute) }
+          : {}),
       };
     const booking = result.bookingOverlaps.get(issue.itemId);
     if (booking && issue.severity === 'review' && issue.references[0] === booking.id) {

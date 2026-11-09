@@ -10,14 +10,14 @@ import { cn } from '@/lib/utils';
 
 import { paddedDayNumber } from './planner-ribbon';
 
-/** The organize call's "after everything": the server clamps it to the end of the day. */
-const END_OF_DAY = 999;
+/** Where on the chosen day the stop goes; the caller turns it into a position. */
+export type MovePlacement = 'end' | 'start' | 'time';
 
 /**
  * Where a stop goes next: another day of the trip, read the way the ribbon
  * reads it - number, date, town and how full it already is - or Unscheduled.
- * Choosing a day moves it there at once, to the end of that day or, asked,
- * to its start. It is the same move as dragging, without the dragging
+ * Choosing a day moves it there at once: a timed stop by default where its
+ * time belongs among that day's stops, otherwise to the end or, asked, the start. It is the same move as dragging, without the dragging
  * (PRD 17.4), and it is how an unscheduled stop is given a day.
  */
 export function MoveToDaySheet({
@@ -25,6 +25,7 @@ export function MoveToDaySheet({
   currentDayId,
   days,
   itemName,
+  timed,
   onMove,
   onOpenChange,
   open,
@@ -34,14 +35,16 @@ export function MoveToDaySheet({
   currentDayId: string | null;
   days: readonly PlannerDay[];
   itemName: string;
-  onMove: (dayId: string | null, position: number) => void;
+  onMove: (dayId: string | null, placement: MovePlacement) => void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
+  /** The stop has a start time, so it can go where that time belongs. */
+  timed: boolean;
 }>) {
   const t = useTranslations('itinerary.planner.move');
   const itineraryT = useTranslations('itinerary');
   const locale = useLocale();
-  const [atStart, setAtStart] = useState(false);
+  const [placement, setPlacement] = useState<MovePlacement>(timed ? 'time' : 'end');
   const date = new Intl.DateTimeFormat(locale, {
     day: 'numeric',
     month: 'short',
@@ -50,7 +53,7 @@ export function MoveToDaySheet({
   });
 
   function move(dayId: string | null) {
-    onMove(dayId, dayId && atStart ? 0 : END_OF_DAY);
+    onMove(dayId, placement);
     onOpenChange(false);
   }
 
@@ -70,24 +73,20 @@ export function MoveToDaySheet({
         />
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pb-[calc(var(--safe-bottom)+1.5rem)] sm:px-6">
           <div aria-label={t('placeLabel')} className="flex gap-2" role="group">
-            <Button
-              aria-pressed={!atStart}
-              onClick={() => setAtStart(false)}
-              size="sm"
-              type="button"
-              variant={atStart ? 'outline' : 'secondary'}
-            >
-              {t('atEnd')}
-            </Button>
-            <Button
-              aria-pressed={atStart}
-              onClick={() => setAtStart(true)}
-              size="sm"
-              type="button"
-              variant={atStart ? 'secondary' : 'outline'}
-            >
-              {t('atStart')}
-            </Button>
+            {(timed ? (['time', 'start', 'end'] as const) : (['end', 'start'] as const)).map(
+              (option) => (
+                <Button
+                  aria-pressed={placement === option}
+                  key={option}
+                  onClick={() => setPlacement(option)}
+                  size="sm"
+                  type="button"
+                  variant={placement === option ? 'secondary' : 'outline'}
+                >
+                  {t(option === 'time' ? 'byTime' : option === 'start' ? 'atStart' : 'atEnd')}
+                </Button>
+              ),
+            )}
           </div>
           <ul className="space-y-1.5">
             {days.map((day) => {

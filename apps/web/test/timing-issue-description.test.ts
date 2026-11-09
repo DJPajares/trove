@@ -151,3 +151,39 @@ test('explains a short connection by its two stops and what limits the later one
     'connectedTiming.travelShortfallOverlap',
   );
 });
+
+test('a stop that comes after a later one is told it is out of order', () => {
+  const names: Record<string, string> = { airport: 'Danang Airport', brunch: 'Brunch' };
+  const outOfOrder: TimingIssue = {
+    code: 'FIXED_CONFLICT',
+    itemId: 'brunch',
+    references: ['airport'],
+    severity: 'conflict',
+    travelShortfall: {
+      fromItemId: 'airport',
+      toItemId: 'brunch',
+      travelMinutes: 0,
+      availableMinutes: -480,
+      limitedBy: 'fixed_start',
+      limitItemId: 'brunch',
+      limitLocal: '2026-11-10T14:15',
+      fromStartLocal: '2026-11-10T19:35',
+    },
+  };
+  const named = { ...options, nameFor: (id: string) => names[id]! };
+  expect(JSON.parse(describeTimingIssue(outOfOrder, named))).toEqual({
+    key: 'connectedTiming.travelShortfallOrder',
+    from: 'Danang Airport',
+    fromTime: '7:35 PM',
+    to: 'Brunch',
+    toTime: '2:15 PM',
+  });
+  // In time order but too close: the existing gap wording.
+  const tight = {
+    ...outOfOrder,
+    travelShortfall: { ...outOfOrder.travelShortfall!, fromStartLocal: '2026-11-10T13:30' },
+  };
+  expect(JSON.parse(describeTimingIssue(tight, named)).key).toBe(
+    'connectedTiming.travelShortfallOverlap',
+  );
+});

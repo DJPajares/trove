@@ -327,6 +327,7 @@ test('a stop moved before a fixed one is told why the connection does not fit', 
     limitedBy: 'fixed_start',
     limitItemId: 'a',
     limitMinute: 960,
+    fromStartMinute: 900,
   });
 });
 test('a stop that cannot start later names its closing time as the limit', () => {
@@ -368,4 +369,17 @@ test('retiming a stop keeps it as close to its time as fits, not the first slot 
   day.commitments = [booking('show', 960, 1200)];
   // With the evening taken, the nearest fit ends as the show starts.
   expect(start(suggestScheduledTarget(day, 'b'), 'b')).toBe(870);
+});
+
+test('a stop placed after a later one records when that earlier stop starts', () => {
+  // Brunch at 2:15 PM put after a 7:35 PM airport stop: out of time order.
+  const result = scheduleItinerary(
+    input([stop('airport', 1175, 165, 0, true), stop('brunch', 855, 30, 10, true)]),
+  );
+  expect(result.shortfalls.get('brunch')).toMatchObject({
+    fromItemId: 'airport',
+    toItemId: 'brunch',
+    limitMinute: 855,
+    fromStartMinute: 1175,
+  });
 });

@@ -123,6 +123,7 @@ import {
   refreshedItineraryContainsCopy,
 } from '@/lib/itinerary/duplicate-attempt';
 import { placeVisitDate, scheduledPlaceUse } from '@/lib/itinerary/places';
+import { chronologicalPosition } from '@/lib/itinerary/move-position';
 import { itineraryDayRouteRevision } from '@/lib/itinerary/routes';
 import { rememberAddedTripPlace } from '@/lib/trip-places/cache';
 import { itineraryViewHref, resolveItineraryView } from '@/lib/itinerary/view';
@@ -1966,7 +1967,21 @@ export function ItineraryManager({
           days={ribbonDays}
           itemName={itemName(moveTarget.item)}
           key={moveTarget.item.id}
-          onMove={(dayId, position) => void handleOrganize(moveTarget.item, dayId, position)}
+          onMove={(dayId, placement) => {
+            const items = dayId
+              ? (itinerary?.days.find((day) => day.id === dayId)?.items ?? [])
+              : (itinerary?.unscheduledItems ?? []);
+            // Unscheduled has no times to sort by, so a stop joins its end.
+            const position = !dayId
+              ? items.length
+              : placement === 'start'
+                ? 0
+                : placement === 'time'
+                  ? chronologicalPosition(items, moveTarget.item.localStartTime)
+                  : items.length;
+            void handleOrganize(moveTarget.item, dayId, position);
+          }}
+          timed={Boolean(moveTarget.item.localStartTime)}
           onOpenChange={(open) => !open && setMoveTarget(null)}
           open
         />

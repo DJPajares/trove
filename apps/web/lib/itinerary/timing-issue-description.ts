@@ -60,6 +60,24 @@ export function describeTimingIssue(issue: TimingIssue, options: DescribeOptions
 
   const shortfall = issue.travelShortfall;
   if (shortfall) {
+    // The later stop starts before the earlier one: the trouble is the order, not
+    // the gap between them, so say that rather than that one runs into the other.
+    if (
+      shortfall.limitedBy === 'fixed_start' &&
+      shortfall.fromStartLocal &&
+      shortfall.limitLocal < shortfall.fromStartLocal
+    ) {
+      const [toTime, fromTime] = localClocks(
+        [shortfall.limitLocal, shortfall.fromStartLocal],
+        options,
+      );
+      return t('connectedTiming.travelShortfallOrder', {
+        from: options.nameFor(shortfall.fromItemId),
+        fromTime: fromTime!,
+        to: options.nameFor(shortfall.toItemId),
+        toTime: toTime!,
+      });
+    }
     const [limitTime] = localClocks([shortfall.limitLocal], options);
     const values = {
       from: options.nameFor(shortfall.fromItemId),

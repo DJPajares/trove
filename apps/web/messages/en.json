@@ -2060,6 +2060,7 @@
         "placeLabel": "Where on the day",
         "atEnd": "At the end",
         "atStart": "At the start",
+        "byTime": "By its time",
         "thisDay": "This day",
         "stops": "{count, plural, =0 {nothing planned} one {# stop} other {# stops}}",
         "unscheduledHint": "Keep it without a day for now"
@@ -2470,6 +2471,7 @@
       "suggestionsReady": "Timing suggestions ready.",
       "orderConflict": "After {previous} and travel, arrival is no earlier than {earliest}. This stop is set for {scheduled}.",
       "travelShortfall": "{from} leaves {available} for the {travel} trip to {to}. {limit, select, closing_time {{limitName} closes at {limitTime}, so it can’t start later.} fixed_start {{limitName} is set for {limitTime}.} other {Your day ends at {limitTime}.}}",
+      "travelShortfallOrder": "{to} is set for {toTime}, earlier than {from} at {fromTime}, but comes after it in the plan. Move it earlier in the day or change its time.",
       "travelShortfallOverlap": "{from} runs into the time set for {to}. {limit, select, closing_time {{limitName} closes at {limitTime}, so it can’t start later.} fixed_start {{limitName} is set for {limitTime}.} other {Your day ends at {limitTime}.}}",
       "bookingOverlap": "This overlaps {hasTitle, select, yes {your {booking} booking} other {a booking}}, {start}–{end}. If they’re the same plan, link the booking to this stop. Otherwise, change one of the times.",
       "bookingOverlapAt": "This overlaps {hasTitle, select, yes {your {booking} booking} other {a booking}} at {start}. If they’re the same plan, link the booking to this stop. Otherwise, change one of the times.",

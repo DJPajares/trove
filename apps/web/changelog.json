@@ -858,5 +858,16 @@
         "The tasks row on a stop in Trip Mode is now called \"Tasks for this stop\", and adding a stop's first task takes one tap."
       ]
     }
+  },
+  {
+    "id": "move-to-day-by-time",
+    "date": "2026-11-09",
+    "version": "1.17.11",
+    "summaries": {
+      "en": [
+        "Moving a stop to another day now places it where its time belongs, instead of at the end of the day.",
+        "When a stop is out of time order, the warning now says so plainly."
+      ]
+    }
   }
 ]

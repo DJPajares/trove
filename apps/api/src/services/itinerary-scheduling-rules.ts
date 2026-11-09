@@ -22,6 +22,8 @@ export type TravelShortfall = {
   limitedBy: TimingShortfallLimit;
   limitItemId?: string;
   limitMinute: number;
+  /** When the earlier stop starts, if it has a time; past `limitMinute` means out of time order. */
+  fromStartMinute?: number;
 };
 export type SchedulingInput = {
   items: SchedulingItem[];
@@ -348,6 +350,7 @@ export function scheduleItinerary(input: SchedulingInput): SchedulingResult {
             limitedBy: 'fixed_start',
             limitItemId: first.id,
             limitMinute: first.start!.minutes,
+            fromStartMinute: previousStart,
           });
           if (!moved)
             orderConflicts.set(first.id, {

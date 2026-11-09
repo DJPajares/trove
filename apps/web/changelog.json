@@ -869,5 +869,16 @@
         "When a stop is out of time order, the warning now says so plainly."
       ]
     }
+  },
+  {
+    "id": "memory-editor-journal-page",
+    "date": "2026-11-09",
+    "version": "1.17.12",
+    "summaries": {
+      "en": [
+        "Editing a memory now looks like your journal: photos as prints, your note in its handwriting, and where and when as simple taps.",
+        "Pick where you were from that day's stops, with their times, and choose the day and time in one place."
+      ]
+    }
   }
 ]

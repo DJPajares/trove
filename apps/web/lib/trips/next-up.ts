@@ -1,4 +1,5 @@
 import type { ItineraryItem, TripModeContext } from '@/lib/itinerary/api';
+import { resolveTripPlaceName } from '@/lib/trip-places/place-name';
 
 /**
  * What a trip under way says about its day right now, or null when it says
@@ -11,9 +12,17 @@ import type { ItineraryItem, TripModeContext } from '@/lib/itinerary/api';
 export type TripNextUp =
   { kind: 'current' | 'next'; label: string } | { kind: 'nothingScheduled'; label: null };
 
-/** What a stop is called: the traveller's own label first, then its place. */
+/**
+ * What a stop is called: the traveller's own label first, then its place, named
+ * the way the itinerary names it. A Google place carries its name in the stored
+ * snapshot rather than `place.name`, which is only a custom place's own name -
+ * reading that alone left every untitled Google stop nameless.
+ */
 export function itemLabel(item: ItineraryItem) {
-  return item.customLabel ?? item.customLocation?.label ?? item.tripPlace?.place.name ?? null;
+  const label = item.customLabel?.trim() || item.customLocation?.label?.trim();
+  if (label) return label;
+  if (!item.tripPlace) return null;
+  return resolveTripPlaceName(item.tripPlace, { custom: '', provider: '' }).trim() || null;
 }
 
 /**

@@ -838,5 +838,15 @@
         "Filtered day totals now add up correctly."
       ]
     }
+  },
+  {
+    "id": "home-stop-place-name",
+    "date": "2026-11-09",
+    "version": "1.17.9",
+    "summaries": {
+      "en": [
+        "Stops without a title of their own now show their place's name on Home instead of \"Untitled stop\"."
+      ]
+    }
   }
 ]

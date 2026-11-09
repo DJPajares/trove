@@ -7,6 +7,13 @@ import type { MemoryPhoto } from '@/lib/memories/api';
 import { cn } from '@/lib/utils';
 
 /**
+ * A print's paper, shadow and lean, shared so a print anywhere - the journal or
+ * the editor's tray - is the same object. The lean comes from `--tilt`.
+ */
+export const journalPrintClassName =
+  'group/print relative block w-full rotate-[var(--tilt)] rounded-[3px] bg-paper-print p-[clamp(0.4rem,1.8vw,0.65rem)] text-start shadow-[var(--shadow-print)] outline-none transition-transform duration-[var(--motion-slow)] ease-[var(--ease-standard)] focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none [@media(hover:hover)]:hover:rotate-[calc(var(--tilt)*0.35)]';
+
+/**
  * One photograph as a print: a paper border, a soft contact shadow, and a lean
  * of a degree or two that is the same on every visit. It straightens a little
  * under a pointer that can hover - a print picked up, not a card lifted.
@@ -43,11 +50,7 @@ export function JournalPrint({
   return (
     <button
       aria-label={label}
-      className={cn(
-        'group/print relative block w-full rotate-[var(--tilt)] rounded-[3px] bg-paper-print p-[clamp(0.4rem,1.8vw,0.65rem)] text-start shadow-[var(--shadow-print)] outline-none transition-transform duration-[var(--motion-slow)] ease-[var(--ease-standard)] focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none [@media(hover:hover)]:hover:rotate-[calc(var(--tilt)*0.35)]',
-        lip && 'pb-[clamp(1.5rem,6vw,2.4rem)]',
-        className,
-      )}
+      className={cn(journalPrintClassName, lip && 'pb-[clamp(1.5rem,6vw,2.4rem)]', className)}
       onClick={onOpen}
       style={{ '--tilt': `${tilt}deg` } as CSSProperties}
       type="button"

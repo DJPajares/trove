@@ -1,7 +1,7 @@
 'use client';
 
-import { ArrowDown, ArrowUp, ImagePlus, Trash2, TriangleAlert, X } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { Trash2, TriangleAlert } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
@@ -15,23 +15,19 @@ import {
   AlertDialogMedia,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  MemoryWhenSheet,
+  MemoryWhereSheet,
+  type WhenDay,
+  type WhereOption,
+} from '@/components/memories/memory-context';
+import { MemoryPage } from '@/components/memories/memory-page';
+import { usePreferences } from '@/components/preferences-provider';
 import { footerDeleteClassName } from '@/components/ui/footer-actions';
 import { Button } from '@/components/ui/button';
-import { DatePicker } from '@/components/date-picker';
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
-import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
-import { TimeInput } from '@/components/time-input';
 import type { Itinerary, ItineraryItem } from '@/lib/itinerary/api';
+import { formatSuggestedClock } from '@/lib/itinerary/day-time-suggestions';
 import {
   addMemoryPhotos,
   allowedMemoryPhotoTypes,
@@ -53,7 +49,6 @@ import {
 } from '@/lib/memories/edit-patch';
 import { placeName } from '@/lib/memories/story';
 import { resolveItineraryItemPlaceName, resolveTripPlaceName } from '@/lib/trip-places/place-name';
-import * as Icons from '@/lib/icons';
 
 const NO_DAY = 'none';
 const NO_ITEM = 'none';
@@ -88,6 +83,8 @@ export function MemoryEditorSheet({
   tripId: string;
 }>) {
   const t = useTranslations('memories.editor');
+  const locale = useLocale();
+  const { preferences } = usePreferences();
   const isCreate = memory === null;
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -106,6 +103,8 @@ export function MemoryEditorSheet({
   const [photoToDelete, setPhotoToDelete] = useState<MemoryPhoto | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  /** Which of the two small pickers - where, or when - is open over the page. */
+  const [picker, setPicker] = useState<'when' | 'where' | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -123,6 +122,7 @@ export function MemoryEditorSheet({
     setUploadingPhotos(false);
     setPhotoToDelete(null);
     setConfirmDelete(false);
+    setPicker(null);
   }, [memory, open]);
 
   const selectedDay = itinerary?.days.find((day) => day.id === dayId) ?? null;
@@ -348,6 +348,46 @@ export function MemoryEditorSheet({
     return resolveItineraryItemPlaceName(item, t('noContext'));
   }
 
+  const hour12 = preferences.timeFormat === '12h';
+  const clock = (time: string) => formatSuggestedClock(time.slice(0, 5), locale, hour12);
+  const shortDate = new Intl.DateTimeFormat(locale, {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+    weekday: 'short',
+  });
+  const dateLabel = (date: string) => shortDate.format(new Date(`${date}T00:00:00.000Z`));
+
+  // What the page's two chips say.
+  const whereLabel = selectedItem
+    ? itemLabel(selectedItem)
+    : place.kind === 'current'
+      ? currentPlaceLabel
+      : place.kind === 'place'
+        ? keptPlaceLabel
+        : null;
+  const whenLabel = localDate
+    ? localTime
+      ? t('whenValue', { date: dateLabel(localDate), time: clock(localTime) })
+      : dateLabel(localDate)
+    : null;
+
+  const whereOptions: WhereOption[] = [
+    ...(currentPlaceLabel ? [{ id: CURRENT_PLACE, name: currentPlaceLabel, time: null }] : []),
+    ...(keptPlaceLabel ? [{ id: KEPT_PLACE, name: keptPlaceLabel, time: null }] : []),
+    ...dayItems.map((item) => ({
+      id: item.id,
+      name: itemLabel(item),
+      time: item.localStartTime ? clock(item.localStartTime) : null,
+    })),
+  ];
+  const whenDays: WhenDay[] = (itinerary?.days ?? []).map((day, index) => ({
+    date: day.date,
+    id: day.id,
+    label: dateLabel(day.date),
+    number: index + 1,
+  }));
+
   return (
     <>
       <Sheet onOpenChange={(next) => !next && onClose()} open={open}>
@@ -360,205 +400,42 @@ export function MemoryEditorSheet({
             description={isCreate ? t('addDescription') : t('editDescription')}
           />
 
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
-            <Field>
-              <FieldLabel htmlFor="memory-editor-note">{t('note')}</FieldLabel>
-              <Textarea
-                id="memory-editor-note"
-                maxLength={2000}
-                onChange={(event) => setNote(event.target.value)}
-                placeholder={t('notePlaceholder')}
-                rows={3}
-                value={note}
-              />
-            </Field>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor="memory-editor-day">{t('day')}</FieldLabel>
-                <Select onValueChange={(value) => value && selectDay(value)} value={dayId}>
-                  <SelectTrigger id="memory-editor-day">
-                    <SelectValue>{selectedDay ? selectedDay.date : t('noDay')}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NO_DAY}>{t('noDay')}</SelectItem>
-                    {itinerary?.days.map((day) => (
-                      <SelectItem key={day.id} value={day.id}>
-                        {day.date}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="memory-editor-item">{t('place')}</FieldLabel>
-                <Select onValueChange={(value) => selectPlace(value ?? NO_ITEM)} value={placeValue}>
-                  <SelectTrigger
-                    disabled={dayId === NO_DAY && place.kind !== 'current'}
-                    id="memory-editor-item"
-                  >
-                    <SelectValue>
-                      {selectedItem
-                        ? itemLabel(selectedItem)
-                        : place.kind === 'current'
-                          ? currentPlaceLabel
-                          : place.kind === 'place'
-                            ? keptPlaceLabel
-                            : t('noContext')}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NO_ITEM}>{t('noContext')}</SelectItem>
-                    {currentPlaceLabel ? (
-                      <SelectItem value={CURRENT_PLACE}>{currentPlaceLabel}</SelectItem>
-                    ) : null}
-                    {keptPlaceLabel ? (
-                      <SelectItem value={KEPT_PLACE}>{keptPlaceLabel}</SelectItem>
-                    ) : null}
-                    {dayItems.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {itemLabel(item)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FieldDescription>{t('placeDescription')}</FieldDescription>
-              </Field>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor="memory-editor-date">{t('capturedDate')}</FieldLabel>
-                <DatePicker
-                  id="memory-editor-date"
-                  label={t('capturedDate')}
-                  max={itinerary?.trip.endDate}
-                  min={itinerary?.trip.startDate}
-                  onChange={setLocalDate}
-                  value={localDate}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="memory-editor-time">{t('capturedTime')}</FieldLabel>
-                <TimeInput
-                  disabled={!localDate}
-                  id="memory-editor-time"
-                  onValueChange={setLocalTime}
-                  value={localTime}
-                />
-              </Field>
-            </div>
-            <FieldDescription>{t('capturedHint')}</FieldDescription>
-
-            <Field orientation="horizontal">
-              <FieldLabel htmlFor="memory-editor-highlight">{t('highlight')}</FieldLabel>
-              <Switch
-                checked={isHighlight}
-                id="memory-editor-highlight"
-                onCheckedChange={setIsHighlight}
-              />
-            </Field>
-
-            <div className="space-y-2">
-              <FieldLabel>{t('photos')}</FieldLabel>
-              <input
-                accept="image/heic,image/jpeg,image/png,image/webp"
-                className="sr-only"
-                multiple
-                onChange={(event) => {
-                  addPhotoFiles(event.target.files);
-                  event.target.value = '';
-                }}
-                ref={fileInput}
-                type="file"
-              />
-              <Button
-                disabled={uploadingPhotos}
-                onClick={() => fileInput.current?.click()}
-                type="button"
-                variant="outline"
-              >
-                <ImagePlus aria-hidden="true" data-icon="inline-start" />
-                {uploadingPhotos ? t('uploadingPhotos') : t('addPhotos')}
-              </Button>
-
-              {existingPhotos.length ? (
-                <ul aria-label={t('photoList')} className="space-y-1">
-                  {existingPhotos.map((photo, index) => (
-                    <li
-                      className="flex items-center justify-between gap-2 rounded-[var(--radius-md)] bg-muted/40 px-3 py-1.5"
-                      key={photo.id}
-                    >
-                      <span className="min-w-0 truncate text-sm">{photo.fileName}</span>
-                      <span className="flex shrink-0 items-center gap-1">
-                        <Button
-                          aria-label={t('movePhotoUp', { name: photo.fileName })}
-                          disabled={index === 0 || busyPhotoId === photo.id}
-                          onClick={() => void movePhoto(photo.id, -1)}
-                          size="icon-sm"
-                          type="button"
-                          variant="ghost"
-                        >
-                          <ArrowUp aria-hidden="true" />
-                        </Button>
-                        <Button
-                          aria-label={t('movePhotoDown', { name: photo.fileName })}
-                          disabled={index === existingPhotos.length - 1 || busyPhotoId === photo.id}
-                          onClick={() => void movePhoto(photo.id, 1)}
-                          size="icon-sm"
-                          type="button"
-                          variant="ghost"
-                        >
-                          <ArrowDown aria-hidden="true" />
-                        </Button>
-                        <Button
-                          aria-label={t('removePhoto', { name: photo.fileName })}
-                          disabled={busyPhotoId === photo.id}
-                          onClick={() => setPhotoToDelete(photo)}
-                          size="icon-sm"
-                          type="button"
-                          variant="ghost"
-                        >
-                          <X aria-hidden="true" />
-                        </Button>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-
-              {newPhotos.length ? (
-                <ul aria-label={t('photoList')} className="space-y-1">
-                  {newPhotos.map((photo, index) => (
-                    <li
-                      className="flex items-center justify-between gap-2 rounded-[var(--radius-md)] bg-muted/40 px-3 py-1.5"
-                      key={`${photo.name}-${index}`}
-                    >
-                      <span className="min-w-0 truncate text-sm">{photo.name}</span>
-                      <Button
-                        aria-label={t('removePhoto', { name: photo.name })}
-                        onClick={() =>
-                          setNewPhotos((current) => current.filter((_, entry) => entry !== index))
-                        }
-                        size="icon-sm"
-                        type="button"
-                        variant="ghost"
-                      >
-                        <X aria-hidden="true" />
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-
-            {error ? (
-              <Alert variant="destructive">
-                <Icons.Error aria-hidden="true" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            ) : null}
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-3 pb-5">
+            <input
+              accept="image/heic,image/jpeg,image/png,image/webp"
+              className="sr-only"
+              multiple
+              onChange={(event) => {
+                addPhotoFiles(event.target.files);
+                event.target.value = '';
+              }}
+              ref={fileInput}
+              tabIndex={-1}
+              type="file"
+            />
+            <MemoryPage
+              error={error}
+              highlight={isHighlight}
+              note={note}
+              onHighlightChange={setIsHighlight}
+              onNoteChange={setNote}
+              onOpenWhen={() => setPicker('when')}
+              onOpenWhere={() => setPicker('where')}
+              prints={{
+                busyPhotoId,
+                memoryId: memory?.id ?? null,
+                onAdd: () => fileInput.current?.click(),
+                onMove: (photoId, direction) => void movePhoto(photoId, direction),
+                onRemove: setPhotoToDelete,
+                onRemovePending: (index) =>
+                  setNewPhotos((current) => current.filter((_, entry) => entry !== index)),
+                pending: newPhotos,
+                photos: existingPhotos,
+                uploading: uploadingPhotos,
+              }}
+              when={whenLabel}
+              where={whereLabel}
+            />
           </div>
 
           <SheetFooter>
@@ -583,6 +460,32 @@ export function MemoryEditorSheet({
           </SheetFooter>
         </SheetContent>
       </Sheet>
+
+      <MemoryWhereSheet
+        dayChosen={dayId !== NO_DAY}
+        noneId={NO_ITEM}
+        noneLabel={t('noContext')}
+        onChooseDay={() => setPicker('when')}
+        onOpenChange={(next) => setPicker(next ? 'where' : null)}
+        onSelect={selectPlace}
+        open={open && picker === 'where'}
+        options={whereOptions}
+        selectedId={placeValue}
+      />
+      <MemoryWhenSheet
+        days={whenDays}
+        localDate={localDate}
+        localTime={localTime}
+        maxDate={itinerary?.trip.endDate}
+        minDate={itinerary?.trip.startDate}
+        noDayId={NO_DAY}
+        onDateChange={setLocalDate}
+        onDayChange={selectDay}
+        onOpenChange={(next) => setPicker(next ? 'when' : null)}
+        onTimeChange={setLocalTime}
+        open={open && picker === 'when'}
+        selectedDayId={dayId}
+      />
 
       <AlertDialog
         onOpenChange={(next) => !next && setPhotoToDelete(null)}

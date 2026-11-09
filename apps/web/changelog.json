@@ -848,5 +848,15 @@
         "Stops without a title of their own now show their place's name on Home instead of \"Untitled stop\"."
       ]
     }
+  },
+  {
+    "id": "trip-mode-stop-tasks-label",
+    "date": "2026-11-09",
+    "version": "1.17.10",
+    "summaries": {
+      "en": [
+        "The tasks row on a stop in Trip Mode is now called \"Tasks for this stop\", and adding a stop's first task takes one tap."
+      ]
+    }
   }
 ]

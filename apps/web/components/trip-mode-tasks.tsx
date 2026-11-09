@@ -306,6 +306,28 @@ export function TripModeTaskDisclosure({
   const t = useTranslations('tripMode.tasks');
   const { openCreate } = useTripModeTasks();
   const openCount = tasks.filter((task) => !task.completed).length;
+  // Nothing to open: the row does the one thing it can, so the first task is
+  // one tap rather than a tap to expand an empty list and another to add.
+  if (!tasks.length && addContext) {
+    return (
+      <div className={className}>
+        <button
+          className="group flex min-h-11 w-full items-center justify-between gap-3 rounded-[var(--radius-sm)] py-2 text-left text-sm font-medium outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/40"
+          onClick={() => openCreate(addContext)}
+          type="button"
+        >
+          <span className="inline-flex min-w-0 items-center gap-2 text-foreground">
+            <Icons.Tasks aria-hidden="true" className="size-4 shrink-0 text-brand" />
+            <span className="truncate">{title}</span>
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-1 text-xs text-brand">
+            <Plus aria-hidden="true" className="size-3.5" />
+            {t('add')}
+          </span>
+        </button>
+      </div>
+    );
+  }
   return (
     <Collapsible className={className}>
       <CollapsibleTrigger className="group w-full justify-between gap-3 py-2 text-left">

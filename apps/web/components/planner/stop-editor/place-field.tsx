@@ -252,6 +252,11 @@ export function PlaceField({
   }
 
   const typed = query.trim();
+  // Nothing in the trip or Saved goes by that name, and Google has not been
+  // asked yet: finding the real place is the likely next step, so it leads.
+  const searchLeads =
+    Boolean(typed) &&
+    !options.some((option) => option.kind !== 'custom_label' && option.kind !== 'custom_place');
 
   return (
     <>
@@ -322,6 +327,11 @@ export function PlaceField({
               triggerLabel={t('openPlacePicker')}
             />
             <ComboboxContent>
+              {searchLeads ? (
+                <div className="border-b p-2">
+                  <GoogleSearchRow online={online} prominent query={typed} search={search} />
+                </div>
+              ) : null}
               <ComboboxEmpty>{t('placePickerEmpty')}</ComboboxEmpty>
               <ComboboxList>
                 {(option: PlaceOption) => (
@@ -387,12 +397,19 @@ export function PlaceField({
                         <span className="block truncate text-xs text-muted-foreground">
                           {option.suggestion.description}
                         </span>
+                      ) : option.kind === 'custom_label' || option.kind === 'custom_place' ? (
+                        // What each choice actually makes, so the two are not a guess.
+                        <span className="block text-xs text-muted-foreground">
+                          {option.kind === 'custom_label'
+                            ? t('useCustomPlanHint')
+                            : plannerT('addCustomPlaceHint')}
+                        </span>
                       ) : null}
                     </span>
                   </ComboboxItem>
                 )}
               </ComboboxList>
-              {typed ? (
+              {typed && !searchLeads ? (
                 <div className="border-t p-2">
                   <GoogleSearchRow online={online} query={typed} search={search} />
                 </div>

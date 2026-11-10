@@ -880,5 +880,15 @@
         "Pick where you were from that day's stops, with their times, and choose the day and time in one place."
       ]
     }
+  },
+  {
+    "id": "add-stop-clearer-choices",
+    "date": "2026-11-10",
+    "version": "1.17.13",
+    "summaries": {
+      "en": [
+        "Adding a stop is clearer: when a place isn't in your trip, searching Google comes first, and the other choices say what they do."
+      ]
+    }
   }
 ]

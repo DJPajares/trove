@@ -16,8 +16,10 @@ import {
 import { dayForecast } from '@/lib/weather/trip-forecast';
 import { useWeatherEvidenceDescription } from '@/lib/weather/use-evidence-description';
 
+/** A forecast is something to open, so it keeps a shape; an absence is only a line. */
 const frameClassName =
-  'flex min-h-[4.25rem] items-center gap-3.5 rounded-[var(--radius-xl)] border border-border-subtle bg-card px-4 py-3';
+  'flex min-h-[4.25rem] items-center gap-3.5 rounded-[var(--radius-xl)] bg-card px-4 py-3';
+const quietClassName = 'flex items-center gap-2.5 px-1 text-sm text-muted-foreground';
 
 /**
  * One day's weather, under the day it belongs to: the condition, the high it
@@ -61,9 +63,9 @@ export function DayWeatherCard({
 
   if (!weather || !day) {
     return (
-      <div aria-live="polite" className={frameClassName}>
-        <CloudSun aria-hidden="true" className="size-5 shrink-0 text-muted-foreground" />
-        <p className="min-w-0 flex-1 text-sm text-muted-foreground">{t('unavailableTitle')}</p>
+      <div aria-live="polite" className={quietClassName}>
+        <CloudSun aria-hidden="true" className="size-4 shrink-0" />
+        <p className="min-w-0 flex-1">{t('unavailableTitle')}</p>
         <Button
           aria-label={t('tryAgain')}
           className="rounded-full"
@@ -79,8 +81,8 @@ export function DayWeatherCard({
 
   if (!day.forecast) {
     return (
-      <p className={cn(frameClassName, 'min-h-0 text-sm text-muted-foreground')}>
-        <CloudSun aria-hidden="true" className="size-5 shrink-0" />
+      <p className={quietClassName}>
+        <CloudSun aria-hidden="true" className="size-4 shrink-0" />
         {day.state === 'later'
           ? t('forecastLater')
           : day.state === 'past'

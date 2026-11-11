@@ -901,5 +901,16 @@
         "The journey shows the stops behind you and the ones still ahead at a glance."
       ]
     }
+  },
+  {
+    "id": "itinerary-calmer-planner",
+    "date": "2026-11-11",
+    "version": "1.18.2",
+    "summaries": {
+      "en": [
+        "Your itinerary is calmer: a day's weather, timing and map sit quietly under its photo, so the plan itself comes sooner.",
+        "A stop that still needs a location now says so once, and the all-days view shows full day names."
+      ]
+    }
   }
 ]

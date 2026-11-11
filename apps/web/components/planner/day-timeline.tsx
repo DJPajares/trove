@@ -135,6 +135,9 @@ export function DayTimeline({
   // on the leg that reaches that spot when one is drawn, and in a gap of its own
   // when not - the day's first stop before its legs arrive, or Compact view.
   const stops = entries.flatMap((entry) => (entry.kind === 'stop' ? [entry.item] : []));
+  const unlocated = new Set(
+    stops.filter((item) => !item.tripPlace?.place.location).map((item) => item.id),
+  );
   const stopIndex = new Map(stops.map((item, index) => [item.id, index]));
   const names = stops.map((item) => resolveItem(item).name);
   const ids = stops.map((item) => item.id);
@@ -233,6 +236,9 @@ export function DayTimeline({
             savingRouteOwner === `${entry.segment.modeOwner.kind}:${entry.segment.modeOwner.id}`
           }
           segment={entry.segment}
+          unlocated={[entry.segment.origin, entry.segment.destination].some(
+            (end) => end.kind === 'itinerary_item' && unlocated.has(end.id),
+          )}
         />,
       );
       return;

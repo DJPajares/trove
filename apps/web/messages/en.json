@@ -1212,7 +1212,7 @@
         "hourCell": "{time}, {condition}, {temperature}",
         "hourCellWithPrecipitation": "{time}, {condition}, {temperature}, {probability}% chance of precipitation",
         "forecastLater": "Weather for this day will be available closer to your trip.",
-        "pastForecastUnavailable": "No forecast was saved for this past day.",
+        "pastForecastUnavailable": "No forecast was kept for this day.",
         "noForecast": "A forecast is not available for this day.",
         "unavailableTitle": "Weather is unavailable right now",
         "unavailableDescription": "Your trip details are still available. Try again when you have a connection.",
@@ -1965,7 +1965,7 @@
         "dayLabel": "Day {number}",
         "stops": "{count, plural, =0 {Nothing planned yet} one {# stop} other {# stops}}",
         "facts": {
-          "plannedAt": "planned at {count, plural, one {# stop} other {# stops}}"
+          "plannedAt": "across {count, plural, one {# stop} other {# stops}}"
         },
         "measuringTravel": "Measuring travel…",
         "unmapped": "{count} not on map",
@@ -2104,7 +2104,6 @@
     },
     "overview": {
       "title": "Your whole trip",
-      "description": "{count, plural, one {One day in one view.} other {All # days in one view.}}",
       "itemsForDay": "Plans for day {number}",
       "editItem": "Open {name} in day view",
       "emptyDay": "No plans yet"
@@ -2156,7 +2155,7 @@
     },
     "viewDetailsFor": "View details for {name}",
     "itemListLabel": "Items for this day",
-    "addItem": "Add item",
+    "addItem": "Add stop",
     "unscheduled": "Unscheduled",
     "unscheduledDescription": "Ideas kept here retain their details until you assign a day.",
     "dailyBase": "Stay",
@@ -2446,6 +2445,7 @@
       "needsReview": "Some timing needs a review.",
       "review": "Review changes",
       "reviewTiming": "Review timing",
+      "travelNeedsLocation": "Travel time can’t be checked until this stop has a location.",
       "reviewHint": "These changes are already saved. Open a stop to review or edit its current time.",
       "pending": "Timing review pending. Trove will check the day when you reconnect.",
       "stale": "The day changed since this preview. Suggest timing again before saving.",

@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useRef, type ComponentType } from 'react';
 
 import { MediaFrame } from '@/components/media-frame';
+import { TodayPostcard } from '@/components/trip-hub/trip-hub-postcard';
 import { TripInsights } from '@/components/trip-insights';
 import { TripReadinessPrompt } from '@/components/trip-readiness-prompt';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -132,7 +133,7 @@ function ExperienceDoors({ trip }: Readonly<{ trip: Trip }>) {
   const t = useTranslations('trips');
   const destinations = tripOverviewDestinations(trip.id, trip.lifecycle, trip.startDate);
   return (
-    <nav aria-label={t('tripExperiences')} className="grid grid-cols-2 gap-2.5">
+    <nav aria-label={t('tripExperiences')} className="grid grid-cols-2 gap-x-4">
       {destinations.secondary
         .filter((destination) => !trip.archivedAt || destination.section !== 'mode')
         .map((destination) => {
@@ -143,29 +144,25 @@ function ExperienceDoors({ trip }: Readonly<{ trip: Trip }>) {
               : doorIcons[destination.section];
           return (
             <Link
-              className="group flex min-w-0 flex-col gap-3 rounded-[var(--radius-xl)] border border-border-subtle p-3.5 outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none"
+              className="group -mx-2 flex min-h-11 min-w-0 items-start gap-2.5 rounded-[var(--radius-lg)] px-2 py-2 outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none"
               data-slot="trip-overview-secondary-action"
               href={destination.href}
               key={destination.section}
             >
-              <span className="flex items-center justify-between">
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    'grid size-9 place-items-center rounded-full bg-surface-tint',
-                    destination.section === 'memories' ? 'text-accent-strong' : 'text-brand',
-                  )}
-                >
-                  <Icon className="size-[1.125rem]" />
-                </span>
-                <ChevronRight
-                  aria-hidden="true"
-                  className="size-4 text-text-subtle transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
-                />
-              </span>
-              <span>
-                <span className="block text-[0.9375rem] font-semibold">
+              <Icon
+                aria-hidden="true"
+                className={cn(
+                  'mt-0.5 size-[1.125rem] shrink-0',
+                  destination.section === 'memories' ? 'text-accent-strong' : 'text-brand',
+                )}
+              />
+              <span className="min-w-0">
+                <span className="flex items-center gap-0.5 text-[0.9375rem] font-semibold">
                   {t(destination.displayLabelKey)}
+                  <ChevronRight
+                    aria-hidden="true"
+                    className="size-3.5 text-text-subtle transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
+                  />
                 </span>
                 <span className="mt-0.5 block text-[0.8125rem] leading-snug text-muted-foreground">
                   {t(`experienceDescription.${destination.descriptionKey}`)}
@@ -322,15 +319,17 @@ export function TripHubChapter({
       <p
         className={cn(kickerClass, remember ? 'tracking-[0.2em] text-accent-strong' : 'text-brand')}
       >
-        {t(
-          remember
-            ? 'chapter.remember'
-            : stage === 'live'
-              ? 'chapter.live'
-              : stage === 'soon'
-                ? 'chapter.soon'
-                : 'chapter.plan',
-        )}
+        {stage === 'live' && day
+          ? t('liveKicker', { number: day.number, total: totalDays })
+          : t(
+              remember
+                ? 'chapter.remember'
+                : stage === 'live'
+                  ? 'chapter.live'
+                  : stage === 'soon'
+                    ? 'chapter.soon'
+                    : 'chapter.plan',
+            )}
       </p>
 
       {remember ? (
@@ -364,29 +363,19 @@ export function TripHubChapter({
       ) : stage === 'live' ? (
         <>
           {day ? (
-            <div className="flex items-end gap-4">
-              <p aria-hidden="true" className="flex shrink-0 items-baseline">
-                <span className="text-[4.75rem] leading-[0.8] font-semibold tracking-[-0.06em] tabular-nums">
-                  {pad(day.number)}
-                </span>
-                <span className="ml-1.5 text-base font-medium text-muted-foreground tabular-nums">
-                  {t('dayTotal', { total: pad(totalDays) })}
-                </span>
-              </p>
-              <div className="min-w-0 pb-0.5">
+            <div className="-mt-2 flex items-start gap-4">
+              <div className="min-w-0 flex-1">
                 <h2
-                  className="text-[1.75rem] leading-[1.08] font-semibold tracking-[-0.03em] text-balance break-words"
+                  className="text-[2.125rem] leading-[1.04] font-semibold tracking-[-0.035em] text-balance break-words"
                   id="trip-chapter-heading"
                 >
-                  <span className="sr-only">
-                    {t('todayTitle', { number: day.number, total: totalDays })}:{' '}
-                  </span>
                   {day.name ?? days.find((entry) => entry.id === day.id)?.town ?? t('liveTitle')}
                 </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="mt-2 text-sm text-muted-foreground">
                   {formatDay(day.date, locale, { weekday: 'long', month: 'short', day: 'numeric' })}
                 </p>
               </div>
+              <TodayPostcard dayId={day.id} days={days} trip={trip} />
             </div>
           ) : (
             <h2
@@ -399,32 +388,27 @@ export function TripHubChapter({
           {loading ? (
             <ChapterSkeleton label={t('loading')} />
           ) : day ? (
-            <div className="rounded-[var(--radius-xl)] border border-border-subtle bg-card px-4 shadow-[var(--shadow-card)]">
-              {day.current || day.next ? (
-                <ul className="divide-y divide-border-subtle">
-                  {day.current ? (
-                    <li className="py-3.5">
-                      <StopLine clockTimeZone={overview!.clockTimeZone} stop={day.current} />
-                    </li>
-                  ) : null}
-                  {day.next ? (
-                    <li className="py-3.5">
-                      <StopLine clockTimeZone={overview!.clockTimeZone} stop={day.next} />
-                    </li>
-                  ) : null}
-                </ul>
-              ) : (
-                <p className="py-4 text-[0.9375rem] leading-relaxed text-muted-foreground">
-                  {t(day.state === 'empty' ? 'todayEmpty' : 'todayFinished')}
-                </p>
-              )}
-            </div>
+            day.current || day.next ? (
+              <ul className="divide-y divide-border-subtle border-y border-border-subtle">
+                {day.current ? (
+                  <li className="py-3.5">
+                    <StopLine clockTimeZone={overview!.clockTimeZone} stop={day.current} />
+                  </li>
+                ) : null}
+                {day.next ? (
+                  <li className="py-3.5">
+                    <StopLine clockTimeZone={overview!.clockTimeZone} stop={day.next} />
+                  </li>
+                ) : null}
+              </ul>
+            ) : (
+              <p className="text-[1.0625rem] leading-relaxed text-pretty text-muted-foreground">
+                {t(day.state === 'empty' ? 'todayEmpty' : 'todayFinished')}
+              </p>
+            )
           ) : (
             <p className="text-[0.9375rem] leading-relaxed text-muted-foreground">{t('noDay')}</p>
           )}
-          {day ? (
-            <TripInsights dayId={day.id} headingLevel={3} initialItemLimit={1} tripId={trip.id} />
-          ) : null}
         </>
       ) : (
         <>
@@ -463,7 +447,7 @@ export function TripHubChapter({
       <Link
         className={cn(
           buttonVariants({ size: 'lg' }),
-          'h-auto min-h-12 w-full rounded-[var(--radius-lg)] py-3 text-[0.9375rem] whitespace-normal lg:mt-auto',
+          'h-auto min-h-12 w-full rounded-[var(--radius-xl)] py-3 text-[0.9375rem] whitespace-normal lg:mt-auto',
         )}
         data-slot="trip-overview-primary-action"
         href={href}
@@ -476,6 +460,16 @@ export function TripHubChapter({
         )}
       </Link>
       <ExperienceDoors trip={trip} />
+      {/* The day's one insight follows the way in: Trip Mode holds the rest. */}
+      {stage === 'live' && day ? (
+        <TripInsights
+          dayId={day.id}
+          headingLevel={3}
+          initialItemLimit={1}
+          surface="inset"
+          tripId={trip.id}
+        />
+      ) : null}
     </section>
   );
 }

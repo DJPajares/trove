@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { MediaFrame } from '@/components/media-frame';
 import { useTripPlacesDrawer } from '@/components/trip-places-provider';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useEditorialImageResolution } from '@/hooks/use-editorial-images';
 import * as Icons from '@/lib/icons';
 import {
@@ -34,36 +35,59 @@ function formatDayRange(start: string, end: string, locale: string) {
   }).formatRange(new Date(`${start}T00:00:00Z`), new Date(`${end}T00:00:00Z`));
 }
 
-/** Decorative only: a town's editorial photograph, or a calm tile while there is none. */
+/** A town as the journey's photography knows it: one subject per stop, shared with the chapter's postcard. */
+export function journeyStopSubject(town: string, trip: Trip): EditorialSubject {
+  const countryCode = trip.countries?.length === 1 ? trip.countries[0] : undefined;
+  return { category: 'destination', context: { area: town, countryCode }, name: town };
+}
+
+/**
+ * Decorative only: a town's editorial photograph. While it resolves the tile
+ * waits rather than flashing a fallback; with none, the town's initial stands in.
+ */
 function StopThumbnail({
   current,
-  subject,
   images,
+  pending,
+  subject,
+  travelled,
 }: Readonly<{
   current: boolean;
   images: ReturnType<typeof useEditorialImageResolution>['images'];
+  pending: boolean;
   subject: EditorialSubject;
+  travelled: boolean;
 }>) {
   const reference = primaryEditorialImage(images.get(editorialSubjectKey(subject)));
-  const ring = current && 'ring-2 ring-brand ring-offset-2 ring-offset-background';
-  return reference ? (
-    <MediaFrame
-      alt=""
-      className={cn('size-14 shrink-0 rounded-[var(--radius-lg)]', ring)}
-      dataSlot="trip-journey-stop"
-      sizes="56px"
-      source={{ kind: 'editorial', reference }}
-      variant="thumbnail"
-    />
-  ) : (
+  const frame = cn(
+    'size-16 shrink-0 rounded-[var(--radius-xl)]',
+    current && 'ring-2 ring-brand ring-offset-2 ring-offset-background',
+    travelled && 'opacity-70 saturate-[0.6]',
+  );
+  if (reference) {
+    return (
+      <MediaFrame
+        alt=""
+        className={frame}
+        dataSlot="trip-journey-stop"
+        sizes="64px"
+        source={{ kind: 'editorial', reference }}
+        variant="thumbnail"
+      />
+    );
+  }
+  if (pending) return <Skeleton aria-hidden="true" className={frame} />;
+  return (
     <span
       aria-hidden="true"
       className={cn(
-        'grid size-14 shrink-0 place-items-center rounded-[var(--radius-lg)] bg-surface-tint text-brand',
-        ring,
+        'grid place-items-center bg-surface-tint font-journal text-[1.75rem] leading-none text-brand',
+        frame,
       )}
     >
-      <Icons.Place className="size-5" />
+      {Array.from(subject.name.trim())[0]?.toLocaleUpperCase() ?? (
+        <Icons.Place className="size-5" />
+      )}
     </span>
   );
 }
@@ -106,7 +130,6 @@ export function TripHubJourney({
   const [aboutOpen, setAboutOpen] = useState(false);
   const days = overview?.days ?? [];
   const stops = tripJourneyStops(days);
-  const countryCode = trip.countries?.length === 1 ? trip.countries[0] : undefined;
   // A trip whose days cannot be placed still has the destinations its traveller
   // named, in order. They lead with the place itself; the rest is its region.
   const destinations = stops.length
@@ -115,17 +138,19 @@ export function TripHubJourney({
         const [title, ...rest] = (destination.name ?? '').split(',').map((part) => part.trim());
         return title ? [{ id: destination.id, region: rest.join(', '), title }] : [];
       });
-  const subject = (name: string): EditorialSubject => ({
-    category: 'destination',
-    context: { area: name, countryCode },
-    name,
-  });
+  const subject = (name: string) => journeyStopSubject(name, trip);
   const subjects = stops.length
     ? stops.map((stop) => subject(stop.town))
     : destinations.map((destination) => subject(destination.title));
-  const { images } = useEditorialImageResolution(subjects);
+  const { images, status } = useEditorialImageResolution(subjects);
+  const pending = status === 'pending';
   const focusDayId = stage === 'remember' ? null : (overview?.day?.id ?? null);
   const totalDays = days.length;
+  // While travelling the route reads as lived up to here and still ahead after.
+  const currentIndex =
+    stage === 'live' && focusDayId
+      ? stops.findIndex((stop) => stop.days.some((day) => day.id === focusDayId))
+      : -1;
 
   return (
     <section
@@ -177,6 +202,7 @@ export function TripHubJourney({
         <ol aria-label={t('destinations')} className="mt-5">
           {stops.map((stop, index) => {
             const current = Boolean(focusDayId && stop.days.some((day) => day.id === focusDayId));
+            const travelled = index < currentIndex;
             const last = index === stops.length - 1;
             const range =
               stop.firstNumber === stop.lastNumber
@@ -195,17 +221,23 @@ export function TripHubJourney({
                   });
             return (
               <li
-                className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-x-3.5"
+                className="grid grid-cols-[4rem_minmax(0,1fr)] gap-x-3.5"
                 key={stop.days[0]?.id ?? stop.town}
               >
                 <div className="flex flex-col items-center">
-                  <StopThumbnail current={current} images={images} subject={subjects[index]!} />
+                  <StopThumbnail
+                    current={current}
+                    images={images}
+                    pending={pending}
+                    subject={subjects[index]!}
+                    travelled={travelled}
+                  />
                   {last ? null : (
                     <span
                       aria-hidden="true"
                       className={cn(
                         'my-1.5 min-h-5 w-0 flex-1 border-l-2',
-                        stage === 'remember'
+                        stage === 'remember' || travelled
                           ? 'border-border-strong'
                           : 'border-dashed border-border-strong',
                       )}
@@ -213,9 +245,14 @@ export function TripHubJourney({
                   )}
                 </div>
                 <Collapsible className={cn('min-w-0', !last && 'pb-5')} defaultOpen={current}>
-                  <div className="flex items-start justify-between gap-2 pt-1.5">
+                  <div className="flex items-start justify-between gap-2 pt-2.5">
                     <div className="min-w-0">
-                      <p className="text-[1.0625rem] leading-snug font-semibold break-words">
+                      <p
+                        className={cn(
+                          'text-[1.0625rem] leading-snug font-semibold break-words',
+                          travelled && 'text-muted-foreground',
+                        )}
+                      >
                         {stop.town}
                       </p>
                       <p className="mt-0.5 text-sm text-muted-foreground">{range}</p>
@@ -234,7 +271,7 @@ export function TripHubJourney({
                     </div>
                   </div>
                   <CollapsiblePanel>
-                    <ul className="mt-3 rounded-[var(--radius-lg)] border border-border-subtle bg-card px-3.5">
+                    <ul className="mt-2 border-t border-border-subtle">
                       {stop.days.map((day) => {
                         const today = stage === 'live' && day.id === focusDayId;
                         return (
@@ -256,7 +293,7 @@ export function TripHubJourney({
                                     day: 'numeric',
                                   })}
                             </span>
-                            <span className="min-w-0 break-words">
+                            <span className={cn('min-w-0 break-words', today && 'font-semibold')}>
                               {day.name ??
                                 (day.stopCount
                                   ? t('plannedStops', { count: day.stopCount })
@@ -277,9 +314,15 @@ export function TripHubJourney({
           {destinations.map((destination, index) => {
             const last = index === destinations.length - 1;
             return (
-              <li className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-x-3.5" key={destination.id}>
+              <li className="grid grid-cols-[4rem_minmax(0,1fr)] gap-x-3.5" key={destination.id}>
                 <div className="flex flex-col items-center">
-                  <StopThumbnail current={false} images={images} subject={subjects[index]!} />
+                  <StopThumbnail
+                    current={false}
+                    images={images}
+                    pending={pending}
+                    subject={subjects[index]!}
+                    travelled={false}
+                  />
                   {last ? null : (
                     <span
                       aria-hidden="true"
@@ -287,7 +330,7 @@ export function TripHubJourney({
                     />
                   )}
                 </div>
-                <div className={cn('min-w-0 pt-1.5', !last && 'pb-5')}>
+                <div className={cn('min-w-0 pt-2.5', !last && 'pb-5')}>
                   <p className="text-[1.0625rem] leading-snug font-semibold break-words">
                     {destination.title}
                   </p>
@@ -303,7 +346,7 @@ export function TripHubJourney({
 
       <button
         aria-haspopup="dialog"
-        className="group mt-6 flex w-full items-center gap-3.5 rounded-[var(--radius-xl)] border border-border-subtle bg-card p-3.5 pr-4 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none md:max-w-md"
+        className="group -mx-2 mt-5 flex w-[calc(100%+1rem)] items-center gap-3.5 rounded-[var(--radius-xl)] p-2 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none md:max-w-md"
         data-trip-places-trigger
         onClick={openPlaces}
         type="button"

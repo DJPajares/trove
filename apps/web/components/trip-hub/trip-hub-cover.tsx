@@ -44,7 +44,7 @@ function CoverSignature({
 
   if (stage === 'live') {
     const { day, total } = tripDayProgress(trip);
-    return <TripDaySegments className="mt-3" day={day} total={total} />;
+    return <TripDaySegments className="mt-3" day={day} reveal total={total} />;
   }
 
   if (stage === 'soon') {

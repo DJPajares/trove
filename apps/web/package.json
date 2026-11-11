@@ -1,6 +1,6 @@
 {
   "name": "@trove/web",
-  "version": "1.17.13",
+  "version": "1.18.0",
   "private": true,
   "type": "module",
   "scripts": {

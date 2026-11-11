@@ -20,6 +20,7 @@ import { selectNextSteps } from '@/lib/home/next-steps';
 import * as Icons from '@/lib/icons';
 import { overviewLifecycle, tripHubStage } from '@/lib/trips/overview';
 import { useTripOverview } from '@/lib/trips/use-trip-overview';
+import { cn } from '@/lib/utils';
 
 /**
  * A single trip's home: its identity on its own photograph, what matters for
@@ -152,9 +153,16 @@ export function TripDetail({ planScoreEnabled }: Readonly<{ planScoreEnabled: bo
 
         <TripActionFeedback />
 
-        <div className="mt-10 grid gap-12 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] md:gap-x-14">
+        {/* On a phone the chapter runs straight into the journey, so a rule marks
+            where one ends; on desktop the tab row already sits between them. */}
+        <div
+          className={cn(
+            'mt-10 grid gap-10 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] md:gap-x-14',
+            stage !== 'remember' && 'border-t border-border-subtle pt-10 lg:border-t-0 lg:pt-0',
+          )}
+        >
           <TripHubJourney overview={overview} stage={stage} trip={trip} />
-          <div className="space-y-12 empty:hidden">
+          <div className="space-y-12 border-t border-border-subtle pt-10 empty:hidden md:border-t-0 md:pt-0">
             <TripHubGoodToKnow planScoreEnabled={planScoreEnabled} stage={stage} trip={trip} />
             <TripHubCloseAtHand overview={overview} stage={stage} trip={trip} />
           </div>

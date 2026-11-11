@@ -43,7 +43,7 @@ export function TripHubScore({ tripId }: Readonly<{ tripId: string }>) {
     <>
       <button
         aria-haspopup="dialog"
-        className="group -mx-2 flex w-[calc(100%+1rem)] items-center gap-4 rounded-[var(--radius-xl)] p-2 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none"
+        className="group flex w-full items-center gap-4 rounded-[var(--radius-xl)] bg-card p-3.5 pr-4 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none"
         onClick={() => setOpen(true)}
         type="button"
       >

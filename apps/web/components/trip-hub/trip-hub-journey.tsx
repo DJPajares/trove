@@ -346,7 +346,7 @@ export function TripHubJourney({
 
       <button
         aria-haspopup="dialog"
-        className="group -mx-2 mt-5 flex w-[calc(100%+1rem)] items-center gap-3.5 rounded-[var(--radius-xl)] p-2 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none md:max-w-md"
+        className="group mt-5 flex w-full items-center gap-3.5 rounded-[var(--radius-xl)] bg-card p-3.5 pr-4 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none md:max-w-md"
         data-trip-places-trigger
         onClick={openPlaces}
         type="button"

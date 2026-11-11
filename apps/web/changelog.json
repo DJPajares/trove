@@ -890,5 +890,16 @@
         "Adding a stop is clearer: when a place isn't in your trip, searching Google comes first, and the other choices say what they do."
       ]
     }
+  },
+  {
+    "id": "trip-overview-journal-page",
+    "date": "2026-11-11",
+    "version": "1.18.0",
+    "summaries": {
+      "en": [
+        "Your trip overview now reads like a journal page: today's place leads, with a postcard of where you are while you travel.",
+        "The journey shows the stops behind you and the ones still ahead at a glance."
+      ]
+    }
   }
 ]

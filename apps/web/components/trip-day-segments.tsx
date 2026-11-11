@@ -11,8 +11,15 @@ const MAX_DAY_SEGMENTS = 21;
 export function TripDaySegments({
   className,
   day,
+  reveal = false,
   total,
-}: Readonly<{ className?: string; day: number; total: number }>) {
+}: Readonly<{
+  className?: string;
+  day: number;
+  /** Fills the days lived one after another, up to today, as the trip opens. */
+  reveal?: boolean;
+  total: number;
+}>) {
   if (total > MAX_DAY_SEGMENTS) {
     return (
       <span
@@ -36,8 +43,12 @@ export function TripDaySegments({
             index + 1 < day && 'bg-white/70',
             index + 1 === day && 'bg-primary-on-media shadow-[0_0_12px_oklch(0.78_0.085_115/0.7)]',
             index + 1 > day && 'bg-white/22',
+            reveal &&
+              index < day &&
+              'motion-safe:animate-in motion-safe:fill-mode-backwards motion-safe:duration-[var(--motion-slow)] motion-safe:fade-in-25',
           )}
           key={index}
+          style={reveal && index < day ? { animationDelay: `${index * 45}ms` } : undefined}
         />
       ))}
     </span>

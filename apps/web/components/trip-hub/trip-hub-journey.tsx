@@ -100,14 +100,14 @@ function StopMarker({
   const t = useTranslations('trips.hub');
   if (stage === 'live' && current) {
     return (
-      <span className="inline-flex h-6 items-center rounded-full bg-brand px-2.5 text-xs font-semibold text-primary-foreground">
+      <span className="mt-2 inline-flex h-6 items-center rounded-full bg-brand px-2.5 text-xs font-semibold text-primary-foreground">
         {t('youAreHere')}
       </span>
     );
   }
   if ((stage === 'plan' || stage === 'soon') && stop.openDays) {
     return (
-      <span className="inline-flex h-6 items-center rounded-full bg-accent/30 px-2.5 text-xs font-semibold text-accent-strong">
+      <span className="mt-2 inline-flex h-6 items-center rounded-full bg-accent/30 px-2.5 text-xs font-semibold text-accent-strong">
         {t('daysOpen', { count: stop.openDays })}
       </span>
     );
@@ -256,9 +256,9 @@ export function TripHubJourney({
                         {stop.town}
                       </p>
                       <p className="mt-0.5 text-sm text-muted-foreground">{range}</p>
+                      <StopMarker current={current} stage={stage} stop={stop} />
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
-                      <StopMarker current={current} stage={stage} stop={stop} />
                       <CollapsibleTrigger
                         aria-label={t('showDays', { town: stop.town })}
                         className="group grid size-11 place-items-center rounded-full hover:bg-surface-hover"
@@ -346,7 +346,7 @@ export function TripHubJourney({
 
       <button
         aria-haspopup="dialog"
-        className="group -mx-2 mt-5 flex w-[calc(100%+1rem)] items-center gap-3.5 rounded-[var(--radius-xl)] p-2 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none md:max-w-md"
+        className="group mt-5 flex w-full items-center gap-3.5 rounded-[var(--radius-xl)] bg-card p-3.5 pr-4 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none md:max-w-md"
         data-trip-places-trigger
         onClick={openPlaces}
         type="button"

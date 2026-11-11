@@ -444,3 +444,39 @@ test('the trip falls into chapters by where each night is spent, in the order li
   ]);
   expect(chapters[0]?.stayTripPlaceId).toBe('hotel');
 });
+
+test('days that name no place join the town beside them, never a Stay', () => {
+  const dates = ['2026-09-05', '2026-09-06', '2026-09-07', '2026-09-08', '2026-09-09'];
+  const days = dates.map((date, index) =>
+    day(`d${index + 1}`, {
+      date,
+      stay:
+        index === 4
+          ? {
+              endSource: 'accommodation',
+              endTripPlaceId: 'hotel',
+              startSource: 'accommodation',
+              startTripPlaceId: 'hotel',
+            }
+          : undefined,
+    }),
+  );
+  const towns = [null, 'Hokitika', null, 'Wānaka', null];
+  const ribbon = plannerDays({ days, today: null, tripPlaces: [HOTEL] }).map((entry, index) => ({
+    ...entry,
+    town: towns[index] ?? null,
+  }));
+
+  expect(
+    stayChapters({ days, plannerDays: ribbon }).map((chapter) => [
+      chapter.kind,
+      chapter.town,
+      chapter.days.map((entry) => entry.id),
+    ]),
+  ).toStrictEqual([
+    // The opening day joins the first town; the quiet day after it stays with it.
+    ['town', 'Hokitika', ['d1', 'd2', 'd3']],
+    ['town', 'Wānaka', ['d4']],
+    ['stay', null, ['d5']],
+  ]);
+});

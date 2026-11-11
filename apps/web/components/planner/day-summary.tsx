@@ -47,11 +47,14 @@ export function DaySummary({
   compactTravel,
   facts,
   routesLoading,
+  unmapped = 0,
 }: Readonly<{
   /** The traveller turned travel details off; the day says nothing about travel. */
   compactTravel: boolean;
   facts: DayFacts;
   routesLoading: boolean;
+  /** Stops with no location yet. They already say so themselves, so the day does not repeat it as missing travel. */
+  unmapped?: number;
 }>) {
   const t = useTranslations('itinerary.planner.masthead');
   const routesT = useTranslations('itinerary.routes');
@@ -66,16 +69,17 @@ export function DaySummary({
     );
   }
 
-  const travel = compactTravel ? null : facts.travel;
+  const travel =
+    compactTravel || (facts.travel?.kind === 'unavailable' && unmapped > 0) ? null : facts.travel;
   const planned = facts.planned;
   const travelMinutes = travel?.kind === 'known' ? Math.round(travel.durationSeconds / 60) : 0;
   const total = (planned?.minutes ?? 0) + travelMinutes;
   const travelShare = planned && travelMinutes && total ? travelMinutes / total : 0;
 
   return (
-    <div className="flex h-full flex-col justify-center gap-2.5 rounded-[var(--radius-lg)] border border-border-subtle bg-card px-3.5 py-3">
+    <div className="flex h-full flex-col justify-center gap-2.5 px-1 py-1">
       <p className="min-w-0">
-        <span className="block text-xl leading-tight font-semibold tracking-[-0.02em] tabular-nums">
+        <span className="block text-2xl leading-tight font-semibold tracking-[-0.02em] tabular-nums">
           {planned
             ? `${planned.approximate ? '≈' : ''}${formatPlannedDuration(planned.minutes, locale)}`
             : t('stops', { count: facts.stopCount })}

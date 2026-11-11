@@ -114,12 +114,15 @@ export function TimingConflictNote({
         }
       >
         <span className="sr-only">{t(`connectedTiming.issueLabel.${issue.severity}`)}: </span>
-        {describeTimingIssue(issue, {
-          locale,
-          hour12: preferences.timeFormat === '12h',
-          nameFor,
-          t,
-        })}
+        {/* A stop with nowhere to route to has one cause and one fix, said plainly. */}
+        {issue.code === 'TRAVEL_UNKNOWN' && !item.tripPlace?.place.location
+          ? t('connectedTiming.travelNeedsLocation')
+          : describeTimingIssue(issue, {
+              locale,
+              hour12: preferences.timeFormat === '12h',
+              nameFor,
+              t,
+            })}
         {detail ? <p className="mt-1 text-muted-foreground">{detail}</p> : null}
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {applicable ? (

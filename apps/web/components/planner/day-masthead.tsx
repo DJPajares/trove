@@ -170,13 +170,18 @@ export function DayMasthead({
       <div className="space-y-3">
         <div className="flex items-stretch gap-3">
           <div className="min-w-0 flex-1 space-y-2">
-            <DaySummary compactTravel={compactTravel} facts={facts} routesLoading={routesLoading} />
+            <DaySummary
+              compactTravel={compactTravel}
+              facts={facts}
+              routesLoading={routesLoading}
+              unmapped={unmapped}
+            />
           </div>
 
           {/* The day's shape at a glance, and the way into the real map. */}
           <button
             aria-label={t('openMapLabel', { number: dayNumber })}
-            className="group flex w-28 shrink-0 flex-col gap-1.5 rounded-[var(--radius-lg)] border border-border-subtle bg-card p-1.5 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:border-border hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none sm:w-36 lg:hidden"
+            className="group flex w-28 shrink-0 flex-col gap-1.5 rounded-[var(--radius-lg)] bg-card p-1.5 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none sm:w-36 lg:hidden"
             // Where focus returns when the map is closed by its own way back.
             data-planner-open-map=""
             onClick={onOpenMap}

@@ -66,9 +66,6 @@ export function TripBoard({
           >
             {t('overview.title')}
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {t('overview.description', { count: days.length })}
-          </p>
         </div>
         <div className="flex items-center gap-2">
           <Tabs

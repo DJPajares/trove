@@ -34,7 +34,7 @@ type CardProps = {
 };
 
 const cardClassName =
-  'relative flex h-[5.5rem] w-[5rem] shrink-0 flex-col justify-between rounded-[var(--radius-lg)] border px-2.5 py-2.5 text-left outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none';
+  'relative flex h-[4.25rem] w-[4.5rem] shrink-0 flex-col justify-between rounded-[var(--radius-lg)] border px-2.5 py-2 text-left outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none';
 
 /** A tile of the planner ribbon, marked for its keyboard and scroll handling. */
 function CardShell({
@@ -146,30 +146,17 @@ export function TripDayCard({
       >
         {paddedDayNumber(day.number)}
       </span>
-      <span aria-hidden="true" className="flex min-w-0 flex-col gap-1.5">
-        <span
-          className={cn(
-            'block truncate text-[0.6875rem] leading-tight',
-            current
-              ? 'text-primary-foreground/85'
-              : planned
-                ? 'text-muted-foreground'
-                : 'font-semibold text-accent-strong',
-          )}
-        >
-          {day.name ?? day.town ?? (planned ? t('stops', { count: day.stopCount }) : t('open'))}
-        </span>
-        <span
-          className={cn(
-            'flex h-1 items-center gap-[3px] text-[0.625rem] leading-none',
-            current ? 'text-primary-foreground/85' : 'text-muted-foreground',
-          )}
-        >
-          {Array.from({ length: Math.min(day.stopCount, MAX_PIPS) }, (_, index) => (
-            <span className="size-1 rounded-full bg-current" key={index} />
-          ))}
-          {day.stopCount > MAX_PIPS ? <span className="ml-px">+</span> : null}
-        </span>
+      <span
+        aria-hidden="true"
+        className={cn(
+          'flex h-1 items-center gap-[3px] text-[0.625rem] leading-none',
+          current ? 'text-primary-foreground/85' : 'text-muted-foreground',
+        )}
+      >
+        {Array.from({ length: Math.min(day.stopCount, MAX_PIPS) }, (_, index) => (
+          <span className="size-1 rounded-full bg-current" key={index} />
+        ))}
+        {day.stopCount > MAX_PIPS ? <span className="ml-px">+</span> : null}
       </span>
       {day.attention ? (
         <span

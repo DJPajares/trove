@@ -17,7 +17,7 @@ import {
 import { dayForecast, forecastGap } from '@/lib/weather/trip-forecast';
 import { useWeatherEvidenceDescription } from '@/lib/weather/use-evidence-description';
 
-const frameClassName = 'rounded-[var(--radius-xl)] border border-border-subtle bg-card px-4 py-3.5';
+const frameClassName = 'rounded-[var(--radius-xl)] bg-card px-4 py-3.5';
 
 /**
  * The whole trip's weather at a glance, above the days it belongs to: one
@@ -91,8 +91,8 @@ export function TripForecastCard({
 
   if (!shown.length) {
     return (
-      <p className={cn(frameClassName, 'flex items-center gap-3 text-sm text-muted-foreground')}>
-        <CloudSun aria-hidden="true" className="size-5 shrink-0" />
+      <p className="flex items-center gap-2.5 px-1 text-sm text-muted-foreground">
+        <CloudSun aria-hidden="true" className="size-4 shrink-0" />
         {gapText ?? planner('tripMissing')}
       </p>
     );
@@ -114,7 +114,8 @@ export function TripForecastCard({
         {planner('tripTitle')}
       </h3>
       <ol className="interaction-scrollbar -mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1">
-        {columns.map(({ day, forecast: entry }) => {
+        {/* Days with nothing to show are covered once, by the line below. */}
+        {shown.map(({ day, forecast: entry }) => {
           const forecast = entry?.forecast ?? null;
           const dayLabel = `${paddedDayNumber(day.number)} ${weekday.format(
             new Date(`${day.date}T00:00:00.000Z`),

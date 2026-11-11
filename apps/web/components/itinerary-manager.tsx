@@ -221,7 +221,7 @@ function TripScoreAndInsights({
       <TripInsights
         enabled={hasBeenVisible}
         resolveAction={resolveAction}
-        surface="card"
+        surface="inset"
         tripId={tripId}
       />
     </div>
@@ -1439,7 +1439,7 @@ export function ItineraryManager({
       // The height of the sticky stack the day scrolls under - the trip's tab
       // row on a phone, and the ribbon everywhere - so the map and a scrolled-to
       // stop can land just below it.
-      className="flex flex-col gap-5 md:gap-7 [--planner-sticky:calc(var(--safe-top)+var(--header-offset)+9.75rem)] md:[--planner-sticky:calc(var(--safe-top)+var(--header-offset)+6.5rem)]"
+      className="flex flex-col gap-5 md:gap-7 [--planner-sticky:calc(var(--safe-top)+var(--header-offset)+8.5rem)] md:[--planner-sticky:calc(var(--safe-top)+var(--header-offset)+5.25rem)]"
     >
       {movement.dialog}
       {movement.busy && !movement.dialog ? (
@@ -1889,7 +1889,7 @@ export function ItineraryManager({
               dayId={selectedDay.id}
               enabled={insightsVisible}
               resolveAction={resolveScoreAction}
-              surface="card"
+              surface="inset"
               tripId={tripId}
             />
           </PlannerDayView>

@@ -52,7 +52,7 @@ export function BoardDayCard({
   return (
     <article
       className={cn(
-        'relative flex min-h-44 flex-col gap-3 rounded-[var(--radius-xl)] border p-3.5 transition-colors duration-[var(--motion-standard)] motion-reduce:transition-none',
+        'relative flex flex-col gap-3 rounded-[var(--radius-xl)] border p-3.5 transition-colors duration-[var(--motion-standard)] motion-reduce:transition-none',
         day.items.length
           ? 'border-border-subtle bg-card hover:border-border'
           : 'border-dashed border-border bg-transparent',
@@ -76,7 +76,7 @@ export function BoardDayCard({
               {paddedDayNumber(plannerDay.number)}
             </span>
             <button
-              className="min-w-0 truncate rounded-[var(--radius-sm)] text-left text-base font-semibold outline-none after:absolute after:inset-0 after:rounded-[var(--radius-xl)] hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+              className="line-clamp-2 min-w-0 rounded-[var(--radius-sm)] text-left text-base leading-snug font-semibold text-balance outline-none after:absolute after:inset-0 after:rounded-[var(--radius-xl)] hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
               onClick={onOpen}
               type="button"
             >
@@ -127,10 +127,11 @@ export function BoardDayCard({
       )}
 
       <div className="mt-auto flex items-end justify-between gap-3">
+        {/* The stops above already count themselves; only the ones not shown need saying. */}
         <p className="text-xs text-muted-foreground">
           {day.items.length > STOPS_SHOWN
             ? boardT('more', { count: day.items.length - STOPS_SHOWN })
-            : boardT('stops', { count: day.items.length })}
+            : null}
         </p>
         {sketch ? <div className="w-20 shrink-0 opacity-90">{sketch}</div> : null}
       </div>

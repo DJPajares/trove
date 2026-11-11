@@ -37,6 +37,7 @@ export function LegConnector({
   onModeChange,
   saving,
   segment,
+  unlocated = false,
 }: Readonly<{
   className?: string;
   distanceUnit: 'km' | 'mi';
@@ -45,6 +46,8 @@ export function LegConnector({
   onModeChange: (segment: ItineraryRouteSegment, mode: RouteTravelMode) => void;
   saving: boolean;
   segment: ItineraryRouteSegment;
+  /** A stop on this leg has no location yet, which that stop already says: the leg names its mode only. */
+  unlocated?: boolean;
 }>) {
   const t = useTranslations('itinerary.routes');
   const readOnly = useTripReadOnly();
@@ -86,10 +89,14 @@ export function LegConnector({
       <div className="flex min-h-11 items-center gap-2 py-0.5">
         <p className="min-w-0 flex-1 text-xs leading-5 text-muted-foreground tabular-nums">
           <span className="font-medium text-foreground">{t(`mode.${segment.mode}`)}</span>
-          <span aria-hidden="true" className="text-text-subtle">
-            {' · '}
-          </span>
-          <span>{metrics}</span>
+          {unlocated && !available ? null : (
+            <>
+              <span aria-hidden="true" className="text-text-subtle">
+                {' · '}
+              </span>
+              <span>{metrics}</span>
+            </>
+          )}
           {context ? <span className="block">{context}</span> : null}
         </p>
         <Select

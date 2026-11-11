@@ -27,8 +27,8 @@ export type StayChapter = {
  * the same way the day's own page reads it: a Stay set by hand first, then the
  * one a booking decided. Only consecutive days share a chapter, so coming back
  * to a hotel later in the trip is a chapter of its own, in the order it was
- * lived. Days without a Stay fall back to their town, and days with neither are
- * kept in runs rather than scattered one per chapter.
+ * lived. Days without a Stay fall back to their town, and days with neither
+ * join the town beside them, or are kept in one run when there is none.
  */
 export function stayChapters(input: {
   days: readonly ItineraryDay[];
@@ -63,5 +63,19 @@ export function stayChapters(input: {
     });
   });
 
-  return chapters;
+  // A day that says nothing about where it is belongs with the town beside it,
+  // the way the trip's journey reads it: with the town before it, or, at the
+  // start of the trip, the one after. Next to a Stay it stays apart, because a
+  // Stay chapter is its nights and nothing says this day was one of them.
+  return chapters.reduce<StayChapter[]>((merged, chapter) => {
+    const previous = merged.at(-1);
+    if (chapter.kind === 'days' && previous?.kind === 'town') {
+      previous.days.push(...chapter.days);
+    } else if (chapter.kind === 'town' && previous?.kind === 'days' && merged.length === 1) {
+      merged[0] = { ...chapter, days: [...previous.days, ...chapter.days], key: previous.key };
+    } else {
+      merged.push(chapter);
+    }
+    return merged;
+  }, []);
 }

@@ -912,5 +912,13 @@
         "A stop that still needs a location now says so once, and the all-days view shows full day names."
       ]
     }
+  },
+  {
+    "id": "no-sideways-scroll",
+    "date": "2026-11-11",
+    "version": "1.18.3",
+    "summaries": {
+      "en": ["Trove no longer slides sideways on your phone; pages stay put while you scroll."]
+    }
   }
 ]

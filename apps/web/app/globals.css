@@ -395,6 +395,11 @@
 html {
   min-width: 320px;
   background: var(--background);
+  /* The app is one column wide on a phone: nothing may pan it sideways. Clip,
+     not hidden, so the page stays the scroller and sticky headers keep working;
+     anything meant to scroll sideways (the day ribbon, forecast strip) does so
+     inside its own container. */
+  overflow-x: clip;
 }
 
 body {
@@ -409,6 +414,9 @@ body {
   -webkit-font-smoothing: antialiased;
   /* Keeps an over-scrolled sheet or map from scrolling the page behind it. */
   overscroll-behavior-y: contain;
+  overflow-x: clip;
+  /* A sideways swipe on the page itself goes nowhere, so it should not bounce. */
+  overscroll-behavior-x: none;
   /* Rotating a phone must not silently reflow the type scale. */
   -webkit-text-size-adjust: 100%;
 }

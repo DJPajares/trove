@@ -36,7 +36,7 @@ export function TripHubGoodToKnow({
       </h2>
       {planScoreEnabled ? <TripHubScore tripId={trip.id} /> : null}
       {stage === 'live' ? null : (
-        <TripInsights headingLevel={3} initialItemLimit={1} tripId={trip.id} />
+        <TripInsights headingLevel={3} initialItemLimit={1} surface="inset" tripId={trip.id} />
       )}
     </section>
   );

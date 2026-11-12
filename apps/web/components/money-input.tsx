@@ -1,8 +1,10 @@
 'use client';
 
+import { X } from 'lucide-react';
 import { useLocale } from 'next-intl';
 import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps } from 'react';
 
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   formatMoneyInput,
@@ -11,6 +13,7 @@ import {
   normalizeMoneyInput,
   removeDigitBesideSeparator,
 } from '@/lib/currency/money';
+import { cn } from '@/lib/utils';
 
 type MoneyInputProps = Omit<
   ComponentProps<typeof Input>,
@@ -21,15 +24,22 @@ type MoneyInputProps = Omit<
    * loses focus, so a long amount can be checked before moving on.
    */
   groupWhileTyping?: boolean;
+  /**
+   * Accessible name for a clear button shown inside the field once it has
+   * text. Leave out where the surrounding layout supplies its own.
+   */
+  clearLabel?: string;
   onValueChange: (value: string) => void;
   value: string;
 };
 
 export function MoneyInput({
   'aria-invalid': ariaInvalid,
+  clearLabel,
   groupWhileTyping = false,
   onBlur,
   onFocus,
+  onKeyDown,
   onValueChange,
   value,
   ...props
@@ -55,9 +65,11 @@ export function MoneyInput({
     }
   }, [displayValue]);
 
-  return (
+  const field = (
     <Input
+      enterKeyHint="done"
       {...props}
+      className={clearLabel && value ? cn('pe-11', props.className) : props.className}
       aria-invalid={ariaInvalid || invalid || undefined}
       inputMode="decimal"
       onBlur={(event) => {
@@ -105,6 +117,15 @@ export function MoneyInput({
         setInvalid(normalized === null);
         onValueChange(normalized ?? '');
       }}
+      onKeyDown={(event) => {
+        onKeyDown?.(event);
+        // Return on a phone keyboard means "done": drop focus so the keyboard
+        // closes and the amount settles. It must not also submit a form.
+        if (event.key === 'Enter' && !event.defaultPrevented) {
+          event.preventDefault();
+          event.currentTarget.blur();
+        }
+      }}
       onFocus={(event) => {
         setFocused(true);
         setDisplayValue(
@@ -118,5 +139,32 @@ export function MoneyInput({
       type="text"
       value={displayValue}
     />
+  );
+
+  if (!clearLabel) return field;
+
+  return (
+    <div className="relative">
+      {field}
+      {value ? (
+        <div className="absolute inset-y-0 end-1 flex items-center">
+          <Button
+            aria-label={clearLabel}
+            className="rounded-full text-muted-foreground"
+            onClick={() => {
+              // Blur first: a touch tap on a button does not always take focus
+              // from the field, and a focused field keeps showing its text.
+              inputRef.current?.blur();
+              onValueChange('');
+            }}
+            size="icon-sm"
+            type="button"
+            variant="ghost"
+          >
+            <X aria-hidden="true" />
+          </Button>
+        </div>
+      ) : null}
+    </div>
   );
 }

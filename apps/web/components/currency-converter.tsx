@@ -248,13 +248,7 @@ export function CurrencyConverter() {
                   'mt-1 h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 py-1 font-journal leading-none tabular-nums shadow-none placeholder:text-text-subtle hover:border-0 focus-visible:shadow-[inset_0_-2px_0_var(--color-ring)] focus-visible:ring-0 dark:bg-transparent',
                   large(amount),
                 )}
-                enterKeyHint="done"
                 id="currency-amount"
-                onKeyDown={(event) => {
-                  // Return on a phone keyboard means "done": drop focus so the
-                  // keyboard closes and the amount settles into its final form.
-                  if (event.key === 'Enter') event.currentTarget.blur();
-                }}
                 onValueChange={setAmount}
                 placeholder={SAMPLE_AMOUNT}
                 value={amount}

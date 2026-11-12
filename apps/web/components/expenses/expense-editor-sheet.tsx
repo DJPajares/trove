@@ -141,6 +141,7 @@ export function ExpenseEditorSheet({
                       <Field>
                         <FieldLabel htmlFor="budget-amount">{t('amount')}</FieldLabel>
                         <MoneyInput
+                          clearLabel={t('clearAmount')}
                           id="budget-amount"
                           onValueChange={(value) => onBudgetFieldChange('amount', value)}
                           placeholder={t('amountPlaceholder')}
@@ -189,6 +190,7 @@ export function ExpenseEditorSheet({
                       <Field>
                         <FieldLabel htmlFor="expense-amount">{t('amount')}</FieldLabel>
                         <MoneyInput
+                          clearLabel={t('clearAmount')}
                           id="expense-amount"
                           onValueChange={(value) => onExpenseFieldChange('amount', value)}
                           placeholder={t('amountPlaceholder')}

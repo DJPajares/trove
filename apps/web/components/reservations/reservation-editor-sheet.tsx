@@ -913,6 +913,7 @@ function EditorForm({
                   <Field>
                     <FieldLabel htmlFor="reservation-cost">{t('plannedCost')}</FieldLabel>
                     <MoneyInput
+                      clearLabel={t('clearAmount')}
                       id="reservation-cost"
                       onValueChange={(value) => update('plannedCostAmount', value)}
                       placeholder={t('plannedCostPlaceholder')}

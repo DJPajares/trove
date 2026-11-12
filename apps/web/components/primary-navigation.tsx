@@ -134,35 +134,14 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
                     scroll={href === '/trips' ? false : undefined}
                   >
                     {active ? <NavActiveIndicator /> : null}
-                    {/* The current tab's icon sits in a soft brand well that
-                        glides between tabs, and fills in as a quiet duotone,
-                        so the glyph itself reads as chosen rather than only
-                        recoloured. The well is narrower than the column so it
-                        clears the notch's curve on a 320px screen. */}
-                    <span className="relative grid h-8 w-12 place-items-center">
-                      {active ? (
-                        <motion.span
-                          aria-hidden="true"
-                          className="absolute inset-0 rounded-full bg-brand/12"
-                          layoutId="primary-navigation-mobile-well"
-                          transition={navigationTransition}
-                        />
-                      ) : null}
-                      <motion.span
-                        animate={{ scale: active ? [0.86, 1.06, 1] : 1 }}
-                        className="relative grid place-items-center"
-                        initial={false}
-                        transition={iconSelectTransition}
-                      >
-                        <Icon
-                          aria-hidden="true"
-                          className={cn(
-                            'size-[1.375rem] transition-[fill-opacity] duration-[var(--motion-standard)] ease-[var(--ease-standard)]',
-                            active ? 'fill-current [fill-opacity:0.2]' : '[fill-opacity:0]',
-                          )}
-                        />
-                      </motion.span>
-                    </span>
+                    <motion.span
+                      animate={{ scale: active ? [0.86, 1.06, 1] : 1 }}
+                      className="grid place-items-center"
+                      initial={false}
+                      transition={iconSelectTransition}
+                    >
+                      <Icon aria-hidden="true" className="size-5" />
+                    </motion.span>
                     <span className="max-w-full truncate">{label}</span>
                   </Link>
                 </li>

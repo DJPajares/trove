@@ -3495,8 +3495,8 @@
     "eyebrow": "Offline",
     "title": "Trove needs a connection for this page.",
     "description": "This page needs a connection. Trips you prepared for offline use are still available.",
-    "availableTitle": "Available offline",
-    "availableDescription": "These trips are stored on this device.",
+    "readyTitle": "Your prepared trips are ready.",
+    "readyDescription": "You're offline, but these trips are stored on this device. Anything that needs a connection waits until you're back online.",
     "untitledTrip": "Untitled trip"
   },
   "placeholder": {

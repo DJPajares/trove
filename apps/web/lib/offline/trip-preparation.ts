@@ -6,15 +6,18 @@ import { fetchTasks } from '@/lib/tasks/api';
 import { fetchTripInfo } from '@/lib/trip-info/api';
 import { fetchTrip } from '@/lib/trips/api';
 import { storageCacheKey, USER_MEDIA_CACHE } from '@/lib/media/storage-cache-key';
+import { runningRelease } from '@/lib/updates/running-release';
 
 import {
   isOfflineApiReachable,
   listOfflineReservationDocuments,
+  listTripSnapshots,
   markTripPrepared,
   recordTripPreparationError,
   removeTripOfflineData,
   selectOfflineReservationDocument,
 } from './trip-store';
+import { offlineTripPageUrls } from './trip-pages';
 import { getOfflineAuthContext, OfflineSyncError, syncOfflineMutations } from './trip-sync';
 
 function errorCode(error: unknown) {
@@ -39,27 +42,48 @@ async function refreshSelectedDocuments(userId: string, tripId: string) {
   );
 }
 
+const TRIP_PAGE_CACHE = 'trove-pwa-trip-mode-pages';
+const TRIP_PAGES_RELEASE_KEY = 'trove.offline-pages-release';
+
 async function cacheTripPages(tripId: string) {
   if (!('caches' in window)) return;
-  const cache = await caches.open('trove-pwa-trip-mode-pages');
-  const paths = [
-    'expenses',
-    'info',
-    'itinerary',
-    'memories',
-    'mode',
-    'mode/map',
-    'mode/trip',
-    'mode/today',
-    'places',
-    'reservations',
-    'tasks',
-  ];
+  const cache = await caches.open(TRIP_PAGE_CACHE);
   await Promise.all(
-    paths.map((path) =>
-      cache.add(new Request(`/trips/${tripId}/${path}`, { credentials: 'same-origin' })),
+    offlineTripPageUrls(tripId).map((url) =>
+      cache.add(new Request(url, { credentials: 'same-origin' })),
     ),
   );
+}
+
+/**
+ * Re-warms prepared trips' pages once per release.
+ *
+ * A cached page is HTML naming the build's hashed chunks, and activating a new
+ * worker drops the old build's chunks from the precache. Without this, every
+ * prepared page except the one open during the update would fail offline until
+ * its trip was prepared again. Own-origin pages only: no provider requests.
+ */
+export async function refreshPreparedTripPages() {
+  const buildId = runningRelease?.buildId;
+  if (!buildId || !('caches' in window) || !navigator.onLine) return;
+  try {
+    if (window.localStorage.getItem(TRIP_PAGES_RELEASE_KEY) === buildId) return;
+  } catch {
+    return;
+  }
+
+  const { accessToken, userId } = await getOfflineAuthContext();
+  if (!accessToken) return;
+  const prepared = (await listTripSnapshots(userId)).filter((snapshot) => snapshot.preparedAt);
+  const results = await Promise.allSettled(
+    prepared.map((snapshot) => cacheTripPages(snapshot.tripId)),
+  );
+  if (results.some((result) => result.status === 'rejected')) return;
+  try {
+    window.localStorage.setItem(TRIP_PAGES_RELEASE_KEY, buildId);
+  } catch {
+    // Retried on the next load.
+  }
 }
 
 /**

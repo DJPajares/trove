@@ -11,6 +11,7 @@ import {
   getRememberedOfflineUser,
   OFFLINE_DATA_REFRESH_EVENT,
 } from '@/lib/offline/trip-store';
+import { refreshPreparedTripPages } from '@/lib/offline/trip-preparation';
 import { syncOfflineMutations } from '@/lib/offline/trip-sync';
 import { removePersistedQueryCache } from '@/lib/query/persister';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
@@ -47,12 +48,19 @@ export function OfflineSyncManager() {
       void queryClient.invalidateQueries();
     };
 
+    const refreshPages = () => {
+      if (!isAuthDeparting() && navigator.onLine && !isAuthFlowPath(window.location.pathname))
+        void refreshPreparedTripPages().catch(() => undefined);
+    };
+
     const reconnect = () => {
       sync();
+      refreshPages();
       invalidateAfterReconnect();
     };
 
     sync();
+    refreshPages();
     window.addEventListener('online', reconnect);
     window.addEventListener('focus', sync);
     window.addEventListener(OFFLINE_DATA_REFRESH_EVENT, invalidateAfterReconnect);

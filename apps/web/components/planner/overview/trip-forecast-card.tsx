@@ -16,6 +16,7 @@ import {
 } from '@/lib/weather/conditions';
 import { dayForecast, forecastGap } from '@/lib/weather/trip-forecast';
 import { useWeatherEvidenceDescription } from '@/lib/weather/use-evidence-description';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 const frameClassName = 'rounded-[var(--radius-xl)] bg-card px-4 py-3.5';
 
@@ -113,7 +114,11 @@ export function TripForecastCard({
       <h3 className="text-sm font-semibold" id="trip-forecast-heading">
         {planner('tripTitle')}
       </h3>
-      <ol className="interaction-scrollbar relative -mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1">
+      <ScrollShadow
+        orientation="horizontal"
+        render={<ol />}
+        className="interaction-scrollbar relative -mx-1 mt-3 flex gap-2 px-1 pb-1"
+      >
         {/* Days with nothing to show are covered once, by the line below. */}
         {shown.map(({ day, forecast: entry }) => {
           const forecast = entry?.forecast ?? null;
@@ -196,7 +201,7 @@ export function TripForecastCard({
             </li>
           );
         })}
-      </ol>
+      </ScrollShadow>
       <div className="mt-2 space-y-1 text-xs text-muted-foreground empty:hidden">
         {gapText && shown.length < columns.length ? <p>{gapText}</p> : null}
         {shown.some(({ forecast: entry }) => entry?.state === 'archived') ? (

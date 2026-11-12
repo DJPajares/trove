@@ -944,5 +944,15 @@
         "The All days page no longer slides sideways, so the bottom bar stays put on trips with a long forecast."
       ]
     }
+  },
+  {
+    "id": "scroll-edge-fades",
+    "date": "2026-11-12",
+    "version": "1.20.0",
+    "summaries": {
+      "en": [
+        "Scrolling lists and day strips now fade softly at the edges, so it's easier to tell when there's more to see."
+      ]
+    }
   }
 ]

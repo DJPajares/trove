@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { formatMinorUnits } from '@/lib/currency/money';
 import type { DayRollup, SpendBreakdown } from '@/lib/expenses/spend-insights';
 import { cn } from '@/lib/utils';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 /** The tallest column; every other day is drawn against the trip's biggest. */
 const COLUMN_HEIGHT = 72;
@@ -96,12 +97,14 @@ export function SpendDayStrip({
 
   return (
     <div className="space-y-2">
-      <ol
+      <ScrollShadow
+        orientation="horizontal"
+        render={<ol />}
         aria-label={t('day.label')}
-        className="interaction-scrollbar -mx-1 flex gap-0.5 overflow-x-auto px-1 pb-1"
+        className="interaction-scrollbar -mx-1 flex gap-0.5 px-1 pb-1"
       >
         {breakdown.days.map(column)}
-      </ol>
+      </ScrollShadow>
       {/* What the selected day was, said in words beside the chart. */}
       <p aria-live="polite" className="min-h-5 text-sm text-muted-foreground tabular-nums">
         {active

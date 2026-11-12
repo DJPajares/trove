@@ -25,6 +25,7 @@ import {
   type DayTimeRow,
   type ItineraryTranslator,
 } from '@/lib/itinerary/day-time-suggestions';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 type Props = {
   day: ItineraryDay;
@@ -102,7 +103,7 @@ export function ItineraryDayTimeSuggestions({
     <Sheet onOpenChange={onOpenChange} open={open}>
       <SheetContent closeLabel={t('close')}>
         <SheetHeading title={t('dayTimes.title')} description={t('dayTimes.description')} />
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+        <ScrollShadow className="min-h-0 flex-1 p-5">
           {status === 'loading' ? (
             <p aria-live="polite" className="text-sm text-muted-foreground" role="status">
               {t('dayTimes.loading')}
@@ -148,7 +149,7 @@ export function ItineraryDayTimeSuggestions({
               })}
             </ul>
           )}
-        </div>
+        </ScrollShadow>
         <SheetFooter>
           <Button
             disabled={status === 'applying'}

@@ -21,6 +21,7 @@ import { resolvePlaceMediaSource } from '@/lib/media/trip-media';
 import type { SavedCollection, SavedPlace } from '@/lib/saved/api';
 import { matchesPlaceQuery } from '@/lib/trip-places/list-view';
 import { cn } from '@/lib/utils';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 /** Past this many places, finding one by name beats scrolling for it. */
 const SEARCHABLE_FROM = 8;
@@ -93,7 +94,7 @@ export function CollectionPlacesSheet({
           description={t('addPlacesDescription')}
           title={t('addPlacesTitle', { name: collection?.name ?? '' })}
         />
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+        <ScrollShadow className="min-h-0 flex-1 space-y-4 p-5">
           {error ? (
             <Alert role="alert" variant="destructive">
               <CircleAlert aria-hidden="true" />
@@ -172,7 +173,7 @@ export function CollectionPlacesSheet({
               })}
             </ul>
           )}
-        </div>
+        </ScrollShadow>
         <SheetFooter>
           <Button onClick={() => onOpenChange(false)}>{t('done')}</Button>
         </SheetFooter>

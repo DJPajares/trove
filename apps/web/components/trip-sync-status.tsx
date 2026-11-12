@@ -30,6 +30,7 @@ import {
   retryOfflineMutation,
   syncOfflineMutations,
 } from '@/lib/offline/trip-sync';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 export function useOnlineStatus() {
   const [online, setOnline] = useState(true);
@@ -215,7 +216,7 @@ export function TripSyncStatus({ tripId }: Readonly<{ tripId: string }>) {
         <SheetContent closeLabel={t('close')}>
           <SheetHeading title={t('title')} description={t('description')} />
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
+          <ScrollShadow className="min-h-0 flex-1 px-5 pb-5">
             <ul aria-label={t('listLabel')} className="border-y border-border">
               {mutations.map((mutation) => (
                 <li className="border-b border-border py-4 last:border-b-0" key={mutation.id}>
@@ -350,7 +351,7 @@ export function TripSyncStatus({ tripId }: Readonly<{ tripId: string }>) {
                 </li>
               ))}
             </ul>
-          </div>
+          </ScrollShadow>
 
           {pendingCount && online ? (
             <div className="border-t border-border p-5">

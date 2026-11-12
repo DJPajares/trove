@@ -49,6 +49,7 @@ import {
 } from '@/lib/memories/edit-patch';
 import { placeName } from '@/lib/memories/story';
 import { resolveItineraryItemPlaceName, resolveTripPlaceName } from '@/lib/trip-places/place-name';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 const NO_DAY = 'none';
 const NO_ITEM = 'none';
@@ -400,7 +401,7 @@ export function MemoryEditorSheet({
             description={isCreate ? t('addDescription') : t('editDescription')}
           />
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-3 pb-5">
+          <ScrollShadow className="min-h-0 flex-1 px-5 pt-3 pb-5">
             <input
               accept="image/heic,image/jpeg,image/png,image/webp"
               className="sr-only"
@@ -436,7 +437,7 @@ export function MemoryEditorSheet({
               when={whenLabel}
               where={whereLabel}
             />
-          </div>
+          </ScrollShadow>
 
           <SheetFooter>
             {!isCreate ? (

@@ -42,6 +42,7 @@ import { nextTripForTools } from '@/lib/tools/shelf';
 import { fetchTrips } from '@/lib/trips/api';
 import * as Icons from '@/lib/icons';
 import { cn } from '@/lib/utils';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 const LOCAL_SEARCH_DELAY_MS = 350;
 
@@ -413,9 +414,10 @@ export function GlobalSearch({
         </div>
 
         {showResults && allResults.length ? (
-          <div
+          <ScrollShadow
+            orientation="horizontal"
             aria-label={t('scopeLabel')}
-            className="flex gap-1.5 overflow-x-auto border-b border-border-subtle px-4 pb-3 [scrollbar-width:none] sm:px-5 sm:py-3"
+            className="flex gap-1.5 border-b border-border-subtle px-4 pb-3 [scrollbar-width:none] sm:px-5 sm:py-3"
             role="group"
           >
             {(Object.keys(scopes) as Scope[])
@@ -433,12 +435,12 @@ export function GlobalSearch({
                   {t('scopeCount', { count: counts[key], label: t(`scopes.${key}`) })}
                 </Button>
               ))}
-          </div>
+          </ScrollShadow>
         ) : (
           <div className="border-b border-border-subtle sm:hidden" />
         )}
 
-        <div className="min-h-0 overflow-y-auto px-1.5 pb-4 sm:px-2" ref={listRef}>
+        <ScrollShadow className="min-h-0 px-1.5 pb-4 sm:px-2" ref={listRef}>
           <p aria-live="polite" className="sr-only" role="status">
             {status === 'loading'
               ? t('searching')
@@ -627,7 +629,7 @@ export function GlobalSearch({
               ) : null}
             </>
           ) : null}
-        </div>
+        </ScrollShadow>
 
         <div
           className={cn(

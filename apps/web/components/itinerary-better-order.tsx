@@ -13,6 +13,7 @@ import {
   type ItineraryDay,
   type ItineraryItem,
 } from '@/lib/itinerary/api';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 import type { ItineraryMovement } from '@trove/types';
 
 type Props = {
@@ -89,7 +90,7 @@ export function ItineraryBetterOrder({
     <Sheet onOpenChange={onOpenChange} open={day !== null}>
       <SheetContent closeLabel={t('close')}>
         <SheetHeading title={t('title')} description={t('description')} />
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+        <ScrollShadow className="min-h-0 flex-1 space-y-4 p-5">
           {status === 'loading' ? (
             <p aria-live="polite" className="text-sm text-muted-foreground" role="status">
               {t('loading')}
@@ -130,7 +131,7 @@ export function ItineraryBetterOrder({
               <p className="text-xs text-muted-foreground">{t('estimate')}</p>
             </>
           )}
-        </div>
+        </ScrollShadow>
         <SheetFooter>
           <Button
             disabled={status === 'applying'}

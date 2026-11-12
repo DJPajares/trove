@@ -51,6 +51,7 @@ import { DayHeaderMedia } from '@/components/day-header-media';
 import { dayTown } from '@/lib/itinerary/day-place';
 import { resolveItineraryItemPlaceName, resolveTripPlaceName } from '@/lib/trip-places/place-name';
 import * as Icons from '@/lib/icons';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 /**
  * Trip Mode changes a stop's status and nothing else: reordering, moving and
@@ -566,7 +567,11 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
           the morning held had to go back to Planning to find out. The strip is
           a reading position, not a claim about where anyone is. */}
       <nav aria-label={t('dayStripLabel')} className="-mx-[var(--gutter-inline-start)]">
-        <ul className="interaction-scrollbar flex snap-x snap-mandatory gap-2 overflow-x-auto px-[var(--gutter-inline-start)] pb-1">
+        <ScrollShadow
+          orientation="horizontal"
+          render={<ul />}
+          className="interaction-scrollbar flex snap-x snap-mandatory gap-2 px-[var(--gutter-inline-start)] pb-1"
+        >
           {itinerary.days.map((candidate, index) => {
             const active = candidate.date === day.date;
             const isContextDay = candidate.date === context.selectedDate;
@@ -615,7 +620,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
               </li>
             );
           })}
-        </ul>
+        </ScrollShadow>
       </nav>
 
       {/* Every day has a photographic header, including an empty or unnamed day.

@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetHeading } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import type { PlannerDay } from '@/lib/itinerary/planner-days';
 import { cn } from '@/lib/utils';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 import { paddedDayNumber } from './planner-ribbon';
 
@@ -71,7 +72,7 @@ export function MoveToDaySheet({
           }
           description={t('description')}
         />
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pb-[calc(var(--safe-bottom)+1.5rem)] sm:px-6">
+        <ScrollShadow className="min-h-0 flex-1 space-y-4 px-4 pb-[calc(var(--safe-bottom)+1.5rem)] sm:px-6">
           <div aria-label={t('placeLabel')} className="flex gap-2" role="group">
             {(timed ? (['time', 'start', 'end'] as const) : (['end', 'start'] as const)).map(
               (option) => (
@@ -138,7 +139,7 @@ export function MoveToDaySheet({
               </li>
             ) : null}
           </ul>
-        </div>
+        </ScrollShadow>
       </SheetContent>
     </Sheet>
   );

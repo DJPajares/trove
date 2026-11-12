@@ -8,6 +8,7 @@ import type { Memory, MemoryPhoto } from '@/lib/memories/api';
 import { printTilts, selectPhotoLayout } from '@/lib/memories/photo-layout';
 import { cn } from '@/lib/utils';
 import * as Icons from '@/lib/icons';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 const PRINT_SIZES = '(max-width: 640px) 88vw, 36rem';
 const STRIP_SIZES = '(max-width: 640px) 40vw, 14rem';
@@ -86,13 +87,17 @@ export function JournalMoment({
       {template?.kind === 'spread' && photos[0] ? (
         <div className="space-y-4">
           {print(photos[0], 0, template.leadAspect)}
-          <ul className="interaction-scrollbar flex snap-x snap-mandatory gap-5 overflow-x-auto px-2 py-4">
+          <ScrollShadow
+            orientation="horizontal"
+            render={<ul />}
+            className="interaction-scrollbar flex snap-x snap-mandatory gap-5 px-2 py-4"
+          >
             {photos.slice(1).map((photo, offset) => (
               <li className="w-[44%] shrink-0 snap-start sm:w-[36%]" key={photo.id}>
                 {print(photo, offset + 1, template.stripAspect)}
               </li>
             ))}
-          </ul>
+          </ScrollShadow>
         </div>
       ) : null}
 

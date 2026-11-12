@@ -16,6 +16,7 @@ import {
 } from '@/lib/ai-planning/brief';
 import { isAiPlanningPromptValid } from '@/lib/ai-planning/presentation';
 import * as Icons from '@/lib/icons';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 const ADJUST_PROMPT_ID = 'ai-review-adjust-prompt';
 
@@ -68,7 +69,7 @@ export function AiPlanningAdjustSheet({
       >
         <SheetHeading description={t('adjustHint')} title={t('adjustEyebrow')} />
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-          <div className="flex-1 space-y-4 overflow-y-auto px-4 pt-2 pb-6 sm:px-6">
+          <ScrollShadow className="flex-1 space-y-4 px-4 pt-2 pb-6 sm:px-6">
             <AiPlanningBriefField
               disabled={busy}
               id={ADJUST_PROMPT_ID}
@@ -93,7 +94,7 @@ export function AiPlanningAdjustSheet({
                 </p>
               </div>
             </div>
-          </div>
+          </ScrollShadow>
           <SheetFooter className="bg-background px-4 pt-3 pb-4 sm:px-6">
             <div data-footer-lead>
               <AiPlanningAllowance availability={availability} className="px-1" spending />

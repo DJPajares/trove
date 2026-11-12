@@ -19,6 +19,7 @@ import { formatSuggestedClock } from '@/lib/itinerary/day-time-suggestions';
 import { withItineraryEdit } from '@/lib/itinerary/edit-lifecycle';
 import { queryKeys } from '@/lib/query/keys';
 import { invalidateTripQueries, ITINERARY_EDIT_QUERY_ROOTS } from '@/lib/query/trip-invalidation';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 /** A dependent suggestion is one atomic decision, with every changed time visible. */
 export function TimingSuggestionReview({
@@ -100,7 +101,7 @@ export function TimingSuggestionReview({
           title={t('connectedTiming.repairTitle')}
           description={t('connectedTiming.repairHint')}
         />
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-5">
+        <ScrollShadow className="min-h-0 flex-1 space-y-4 px-5 pb-5">
           {!online || review.isPending || review.isFetching ? (
             <p className="text-sm text-muted-foreground" role="status">
               {t(!online ? 'connectedTiming.onlineReview' : 'connectedTiming.loadingReview')}
@@ -174,7 +175,7 @@ export function TimingSuggestionReview({
               </p>
             )
           ) : null}
-        </div>
+        </ScrollShadow>
         <SheetFooter>
           <Button type="button" variant="outline" disabled={saving} onClick={onClose}>
             {t('cancel')}

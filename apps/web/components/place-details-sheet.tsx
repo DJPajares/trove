@@ -27,6 +27,7 @@ import {
   type CanonicalPlace,
   type RichPlaceDetails,
 } from '@/lib/saved/api';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 /** A row only the surface that opened this sheet can supply: a note, a priority, a collection. */
 export type PlaceDetailsRow = { label: string; value: string };
@@ -256,7 +257,7 @@ export function PlaceDetailsSheet({
           evidenceFetchedAt={richDetails.data?.freshness.fetchedAt}
         />
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6">
+        <ScrollShadow className="min-h-0 flex-1 overscroll-contain pb-6">
           <section className="grid gap-4 px-6 pt-5">
             {loadingEvidence ? (
               <Skeleton className="h-5 w-48" />
@@ -409,7 +410,7 @@ export function PlaceDetailsSheet({
               <p>{t('richUnavailable')}</p>
             ) : null}
           </div>
-        </div>
+        </ScrollShadow>
 
         {/* A Custom Place has no Google listing to link out to, so this footer
             is where it gets the one action that can give it a location. */}

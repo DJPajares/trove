@@ -18,6 +18,7 @@ import type { PublicItinerary } from '@/lib/public-trip/api';
 import { queryKeys } from '@/lib/query/keys';
 import { copySharedTrip, fetchTrips, TripApiError } from '@/lib/trips/api';
 import { calendarDayDistance } from '@/lib/trips/lifecycle';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 type SaveTripCopyProps = {
   isSignedIn: boolean;
@@ -174,7 +175,7 @@ function SaveTripCopySheet({
       >
         <SheetHeading description={t('description')} title={t('title')} />
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-          <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          <ScrollShadow className="min-h-0 flex-1 p-5">
             <FieldGroup>
               {error ? (
                 <Alert role="alert" variant="destructive">
@@ -219,7 +220,7 @@ function SaveTripCopySheet({
                 </p>
               </div>
             </FieldGroup>
-          </div>
+          </ScrollShadow>
           <SheetFooter>
             <Button onClick={() => onOpenChange(false)} type="button" variant="secondary">
               {t('cancel')}

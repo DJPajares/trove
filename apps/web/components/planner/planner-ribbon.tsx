@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { useEffect, useRef, type KeyboardEvent } from 'react';
 
 import { TripAllDaysCard, TripDayCard, type TripDayCardDay } from '@/components/trip-day-card';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 export { paddedDayNumber } from '@/components/trip-day-card';
 
@@ -34,7 +35,7 @@ export function PlannerRibbon({
   selectedDayId: string | null;
 }>) {
   const t = useTranslations('itinerary.planner.ribbon');
-  const listRef = useRef<HTMLOListElement>(null);
+  const listRef = useRef<HTMLElement>(null);
   const activeKey = overviewActive ? 'overview' : selectedDayId;
 
   // The open day is kept in view without moving the page: only the strip
@@ -50,7 +51,7 @@ export function PlannerRibbon({
     });
   }, [activeKey]);
 
-  function moveFocus(event: KeyboardEvent<HTMLOListElement>) {
+  function moveFocus(event: KeyboardEvent<HTMLElement>) {
     const tiles = [...(listRef.current?.querySelectorAll<HTMLElement>('[data-ribbon-tile]') ?? [])];
     const current = tiles.indexOf(document.activeElement as HTMLElement);
     if (current < 0) return;
@@ -75,8 +76,10 @@ export function PlannerRibbon({
       className="relative sticky top-[calc(var(--safe-top)+var(--header-offset)+3.25rem)] z-[calc(var(--layer-sticky)-1)] -mx-[var(--gutter-inline-start)] -mt-2 bg-background/95 backdrop-blur before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4 before:bg-background before:content-[''] md:top-[calc(var(--safe-top)+var(--header-offset))] md:mx-0 md:mt-0 md:rounded-[var(--radius-xl)] md:before:hidden"
       data-slot="planner-ribbon"
     >
-      <ol
-        className="interaction-scrollbar relative flex snap-x scroll-px-[var(--gutter-inline-start)] gap-1.5 overflow-x-auto px-[var(--gutter-inline-start)] py-2 md:scroll-px-1 md:px-1"
+      <ScrollShadow
+        orientation="horizontal"
+        render={<ol />}
+        className="interaction-scrollbar relative flex snap-x scroll-px-[var(--gutter-inline-start)] gap-1.5 px-[var(--gutter-inline-start)] py-2 md:scroll-px-1 md:px-1"
         onKeyDown={moveFocus}
         ref={listRef}
       >
@@ -102,7 +105,7 @@ export function PlannerRibbon({
             </li>
           );
         })}
-      </ol>
+      </ScrollShadow>
     </nav>
   );
 }

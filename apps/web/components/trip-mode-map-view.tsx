@@ -51,6 +51,7 @@ import {
 import { queryKeys } from '@/lib/query/keys';
 import { cn } from '@/lib/utils';
 import * as Icons from '@/lib/icons';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 type RouteState =
   | { data: null; status: 'error' | 'idle' | 'loading' }
@@ -545,9 +546,11 @@ export function TripModeMapView({
                 </div>
               ) : null}
               {!mapControlsExpanded && day.items.length ? (
-                <ul
+                <ScrollShadow
+                  orientation="horizontal"
+                  render={<ul />}
                   aria-label={t('todayItinerary')}
-                  className="interaction-scrollbar -mx-[var(--gutter-inline-start)] flex gap-2 overflow-x-auto px-[var(--gutter-inline-start)] pt-1 pb-2 lg:hidden"
+                  className="interaction-scrollbar -mx-[var(--gutter-inline-start)] flex gap-2 px-[var(--gutter-inline-start)] pt-1 pb-2 lg:hidden"
                 >
                   {day.items.map((item, index) => {
                     const point = scheduledPoints.find((candidate) => candidate.itemId === item.id);
@@ -584,7 +587,7 @@ export function TripModeMapView({
                       </li>
                     );
                   })}
-                </ul>
+                </ScrollShadow>
               ) : null}
               {/* How far and how long, beside the map where the rail has room. */}
               <div className="hidden lg:block lg:overflow-hidden lg:rounded-[var(--radius-xl)] lg:border lg:border-border-subtle lg:bg-card lg:shadow-[var(--shadow-surface)]">

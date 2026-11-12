@@ -15,6 +15,7 @@ import { aiPlanningErrorMessageKey } from '@/lib/ai-planning/presentation';
 import type { AiPlanningLifecycle } from '@/lib/ai-planning/use-lifecycle';
 import * as Icons from '@/lib/icons';
 import { cn } from '@/lib/utils';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 const PROMPT_ID = 'ai-planning-prompt';
 
@@ -86,7 +87,7 @@ export function AiPlanningComposer({
       <SheetHeading description={t('description')} title={t('sheetTitle')} />
 
       <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-        <div className="flex-1 space-y-5 overflow-y-auto px-4 pt-2 pb-6 sm:px-6">
+        <ScrollShadow className="flex-1 space-y-5 px-4 pt-2 pb-6 sm:px-6">
           {exhausted && availability ? (
             <CreditsSpent availability={availability} />
           ) : unavailable && availability ? (
@@ -195,9 +196,11 @@ export function AiPlanningComposer({
           )}
 
           {!exhausted && !hasWords && examples.length ? (
-            <section
+            <ScrollShadow
+              orientation="horizontal"
+              render={<section />}
               aria-labelledby="ai-planning-ideas"
-              className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0"
+              className="-mx-4 flex items-center gap-2 px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0"
             >
               <h3
                 className="shrink-0 px-1 text-[length:var(--text-metadata)] font-semibold text-muted-foreground"
@@ -220,9 +223,9 @@ export function AiPlanningComposer({
                   {t(`exampleLabels.${example}`)}
                 </Button>
               ))}
-            </section>
+            </ScrollShadow>
           ) : null}
-        </div>
+        </ScrollShadow>
 
         <div className="space-y-2.5 border-t border-border-subtle bg-background px-4 pt-3 pb-4 sm:px-6">
           {!exhausted ? (

@@ -1042,5 +1042,15 @@
         "The day strip fades softly as the plan scrolls under it, and long trip names fit neatly in Trip Mode."
       ]
     }
+  },
+  {
+    "id": "clearer-stop-cards",
+    "date": "2026-11-12",
+    "version": "1.21.3",
+    "summaries": {
+      "en": [
+        "Stop cards are easier to scan: the time stands out, opening hours sit quietly beneath it, your notes read as notes, and warnings fit in one slim strip."
+      ]
+    }
   }
 ]

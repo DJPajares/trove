@@ -1,7 +1,7 @@
 'use client';
 import { useTripReadOnly } from '@/components/trip-provider';
 
-import { Clock3 } from 'lucide-react';
+import { Clock3, DoorOpen } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Fragment, type CSSProperties, type ReactNode, type Ref } from 'react';
 
@@ -103,13 +103,14 @@ function StopHoursLine({
   return (
     <p
       className={cn(
-        'mt-1 flex items-center gap-1 text-xs leading-5',
+        'mt-0.5 flex items-center gap-1 text-xs leading-5',
         closed ? 'font-medium text-status-warning' : 'text-muted-foreground',
       )}
       // Date-specific hours are still worth knowing, just not worth a label.
       title={status.status === 'open' && status.special ? t('specialHours') : undefined}
     >
-      <Clock3 aria-hidden="true" className="size-3 shrink-0" />
+      {/* A door, not a clock: the clock is the stop's own time, just above. */}
+      <DoorOpen aria-hidden="true" className="size-3 shrink-0" />
       <span className="sr-only">{t('hoursLabel')}</span>
       <span className="min-w-0 truncate">{text}</span>
     </p>
@@ -203,12 +204,21 @@ export function StopCard({
   const timingParts = [when, duration].filter((fact): fact is string => Boolean(fact));
   const timing = timingParts.join(' · ');
   // Keep time parts together when space permits, but let enlarged text reflow.
+  // When the stop happens is the second thing read after its name, so it is
+  // the one part of the line set in full colour; how long follows quietly.
   const timingText = timingParts.map((part, index) => (
     <Fragment key={`${part}-${index}`}>
       {index ? ' ' : null}
-      <span className="@min-[14rem]:whitespace-nowrap">
+      <span
+        className={cn(
+          '@min-[14rem]:whitespace-nowrap',
+          index === 0 && when ? 'font-medium text-foreground' : undefined,
+        )}
+      >
         {part}
-        {index < timingParts.length - 1 ? ' ·' : null}
+        {index < timingParts.length - 1 ? (
+          <span className="font-normal text-muted-foreground"> ·</span>
+        ) : null}
       </span>
     </Fragment>
   ));
@@ -371,8 +381,10 @@ export function StopCard({
             ) : null}
             <StopHoursLine item={item} status={hours} />
             {item.notes ? (
+              // Words to read rather than facts to scan: a gap above, body-weight
+              // text and looser lines tell it apart without a rule or a box.
               <ExpandableDescription
-                className="mt-1 text-sm text-text-subtle"
+                className="mt-2.5 text-sm leading-relaxed text-foreground/75"
                 name={view.name}
                 text={item.notes}
               />
@@ -383,7 +395,14 @@ export function StopCard({
           </div>
         </div>
         {attention ? (
-          <div className="relative z-10 mt-2.5 space-y-2 group-data-[reordering]/day:hidden">
+          // Every warning on the stop, stacked flush into one compact strip at
+          // its foot: still clearly a warning, never heavier than the stop.
+          // Each keeps its own tint, so a conflict still reads red beside an
+          // advisory's amber. The notes themselves stay full size elsewhere.
+          <div
+            className="relative z-10 mt-3 flex flex-col group-data-[reordering]/day:hidden [&>[data-slot=attention-note]]:rounded-none [&>[data-slot=attention-note]]:py-1.5 [&>[data-slot=attention-note]]:text-[0.8125rem] [&>[data-slot=attention-note]:first-child]:rounded-t-[var(--radius-md)] [&>[data-slot=attention-note]:last-child]:rounded-b-[var(--radius-md)] [&_[data-slot=attention-actions]]:mt-0.5"
+            data-slot="stop-attention"
+          >
             {attention}
           </div>
         ) : null}

@@ -75,13 +75,13 @@ const round = (value: number) => Math.round(value * 100) / 100;
 
 /**
  * The symbol stands 1.45 cap heights tall beside the wordmark, centred on its
- * capitals, 1.3 ribbon widths away. Derived rather than written out, so the
+ * capitals, 2 ribbon widths away. Derived rather than written out, so the
  * React lockup and the exports cannot disagree.
  */
 const lockupScale = (1.45 * brandWordmark.capHeight) / brandMark.live.height;
 const lockupSymbolHeight = brandMark.live.height * lockupScale;
 const lockupOverhang = (lockupSymbolHeight - brandWordmark.capHeight) / 2;
-const lockupWordmarkX = (brandMark.live.width + 1.3 * brandMark.ribbonWidth) * lockupScale;
+const lockupWordmarkX = (brandMark.live.width + 2 * brandMark.ribbonWidth) * lockupScale;
 
 export const brandLockup = {
   width: round(lockupWordmarkX + brandWordmark.width),

@@ -94,7 +94,7 @@ export function HomeNowStripContent({
           className={cn(
             'flex min-w-0 items-center gap-2 rounded-[var(--radius-sm)] outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-visible:ring-3 motion-reduce:transition-none',
             onMedia
-              ? 'h-10 rounded-full border border-white/20 bg-black/30 px-3.5 backdrop-blur-md hover:bg-black/40 focus-visible:ring-white/70'
+              ? 'h-11 rounded-full border border-white/20 bg-black/30 px-3.5 backdrop-blur-md hover:bg-black/40 focus-visible:ring-white/70'
               : 'hover:text-foreground focus-visible:ring-ring/40',
           )}
           href={weather.attribution.url}

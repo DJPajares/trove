@@ -75,7 +75,7 @@ export function HomeJourney(props: Readonly<HomeJourneyProps>) {
     return (
       <section
         aria-labelledby={headingId}
-        className="group relative flex items-center gap-5 rounded-[var(--radius-2xl)] bg-paper p-5 transition-shadow duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-within:ring-3 focus-within:ring-ring/40 hover:shadow-[var(--shadow-card)] motion-reduce:transition-none sm:gap-7 sm:p-6"
+        className="group relative mx-[calc(50%-50vw)] flex items-center gap-5 bg-paper px-[calc(50vw-50%)] py-8 focus-within:ring-3 focus-within:ring-ring/40 focus-within:ring-inset sm:gap-7 md:py-10"
         data-slot="home-journey"
       >
         <span aria-hidden="true" className="w-24 shrink-0 sm:w-28">
@@ -97,7 +97,7 @@ export function HomeJourney(props: Readonly<HomeJourneyProps>) {
           </h2>
           {/* Stretched over the card, so the print and the name open the story too. */}
           <Link
-            className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-brand outline-none after:absolute after:inset-0 after:rounded-[var(--radius-2xl)] hover:underline"
+            className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-brand outline-none after:absolute after:inset-0 hover:underline"
             href={`/trips/${trip.id}/memories`}
           >
             {trip.memoryCount ? t('openStory') : homeT('addMemories')}
@@ -114,7 +114,7 @@ export function HomeJourney(props: Readonly<HomeJourneyProps>) {
   return (
     <section
       aria-labelledby={headingId}
-      className="-ms-[var(--gutter-inline-start)] -me-[var(--gutter-inline-end)] bg-paper ps-[var(--gutter-inline-start)] pe-[var(--gutter-inline-end)] py-10 md:mx-0 md:rounded-[var(--radius-2xl)] md:px-10 md:py-12"
+      className="mx-[calc(50%-50vw)] bg-paper px-[calc(50vw-50%)] py-10 md:py-14"
       data-slot={returned ? 'home-returned' : 'home-journey'}
     >
       <div className="group grid items-center gap-8 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:gap-12">

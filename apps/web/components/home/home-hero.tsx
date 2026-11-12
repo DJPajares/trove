@@ -111,7 +111,7 @@ export function HomeCover({
           {/* Above the headline's stretched link, so the weather source stays its
               own link. From `md` it sits in the header's row, beside the
               floating controls; the header lets clicks through to it. */}
-          <div className="relative z-10 self-start motion-safe:animate-in motion-safe:duration-700 motion-safe:fade-in md:absolute md:top-[calc(var(--safe-top)+(var(--header-height)-2.75rem)/2)] md:right-[calc(max(0.75rem,var(--safe-right))+6.25rem)]">
+          <div className="relative z-10 self-start motion-safe:animate-in motion-safe:duration-700 motion-safe:fade-in md:absolute md:top-[calc(var(--safe-top)+0.75rem)] md:right-[calc(max(0.75rem,var(--safe-right))+6.25rem)]">
             <HomeNowStrip tone="onMedia" />
           </div>
 

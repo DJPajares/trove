@@ -433,6 +433,7 @@ body {
   --muted-foreground: oklch(0.978 0.013 80 / 0.8);
   --brand: var(--primary-on-media);
   --brand-symbol-bar: var(--brand-mark-ink);
+  --brand-symbol-ribbon: var(--brand-mark-ink);
   --brand-mark-type: var(--brand-mark-ink);
   --ring: var(--media-fallback-foreground);
 }

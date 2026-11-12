@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AiPlanningDraftCard } from '@/components/ai-planning-draft-card';
 import { HomeBeforeYouGo } from '@/components/home/home-before-you-go';
 import { HomeComingUp } from '@/components/home/home-coming-up';
-import { HOME_SHEET, HomeEmpty, HomeIdle, HomeSkeleton } from '@/components/home/home-front-door';
+import { HomeEmpty, HomeIdle, HomeSheet, HomeSkeleton } from '@/components/home/home-front-door';
 import { HomeCover } from '@/components/home/home-hero';
 import { HomeJourney } from '@/components/home/home-journey';
 import { HomeToday } from '@/components/home/home-today';
@@ -190,7 +190,7 @@ export function HomeExperience() {
     <div className="mx-auto w-full max-w-5xl">
       <HomeCover editorial={lead ? editorialFor(lead) : null} headline={headline} trip={lead} />
 
-      <div className={HOME_SHEET}>
+      <HomeSheet>
         {!lead && trips.length ? <HomeIdle onCreateTrip={openCreateTrip} /> : null}
 
         {trips.length === 0 ? (
@@ -270,7 +270,7 @@ export function HomeExperience() {
             variant="journey"
           />
         ) : null}
-      </div>
+      </HomeSheet>
     </div>
   );
 }

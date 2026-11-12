@@ -29,7 +29,7 @@ function DialogOverlay({ className, ...props }: DialogPrimitive.Backdrop.Props) 
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
-        'fixed inset-0 isolate z-[var(--layer-overlay)] bg-foreground/20 duration-[var(--motion-standard)] supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 dark:bg-surface-sunken/70',
+        'fixed inset-0 isolate z-[var(--layer-overlay)] bg-foreground/20 duration-[var(--motion-standard)] supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fill-mode-forwards data-closed:fade-out-0 dark:bg-surface-sunken/70',
         className,
       )}
       {...props}
@@ -80,7 +80,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          'fixed top-1/2 left-1/2 z-[var(--layer-overlay)] grid max-h-[calc(100dvh-2rem-var(--safe-top)-var(--safe-bottom))] w-full max-w-[calc(100%-2rem-var(--safe-left)-var(--safe-right))] -translate-x-1/2 -translate-y-1/2 gap-6 overflow-y-auto rounded-[var(--radius-2xl)] border border-border-subtle bg-popover p-6 text-sm text-popover-foreground shadow-[var(--shadow-overlay)] duration-[var(--motion-standard)] outline-none sm:max-w-lg sm:p-8 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+          'fixed top-1/2 left-1/2 z-[var(--layer-overlay)] grid max-h-[calc(100dvh-2rem-var(--safe-top)-var(--safe-bottom))] w-full max-w-[calc(100%-2rem-var(--safe-left)-var(--safe-right))] -translate-x-1/2 -translate-y-1/2 gap-6 overflow-y-auto rounded-[var(--radius-2xl)] border border-border-subtle bg-popover p-6 text-sm text-popover-foreground shadow-[var(--shadow-overlay)] duration-[var(--motion-standard)] outline-none sm:max-w-lg sm:p-8 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fill-mode-forwards data-closed:fade-out-0 data-closed:zoom-out-95',
           className,
         )}
         {...props}

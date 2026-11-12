@@ -24,7 +24,7 @@ function AlertDialogOverlay({ className, ...props }: AlertDialogPrimitive.Backdr
     <AlertDialogPrimitive.Backdrop
       data-slot="alert-dialog-overlay"
       className={cn(
-        'fixed inset-0 isolate z-[var(--layer-overlay)] bg-foreground/20 duration-[var(--motion-standard)] supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 dark:bg-surface-sunken/70',
+        'fixed inset-0 isolate z-[var(--layer-overlay)] bg-foreground/20 duration-[var(--motion-standard)] supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fill-mode-forwards data-closed:fade-out-0 dark:bg-surface-sunken/70',
         className,
       )}
       {...props}
@@ -46,7 +46,7 @@ function AlertDialogContent({
         data-slot="alert-dialog-content"
         data-size={size}
         className={cn(
-          'group/alert-dialog-content fixed top-1/2 left-1/2 z-[var(--layer-overlay)] grid max-h-[calc(100dvh-2rem-var(--safe-top)-var(--safe-bottom))] w-full max-w-[calc(100%-2rem-var(--safe-left)-var(--safe-right))] -translate-x-1/2 -translate-y-1/2 gap-5 overflow-y-auto rounded-[var(--radius-xl)] border border-border bg-popover p-5 text-popover-foreground shadow-[var(--shadow-overlay)] duration-[var(--motion-standard)] outline-none data-[size=default]:sm:max-w-md data-[size=sm]:sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 sm:p-6',
+          'group/alert-dialog-content fixed top-1/2 left-1/2 z-[var(--layer-overlay)] grid max-h-[calc(100dvh-2rem-var(--safe-top)-var(--safe-bottom))] w-full max-w-[calc(100%-2rem-var(--safe-left)-var(--safe-right))] -translate-x-1/2 -translate-y-1/2 gap-5 overflow-y-auto rounded-[var(--radius-xl)] border border-border bg-popover p-5 text-popover-foreground shadow-[var(--shadow-overlay)] duration-[var(--motion-standard)] outline-none data-[size=default]:sm:max-w-md data-[size=sm]:sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fill-mode-forwards data-closed:fade-out-0 data-closed:zoom-out-95 sm:p-6',
           className,
         )}
         {...props}

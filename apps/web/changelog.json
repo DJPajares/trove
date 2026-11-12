@@ -1094,5 +1094,16 @@
         "Search now has its own button at the top of every screen, beside your initials."
       ]
     }
+  },
+  {
+    "id": "home-cover-polish",
+    "date": "2026-11-13",
+    "version": "1.22.1",
+    "summaries": {
+      "en": [
+        "Search and other windows now close smoothly, without a flash.",
+        "Home's sheet settles flat as you scroll, and past trips get a full-width band of their own."
+      ]
+    }
   }
 ]

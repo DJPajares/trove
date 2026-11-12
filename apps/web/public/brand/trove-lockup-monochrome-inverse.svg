@@ -1,9 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="397.94" height="104.4" viewBox="0 0 198.97 52.2">
+<svg xmlns="http://www.w3.org/2000/svg" width="420.18" height="104.4" viewBox="0 0 210.09 52.2">
   <g transform="translate(-9.08 -10.21) scale(1.1348)">
     <path d="M26.5 23.5H37.5A1.5 1.5 0 0 1 39 25V55L32 48L25 55V25A1.5 1.5 0 0 1 26.5 23.5Z" fill="#fcf7ee" />
     <path d="M11 9H53A3 3 0 0 1 56 12V18A3 3 0 0 1 53 21H11A3 3 0 0 1 8 18V12A3 3 0 0 1 11 9Z" fill="#fcf7ee" />
   </g>
-  <g transform="translate(75.12 8.1)">
+  <g transform="translate(86.24 8.1)">
     <g fill="#fcf7ee">
       <path d="M13.35 36V5.13H1.4V0H31.8V5.13H19.85V36Z" transform="translate(-1.4 0)" />
       <path d="M3.33 36V10.5H9.48V16.67H9.67V36ZM9.67 22.7 9.02 16.65Q9.92 13.4 12.05 11.7Q14.18 10 17.22 10Q18.27 10 18.72 10.2V16.15Q18.47 16.05 18.02 16.03Q17.57 16 16.92 16Q13.25 16 11.46 17.61Q9.67 19.22 9.67 22.7Z" transform="translate(25.25 0)" />

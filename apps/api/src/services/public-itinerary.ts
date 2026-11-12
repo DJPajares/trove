@@ -3,7 +3,7 @@ import { getPrismaClient } from '@trove/db';
 import { readPlaceSnapshots } from './place-data.js';
 import { placeProviderRefInclude, serializeCanonicalPlace } from './place-serializer.js';
 import { formatLocalTime } from './itinerary-rules.js';
-import { formatDateOnly } from './trip-rules.js';
+import { formatDateOnly, tripCopyCredit } from './trip-rules.js';
 
 /**
  * The trip is not shared, or does not exist. Deliberately one error for both, so
@@ -38,6 +38,11 @@ export type PublicItinerary = {
     notes: string | null;
   }>;
   trip: {
+    /**
+     * Set when this trip is itself a saved copy: the display name its credit
+     * records, or null where the creator had none.
+     */
+    basedOn: { creatorName: string | null } | null;
     /** ISO 3166-1 alpha-2. Where the trip goes, which a shared plan may say. */
     countries: string[];
     /** The traveller's own framing of the trip, deliberately shared. */
@@ -45,6 +50,11 @@ export type PublicItinerary = {
     endDate: string;
     id: string;
     name: string;
+    /**
+     * The sharer's display name, disclosed to them before they share (PRD 8.2).
+     * Null where they have not set one; the reader supplies its own wording.
+     */
+    ownerName: string | null;
     startDate: string;
   };
 };
@@ -92,10 +102,15 @@ export async function listPublicItinerary(
     where: { id: tripId, visibility: 'PUBLIC' },
     select: {
       countries: true,
+      creatorId: true,
       description: true,
       endDate: true,
       id: true,
       name: true,
+      owner: { select: { displayName: true } },
+      ownerId: true,
+      sourceAttribution: true,
+      sourceTripId: true,
       startDate: true,
       itineraryDays: {
         select: {
@@ -139,11 +154,13 @@ export async function listPublicItinerary(
       notes: day.notes,
     })),
     trip: {
+      basedOn: tripCopyCredit(trip),
       countries: trip.countries,
       description: trip.description,
       endDate: formatDateOnly(trip.endDate),
       id: trip.id,
       name: trip.name,
+      ownerName: trip.owner.displayName?.trim() || null,
       startDate: formatDateOnly(trip.startDate),
     },
   };

@@ -90,7 +90,7 @@ The current approved scope does not provide:
 - native iOS/Android apps,
 - full multilingual UI.
 
-AI-assisted trip creation (Section 7.6) and owner-enabled read-only itinerary links (Section 8.2) are approved extensions to the original MVP. Neither authorizes the broader AI, collaboration, or discovery workflows deferred here.
+AI-assisted trip creation (Section 7.6) and owner-enabled read-only itinerary links (Section 8.2), with saving a copy from them (Section 8.1), are approved extensions to the original MVP. Neither authorizes the broader AI, collaboration, or discovery workflows deferred here.
 
 ---
 
@@ -601,7 +601,7 @@ Existing and manually created itinerary durations are `USER_OWNED`. Editing an `
 
 # 8. Trip Ownership & Sharing
 
-Trips are **private by default and edited only by their owner**. Read-only itinerary links in Section 8.2 are the sole approved public exception; they do not expose the whole Trip.
+Trips are **private by default and edited only by their owner**. Read-only itinerary links in Section 8.2 are the sole approved public exception; they do not expose the whole Trip. A signed-in traveller who opens such a link may save their own copy of it (Section 8.1); the copy is a new private Trip they own, not access to the original.
 
 The data model may remain future-ready for:
 
@@ -622,26 +622,21 @@ Future-ready concepts may include:
 - attribution,
 - user-to-trip relationship.
 
-Future-ready fields do not authorize additional collaboration, discovery, or sharing workflows beyond Section 8.2.
+Future-ready fields do not authorize additional collaboration, discovery, or sharing workflows beyond Sections 8.1 and 8.2.
 
-## 8.1 Future Saved vs Copied Itinerary Behavior
+## 8.1 Saving a Copy of a Shared Trip
 
-This subsection describes **future functionality only**.
+A signed-in traveller reading a shared link (Section 8.2) may **Save a copy** to their own trips. User-facing language is "Save a copy", "your copy" and "Based on {name}'s trip"; avoid fork, clone, duplicate, source trip and attribution.
 
-### Saved itinerary
+- The copy is an independent, private Trip owned by the traveller who saved it. It is fully editable, can be prepared offline, runs in Trip Mode and can itself be shared. Later edits to the original never reach it, and revoking or deleting the original does not affect it.
+- Saving asks for a name (the original's by default) and a start date (the original's by default). Days keep their order and length, shifted to the new dates. Local clock times stay the same.
+- The copy carries only what the link shows: the trip's name, description, countries and destinations; each day's name and notes; and each scheduled stop's name, address/custom location text, daypart, local times, duration and notes.
+- Nothing private crosses over: Unscheduled items, Trip Places that are not scheduled, priority, costs/budgets/Expenses, completion/skip state, Tasks, Reservations, Trip Info, Memories, ratings, cover photos, planning preferences, daily bases and stays, and the share setting all stay behind. A copy always starts private.
+- A scheduled stop linked to a shared Google Place is relinked to the same Place without a provider request. A stop linked to the original owner's Custom Place gets a new Custom Place owned by the copier, built from its shared name only; the owner's private Place, its coordinates and its notes are never linked or copied.
+- **Always credit.** A copy shows "Based on {name}'s trip" in its identity area, naming the trip's original creator; a copy of a copy still names the first creator. The name is recorded when the copy is saved, so the credit survives the original being deleted or its creator renaming. Without a display name, the credit reads "a Trove traveller". The credit cannot be removed and does not link anywhere.
+- Saving a copy requires server confirmation and is not queued offline. A failed save must not be presented as successful.
 
-- References another user's trip.
-- Generally read-only.
-- Lives under Trips rather than Saved Places.
-
-### Copied itinerary
-
-- Creates an independent editable trip.
-- Preserves original source and attribution.
-
-A future read-only saved itinerary must not run the user's personal Trip Mode directly; it must be copied into an owned trip first.
-
-Shared With Me, collaborators, saved itineraries, Copy to My Trips, public discovery, and source-attribution UI remain deferred.
+Following another traveller's trip read-only, Shared With Me, collaborators, owner notifications about copies, and public discovery remain deferred. A future read-only saved itinerary must not run the user's personal Trip Mode directly; it must be copied into an owned trip first.
 
 ## 8.2 Read-Only Itinerary Links
 
@@ -650,17 +645,18 @@ An owner may explicitly enable a link so companions can read the plan without an
 The public projection contains only:
 
 - trip name, description, countries, and inclusive dates;
+- the owner's display name, and the original creator's display name when the trip is itself a copy;
 - scheduled days' dates, names, and notes;
 - scheduled stops' names, addresses/custom location text, dayparts, local start/end times, durations, and notes, including scheduled Custom Places and label-only blocks.
 
-It excludes Saved and Trip Place collections, Unscheduled items, costs/budgets/Expenses, priority, completion/skip state, provider IDs and coordinates, Tasks, Reservations and their documents, Trip Info, Memories, Experience Ratings, private media, and account details. Shared notes and addresses may contain personal information; the owner must see what will be disclosed before enabling sharing. While enabled, the link reflects subsequent edits to these shared fields.
+It excludes Saved and Trip Place collections, Unscheduled items, costs/budgets/Expenses, priority, completion/skip state, provider IDs and coordinates, Tasks, Reservations and their documents, Trip Info, Memories, Experience Ratings, private media, and account details. Shared notes and addresses may contain personal information; the owner must see what will be disclosed before enabling sharing, including their display name and that people with the link can save their own copy crediting them. While enabled, the link reflects subsequent edits to these shared fields.
 
 Rules:
 
 - Enabling and disabling sharing require server confirmation and are not queued offline. A failed change must not be presented as successful.
 - After revocation, subsequent public reads must be denied, including through application/CDN caches. Private, revoked, missing, and deleted trips produce the same unavailable response. Revocation cannot recall a copy already viewed or saved by a recipient.
 - Public reads use only the allowlisted projection and permitted stored Place context; they cannot trigger billable provider calls or expose authenticated endpoints. Missing or expired provider detail degrades to available context.
-- The page is excluded from indexing and discovery. It offers no maps, Trip Mode, copying into an owned Trip, collaborator management, expiry, or recipient permissions in the current scope.
+- The page is excluded from indexing and discovery. It offers no maps, Trip Mode, collaborator management, expiry, or recipient permissions in the current scope. Its one action beyond reading is Save a copy (Section 8.1).
 - Private Custom Places remain owner-owned. Sharing a scheduled stop's name/address/notes exposes only that projection, not access to its underlying private Place record.
 
 ---
@@ -2454,11 +2450,10 @@ Future purpose:
 - collaboration/invitation-based sharing beyond the read-only links in Section 8.2,
 - Shared With Me,
 - saved itineraries from others,
-- copying trips,
 - comments/recommendations,
 - possible traveller profiles.
 
-The model may keep future-ready ownership/source/visibility fields without implementing these workflows. Read-only link sharing is already defined in Section 8.2 and does not imply them.
+The model may keep future-ready ownership/source/visibility fields without implementing these workflows. Read-only link sharing (Section 8.2) and saving a copy (Section 8.1) are already defined and do not imply them.
 
 ## 35.3 Where to Go When / Discovery
 

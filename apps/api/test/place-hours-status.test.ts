@@ -60,6 +60,47 @@ test('date-specific hours replace the weekly pattern inside their window', () =>
   });
 });
 
+test('dated hours that match the weekly pattern are not special', () => {
+  // Google returns the coming week's dated hours for every place; an ordinary
+  // Saturday inside that window must not read as special hours.
+  const ordinary = hours({
+    currentPeriods: [
+      {
+        close: { date: SATURDAY, day: 6, hour: 17, minute: 0 },
+        open: { date: SATURDAY, day: 6, hour: 9, minute: 0 },
+      },
+    ],
+    validFrom: SATURDAY,
+    validThrough: '2026-10-09',
+  });
+
+  expect(placeHoursStatus({ date: SATURDAY, hours: ordinary })).toStrictEqual({
+    asOf: FETCHED,
+    special: false,
+    spans: [{ close: '17:00', open: '09:00' }],
+    status: 'open',
+  });
+});
+
+test('dated hours with no weekly pattern to compare are not called special', () => {
+  const datedOnly = hours({
+    currentPeriods: [
+      {
+        close: { date: SATURDAY, day: 6, hour: 17, minute: 0 },
+        open: { date: SATURDAY, day: 6, hour: 9, minute: 0 },
+      },
+    ],
+    periods: [],
+    validFrom: SATURDAY,
+    validThrough: SATURDAY,
+  });
+
+  expect(placeHoursStatus({ date: SATURDAY, hours: datedOnly })).toMatchObject({
+    special: false,
+    status: 'open',
+  });
+});
+
 test('a place open past midnight is shown closing at the end of the day', () => {
   const late = hours({
     periods: [{ open: { day: 6, hour: 18, minute: 0 }, close: { day: 0, hour: 2, minute: 0 } }],

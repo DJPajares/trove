@@ -1062,5 +1062,15 @@
         "Profile now looks like the rest of Trove, with a clearer heading and your photo up top. The theme switch is gone from here; you can still change it from the menu."
       ]
     }
+  },
+  {
+    "id": "special-hours-only-when-different",
+    "date": "2026-11-12",
+    "version": "1.21.5",
+    "summaries": {
+      "en": [
+        "Special hours now only appear when a place's hours that day really differ from its usual week."
+      ]
+    }
   }
 ]

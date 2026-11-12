@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { useEffect, useRef, type KeyboardEvent } from 'react';
+import { useEffect, useRef, type KeyboardEvent, type PointerEvent } from 'react';
 
 import { TripAllDaysCard, TripDayCard, type TripDayCardDay } from '@/components/trip-day-card';
 
@@ -50,6 +50,40 @@ export function PlannerRibbon({
     });
   }, [activeKey]);
 
+  // A finger scrolls the strip natively; a mouse does not, so with one the
+  // strip is dragged. Snapping is off while it is, or it fights every frame, and
+  // a drag that moved never counts as a tap on the tile it ended over.
+  const drag = useRef<{ left: number; moved: boolean; x: number } | null>(null);
+
+  function startDrag(event: PointerEvent<HTMLOListElement>) {
+    const list = listRef.current;
+    if (!list || event.pointerType !== 'mouse' || event.button !== 0) return;
+    drag.current = { left: list.scrollLeft, moved: false, x: event.clientX };
+  }
+
+  function moveDrag(event: PointerEvent<HTMLOListElement>) {
+    const list = listRef.current;
+    const state = drag.current;
+    if (!list || !state) return;
+    const distance = event.clientX - state.x;
+    if (!state.moved && Math.abs(distance) < 4) return;
+    if (!state.moved) {
+      state.moved = true;
+      list.setPointerCapture(event.pointerId);
+      list.style.scrollSnapType = 'none';
+    }
+    list.scrollLeft = state.left - distance;
+  }
+
+  function endDrag() {
+    const list = listRef.current;
+    if (list) list.style.scrollSnapType = '';
+    // Cleared after the click this release may produce has been swallowed.
+    window.setTimeout(() => {
+      drag.current = null;
+    }, 0);
+  }
+
   function moveFocus(event: KeyboardEvent<HTMLOListElement>) {
     const tiles = [...(listRef.current?.querySelectorAll<HTMLElement>('[data-ribbon-tile]') ?? [])];
     const current = tiles.indexOf(document.activeElement as HTMLElement);
@@ -77,7 +111,14 @@ export function PlannerRibbon({
     >
       <ol
         className="interaction-scrollbar relative flex snap-x scroll-px-[var(--gutter-inline-start)] gap-1.5 overflow-x-auto px-[var(--gutter-inline-start)] py-2 md:scroll-px-1 md:px-1"
+        onClickCapture={(event) => {
+          if (drag.current?.moved) event.stopPropagation();
+        }}
         onKeyDown={moveFocus}
+        onPointerCancel={endDrag}
+        onPointerDown={startDrag}
+        onPointerMove={moveDrag}
+        onPointerUp={endDrag}
         ref={listRef}
       >
         <li className="snap-start">

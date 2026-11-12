@@ -934,5 +934,15 @@
         "Copies always credit the traveller who planned the original."
       ]
     }
+  },
+  {
+    "id": "drag-day-strip-with-mouse",
+    "date": "2026-11-12",
+    "version": "1.19.1",
+    "summaries": {
+      "en": [
+        "Drag the row of days with your mouse to move along a long trip, just like swiping on your phone."
+      ]
+    }
   }
 ]

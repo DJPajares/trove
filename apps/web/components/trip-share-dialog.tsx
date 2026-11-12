@@ -1,6 +1,8 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import { Check, Copy } from 'lucide-react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useEffect, useId, useState } from 'react';
 
@@ -17,6 +19,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { fetchProfile } from '@/lib/profile/api';
+import { queryKeys } from '@/lib/query/keys';
 import { updateTripVisibility, type Trip } from '@/lib/trips/api';
 
 type TripShareDialogProps = {
@@ -47,6 +51,12 @@ export function TripShareDialog({
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
   const isPublic = trip.visibility === 'public';
+  // Already loaded by the preferences provider, so this reads the cache. The
+  // name is what the link and every saved copy will say, so it is disclosed here.
+  const profile = useQuery({ queryFn: fetchProfile, queryKey: queryKeys.profile() });
+  const displayName = profile.data?.profile.displayName?.trim() || null;
+  // A copy of someone else's trip keeps crediting them, not whoever shares it on.
+  const creditName = trip.basedOn ? trip.basedOn.creatorName : displayName;
   // Rendered rather than stored, so it follows the deployment the owner is on
   // rather than whatever origin was baked in at build time.
   const [shareUrl, setShareUrl] = useState('');
@@ -112,7 +122,22 @@ export function TripShareDialog({
               <li>{t('sharedTrip')}</li>
               <li>{t('sharedDays')}</li>
               <li>{t('sharedStops')}</li>
+              <li>
+                {displayName ? (
+                  t('sharedName', { name: displayName })
+                ) : (
+                  <>
+                    {t('sharedNameMissing')}{' '}
+                    <Link className="font-medium text-foreground underline" href="/profile">
+                      {t('addName')}
+                    </Link>
+                  </>
+                )}
+              </li>
             </ul>
+            <p className="text-muted-foreground">
+              {creditName ? t('copyCredit', { name: creditName }) : t('copyCreditAnonymous')}
+            </p>
             <p className="text-muted-foreground">{t('privateDetails')}</p>
           </div>
 

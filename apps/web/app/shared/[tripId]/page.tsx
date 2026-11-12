@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 
 import { PublicItinerary } from '@/components/public-itinerary';
+import { getAuthUserId } from '@/lib/auth/session';
 import { fetchPublicItinerary } from '@/lib/public-trip/api';
 
 type SharedTripPageProps = { params: Promise<{ tripId: string }> };
@@ -28,12 +29,12 @@ export async function generateMetadata({ params }: SharedTripPageProps): Promise
  * redirected to sign-in before it ever ran.
  */
 export default async function SharedTripPage({ params }: SharedTripPageProps) {
-  const [{ tripId }, locale] = await Promise.all([params, getLocale()]);
+  const [{ tripId }, locale, userId] = await Promise.all([params, getLocale(), getAuthUserId()]);
   const itinerary = await fetchPublicItinerary(tripId);
 
   // Private, never existed, or a malformed id - all the same answer, so the page
   // is no more of a tell than the endpoint behind it.
   if (!itinerary) notFound();
 
-  return <PublicItinerary itinerary={itinerary} locale={locale} />;
+  return <PublicItinerary isSignedIn={userId !== null} itinerary={itinerary} locale={locale} />;
 }

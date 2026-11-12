@@ -944,5 +944,16 @@
         "The All days page no longer slides sideways, so the bottom bar stays put on trips with a long forecast."
       ]
     }
+  },
+  {
+    "id": "clearer-bottom-bar-icons",
+    "date": "2026-11-12",
+    "version": "1.19.2",
+    "summaries": {
+      "en": [
+        "The bottom bar has clearer icons: a suitcase for Trips and a toolbox for Tools.",
+        "The tab you're on now fills in and sits in a soft highlight, so it's easy to spot at a glance."
+      ]
+    }
   }
 ]

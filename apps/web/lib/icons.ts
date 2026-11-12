@@ -26,10 +26,10 @@ import type { TripSection } from '@/lib/trips/navigation';
 
 // Global navigation
 export {
-  Wrench as Tools,
+  Toolbox as Tools,
   Bookmark as Saved,
   House as Home,
-  Waypoints as Trips,
+  Luggage as Trips,
   Plus as Create,
 } from 'lucide-react';
 

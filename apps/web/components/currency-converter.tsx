@@ -242,6 +242,7 @@ export function CurrencyConverter() {
             </label>
             <MoneyInput
               autoComplete="off"
+              groupWhileTyping
               className={cn(
                 'mt-1 h-auto rounded-none border-0 bg-transparent px-0 py-1 font-journal leading-none tabular-nums shadow-none placeholder:text-text-subtle hover:border-0 focus-visible:shadow-[inset_0_-2px_0_var(--color-ring)] focus-visible:ring-0 dark:bg-transparent',
                 large(amount),
@@ -254,9 +255,13 @@ export function CurrencyConverter() {
           </div>
 
           <div className="relative h-px bg-border-subtle">
+            {/* Centred on the divider by `top`, not `-translate-y-1/2`: the
+                button's press nudge is also a Y translate and would replace it,
+                dropping the button half its height mid-press so a tap on its
+                upper half released off it and never swapped. */}
             <Button
               aria-label={t('swap')}
-              className="absolute top-0 right-5 size-11 -translate-y-1/2 rounded-full bg-card text-brand sm:right-7"
+              className="absolute -top-5.5 right-5 size-11 rounded-full bg-card text-brand sm:right-7"
               disabled={!source || !target}
               onClick={() => {
                 setSource(target);

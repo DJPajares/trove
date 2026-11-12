@@ -40,6 +40,68 @@ export function formatMoneyInput(value: string, locale: string, grouping = true)
   }).format(parsed);
 }
 
+/**
+ * A normalized amount as it should read mid-typing: grouped, but keeping what
+ * the traveller has not finished yet - a trailing decimal separator, or a
+ * fraction's trailing zero - which `formatMoneyInput` would round away.
+ */
+export function formatMoneyWhileTyping(normalized: string, locale: string) {
+  if (!normalized) return '';
+  const { decimal } = getNumberSeparators(locale);
+  const [whole = '0', fraction] = normalized.split('.');
+  const grouped = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(Number(whole));
+  return fraction === undefined ? grouped : `${grouped}${decimal}${fraction}`;
+}
+
+/**
+ * Where the caret belongs after a reformat: past the same number of typed
+ * characters (digits and the decimal separator) as before, so inserted or
+ * removed group separators never make it jump.
+ */
+export function moneyCaretAfterFormat(
+  raw: string,
+  rawCaret: number,
+  formatted: string,
+  locale: string,
+) {
+  const typed = typedCharacters(raw.slice(0, rawCaret), locale).length;
+  if (typed === 0) return 0;
+  const { group } = getNumberSeparators(locale);
+  let seen = 0;
+  for (let index = 0; index < formatted.length; index += 1) {
+    if (!isSeparator(formatted[index] ?? '', group)) seen += 1;
+    if (seen === typed) return index + 1;
+  }
+  return formatted.length;
+}
+
+/**
+ * Backspace or delete that only removed a group separator would be undone by
+ * the next reformat, so the key would appear to do nothing. Treat it as
+ * removing the digit beside the separator instead, the way native number
+ * fields behave.
+ */
+export function removeDigitBesideSeparator(
+  raw: string,
+  caret: number,
+  direction: 'backward' | 'forward',
+) {
+  // `raw` is the field after the browser removed the separator, and `caret`
+  // sits where that separator was.
+  const index = direction === 'backward' ? caret - 1 : caret;
+  if (index < 0 || index >= raw.length) return null;
+  return { caret: index, raw: raw.slice(0, index) + raw.slice(index + 1) };
+}
+
+function isSeparator(character: string, group: string) {
+  return character === group || /[\s  ]/.test(character);
+}
+
+function typedCharacters(value: string, locale: string) {
+  const { group } = getNumberSeparators(locale);
+  return [...value].filter((character) => !isSeparator(character, group));
+}
+
 /** An amount as the API serialises it, paired with the currency it was paid in. */
 export type CurrencyAmount = { amount: string; currencyCode: string };
 

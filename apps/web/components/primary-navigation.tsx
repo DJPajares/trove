@@ -1,7 +1,7 @@
 'use client';
 
 import { Plus } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, type Transition } from 'motion/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -11,7 +11,7 @@ import { NavActiveIndicator } from '@/components/nav-active-indicator';
 import { usePrimaryAction } from '@/components/primary-action-provider';
 import { useTripCreation } from '@/components/trip-creation-provider';
 import { Button } from '@/components/ui/button';
-import { navigationTransition } from '@/lib/motion';
+import { motionEase, navigationTransition } from '@/lib/motion';
 import {
   isImmersiveTripPath,
   isNavigationPathActive,
@@ -19,6 +19,13 @@ import {
 } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 import * as Icons from '@/lib/icons';
+
+/** A small settle as a tab becomes current: a dip, a slight overshoot, rest. */
+const iconSelectTransition: Transition = {
+  duration: 0.32,
+  ease: motionEase,
+  times: [0, 0.55, 1],
+};
 
 type NavigationItem = {
   /**
@@ -127,7 +134,14 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
                     scroll={href === '/trips' ? false : undefined}
                   >
                     {active ? <NavActiveIndicator /> : null}
-                    <Icon aria-hidden="true" className="size-5" />
+                    <motion.span
+                      animate={{ scale: active ? [0.86, 1.06, 1] : 1 }}
+                      className="grid place-items-center"
+                      initial={false}
+                      transition={iconSelectTransition}
+                    >
+                      <Icon aria-hidden="true" className="size-5" />
+                    </motion.span>
                     <span className="max-w-full truncate">{label}</span>
                   </Link>
                 </li>

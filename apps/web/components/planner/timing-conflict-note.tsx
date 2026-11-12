@@ -124,7 +124,7 @@ export function TimingConflictNote({
               t,
             })}
         {detail ? <p className="mt-1 text-muted-foreground">{detail}</p> : null}
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-2" data-slot="attention-actions">
           {applicable ? (
             <Button
               disabled={saving}

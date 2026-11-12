@@ -2,6 +2,7 @@
 
 import { Menu, Search, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -42,7 +43,8 @@ const TRIGGER_CLASS =
  * The everyday controls, floating in the upper right of the signed-in shell.
  *
  * Search stands on its own beside the trigger. The trigger shows the
- * traveller's initials when their name is known and a burger when it is not;
+ * traveller's photo when they have uploaded one, their initials when only
+ * their name is known, and a burger when neither is;
  * it unfolds notifications, appearance and account downwards and turns into
  * an X in the same place, so the way out is where the way in was.
  */
@@ -57,7 +59,9 @@ export function FloatingActionStack() {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const searchRef = useRef<HTMLButtonElement | null>(null);
   // Initials for a traveller whose name is known; the burger otherwise.
-  const initials = profileInitials(usePreferences().profile?.displayName);
+  const { profile } = usePreferences();
+  const avatarUrl = profile?.avatarUrl ?? null;
+  const initials = profileInitials(profile?.displayName);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
   // An unavailable feed has nothing to count.
@@ -206,6 +210,16 @@ export function FloatingActionStack() {
               >
                 {expanded ? (
                   <X aria-hidden="true" className="size-5" />
+                ) : avatarUrl ? (
+                  // Decorative: the button's label already says what it opens.
+                  <Image
+                    alt=""
+                    className="size-9 rounded-full object-cover"
+                    height={36}
+                    src={avatarUrl}
+                    unoptimized
+                    width={36}
+                  />
                 ) : initials ? (
                   // The button's label already says what it opens; the initials
                   // only say whose it is.

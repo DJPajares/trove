@@ -1105,5 +1105,16 @@
         "Home's sheet settles flat as you scroll, and past trips get a full-width band of their own."
       ]
     }
+  },
+  {
+    "id": "account-button-photo",
+    "date": "2026-11-13",
+    "version": "1.22.2",
+    "summaries": {
+      "en": [
+        "Your profile photo now appears on the account button at the top of every screen.",
+        "Home's sheet keeps its rounded edge until it reaches the top of the screen."
+      ]
+    }
   }
 ]

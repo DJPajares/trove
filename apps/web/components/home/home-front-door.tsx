@@ -25,29 +25,33 @@ const TENSES = [
  * Shared with the skeleton, so the cover does not move when the trips arrive.
  */
 export const HOME_COVER_FRAME =
-  'mx-[calc(50%-50vw)] -mt-[calc(var(--safe-top)+2rem)] min-h-[clamp(25rem,60svh,34rem)] md:-mt-[calc(var(--safe-top)+var(--header-height)+3rem)] md:min-h-[34rem] lg:min-h-[38rem]';
+  'mx-[calc(50%-50vw)] -mt-[calc(var(--safe-top)+2rem)] min-h-[clamp(25rem,60svh,34rem)] md:-mt-[calc(var(--safe-top)+var(--header-height)+3rem+1px)] md:min-h-[34rem] lg:min-h-[38rem]';
 
 /**
  * Everything beneath the cover: a sheet in the page's own colour, as wide as
  * the cover, whose rounded top edge overlaps the photograph. Its padding puts
- * the content back on the page's own measure. The curve squares off as the
- * traveller scrolls the sheet up, as the trip's navigation sheet does when it
- * pins, and returns when they scroll back to the cover.
+ * the content back on the page's own measure. The curve squares off once the
+ * sheet reaches the top of the screen, as the trip's navigation sheet does
+ * when it pins, and returns when they scroll back to the cover.
  */
 export const HOME_SHEET =
   'relative z-10 mx-[calc(50%-50vw)] -mt-7 space-y-10 rounded-t-[1.75rem] bg-background px-[calc(50vw-50%)] pt-6 transition-[border-radius] duration-[var(--motion-slow)] ease-[var(--ease-standard)] data-flat:rounded-t-none motion-safe:animate-in motion-safe:duration-700 motion-safe:ease-[var(--ease-standard)] motion-safe:slide-in-from-bottom-6 motion-reduce:transition-none sm:space-y-12 md:-mt-10 md:rounded-t-[2.5rem] md:pt-10 md:data-flat:rounded-t-none';
 
 /**
- * Whether the traveller has scrolled the sheet up into the top half of the
- * screen. Not "until it touches the top": on a tall screen with a short Home
- * the page ends before the sheet could get there. Read on scroll directly: one
- * rect read per event, no frame loop to stall.
+ * Whether the sheet's top has reached the bar at the top of the screen: the
+ * header's lower edge from `md` while it is showing, the top of the screen on
+ * a phone or once the header has slid away. Read on scroll directly: one rect
+ * read per event, no frame loop to stall.
  */
-function useRisen(element: HTMLElement | null) {
-  const [risen, setRisen] = useState(false);
+function useReachedTop(element: HTMLElement | null) {
+  const [reached, setReached] = useState(false);
   useEffect(() => {
     if (!element) return;
-    const update = () => setRisen(element.getBoundingClientRect().top <= window.innerHeight / 2);
+    const update = () => {
+      const header = document.querySelector('[data-slot="app-header"]');
+      const bar = Math.max(0, header?.getBoundingClientRect().bottom ?? 0);
+      setReached(element.getBoundingClientRect().top <= bar + 0.5);
+    };
     update();
     window.addEventListener('scroll', update, { passive: true });
     window.addEventListener('resize', update);
@@ -56,12 +60,12 @@ function useRisen(element: HTMLElement | null) {
       window.removeEventListener('resize', update);
     };
   }, [element]);
-  return risen;
+  return reached;
 }
 
 export function HomeSheet({ children }: Readonly<{ children: ReactNode }>) {
   const [element, setElement] = useState<HTMLDivElement | null>(null);
-  const flat = useRisen(element);
+  const flat = useReachedTop(element);
 
   return (
     <div

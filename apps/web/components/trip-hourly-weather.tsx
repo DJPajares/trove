@@ -108,6 +108,7 @@ export function TripHourlyWeather({
     ...(is12Hour ? {} : { minute: '2-digit' }),
     timeZone: 'UTC',
   });
+  const weekdayFormatter = new Intl.DateTimeFormat(locale, { timeZone: 'UTC', weekday: 'short' });
   const cells = hasCurrent ? readings.slice(1) : readings;
   const firstDay = cells[0]?.time.slice(0, 10);
   // The row is kept in every tile so the temperatures stay on one line, but a
@@ -143,19 +144,33 @@ export function TripHourlyWeather({
           // the tiles below carry the detail as their own images.
           role="list"
         >
-          {cells.map((hour) => {
+          {cells.map((hour, index) => {
             const Icon = weatherConditionIcon(hour.weatherCode);
             const condition = t(`condition.${weatherConditionKey(hour.weatherCode)}`);
             const temperature = `${Math.round(hour.temperature)}${unit}`;
             const probability = hour.precipitationProbability;
             const showPrecipitation = probability !== null && probability >= NOTABLE_PRECIPITATION;
-            // Crossing midnight is worth saying once, on the tile that does it.
             const rolled = hour.time.slice(0, 10) !== firstDay;
-            const clock = formatter.format(new Date(`${hour.time}:00.000Z`));
+            // Crossing midnight is said once, on the tile that does it, by
+            // naming the day where the time would be - the hours either side
+            // already place it - so every label stays one short line and the
+            // tiles stay one height.
+            const crossesMidnight = rolled && cells[index - 1]?.time.slice(0, 10) === firstDay;
+            const at = new Date(`${hour.time}:00.000Z`);
+            const clock = formatter.format(at);
             const time = rolled ? t('tomorrowCell', { time: clock }) : clock;
 
             return (
-              <li className="shrink-0 snap-start" key={hour.time}>
+              <li
+                className={cn(
+                  // Few hours stretch to fill the card rather than bunching left.
+                  'min-w-14 flex-1 snap-start',
+                  // A hairline ahead of the new day, in the gap it widens.
+                  crossesMidnight &&
+                    'relative ml-2 before:absolute before:inset-y-3 before:-left-[0.4375rem] before:w-px before:bg-border',
+                )}
+                key={hour.time}
+              >
                 <span
                   aria-label={
                     showPrecipitation
@@ -167,14 +182,17 @@ export function TripHourlyWeather({
                         })
                       : t('hourCell', { condition, temperature, time })
                   }
-                  className="flex w-14 flex-col items-center gap-1 rounded-[var(--radius-lg)] bg-muted/60 py-2"
+                  className="flex w-full flex-col items-center gap-1 rounded-[var(--radius-lg)] bg-muted/60 py-2"
                   role="img"
                 >
                   <span
                     aria-hidden="true"
-                    className="text-[0.6875rem] leading-4 text-muted-foreground tabular-nums"
+                    className={cn(
+                      'text-[0.6875rem] leading-4 whitespace-nowrap tabular-nums',
+                      crossesMidnight ? 'font-semibold text-brand' : 'text-muted-foreground',
+                    )}
                   >
-                    {time}
+                    {crossesMidnight ? weekdayFormatter.format(at) : clock}
                   </span>
                   <Icon aria-hidden="true" className="size-5 shrink-0 text-brand" />
                   <span

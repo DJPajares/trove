@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { ArrowDownUp, ChevronDown, CircleAlert, Clock, Plane } from 'lucide-react';
+import { ArrowDownUp, ChevronDown, CircleAlert, Clock, Plane, X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -240,18 +240,37 @@ export function CurrencyConverter() {
             <label className="sr-only" htmlFor="currency-amount">
               {t('amountIn', { currency: nameOf(source) })}
             </label>
-            <MoneyInput
-              autoComplete="off"
-              groupWhileTyping
-              className={cn(
-                'mt-1 h-auto rounded-none border-0 bg-transparent px-0 py-1 font-journal leading-none tabular-nums shadow-none placeholder:text-text-subtle hover:border-0 focus-visible:shadow-[inset_0_-2px_0_var(--color-ring)] focus-visible:ring-0 dark:bg-transparent',
-                large(amount),
-              )}
-              id="currency-amount"
-              onValueChange={setAmount}
-              placeholder={SAMPLE_AMOUNT}
-              value={amount}
-            />
+            <div className="flex items-center gap-2">
+              <MoneyInput
+                autoComplete="off"
+                groupWhileTyping
+                className={cn(
+                  'mt-1 h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 py-1 font-journal leading-none tabular-nums shadow-none placeholder:text-text-subtle hover:border-0 focus-visible:shadow-[inset_0_-2px_0_var(--color-ring)] focus-visible:ring-0 dark:bg-transparent',
+                  large(amount),
+                )}
+                id="currency-amount"
+                onValueChange={setAmount}
+                placeholder={SAMPLE_AMOUNT}
+                value={amount}
+              />
+              {amount ? (
+                <Button
+                  aria-label={t('clearAmount')}
+                  className="shrink-0 rounded-full text-muted-foreground"
+                  onClick={() => {
+                    // Blur first: a touch tap on a button does not always take
+                    // focus from the field, and a focused field keeps its text.
+                    document.getElementById('currency-amount')?.blur();
+                    setAmount('');
+                  }}
+                  size="icon-sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  <X aria-hidden="true" />
+                </Button>
+              ) : null}
+            </div>
           </div>
 
           <div className="relative h-px bg-border-subtle">

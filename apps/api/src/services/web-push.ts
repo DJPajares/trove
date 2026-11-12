@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { getPrismaClient } from '@trove/db';
-import webPush from 'web-push';
+import * as webPush from 'web-push';
 
 import englishCopy from '../i18n/push/en.json' with { type: 'json' };
 
@@ -274,7 +274,7 @@ export async function dispatchNotifications(
     skipped: 0,
   };
   let cursor = 0;
-  const send = options.send ?? webPush.sendNotification.bind(webPush);
+  const send = options.send ?? webPush.sendNotification;
   await Promise.all(
     Array.from({ length: SEND_CONCURRENCY }, async () => {
       while (cursor < jobs.length) {

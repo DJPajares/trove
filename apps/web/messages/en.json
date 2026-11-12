@@ -1215,7 +1215,7 @@
         "hourlyLabel": "Hour by hour",
         "stripLabel": "Hour by hour forecast. {source}",
         "nowCell": "Now",
-        "tomorrowCell": "{time} tom",
+        "tomorrowCell": "{time} tomorrow",
         "hourCell": "{time}, {condition}, {temperature}",
         "hourCellWithPrecipitation": "{time}, {condition}, {temperature}, {probability}% chance of precipitation",
         "forecastLater": "Weather for this day will be available closer to your trip.",

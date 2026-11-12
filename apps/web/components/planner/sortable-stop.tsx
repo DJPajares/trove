@@ -5,7 +5,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useCallback, type ComponentProps } from 'react';
+import { useCallback, type ComponentProps, type CSSProperties } from 'react';
 
 import { resolvePlaceCategoryFallback } from '@/lib/media/place-category-fallback';
 import type { TrovePlaceCategory } from '@/lib/place-categories';
@@ -13,22 +13,29 @@ import { cn } from '@/lib/utils';
 
 import { StopCard } from './stop-card';
 
+/** How long a finger holds a stop's grip before the stop lifts. */
+export const STOP_HOLD_MS = 300;
+
 /**
  * A stop that can be dragged to another place in its day, by its grip only.
  *
- * The grip is the one drag source, so a finger scrolling the day never starts
- * a drag, and it is a real button: Space picks the stop up, the arrow keys
+ * The grip is the one drag source, and a finger has to hold it still for
+ * {@link STOP_HOLD_MS} first, so a swipe that happens to start on it scrolls the
+ * day; a ring fills around the grip while it is held. It is a real button: Space picks the stop up, the arrow keys
  * move it, Space puts it down and Escape puts it back (PRD 4.6). What stays in
  * the list while it moves is a faint outline of where it came from.
  */
 export function SortableStopCard({
   dragDisabled,
   dragLabel,
+  holding = false,
   observeRef,
   ...card
 }: ComponentProps<typeof StopCard> & {
   dragDisabled: boolean;
   dragLabel: string;
+  /** A finger is holding the grip and the stop is about to lift. */
+  holding?: boolean;
   observeRef?: (node: HTMLLIElement | null) => void;
 }) {
   const {
@@ -59,11 +66,34 @@ export function SortableStopCard({
             {...attributes}
             {...listeners}
             aria-label={dragLabel}
-            className="relative grid size-9 cursor-grab touch-none place-items-center rounded-[var(--radius-md)] text-muted-foreground outline-none after:absolute after:-inset-1 hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 active:cursor-grabbing"
+            // `touch-manipulation`, not `touch-none`: the page must still scroll
+            // through the grip until a hold has lifted the stop. No callout or
+            // text selection, which a long press would otherwise bring up.
+            className="group/grip relative grid size-9 cursor-grab touch-manipulation place-items-center rounded-[var(--radius-md)] text-muted-foreground outline-none select-none [-webkit-touch-callout:none] after:absolute after:-inset-1 hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 active:cursor-grabbing data-holding:bg-primary/10 data-holding:text-primary"
+            data-holding={holding ? '' : undefined}
             data-slot="stop-drag-handle"
+            style={{ '--hold-duration': `${STOP_HOLD_MS}ms` } as CSSProperties}
             type="button"
           >
-            <GripVertical aria-hidden="true" className="size-4" />
+            {/* Fills over exactly the hold, then the stop lifts. Snaps back
+                empty at once when the finger lets go or moves away. */}
+            <svg
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 size-full -rotate-90 motion-reduce:hidden"
+              viewBox="0 0 36 36"
+            >
+              <circle
+                className="fill-none stroke-primary stroke-2 opacity-0 transition-none [stroke-dasharray:100] [stroke-dashoffset:100] [stroke-linecap:round] group-data-holding/grip:opacity-100 group-data-holding/grip:transition-[stroke-dashoffset] group-data-holding/grip:duration-(--hold-duration) group-data-holding/grip:ease-linear group-data-holding/grip:[stroke-dashoffset:0]"
+                cx="18"
+                cy="18"
+                pathLength="100"
+                r="16"
+              />
+            </svg>
+            <GripVertical
+              aria-hidden="true"
+              className="size-4 transition-transform duration-[var(--motion-standard)] group-data-holding/grip:scale-90"
+            />
           </button>
         )
       }
@@ -83,9 +113,11 @@ export function StopDragPreview({
   const { Icon } = resolvePlaceCategoryFallback(category);
 
   return (
+    // Lifts off the page as it appears: a touch larger and tilted, easing in
+    // from where the row sat. Still under reduced motion.
     <div
       className={cn(
-        'ml-[3.25rem] flex items-center gap-3 rounded-[var(--radius-xl)] border border-primary/40 bg-card p-3 shadow-[var(--shadow-elevated)]',
+        'ml-[3.25rem] flex scale-[1.03] -rotate-1 items-center gap-3 rounded-[var(--radius-xl)] border border-primary/40 bg-card p-3 shadow-[var(--shadow-elevated)] transition-[scale,rotate,box-shadow] duration-[var(--motion-standard)] ease-[var(--ease-standard)] starting:scale-100 starting:rotate-0 starting:shadow-none motion-reduce:scale-100 motion-reduce:rotate-0 motion-reduce:transition-none',
       )}
     >
       <span

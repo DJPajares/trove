@@ -1,7 +1,7 @@
 'use client';
 import { useTripReadOnly } from '@/components/trip-provider';
 
-import { Clock3, DoorOpen } from 'lucide-react';
+import { Clock3 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Fragment, type CSSProperties, type ReactNode, type Ref } from 'react';
 
@@ -58,7 +58,11 @@ const CATEGORY_TILES: Record<TrovePlaceCategory, string> = {
 const nameClassName =
   'max-w-full rounded-[var(--radius-sm)] text-left break-words outline-none after:absolute after:inset-0 after:rounded-[var(--radius-xl)] hover:underline focus-visible:ring-3 focus-visible:ring-ring/40';
 
-function StopHoursLine({
+/** The chip shape every fact on a stop shares; each kind brings its own tint. */
+const chipClassName =
+  'inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-xs leading-5 tabular-nums';
+
+function StopHoursChip({
   item,
   status,
 }: Readonly<{ item: ItineraryItem; status: PlaceHoursStatus | undefined }>) {
@@ -101,19 +105,26 @@ function StopHoursLine({
             : span(at.open, at.close);
   const closed = warning || status.status === 'closed';
   return (
-    <p
+    <span
       className={cn(
-        'mt-0.5 flex items-center gap-1 text-xs leading-5',
-        closed ? 'font-medium text-status-warning' : 'text-muted-foreground',
+        chipClassName,
+        // Outlined, where the plan's own chips are filled: the hours are a
+        // fact about the place, not something the traveller set. They turn
+        // amber when they are a problem for the plan.
+        'border',
+        closed
+          ? 'border-status-warning/40 bg-status-warning/10 font-medium text-status-warning'
+          : 'border-border text-muted-foreground',
+        'group-data-[reordering]/day:hidden',
       )}
+      data-slot="stop-hours"
       // Date-specific hours are still worth knowing, just not worth a label.
       title={status.status === 'open' && status.special ? t('specialHours') : undefined}
     >
-      {/* A door, not a clock: the clock is the stop's own time, just above. */}
-      <DoorOpen aria-hidden="true" className="size-3 shrink-0" />
+      <Clock3 aria-hidden="true" className="size-3 shrink-0" />
       <span className="sr-only">{t('hoursLabel')}</span>
       <span className="min-w-0 truncate">{text}</span>
-    </p>
+    </span>
   );
 }
 
@@ -211,14 +222,12 @@ export function StopCard({
       {index ? ' ' : null}
       <span
         className={cn(
-          '@min-[14rem]:whitespace-nowrap',
-          index === 0 && when ? 'font-medium text-foreground' : undefined,
+          'whitespace-nowrap',
+          index === 0 && when ? 'font-semibold' : 'font-normal opacity-75',
         )}
       >
         {part}
-        {index < timingParts.length - 1 ? (
-          <span className="font-normal text-muted-foreground"> ·</span>
-        ) : null}
+        {index < timingParts.length - 1 ? <span className="opacity-75"> ·</span> : null}
       </span>
     </Fragment>
   ));
@@ -273,13 +282,16 @@ export function StopCard({
         )}
         data-selected={view.selected || undefined}
       >
-        {/* The third row takes any height the photo column needs beyond the
-            text, so a short stop's name and time stay together at the top. */}
-        <div className="grid grid-cols-[48px_minmax(0,1fr)] grid-rows-[auto_auto_1fr] items-start gap-x-3 gap-y-0.5 @min-[14rem]:grid-cols-[48px_minmax(0,1fr)_auto]">
+        {/* Two columns: the photo with the grip beneath it, and the stop's
+            words as one stack. Every block in the stack is the same 8px apart,
+            and each kind of detail has a form of its own - the name in bold,
+            the facts as tinted chips, the notes as plain prose - so they are
+            told apart by shape, not by shades of grey. */}
+        <div className="grid grid-cols-[48px_minmax(0,1fr)_auto] items-start gap-x-3">
           {/* The grip sits under the photo, at the card's lower left: away from
               the menu and the name, where a thumb reaching for either, or a
               finger scrolling past, does not land on it by accident. */}
-          <div className="flex flex-col items-center gap-1 self-stretch @min-[14rem]:row-span-3">
+          <div className="flex flex-col items-center gap-2 self-stretch">
             <MediaFrame
               alt=""
               className={cn('size-[48px] rounded-[var(--radius-md)]', CATEGORY_TILES[category])}
@@ -297,81 +309,79 @@ export function StopCard({
             />
             {dragHandle ? <div className="relative z-10 mt-auto">{dragHandle}</div> : null}
           </div>
-          <h3 className="col-start-2 row-start-1 min-w-0 text-base leading-snug font-semibold tracking-[-0.01em] break-words text-foreground">
-            {view.detailed ? (
-              <button
-                aria-label={t('viewDetailsFor', { name: view.name })}
-                className={nameClassName}
-                onClick={onViewDetails}
-                type="button"
-              >
-                {view.name}
-              </button>
-            ) : (
-              view.name
-            )}
-          </h3>
-          {timing || facts.length || priority === 'must_go' || onEditTiming ? (
-            <p className="col-span-2 col-start-1 row-start-2 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm break-words text-muted-foreground tabular-nums @min-[14rem]:col-start-2">
-              {priority === 'must_go' ? (
-                <span className="inline-flex items-center gap-1 font-medium text-brand">
-                  <Icons.MustGo aria-hidden="true" className="size-3.5" />
-                  {t('priority.must_go')}
-                </span>
-              ) : null}
-              {priority === 'must_go' && (timing || onEditTiming) ? (
-                <span aria-hidden="true" className="text-text-subtle">
-                  ·
-                </span>
-              ) : null}
-              {/* The time is the part of a stop changed most, so it opens its
-                    own sheet - above the claim the name makes on the card. */}
-              {onEditTiming ? (
+          <div className="flex min-w-0 flex-col gap-2">
+            <h3 className="min-w-0 text-base leading-snug font-semibold tracking-[-0.01em] break-words text-foreground">
+              {view.detailed ? (
                 <button
-                  aria-label={
-                    timing
-                      ? plannerT('changeTiming', { name: view.name, timing })
-                      : plannerT('addTimingFor', { name: view.name })
-                  }
-                  className={cn(
-                    'relative z-10 max-w-full rounded-[var(--radius-sm)] text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40',
-                    !timing && 'inline-flex items-center gap-1 font-medium text-primary',
-                  )}
-                  disabled={readOnly}
-                  onClick={onEditTiming}
+                  aria-label={t('viewDetailsFor', { name: view.name })}
+                  className={nameClassName}
+                  onClick={onViewDetails}
                   type="button"
                 >
-                  {timing ? (
-                    timingText
-                  ) : (
-                    <>
-                      <Clock3 aria-hidden="true" className="size-3.5" />
-                      {plannerT('addTiming')}
-                    </>
-                  )}
+                  {view.name}
                 </button>
-              ) : timing ? (
-                <span>{timingText}</span>
-              ) : null}
-              {facts.map((fact, index) => (
-                <span
-                  className="inline-flex max-w-full items-center gap-1.5"
-                  key={`${fact}-${index}`}
-                >
-                  {index || timing || onEditTiming || priority === 'must_go' ? (
-                    <span aria-hidden="true" className="text-text-subtle">
-                      ·
-                    </span>
-                  ) : null}
-                  {fact}
-                </span>
-              ))}
-            </p>
-          ) : null}
-          <div className="col-span-2 col-start-1 row-start-3 min-w-0 group-data-[reordering]/day:hidden @min-[14rem]:col-start-2">
+              ) : (
+                view.name
+              )}
+            </h3>
+            {timing || facts.length || priority === 'must_go' || onEditTiming || hours ? (
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                {priority === 'must_go' ? (
+                  <span className={cn(chipClassName, 'bg-brand/12 font-medium text-brand')}>
+                    <Icons.MustGo aria-hidden="true" className="size-3 shrink-0" />
+                    {t('priority.must_go')}
+                  </span>
+                ) : null}
+                {/* The time is the part of a stop changed most, so its chip opens
+                    its own sheet - above the claim the name makes on the card. */}
+                {onEditTiming ? (
+                  <button
+                    aria-label={
+                      timing
+                        ? plannerT('changeTiming', { name: view.name, timing })
+                        : plannerT('addTimingFor', { name: view.name })
+                    }
+                    className={cn(
+                      chipClassName,
+                      'relative z-10 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none',
+                      timing
+                        ? 'bg-secondary text-secondary-foreground hover:bg-secondary/75'
+                        : 'border border-dashed border-primary/40 font-medium text-primary hover:bg-primary/5',
+                    )}
+                    disabled={readOnly}
+                    onClick={onEditTiming}
+                    type="button"
+                  >
+                    {timing ? (
+                      timingText
+                    ) : (
+                      <>
+                        <Clock3 aria-hidden="true" className="size-3 shrink-0" />
+                        {plannerT('addTiming')}
+                      </>
+                    )}
+                  </button>
+                ) : timing ? (
+                  <span className={cn(chipClassName, 'bg-secondary text-secondary-foreground')}>
+                    {timingText}
+                  </span>
+                ) : null}
+                <StopHoursChip item={item} status={hours} />
+                {/* Where and how much are plain words beside the chips: worth
+                    knowing, never worth a shape of their own. */}
+                {facts.map((fact, index) => (
+                  <span
+                    className="max-w-full text-xs leading-5 break-words text-muted-foreground"
+                    key={`${fact}-${index}`}
+                  >
+                    {fact}
+                  </span>
+                ))}
+              </div>
+            ) : null}
             {partial ? (
               <button
-                className="relative z-10 mt-1 inline-flex items-center gap-1 rounded-[var(--radius-sm)] text-sm font-medium text-primary outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+                className="relative z-10 inline-flex items-center gap-1 self-start rounded-[var(--radius-sm)] text-sm font-medium text-primary outline-none group-data-[reordering]/day:hidden hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
                 onClick={partial.onAction}
                 type="button"
               >
@@ -379,18 +389,17 @@ export function StopCard({
                 {partial.label}
               </button>
             ) : null}
-            <StopHoursLine item={item} status={hours} />
             {item.notes ? (
-              // Words to read rather than facts to scan: a gap above, body-weight
-              // text and looser lines tell it apart without a rule or a box.
+              // Words to read rather than facts to scan: plain body text with
+              // looser lines, the one block on the card with no shape around it.
               <ExpandableDescription
-                className="mt-2.5 text-sm leading-relaxed text-foreground/75"
+                className="text-sm leading-relaxed text-foreground/80 group-data-[reordering]/day:hidden"
                 name={view.name}
                 text={item.notes}
               />
             ) : null}
           </div>
-          <div className="relative z-10 col-span-2 col-start-1 row-start-4 -mt-1 -mr-1 flex items-center justify-end @min-[14rem]:col-span-1 @min-[14rem]:col-start-3 @min-[14rem]:row-start-1">
+          <div className="relative z-10 -mt-1 -mr-1 flex items-center">
             <span className="group-data-[reordering]/day:invisible">{menu}</span>
           </div>
         </div>

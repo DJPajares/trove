@@ -117,6 +117,7 @@ export function TripWeatherContext({
           tag: current ? t('nowCell') : archived ? t('archivedForecast') : t('forecastCue'),
           temperature: formatTemperature(current?.temperature ?? selectedForecast.temperatureMax),
           weatherCode: condition.weatherCode,
+          isDay: current?.isDay,
         }
       : null;
   const range = selectedForecast

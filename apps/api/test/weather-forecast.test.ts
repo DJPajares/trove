@@ -260,6 +260,27 @@ test('the current reading also asks for the hours just after it', async () => {
   ]);
 });
 
+test('each hour says whether the sun is up, and an hour without it reads as day', async () => {
+  const { requests, weather } = await readWeather({
+    hourly: {
+      ...hourlyBlock(['2026-09-11T21:00', '2026-09-11T22:00', '2026-09-11T23:00']),
+      is_day: [1, 0, null],
+    },
+  });
+
+  expect(requests[0]).toContain('precipitation_probability%2Cis_day');
+  expect(weather.hours.map((hour) => hour.isDay)).toStrictEqual([true, false, undefined]);
+});
+
+test('an hourly block without day and night still answers every hour', async () => {
+  const { weather } = await readWeather({
+    hourly: hourlyBlock(['2026-09-11T09:00']),
+  });
+
+  expect(weather.hours).toHaveLength(1);
+  expect(weather.hours[0]).not.toHaveProperty('isDay');
+});
+
 test('an answer with no hours still carries the current reading', async () => {
   // The hours ride along on the request that answers "right now". Losing the
   // shape of the afternoon must never cost the temperature as well.

@@ -982,5 +982,13 @@
         "The hour-by-hour weather lines up evenly again, and marks the next day by name where it starts."
       ]
     }
+  },
+  {
+    "id": "night-weather-icons",
+    "date": "2026-11-12",
+    "version": "1.20.4",
+    "summaries": {
+      "en": ["Clear night hours in the weather now show a moon instead of a sun."]
+    }
   }
 ]

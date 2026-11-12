@@ -34,7 +34,12 @@ export function HomeNowStripContent({
   const evidenceDescription = useWeatherEvidenceDescription();
 
   const condition = weather?.kind === 'current' ? weather.current : weather?.forecast;
-  const Icon = condition ? weatherConditionIcon(condition.weatherCode) : null;
+  const Icon = condition
+    ? weatherConditionIcon(
+        condition.weatherCode,
+        weather?.kind === 'current' ? weather.current.isDay : true,
+      )
+    : null;
   const unit = conditionT(`unit.${preferences.temperatureUnit}`);
   const temperature = (value: number) => `${Math.round(value)}${unit}`;
   const valueLabel =

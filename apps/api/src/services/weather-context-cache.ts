@@ -61,6 +61,7 @@ const payloadSchema = z.object({
   ),
   hours: z.array(
     z.object({
+      isDay: z.boolean().optional(),
       precipitationProbability: z.number().nullable(),
       temperature: z.number(),
       time: z.string(),

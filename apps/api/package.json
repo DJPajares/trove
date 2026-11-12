@@ -18,24 +18,24 @@
     "typecheck": "../../node_modules/.bin/tsc --noEmit --project tsconfig.json"
   },
   "dependencies": {
-    "@ai-sdk/google-vertex": "5.0.115",
-    "@fastify/cors": "11.3.1",
-    "@fastify/rate-limit": "^11.2.1",
-    "@supabase/supabase-js": "^2.118.0",
+    "@ai-sdk/google-vertex": "5.0.137",
+    "@fastify/cors": "11.4.1",
+    "@fastify/rate-limit": "^11.2.2",
+    "@supabase/supabase-js": "^2.119.0",
     "@trove/db": "workspace:*",
     "@trove/types": "workspace:*",
-    "ai": "7.0.143",
+    "ai": "7.0.169",
     "countries-and-timezones": "^3.11.0",
-    "date-holidays": "^3.37.0",
-    "dotenv": "^18.0.8",
-    "fastify": "^5.12.7",
-    "geo-tz": "8.1.10",
-    "web-push": "^3.6.7",
+    "date-holidays": "^3.39.1",
+    "dotenv": "^18.0.10",
+    "fastify": "^5.12.8",
+    "geo-tz": "8.1.11",
+    "web-push": "^4.0.0",
     "zod": "4.6.7"
   },
   "devDependencies": {
     "@trove/config": "workspace:*",
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "@types/web-push": "^3.6.4",
     "tsx": "^4.23.15"
   }

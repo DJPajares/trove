@@ -339,6 +339,8 @@ export function ExpensesManager({
         onExpenseFieldChange={updateExpenseForm}
         onExpenseSubmit={handleExpenseSubmit}
         onExpenseToDeleteChange={setExpenseToDelete}
+        days={data.days}
+        itineraryItems={data.itineraryItems}
         saving={saving}
         tripEndDate={trip?.endDate ?? ''}
         tripPlaces={data.tripPlaces}

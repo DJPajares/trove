@@ -1072,5 +1072,15 @@
         "Special hours now only appear when a place's hours that day really differ from its usual week."
       ]
     }
+  },
+  {
+    "id": "expense-places-by-day",
+    "date": "2026-11-12",
+    "version": "1.21.6",
+    "summaries": {
+      "en": [
+        "When you add or edit an expense, Linked place now lists that day's stops, in alphabetical order."
+      ]
+    }
   }
 ]

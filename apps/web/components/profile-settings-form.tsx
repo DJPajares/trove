@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { CircleAlert, Palette, SlidersHorizontal, UserRound } from 'lucide-react';
+import { CircleAlert, SlidersHorizontal, UserRound } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useId, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
@@ -36,14 +36,7 @@ import * as Icons from '@/lib/icons';
 
 export function ProfileSettingsForm({ locale }: { locale: string }) {
   const t = useTranslations('profile');
-  const {
-    appearanceSaveError,
-    preferences,
-    profile,
-    saveProfileChanges,
-    setAppearance,
-    status: preferencesStatus,
-  } = usePreferences();
+  const { preferences, profile, saveProfileChanges, status: preferencesStatus } = usePreferences();
   const [form, setForm] = useState<ProfileSettingsFormState | null>(null);
   const [savedBaseline, setSavedBaseline] = useState<SavedProfileSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -170,13 +163,6 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
         </Alert>
       ) : null}
 
-      {appearanceSaveError ? (
-        <Alert role="status" variant="destructive">
-          <Icons.Error aria-hidden="true" />
-          <AlertDescription className="text-destructive">{t('appearanceUnsaved')}</AlertDescription>
-        </Alert>
-      ) : null}
-
       <Card
         className="scroll-mt-[calc(var(--safe-top)+var(--header-height)+1rem)] gap-0 py-0"
         id="profile"
@@ -190,6 +176,57 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
         >
           <FieldSet className="mt-6 gap-6">
             <FieldLegend className="sr-only">{t('profileSection')}</FieldLegend>
+            <div className="flex flex-wrap items-center gap-4 sm:gap-5">
+              <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary text-2xl font-semibold text-secondary-foreground">
+                {profile?.avatarUrl ? (
+                  <Image
+                    alt={t('photoAlt')}
+                    className="size-full object-cover"
+                    height={80}
+                    src={profile.avatarUrl}
+                    unoptimized
+                    width={80}
+                  />
+                ) : (
+                  form.displayName.slice(0, 1).toUpperCase() || '?'
+                )}
+              </div>
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  {/* The input is screen-reader only, so its label carries the focus ring. */}
+                  <label
+                    className={cn(
+                      buttonVariants({ size: 'default' }),
+                      'focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/40',
+                      photoBusy ? 'pointer-events-none opacity-50' : 'cursor-pointer',
+                    )}
+                  >
+                    <span aria-disabled={photoBusy}>
+                      {profile?.avatarPath ? t('changePhoto') : t('choosePhoto')}
+                    </span>
+                    <Input
+                      accept="image/jpeg,image/png,image/webp"
+                      className="sr-only size-px!"
+                      disabled={photoBusy}
+                      onChange={handlePhotoChange}
+                      type="file"
+                    />
+                  </label>
+                  {profile?.avatarPath ? (
+                    <Button
+                      disabled={photoBusy}
+                      onClick={handlePhotoRemove}
+                      type="button"
+                      variant="outline"
+                    >
+                      {t('removePhoto')}
+                    </Button>
+                  ) : null}
+                </div>
+                <p className="text-xs text-muted-foreground">{t('photoHint')}</p>
+              </div>
+            </div>
+
             <div className="grid gap-6 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="profile-display-name">{t('displayName')}</FieldLabel>
@@ -232,60 +269,6 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
                   {t('homeCurrencyHint')}
                 </FieldDescription>
               </Field>
-            </div>
-
-            <div className="border-t border-border-subtle pt-5">
-              <p className="text-sm font-medium text-foreground">{t('photoSection')}</p>
-              <div className="mt-3 flex flex-wrap items-center gap-4 sm:gap-5">
-                <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary text-2xl font-semibold text-secondary-foreground">
-                  {profile?.avatarUrl ? (
-                    <Image
-                      alt={t('photoAlt')}
-                      className="size-full object-cover"
-                      height={80}
-                      src={profile.avatarUrl}
-                      unoptimized
-                      width={80}
-                    />
-                  ) : (
-                    form.displayName.slice(0, 1).toUpperCase() || '?'
-                  )}
-                </div>
-                <div className="min-w-0 flex-1 space-y-2">
-                  <div className="flex flex-wrap gap-2">
-                    {/* The input is screen-reader only, so its label carries the focus ring. */}
-                    <label
-                      className={cn(
-                        buttonVariants({ size: 'default' }),
-                        'focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/40',
-                        photoBusy ? 'pointer-events-none opacity-50' : 'cursor-pointer',
-                      )}
-                    >
-                      <span aria-disabled={photoBusy}>
-                        {profile?.avatarPath ? t('changePhoto') : t('choosePhoto')}
-                      </span>
-                      <Input
-                        accept="image/jpeg,image/png,image/webp"
-                        className="sr-only size-px!"
-                        disabled={photoBusy}
-                        onChange={handlePhotoChange}
-                        type="file"
-                      />
-                    </label>
-                    {profile?.avatarPath ? (
-                      <Button
-                        disabled={photoBusy}
-                        onClick={handlePhotoRemove}
-                        type="button"
-                        variant="outline"
-                      >
-                        {t('removePhoto')}
-                      </Button>
-                    ) : null}
-                  </div>
-                  <p className="text-xs text-muted-foreground">{t('photoHint')}</p>
-                </div>
-              </div>
             </div>
           </FieldSet>
         </EditorialSection>
@@ -354,36 +337,6 @@ export function ProfileSettingsForm({ locale }: { locale: string }) {
                 value={form.dateFormat}
               />
             </div>
-          </FieldSet>
-        </EditorialSection>
-      </Card>
-
-      <Card
-        className="scroll-mt-[calc(var(--safe-top)+var(--header-height)+1rem)] gap-0 py-0"
-        id="appearance"
-      >
-        <EditorialSection
-          className="p-5 sm:p-6"
-          description={t('appearanceSectionDescription')}
-          headingId="appearance-settings-heading"
-          icon={<Palette aria-hidden="true" />}
-          title={t('appearanceSection')}
-        >
-          <FieldSet className="mt-6 max-w-sm">
-            <FieldLegend className="sr-only">{t('appearanceSection')}</FieldLegend>
-            <SelectField
-              label={t('appearance')}
-              onChange={(value) => {
-                const appearance = value as ProfileSettingsFormState['appearance'];
-                setForm((current) => (current ? { ...current, appearance } : current));
-                setAppearance(appearance);
-              }}
-              options={[
-                ['light', t('light')],
-                ['dark', t('dark')],
-              ]}
-              value={form.appearance}
-            />
           </FieldSet>
         </EditorialSection>
       </Card>

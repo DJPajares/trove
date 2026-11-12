@@ -451,12 +451,13 @@ body {
   backdrop-filter: blur(14px);
 }
 
-@media (min-width: 768px) {
-  [data-cover-under-header='true'] [data-floating-trigger] {
-    border-color: transparent;
-    background-color: transparent;
-    backdrop-filter: none;
-  }
+/* The weather cue shares the header's row on Home, underneath the header. */
+[data-cover-under-header='true'] [data-slot='app-header'] {
+  pointer-events: none;
+}
+
+[data-cover-under-header='true'] [data-slot='app-header'] :is(a, button) {
+  pointer-events: auto;
 }
 
 .interaction-scrollbar {

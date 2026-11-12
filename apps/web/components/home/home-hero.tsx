@@ -107,9 +107,11 @@ export function HomeCover({
           cue at the top, clear of the status area or the header, and the
           moment at the foot, clear of the sheet that overlaps it. */}
       <div className="mx-auto flex w-full max-w-[var(--layout-app)] flex-1 flex-col ps-[var(--gutter-inline-start)] pe-[var(--gutter-inline-end)]">
-        <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-between gap-12 pt-[calc(var(--safe-top)+0.75rem)] pb-14 md:pt-[calc(var(--safe-top)+var(--header-height)+1.25rem)] md:pb-20">
-          {/* Above the headline's stretched link, so the weather source stays its own link. */}
-          <div className="relative z-10 self-start motion-safe:animate-in motion-safe:duration-700 motion-safe:fade-in">
+        <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-between gap-12 md:justify-end pt-[calc(var(--safe-top)+0.75rem)] pb-14 md:pt-[calc(var(--safe-top)+var(--header-height)+3rem)] md:pb-20">
+          {/* Above the headline's stretched link, so the weather source stays its
+              own link. From `md` it sits in the header's row, beside the
+              floating controls; the header lets clicks through to it. */}
+          <div className="relative z-10 self-start motion-safe:animate-in motion-safe:duration-700 motion-safe:fade-in md:absolute md:top-[calc(var(--safe-top)+(var(--header-height)-2.75rem)/2)] md:right-[calc(max(0.75rem,var(--safe-right))+6.25rem)]">
             <HomeNowStrip tone="onMedia" />
           </div>
 

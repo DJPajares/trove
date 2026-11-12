@@ -3213,7 +3213,6 @@
     "today": {
       "title": "Today",
       "day": "Day {number}",
-      "dayNamed": "Day {number} · {name}",
       "loading": "Loading today",
       "free": "Nothing is planned for today. A free day is a fine thing.",
       "allDone": "That is everything planned for today.",

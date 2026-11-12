@@ -72,10 +72,8 @@ export function HomeToday({
           {t('title')}
         </h2>
         {day ? (
-          <p className="min-w-0 truncate text-sm text-muted-foreground tabular-nums">
-            {day.name
-              ? t('dayNamed', { name: day.name, number: day.number })
-              : t('day', { number: day.number })}
+          <p className="shrink-0 text-sm font-medium text-brand tabular-nums">
+            {t('day', { number: day.number })}
           </p>
         ) : null}
       </div>

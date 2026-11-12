@@ -1011,5 +1011,15 @@
         "The arrows on place photos and memories now respond to every tap, wherever on the button you press."
       ]
     }
+  },
+  {
+    "id": "map-other-places-toggle",
+    "date": "2026-11-12",
+    "version": "1.21.0",
+    "summaries": {
+      "en": [
+        "Maps have a new Other places button to show or hide the rest of your trip's places, so you can focus on the day or see what's nearby."
+      ]
+    }
   }
 ]

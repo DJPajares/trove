@@ -6,6 +6,8 @@ import { tripPlanningPreferencesSchema } from '@trove/types';
 import { getTripOverview } from '../services/trip-overview.js';
 import { isValidIanaTimeZone } from '../services/trip-rules.js';
 import { getBearerToken } from '../services/request-auth.js';
+import { PublicTripNotFoundError } from '../services/public-itinerary.js';
+import { copySharedTrip } from '../services/trip-copies.js';
 import {
   createTrip,
   deleteTrip,
@@ -301,6 +303,30 @@ export async function deleteTripController(request: FastifyRequest, reply: Fasti
     await deleteTrip(context.userId, context.accessToken, tripId);
     return reply.code(204).send();
   } catch (error) {
+    return handleTripError(error, reply);
+  }
+}
+
+const tripCopySchema = z.object({ name: tripFields.name, startDate: dateSchema }).strict();
+
+/**
+ * Save a copy of a trip someone shared (PRD 8.1). A trip that is not shared
+ * answers exactly as a missing one does, the same as the share link itself.
+ */
+export async function copySharedTripController(request: FastifyRequest, reply: FastifyReply) {
+  const context = getRequestContext(request, reply);
+  const tripId = parseTripId(request, reply);
+  if (!context || !tripId) return;
+  const parsed = tripCopySchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ code: 'invalid_trip' });
+
+  try {
+    const trip = await copySharedTrip(context.userId, context.accessToken, tripId, parsed.data);
+    return reply.code(201).send({ trip });
+  } catch (error) {
+    if (error instanceof PublicTripNotFoundError) {
+      return reply.code(404).send({ code: 'trip_not_found' });
+    }
     return handleTripError(error, reply);
   }
 }

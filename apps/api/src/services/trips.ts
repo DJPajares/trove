@@ -41,6 +41,7 @@ import {
   resolveTripWeatherLocation,
   resolveTripTimeZone,
   shiftDateOnly,
+  tripCopyCredit,
 } from './trip-rules.js';
 
 export const TRIP_COVERS_BUCKET = 'trip-covers';
@@ -326,6 +327,7 @@ async function serializeTrip(
   return {
     planningPreferences: readTripPlanningPreferences(trip.planningPreferences),
     archivedAt: trip.archivedAt?.toISOString() ?? null,
+    basedOn: tripCopyCredit(trip),
     effectivePace: effectiveTripPace(readTripPlanningPreferences(trip.planningPreferences)),
     countries: trip.countries,
     coverPhotoPath: trip.coverPhotoPath,
@@ -511,6 +513,17 @@ async function findOrCreateCustomPlace(
       ownerId: userId,
     },
   });
+}
+
+/** The same lookup for callers outside this file, which only need the Place's id. */
+export async function findOrCreateOwnedCustomPlace(
+  transaction: Prisma.TransactionClient,
+  userId: string,
+  name: string,
+  inferredTimeZone: string | null = null,
+): Promise<{ id: string }> {
+  const place = await findOrCreateCustomPlace(transaction, userId, name, inferredTimeZone);
+  return { id: place.id };
 }
 
 function toTimeZoneCandidate(

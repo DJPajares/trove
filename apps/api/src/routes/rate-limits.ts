@@ -23,3 +23,9 @@ export const PROVIDER_FANOUT_RATE_LIMIT = perMinute(30);
  * longer free ones.
  */
 export const PUBLIC_SHARE_RATE_LIMIT = perMinute(60);
+
+/**
+ * Saving a copy of a shared trip writes a whole trip in one request. Nobody
+ * saves more than a handful by hand; the ceiling is for a client stuck retrying.
+ */
+export const TRIP_COPY_RATE_LIMIT = perMinute(10);

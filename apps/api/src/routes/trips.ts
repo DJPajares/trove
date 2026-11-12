@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import {
   createTripController,
   archiveTripController,
+  copySharedTripController,
   deleteTripController,
   getTripController,
   getTripOverviewController,
@@ -12,6 +13,7 @@ import {
   updateTripVisibilityController,
 } from '../controllers/trips.js';
 import { requireAuthenticatedUser } from '../services/request-auth.js';
+import { TRIP_COPY_RATE_LIMIT } from './rate-limits.js';
 
 export function registerTripRoutes(app: FastifyInstance) {
   app.get('/trips', { preHandler: requireAuthenticatedUser }, listTripsController);
@@ -37,6 +39,11 @@ export function registerTripRoutes(app: FastifyInstance) {
     '/trips/:tripId/visibility',
     { preHandler: requireAuthenticatedUser },
     updateTripVisibilityController,
+  );
+  app.post(
+    '/shared-trips/:tripId/copies',
+    { config: TRIP_COPY_RATE_LIMIT, preHandler: requireAuthenticatedUser },
+    copySharedTripController,
   );
   app.delete('/trips/:tripId', { preHandler: requireAuthenticatedUser }, deleteTripController);
 }

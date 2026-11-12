@@ -55,9 +55,14 @@ function providerRef(overrides: Record<string, unknown> = {}) {
 function tripFixture(visibility: 'PRIVATE' | 'PUBLIC') {
   return {
     countries: ['JP'],
+    creatorId: 'owner-1',
     description: 'Cherry blossom season, finally.',
     endDate: new Date('2026-05-03T00:00:00.000Z'),
     id: visibility === 'PUBLIC' ? PUBLIC_TRIP_ID : PRIVATE_TRIP_ID,
+    owner: { displayName: 'Ana' },
+    ownerId: 'owner-1',
+    sourceAttribution: null as string | null,
+    sourceTripId: null as string | null,
     name: 'Kyoto in spring',
     startDate: new Date('2026-05-01T00:00:00.000Z'),
     visibility,
@@ -133,11 +138,14 @@ test('a shared trip renders its days in travel order', async () => {
   // Exhaustive on purpose: this asserts what a stranger with the link is let
   // see, so a field added to the public trip shape has to be added here too.
   expect(itinerary.trip).toStrictEqual({
+    basedOn: null,
     countries: ['JP'],
     description: 'Cherry blossom season, finally.',
     endDate: '2026-05-03',
     id: PUBLIC_TRIP_ID,
     name: 'Kyoto in spring',
+    // Disclosed to the owner before they share (PRD 8.2).
+    ownerName: 'Ana',
     startDate: '2026-05-01',
   });
   expect(itinerary.days).toHaveLength(1);
@@ -149,6 +157,16 @@ test('a shared trip renders its days in travel order', async () => {
     // stands in for it.
     name: 'Museum',
   });
+});
+
+test('a shared copy says whose trip it is based on', async () => {
+  trips[0] = { ...trips[0]!, creatorId: 'ben', sourceAttribution: 'Ben', sourceTripId: null };
+  const itinerary = await listPublicItinerary(PUBLIC_TRIP_ID);
+
+  expect(itinerary.trip.basedOn).toEqual({ creatorName: 'Ben' });
+  expect(itinerary.trip.ownerName).toBe('Ana');
+  // Where the copy came from is a credit, not a link: never the original's id.
+  expect(JSON.stringify(itinerary)).not.toContain('sourceTripId');
 });
 
 /**

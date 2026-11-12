@@ -30,6 +30,11 @@ test('archived trips allow browsing and management, but reject content writes an
   app.post('/trips/:tripId/tasks', { preHandler: requireUnarchivedTrip }, allowed);
   app.get('/trips/:tripId/trip-mode/context', { preHandler: requireUnarchivedTrip }, allowed);
   app.post('/task-templates/:templateId/apply', { preHandler: requireUnarchivedTrip }, allowed);
+  app.post('/shared-trips/:tripId/copies', { preHandler: requireUnarchivedTrip }, allowed);
+  // Saving a copy writes a new trip; the archived trip it reads is untouched.
+  expect((await app.inject({ method: 'POST', url: `/shared-trips/${id}/copies` })).statusCode).toBe(
+    200,
+  );
   for (const path of [`/trips/${id}`, `/trips/${id}/archive`]) {
     expect(
       (await app.inject({ method: path.endsWith('archive') ? 'PATCH' : 'GET', url: path }))

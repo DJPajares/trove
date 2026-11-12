@@ -378,3 +378,23 @@ export function resolveTripTimeZone(input: {
   const deviceTimeZone = isValidIanaTimeZone(input.deviceTimeZone) ? input.deviceTimeZone : 'UTC';
   return { source: 'DEVICE_FALLBACK', sourcePlaceId: null, timeZone: deviceTimeZone };
 }
+
+/**
+ * Who a saved copy credits (PRD 8.1), or null for a trip that is not a copy.
+ *
+ * The name is the one recorded when the copy was saved; null means the creator
+ * had none, and the reader says "a Trove traveller". A copy is recognised by any
+ * trace of where it came from, so the credit survives the original being deleted.
+ */
+export function tripCopyCredit(trip: {
+  creatorId: string | null;
+  ownerId: string;
+  sourceAttribution: string | null;
+  sourceTripId: string | null;
+}) {
+  const isCopy =
+    trip.sourceTripId !== null ||
+    trip.sourceAttribution !== null ||
+    (trip.creatorId !== null && trip.creatorId !== trip.ownerId);
+  return isCopy ? { creatorName: trip.sourceAttribution } : null;
+}

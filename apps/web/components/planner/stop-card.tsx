@@ -5,7 +5,6 @@ import { Clock3 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Fragment, type CSSProperties, type ReactNode, type Ref } from 'react';
 
-import { PlaceHoursNote } from '@/components/place-hours-note';
 import { ExpandableDescription } from '@/components/expandable-description';
 import { MediaFrame } from '@/components/media-frame';
 import { usePreferences } from '@/components/preferences-provider';
@@ -67,18 +66,29 @@ function StopHoursLine({
   const signalsT = useTranslations('placeSignals');
   const locale = useLocale();
   const { preferences } = usePreferences();
+  if (!status) return null;
   const at = stopHoursAt(status, item.localStartTime, itineraryLocalEndTime(item));
-  // With no planned time to hold the hours against, the day's hours still say something.
-  if (!at || !status) return <PlaceHoursNote className="mt-1" status={status} />;
 
   const clock = (time: string) =>
     time === '24:00'
       ? t('midnight')
       : formatSuggestedClock(time, locale, preferences.timeFormat === '12h');
+  const span = (open: string, close: string) =>
+    t('hoursSpan', { close: clock(close), open: clock(open) });
+  // Only what is wrong with the plan gets words; a place that is simply open
+  // shows its hours and nothing else, behind a clock that says what they are.
   const warning =
-    at.kind === 'closed_day' || at.kind === 'closed_at' || at.kind === 'closes_during';
-  const text =
-    at.kind === 'closed_day'
+    at?.kind === 'closed_day' || at?.kind === 'closed_at' || at?.kind === 'closes_during';
+  const text = !at
+    ? // No planned time to hold the hours against: the day's hours, as they are.
+      status.status === 'closed'
+      ? signalsT('closed')
+      : status.spans.length === 1 &&
+          status.spans[0]?.open === '00:00' &&
+          status.spans[0].close === '24:00'
+        ? signalsT('allDay')
+        : status.spans.map((hours) => span(hours.open, hours.close)).join(', ')
+    : at.kind === 'closed_day'
       ? signalsT('closed')
       : at.kind === 'closed_at'
         ? at.opens
@@ -88,16 +98,20 @@ function StopHoursLine({
           ? t('closesDuring', { close: clock(at.close) })
           : at.kind === 'open_all_day'
             ? signalsT('allDay')
-            : t('openUntil', { close: clock(at.close) });
+            : span(at.open, at.close);
+  const closed = warning || status.status === 'closed';
   return (
     <p
       className={cn(
-        'mt-1 text-xs leading-5',
-        warning ? 'font-medium text-status-warning' : 'text-muted-foreground',
+        'mt-1 flex items-center gap-1 text-xs leading-5',
+        closed ? 'font-medium text-status-warning' : 'text-muted-foreground',
       )}
+      // Date-specific hours are still worth knowing, just not worth a label.
+      title={status.status === 'open' && status.special ? t('specialHours') : undefined}
     >
-      {status.status === 'open' && status.special ? `${t('specialHours')} · ` : null}
-      {text}
+      <Clock3 aria-hidden="true" className="size-3 shrink-0" />
+      <span className="sr-only">{t('hoursLabel')}</span>
+      <span className="min-w-0 truncate">{text}</span>
     </p>
   );
 }
@@ -249,25 +263,30 @@ export function StopCard({
         )}
         data-selected={view.selected || undefined}
       >
-        <div className="grid grid-cols-[48px_minmax(0,1fr)] items-start gap-x-3 gap-y-0.5 @min-[14rem]:grid-cols-[48px_minmax(0,1fr)_auto]">
-          <MediaFrame
-            alt=""
-            className={cn(
-              'size-[48px] rounded-[var(--radius-md)] @min-[14rem]:row-span-3',
-              CATEGORY_TILES[category],
-            )}
-            dataSlot="planner-stop-photo"
-            fallbackContent={
-              <span aria-hidden="true" className="absolute inset-0 grid place-items-center">
-                <Icon className="size-[1.125rem]" />
-              </span>
-            }
-            sizes="48px"
-            source={
-              view.photo ? { kind: 'editorial', reference: view.photo } : { kind: 'fallback' }
-            }
-            variant="thumbnail"
-          />
+        {/* The third row takes any height the photo column needs beyond the
+            text, so a short stop's name and time stay together at the top. */}
+        <div className="grid grid-cols-[48px_minmax(0,1fr)] grid-rows-[auto_auto_1fr] items-start gap-x-3 gap-y-0.5 @min-[14rem]:grid-cols-[48px_minmax(0,1fr)_auto]">
+          {/* The grip sits under the photo, at the card's lower left: away from
+              the menu and the name, where a thumb reaching for either, or a
+              finger scrolling past, does not land on it by accident. */}
+          <div className="flex flex-col items-center gap-1 self-stretch @min-[14rem]:row-span-3">
+            <MediaFrame
+              alt=""
+              className={cn('size-[48px] rounded-[var(--radius-md)]', CATEGORY_TILES[category])}
+              dataSlot="planner-stop-photo"
+              fallbackContent={
+                <span aria-hidden="true" className="absolute inset-0 grid place-items-center">
+                  <Icon className="size-[1.125rem]" />
+                </span>
+              }
+              sizes="48px"
+              source={
+                view.photo ? { kind: 'editorial', reference: view.photo } : { kind: 'fallback' }
+              }
+              variant="thumbnail"
+            />
+            {dragHandle ? <div className="relative z-10 mt-auto">{dragHandle}</div> : null}
+          </div>
           <h3 className="col-start-2 row-start-1 min-w-0 text-base leading-snug font-semibold tracking-[-0.01em] break-words text-foreground">
             {view.detailed ? (
               <button
@@ -360,7 +379,6 @@ export function StopCard({
             ) : null}
           </div>
           <div className="relative z-10 col-span-2 col-start-1 row-start-4 -mt-1 -mr-1 flex items-center justify-end @min-[14rem]:col-span-1 @min-[14rem]:col-start-3 @min-[14rem]:row-start-1">
-            {dragHandle}
             <span className="group-data-[reordering]/day:invisible">{menu}</span>
           </div>
         </div>

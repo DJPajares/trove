@@ -284,6 +284,7 @@ test("a stop's hours are read against the time it is planned for", () => {
   expect(stopHoursAt(daytime, '10:00', '11:00')).toStrictEqual({
     close: '17:00',
     kind: 'open_until',
+    open: '09:00',
   });
   expect(stopHoursAt(daytime, '16:00', '18:00')).toStrictEqual({
     close: '17:00',

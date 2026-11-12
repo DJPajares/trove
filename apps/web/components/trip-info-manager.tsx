@@ -54,6 +54,7 @@ import {
 import { cn } from '@/lib/utils';
 import { queryKeys } from '@/lib/query/keys';
 import { useTripResource } from '@/lib/query/use-trip-resource';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 type EditorState =
   | { entry: null; mode: 'closed' }
@@ -330,7 +331,7 @@ export function TripInfoManager({ tripId }: Readonly<{ tripId: string }>) {
           />
           {editor.mode !== 'closed' ? (
             <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-              <div className="min-h-0 flex-1 overflow-y-auto p-5">
+              <ScrollShadow className="min-h-0 flex-1 p-5">
                 <FieldGroup>
                   {formError ? (
                     <Alert role="alert" variant="destructive">
@@ -413,7 +414,7 @@ export function TripInfoManager({ tripId }: Readonly<{ tripId: string }>) {
                     </label>
                   </Field>
                 </FieldGroup>
-              </div>
+              </ScrollShadow>
               <SheetFooter>
                 {editor.mode === 'edit' ? (
                   <Button

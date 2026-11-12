@@ -38,6 +38,7 @@ import {
   type ItineraryDay,
   type ItineraryTripPlace,
 } from '@/lib/itinerary/api';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 export function StaySheet({
   itinerary,
@@ -336,7 +337,7 @@ export function StaySheet({
             }
             description={view === 'trip' ? t('description') : t('dayDescription')}
           />
-          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-6">
+          <ScrollShadow className="min-h-0 flex-1 space-y-6 px-5 py-5 sm:px-6">
             {day && view === 'day' ? (
               <Button
                 type="button"
@@ -579,7 +580,7 @@ export function StaySheet({
                 {error}
               </p>
             ) : null}
-          </div>
+          </ScrollShadow>
           <SheetFooter>
             <Button
               disabled={

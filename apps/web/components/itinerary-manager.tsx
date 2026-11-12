@@ -153,6 +153,7 @@ import {
   invalidateTripQueries,
   PLACE_LOCATION_QUERY_ROOTS,
 } from '@/lib/query/trip-invalidation';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 function useDesktopMapLayout() {
   const [matches, setMatches] = useState<boolean | null>(null);
@@ -1455,7 +1456,7 @@ export function ItineraryManager({
       >
         <SheetContent closeLabel={t('close')}>
           <SheetHeading title={t('movement.swap')} description={t('movement.swapDescription')} />
-          <div className="space-y-4 overflow-y-auto p-5">
+          <ScrollShadow className="space-y-4 p-5">
             {itinerary?.days.map((day) => (
               <section key={day.id} className="space-y-2">
                 <h3 className="text-sm font-semibold">
@@ -1482,7 +1483,7 @@ export function ItineraryManager({
                   ))}
               </section>
             ))}
-          </div>
+          </ScrollShadow>
         </SheetContent>
       </Sheet>
       {!online ? <p className="text-sm text-muted-foreground">{t('movement.offline')}</p> : null}
@@ -2090,7 +2091,7 @@ export function ItineraryManager({
                   ),
                 })}
               />
-              <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+              <ScrollShadow className="min-h-0 flex-1 space-y-5 p-5">
                 <FieldGroup>
                   <Field>
                     <FieldLabel htmlFor="itinerary-day-move-target">
@@ -2178,7 +2179,7 @@ export function ItineraryManager({
                     <AlertDescription>{dayMoveError}</AlertDescription>
                   </Alert>
                 ) : null}
-              </div>
+              </ScrollShadow>
               <SheetFooter>
                 <Button
                   disabled={movingDay}

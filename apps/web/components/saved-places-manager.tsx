@@ -103,6 +103,7 @@ import {
 import { matchesPlaceQuery } from '@/lib/trip-places/list-view';
 import * as Icons from '@/lib/icons';
 import { cn } from '@/lib/utils';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 type CollectionEditor =
   { collection: null; mode: 'closed' | 'create' } | { collection: SavedCollection; mode: 'rename' };
@@ -1070,7 +1071,10 @@ export function SavedPlacesManager({
                 ) : null}
               </div>
               {collections.length ? (
-                <div className="-mx-[var(--gutter-inline-start)] flex snap-x scroll-px-[var(--gutter-inline-start)] gap-3 overflow-x-auto px-[var(--gutter-inline-start)] pb-1 [scrollbar-width:none]">
+                <ScrollShadow
+                  orientation="horizontal"
+                  className="-mx-[var(--gutter-inline-start)] flex snap-x scroll-px-[var(--gutter-inline-start)] gap-3 px-[var(--gutter-inline-start)] pb-1 [scrollbar-width:none]"
+                >
                   {collections.map((collection) => {
                     const tiles = coverTiles.get(collection.id) ?? [];
                     return (
@@ -1121,7 +1125,7 @@ export function SavedPlacesManager({
                       </Link>
                     );
                   })}
-                </div>
+                </ScrollShadow>
               ) : (
                 // Before the first collection, the section explains itself once
                 // and offers the one thing to do, rather than an empty row.
@@ -1171,7 +1175,8 @@ export function SavedPlacesManager({
             )}
             {small ? null : (
               <ChipGroup
-                className="-mx-1 flex-nowrap overflow-x-auto px-1 pb-1"
+                render={<ScrollShadow orientation="horizontal" />}
+                className="-mx-1 flex-nowrap px-1 pb-1"
                 multiple={false}
                 onValueChange={([value]) => setCategoryFilter((value ?? 'all') as CategoryFilter)}
                 value={[categoryFilter]}
@@ -1287,7 +1292,7 @@ export function SavedPlacesManager({
                 : t('addPlaceDescription')
             }
           />
-          <div className="min-h-0 overflow-y-auto p-5">
+          <ScrollShadow className="min-h-0 p-5">
             {addMode === 'search' ? (
               <div className="space-y-5">
                 <SearchField
@@ -1415,7 +1420,7 @@ export function SavedPlacesManager({
                 </div>
               </form>
             )}
-          </div>
+          </ScrollShadow>
         </SheetContent>
       </Sheet>
 
@@ -1442,7 +1447,7 @@ export function SavedPlacesManager({
                   : t('createCollectionDescription')
               }
             />
-            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+            <ScrollShadow className="min-h-0 flex-1 space-y-5 p-5">
               {collectionError ? (
                 <Alert role="alert" variant="destructive">
                   <CircleAlert aria-hidden="true" />
@@ -1459,7 +1464,7 @@ export function SavedPlacesManager({
                   value={collectionName}
                 />
               </div>
-            </div>
+            </ScrollShadow>
             <SheetFooter>
               {collectionEditor.mode === 'rename' ? (
                 <Button
@@ -1522,7 +1527,7 @@ export function SavedPlacesManager({
               name: collectionPickerPlace ? getPlaceName(collectionPickerPlace) : '',
             })}
           />
-          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+          <ScrollShadow className="min-h-0 flex-1 space-y-5 p-5">
             {collectionError ? (
               <Alert role="alert" variant="destructive">
                 <CircleAlert aria-hidden="true" />
@@ -1557,7 +1562,7 @@ export function SavedPlacesManager({
             ) : (
               <p className="text-sm leading-6 text-muted-foreground">{t('noCollections')}</p>
             )}
-          </div>
+          </ScrollShadow>
           <SheetFooter>
             <Button
               onClick={() => {
@@ -1611,7 +1616,7 @@ export function SavedPlacesManager({
                 name: noteEditorPlace ? getPlaceName(noteEditorPlace) : '',
               })}
             />
-            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+            <ScrollShadow className="min-h-0 flex-1 space-y-5 p-5">
               <div className="space-y-2">
                 <Label htmlFor="saved-place-note">{t('personalNote')}</Label>
                 <Input
@@ -1622,7 +1627,7 @@ export function SavedPlacesManager({
                   value={noteValue}
                 />
               </div>
-            </div>
+            </ScrollShadow>
             <SheetFooter>
               <Button
                 disabled={savingNote}

@@ -946,9 +946,19 @@
     }
   },
   {
+    "id": "scroll-edge-fades",
+    "date": "2026-11-12",
+    "version": "1.20.0",
+    "summaries": {
+      "en": [
+        "Scrolling lists and day strips now fade softly at the edges, so it's easier to tell when there's more to see."
+      ]
+    }
+  },
+  {
     "id": "clearer-bottom-bar-icons",
     "date": "2026-11-12",
-    "version": "1.19.2",
+    "version": "1.20.1",
     "summaries": {
       "en": ["The bottom bar has clearer icons: a plane for Trips and a pocket knife for Tools."]
     }

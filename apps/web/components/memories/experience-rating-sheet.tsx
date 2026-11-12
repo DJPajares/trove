@@ -14,6 +14,7 @@ import {
   nextExperienceRating,
 } from '@/lib/experience-rating';
 import { cn } from '@/lib/utils';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 /**
  * Where a rating is given, changed or taken back - only ever opened on
@@ -80,7 +81,7 @@ export function ExperienceRatingSheet({
       <SheetContent className={cn(journalSerif.variable, 'bg-paper')} closeLabel={t('close')}>
         <SheetHeading description={description} title={title} />
 
-        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 pb-6">
+        <ScrollShadow className="min-h-0 flex-1 space-y-6 px-5 pb-6">
           {/* Toggle buttons rather than radios: choosing the current value
               clears the rating, which a radio group cannot express. */}
           <div aria-label={title} className="-mx-2 flex items-center gap-1" role="group">
@@ -150,7 +151,7 @@ export function ExperienceRatingSheet({
           )}
 
           {error ? <p className="text-xs text-destructive">{t('saveError')}</p> : null}
-        </div>
+        </ScrollShadow>
 
         <SheetFooter>
           <SheetClose render={<Button variant="outline" />}>{t('done')}</SheetClose>

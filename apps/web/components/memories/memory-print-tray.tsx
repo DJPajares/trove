@@ -15,6 +15,7 @@ import {
 import type { MemoryPhoto } from '@/lib/memories/api';
 import { printTilts } from '@/lib/memories/photo-layout';
 import { cn } from '@/lib/utils';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 const PRINT_SIZES = '5.5rem';
 
@@ -57,9 +58,11 @@ export function MemoryPrintTray({
   const print = (index: number) => ({ '--tilt': `${tilts[index] ?? 0}deg` }) as CSSProperties;
 
   return (
-    <ul
+    <ScrollShadow
+      orientation="horizontal"
+      render={<ul />}
       aria-label={t('photoList')}
-      className="interaction-scrollbar -mx-2 flex gap-3.5 overflow-x-auto px-3 pt-2 pb-6"
+      className="interaction-scrollbar -mx-2 flex gap-3.5 px-3 pt-2 pb-6"
     >
       {photos.map((photo, index) => (
         <li className="w-[5.5rem] shrink-0" key={photo.id}>
@@ -146,6 +149,6 @@ export function MemoryPrintTray({
           </span>
         </button>
       </li>
-    </ul>
+    </ScrollShadow>
   );
 }

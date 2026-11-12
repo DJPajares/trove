@@ -36,6 +36,7 @@ import { groupTripsForLibrary } from '@/lib/trips/lifecycle';
 import { resolveTripNextUp } from '@/lib/trips/next-up';
 import { libraryEditorialSubjects, tripEditorialSubject } from '@/lib/trips/summary';
 import { useLibraryView } from '@/lib/trips/use-library-view';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 const EMPTY_TRIPS: Trip[] = [];
 
@@ -185,8 +186,9 @@ export function TripsManager() {
         // Chips, not tabs (PRD 10): a light way to narrow, with the library
         // itself always one tap away. A lens with nothing in it is not offered.
         <ChipGroup
+          render={<ScrollShadow orientation="horizontal" />}
           aria-label={lensT('label')}
-          className="-mx-1 mb-5 flex-nowrap overflow-x-auto px-1 pb-1 sm:mb-6"
+          className="-mx-1 mb-5 flex-nowrap px-1 pb-1 sm:mb-6"
           multiple={false}
           onValueChange={([value]) => chooseLens(parseTripLens(value))}
           value={[activeLens]}

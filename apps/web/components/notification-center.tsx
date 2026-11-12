@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/popover';
 import { floatingActionTriggerClass } from '@/lib/shell/floating-actions';
 import { cn } from '@/lib/utils';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 type NotificationCenterProps = {
   onNavigate?: () => void;
@@ -89,7 +90,7 @@ export function NotificationCenter({
         </PopoverHeader>
 
         {count ? (
-          <div className="max-h-80 overflow-y-auto">
+          <ScrollShadow className="max-h-80">
             <ItemGroup variant="list">
               {notifications.slice(0, 5).map((notification) => (
                 <Item
@@ -126,7 +127,7 @@ export function NotificationCenter({
                 </Item>
               ))}
             </ItemGroup>
-          </div>
+          </ScrollShadow>
         ) : (
           <PageState
             className="px-4"

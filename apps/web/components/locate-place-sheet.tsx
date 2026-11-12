@@ -21,6 +21,7 @@ import { Sheet, SheetContent, SheetHeading } from '@/components/ui/sheet';
 import { fetchPlaceLocationCandidates, type PlaceLocationCandidate } from '@/lib/saved/api';
 import { linkTripPlaceToProvider } from '@/lib/trip-places/api';
 import * as Icons from '@/lib/icons';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 type LocatePlaceSheetProps = {
   finalFocus?: () => HTMLElement | boolean;
@@ -118,7 +119,7 @@ export function LocatePlaceSheet({
       >
         <SheetHeading title={t('locate.title')} description={t('locate.description')} />
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+        <ScrollShadow className="min-h-0 flex-1 space-y-4 p-5">
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -210,7 +211,7 @@ export function LocatePlaceSheet({
               ))}
             </ItemGroup>
           ) : null}
-        </div>
+        </ScrollShadow>
       </SheetContent>
     </Sheet>
   );

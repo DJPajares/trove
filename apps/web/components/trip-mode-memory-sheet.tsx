@@ -29,6 +29,7 @@ import {
 import { queryKeys } from '@/lib/query/keys';
 import { resolveItineraryItemPlaceName } from '@/lib/trip-places/place-name';
 import * as Icons from '@/lib/icons';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 const NO_CONTEXT = 'none';
 
@@ -154,7 +155,7 @@ export function TripModeMemorySheet({
       >
         <SheetHeading title={t('title')} description={t('description')} />
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+        <ScrollShadow className="min-h-0 flex-1 space-y-4 p-5">
           <p className="text-xs leading-5 text-text-subtle">
             {t('capturedContext', { date: dayDate, timeZone })}
           </p>
@@ -257,7 +258,7 @@ export function TripModeMemorySheet({
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           ) : null}
-        </div>
+        </ScrollShadow>
 
         <SheetFooter>
           <Button onClick={() => onOpenChange(false)} type="button" variant="outline">

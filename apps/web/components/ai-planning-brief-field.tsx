@@ -23,6 +23,7 @@ import {
 import { AI_PLANNING_PROMPT_MAX_LENGTH } from '@/lib/ai-planning/presentation';
 import * as Icons from '@/lib/icons';
 import { cn } from '@/lib/utils';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 const selectionOrder: readonly string[] = [...aiPlanningBriefIngredients, ...aiPlanningBriefNudges];
 
@@ -198,14 +199,14 @@ export function AiPlanningBriefField({
               {t('nudgesTitle')}
             </p>
           ) : null}
-          <div
+          <ScrollShadow
             className={cn(
               'flex scroll-px-4 gap-2 px-4 pb-0.5',
               // A first brief has few enough chips to wrap; quick changes scroll.
-              mode === 'ingredients'
-                ? 'flex-wrap'
-                : 'overflow-x-auto [scrollbar-width:none] md:flex-wrap',
+              mode === 'ingredients' ? 'flex-wrap' : '[scrollbar-width:none] md:flex-wrap',
             )}
+            isEnabled={mode !== 'ingredients'}
+            orientation="horizontal"
           >
             {ingredients.map((key) => {
               const choice = selected(key);
@@ -296,7 +297,7 @@ export function AiPlanningBriefField({
                   );
                 })
               : null}
-          </div>
+          </ScrollShadow>
 
           {tray ? (
             <div

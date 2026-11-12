@@ -277,9 +277,11 @@ export function MomentViewer({
 
             {total > 1 ? (
               <>
+                {/* Centred with top, not a translate, so the Button's press
+                    nudge stays a 1px nudge instead of replacing the centring. */}
                 <Button
                   aria-label={t('previous')}
-                  className="absolute top-1/2 left-2 hidden -translate-y-1/2 rounded-full bg-paper-print/90 shadow-[var(--shadow-control)] sm:inline-flex"
+                  className="absolute top-[calc(50%-1.375rem)] left-2 hidden rounded-full bg-paper-print/90 shadow-[var(--shadow-control)] sm:inline-flex"
                   disabled={active === 0}
                   onClick={() => goTo(active - 1)}
                   size="icon"
@@ -290,7 +292,7 @@ export function MomentViewer({
                 </Button>
                 <Button
                   aria-label={t('next')}
-                  className="absolute top-1/2 right-2 hidden -translate-y-1/2 rounded-full bg-paper-print/90 shadow-[var(--shadow-control)] sm:inline-flex"
+                  className="absolute top-[calc(50%-1.375rem)] right-2 hidden rounded-full bg-paper-print/90 shadow-[var(--shadow-control)] sm:inline-flex"
                   disabled={active === total - 1}
                   onClick={() => goTo(active + 1)}
                   size="icon"

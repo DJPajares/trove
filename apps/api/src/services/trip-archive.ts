@@ -13,6 +13,8 @@ export async function requireUnarchivedTrip(request: FastifyRequest, reply: Fast
   const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(request.method);
   const management =
     path === '/trips/:tripId/archive' || (path === '/trips/:tripId' && request.method === 'DELETE');
+  // Saving a copy only reads the shared trip; what it writes is a new trip.
+  if (path.startsWith('/shared-trips/')) return;
   if (management || (!mutation && !path.includes('/trip-mode/'))) return;
   const tripId =
     params.tripId ??

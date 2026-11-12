@@ -923,5 +923,16 @@
         "Prepared trips, including each trip's overview, keep opening offline after an app update."
       ]
     }
+  },
+  {
+    "id": "save-a-copy-of-shared-trips",
+    "date": "2026-11-12",
+    "version": "1.19.0",
+    "summaries": {
+      "en": [
+        "Found a trip you love? Save your own copy from a shared link, pick your dates, and make it yours.",
+        "Copies always credit the traveller who planned the original."
+      ]
+    }
   }
 ]

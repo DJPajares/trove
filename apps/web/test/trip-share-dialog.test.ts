@@ -1,9 +1,11 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NextIntlClientProvider } from 'next-intl';
 import { createElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, test, vi } from 'vitest';
 
 import { TripShareDialog } from '@/components/trip-share-dialog';
+import { queryKeys } from '@/lib/query/keys';
 import type { Trip } from '@/lib/trips/api';
 import messages from '@/messages/en.json';
 
@@ -23,21 +25,52 @@ vi.mock('@/components/ui/dialog', () => {
   };
 });
 
-function renderShare(visibility: Trip['visibility']) {
+function renderShare(
+  visibility: Trip['visibility'],
+  options: { basedOn?: Trip['basedOn']; displayName?: string | null } = {},
+) {
+  // The owner's profile is already cached by the time a trip's menu opens.
+  const queryClient = new QueryClient();
+  queryClient.setQueryData(queryKeys.profile(), {
+    profile: { displayName: options.displayName === undefined ? 'Ana' : options.displayName },
+  });
   return renderToStaticMarkup(
-    createElement(NextIntlClientProvider, {
-      locale: 'en',
-      messages,
-      timeZone: 'UTC',
-      children: createElement(TripShareDialog, {
-        onOpenChange: () => {},
-        onTripChange: () => {},
-        open: true,
-        trip: { id: 'private-test-trip', visibility } as Trip,
+    createElement(QueryClientProvider, {
+      client: queryClient,
+      children: createElement(NextIntlClientProvider, {
+        locale: 'en',
+        messages,
+        timeZone: 'UTC',
+        children: createElement(TripShareDialog, {
+          onOpenChange: () => {},
+          onTripChange: () => {},
+          open: true,
+          trip: { basedOn: options.basedOn, id: 'private-test-trip', visibility } as Trip,
+        }),
       }),
     }),
   );
 }
+
+const textOf = (markup: string) =>
+  markup
+    .replace(/<[^>]*>/g, '')
+    .replace(/&#x27;|&#39;/g, "'")
+    .replace(/&quot;/g, '"');
+
+test('the owner learns their name is shown and credited on every copy before sharing', () => {
+  const text = textOf(renderShare('private'));
+  expect(text).toContain('Your display name, Ana.');
+  expect(text).toContain('Every copy says “Based on Ana’s trip”.');
+
+  const unnamed = textOf(renderShare('private', { displayName: null }));
+  expect(unnamed).toContain('a Trove traveller');
+  expect(unnamed).toContain('Add a display name');
+
+  // Sharing a saved copy passes on the original creator's credit, not the sharer's.
+  const copy = textOf(renderShare('private', { basedOn: { creatorName: 'Ben' } }));
+  expect(copy).toContain('Every copy says “Based on Ben’s trip”.');
+});
 
 test('the private trip dialog discloses the complete public projection before enabling', () => {
   const markup = renderShare('private');

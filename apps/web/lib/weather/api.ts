@@ -17,7 +17,7 @@ import type { TemperatureUnit } from '@/lib/profile/preferences';
  * a version in the key a returning traveller keeps reading an answer the server
  * has already stopped producing.
  */
-export const WEATHER_CONTRACT_VERSION = 'v6';
+export const WEATHER_CONTRACT_VERSION = 'v7';
 
 export type WeatherCurrentConditions = {
   apparentTemperature: number;
@@ -35,6 +35,8 @@ export type WeatherCurrentConditions = {
  * without another field to trust.
  */
 export type WeatherHourlyForecast = {
+  /** Whether the sun is up in that hour; absent on older readings, read as day. */
+  isDay?: boolean;
   precipitationProbability: number | null;
   temperature: number;
   time: string;

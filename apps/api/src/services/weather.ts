@@ -26,6 +26,7 @@ type OpenMeteoResponse = {
     weather_code?: unknown[];
   };
   hourly?: {
+    is_day?: unknown[];
     precipitation_probability?: unknown[];
     temperature_2m?: unknown[];
     time?: unknown[];
@@ -68,6 +69,8 @@ export type WeatherDailyForecast = {
  * which is what makes the day it belongs to readable from the value itself.
  */
 export type WeatherHourlyForecast = {
+  /** Whether the sun is up in that hour; absent when the provider did not say. */
+  isDay?: boolean;
   precipitationProbability: number | null;
   temperature: number;
   time: string;
@@ -313,6 +316,9 @@ function mapHourly(hourly: OpenMeteoResponse['hourly']): WeatherHourlyForecast[]
     const temperature = hourly.temperature_2m?.[index];
     const precipitation = hourly.precipitation_probability?.[index];
     const weatherCode = hourly.weather_code?.[index];
+    // Only decorates the icon, so a missing or odd value falls back to day
+    // rather than costing the hour.
+    const isDay = Array.isArray(hourly.is_day) ? hourly.is_day[index] : undefined;
 
     if (!isDateTime(time)) throw new WeatherProviderError('invalid_response');
     if (
@@ -333,6 +339,7 @@ function mapHourly(hourly: OpenMeteoResponse['hourly']): WeatherHourlyForecast[]
 
     return [
       {
+        ...(isDay === 0 || isDay === 1 ? { isDay: isDay === 1 } : {}),
         precipitationProbability: isFiniteNumber(precipitation) ? precipitation : null,
         temperature,
         time,
@@ -423,7 +430,8 @@ export class OpenMeteoWeatherProvider implements WeatherProvider {
       // that is a number with no forecast behind it, and PRD 21.1 forbids
       // dressing one up as an answer.
       forecast_hours: '168',
-      hourly: 'temperature_2m,weather_code,precipitation_probability',
+      // `is_day` so a clear night hour draws a moon, not a sun. Same request.
+      hourly: 'temperature_2m,weather_code,precipitation_probability,is_day',
       latitude: String(input.latitude),
       longitude: String(input.longitude),
       temperature_unit: input.temperatureUnit,

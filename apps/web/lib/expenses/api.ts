@@ -66,7 +66,13 @@ export type ExpensesResponse = {
     projectedCost: CurrencyTotal[];
   }>;
   expenses: Expense[];
-  itineraryItems: Array<{ id: string; label: string | null; place: ExpensePlace | null }>;
+  itineraryItems: Array<{
+    id: string;
+    /** Absent from responses cached before the field existed. */
+    itineraryDayId?: string;
+    label: string | null;
+    place: ExpensePlace | null;
+  }>;
   projectedCost: CurrencyTotal[];
   trip: { id: string; name: string };
   tripPlaces: ExpensePlace[];

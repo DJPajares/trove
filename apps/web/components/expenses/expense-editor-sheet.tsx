@@ -2,7 +2,7 @@
 import { useTripReadOnly } from '@/components/trip-provider';
 
 import { CircleAlert, Trash2 } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import type { FormEvent } from 'react';
 
 import { CurrencyCombobox } from '@/components/currency-combobox';
@@ -33,13 +33,14 @@ import {
 } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
-import type { Expense, ExpenseCategory, ExpensePlace } from '@/lib/expenses/api';
+import type { Expense, ExpenseCategory, ExpensePlace, ExpensesResponse } from '@/lib/expenses/api';
 import { resolveExpenseCategory } from '@/lib/expenses/categories';
 import {
   expenseTitle as resolveExpenseTitle,
   placeLabel as resolvePlaceLabel,
 } from '@/lib/expenses/labels';
 import type { BudgetForm, EditorState, ExpenseForm } from '@/lib/expenses/editor-state';
+import { expensePlaceOptions } from '@/lib/expenses/place-options';
 import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 const categories: ExpenseCategory[] = [
@@ -72,6 +73,8 @@ export function ExpenseEditorSheet({
   onExpenseFieldChange,
   onExpenseSubmit,
   onExpenseToDeleteChange,
+  days,
+  itineraryItems,
   saving,
   tripEndDate,
   tripPlaces,
@@ -90,13 +93,25 @@ export function ExpenseEditorSheet({
   onExpenseFieldChange: <Key extends keyof ExpenseForm>(key: Key, value: ExpenseForm[Key]) => void;
   onExpenseSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onExpenseToDeleteChange: (expense: Expense | null) => void;
+  days: ExpensesResponse['days'];
+  itineraryItems: ExpensesResponse['itineraryItems'];
   saving: boolean;
   tripEndDate: string;
   tripPlaces: ExpensePlace[];
   tripStartDate: string;
 }>) {
   const t = useTranslations('expenses');
+  const locale = useLocale();
   const readOnly = useTripReadOnly();
+  const placeOptions = expensePlaceOptions({
+    days,
+    fallbackLabel: t('unnamedPlace'),
+    itineraryItems,
+    locale,
+    localDate: expenseForm.localDate,
+    selectedId: expenseForm.tripPlaceId,
+    tripPlaces,
+  });
 
   return (
     <>
@@ -289,7 +304,7 @@ export function ExpenseEditorSheet({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">{t('noLinkedPlace')}</SelectItem>
-                          {tripPlaces.map((place) => (
+                          {placeOptions.map((place) => (
                             <SelectItem key={place.id} value={place.id}>
                               {resolvePlaceLabel(place, t('unnamedPlace'))}
                             </SelectItem>

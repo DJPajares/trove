@@ -472,6 +472,7 @@ export async function listExpenses(userId: string, tripId: string) {
     expenses: trip.expenses.map((expense) => serializeExpense(expense, tripDays)),
     itineraryItems: trip.itineraryItems.map((item) => ({
       id: item.id,
+      itineraryDayId: item.itineraryDayId,
       label: item.customLabel ?? item.customLocation ?? item.tripPlace?.place.customName ?? null,
       place: serializeOptionalExpensePlace(item.tripPlace),
     })),

@@ -169,6 +169,8 @@ export function TripModeExpenseProvider({
           }}
           onExpenseSubmit={(event) => void handleSubmit(event)}
           onExpenseToDeleteChange={() => undefined}
+          days={data.days}
+          itineraryItems={data.itineraryItems}
           saving={saving}
           tripEndDate={trip?.endDate ?? ''}
           tripPlaces={data.tripPlaces}

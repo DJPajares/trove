@@ -2234,6 +2234,8 @@
       "openInDay": "Open in day",
       "unlocatedStops": "{count, plural, one {# stop has no map location, so it isn’t shown.} other {# stops have no map location, so they aren’t shown.}}",
       "routesControl": "Routes",
+      "otherPlacesControl": "Other places",
+      "otherPlacesHint": "Show or hide the trip’s other places",
       "chooseRoute": "Choose a route",
       "closeRouteChooser": "Close route chooser",
       "routeEndpoint": "{order}. {name}",

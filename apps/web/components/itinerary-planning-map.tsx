@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarPlus, Eye, Route, X } from 'lucide-react';
+import { CalendarPlus, Eye, EyeOff, Route, X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useTheme } from 'next-themes';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -25,6 +25,7 @@ import {
 import { type ItineraryMapPoint, viewportPoints } from '@/lib/maps/itinerary-map';
 import { mapDayTint } from '@/lib/maps/map-day-tints';
 import { retainWhileSuspended } from '@/lib/maps/map-retention';
+import { useOtherPlacesVisible } from '@/lib/maps/other-places-visibility';
 import { routeLineStyle } from '@/lib/maps/route-line-style';
 import { googleMapsCoordinatesHref } from '@/lib/saved/api';
 import { cn } from '@/lib/utils';
@@ -257,11 +258,33 @@ export function ItineraryPlanningMap({
           itemId: selectedRoute.origin.kind === 'itinerary_item' ? selectedRoute.origin.id : null,
         }
       : selectedPoint;
+  // The trip's other Places help when looking for what else is nearby and
+  // crowd the day when not, so a traveller decides; the choice is per device.
+  const [showOtherPlaces, setShowOtherPlaces] = useOtherPlacesVisible();
+  const showOtherPlacesRef = useRef(showOtherPlaces);
+  showOtherPlacesRef.current = showOtherPlaces;
+  const hasOtherPlaces = points.some((point) => point.kind === 'considered');
   const controlsExpanded = Boolean(selectedPoint || selectedRoute || chooserIds);
   useEffect(() => {
     onControlsExpandedChange?.(controlsExpanded && !suspendUpdates);
     return () => onControlsExpandedChange?.(false);
   }, [controlsExpanded, onControlsExpandedChange, suspendUpdates]);
+
+  // Detaches the other Places' markers rather than rebuilding them, so the view
+  // stays where it is - they never framed it - and nothing is loaded again.
+  useEffect(() => {
+    if (status !== 'ready') return;
+    points.forEach((point) => {
+      if (point.kind !== 'considered') return;
+      const existing = markerRefs.current.get(point.id);
+      if (existing) existing.map = showOtherPlaces ? mapRef.current : null;
+    });
+  }, [points, showOtherPlaces, status]);
+
+  // A card for a pin that is no longer drawn would point at nothing.
+  useEffect(() => {
+    if (!showOtherPlaces && selectedPoint?.kind === 'considered') onClearSelectionRef.current();
+  }, [selectedPoint, showOtherPlaces]);
 
   const actionItemId =
     selectedRouteId && selectedRoute
@@ -491,7 +514,7 @@ export function ItineraryPlanningMap({
           content.dataset.selected = String(selected);
           const advancedMarker = new marker.AdvancedMarkerElement({
             gmpClickable: true,
-            map: mapRef.current,
+            map: point.kind === 'considered' && !showOtherPlacesRef.current ? null : mapRef.current,
             position: { lat: point.latitude, lng: point.longitude },
             title:
               point.kind === 'scheduled'
@@ -638,25 +661,43 @@ export function ItineraryPlanningMap({
             })
           : ''}
       </span>
-      {routeLines.length && status === 'ready' ? (
+      {(routeLines.length || hasOtherPlaces) && status === 'ready' ? (
         <div
-          className={cn(controlsContainer ? 'mb-2 flex justify-end' : 'absolute end-3 top-3 z-[1]')}
+          className={cn(
+            'flex gap-2',
+            controlsContainer ? 'mb-2 justify-end' : 'absolute end-3 top-3 z-[1]',
+          )}
         >
-          <Button
-            aria-controls={chooserIds ? chooserId : undefined}
-            aria-expanded={Boolean(chooserIds)}
-            className="shadow-[var(--shadow-overlay)]"
-            onClick={() => {
-              if (chooserIds) setChooserIds(null);
-              else setChooserIds(routeLines.map((leg) => leg.id));
-            }}
-            ref={routesButtonRef}
-            size="sm"
-            variant="outline"
-          >
-            <Route aria-hidden="true" />
-            {t('routesControl')}
-          </Button>
+          {hasOtherPlaces ? (
+            <Button
+              aria-pressed={showOtherPlaces}
+              className="shadow-[var(--shadow-overlay)]"
+              onClick={() => setShowOtherPlaces(!showOtherPlaces)}
+              size="sm"
+              title={t('otherPlacesHint')}
+              variant="outline"
+            >
+              {showOtherPlaces ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
+              {t('otherPlacesControl')}
+            </Button>
+          ) : null}
+          {routeLines.length ? (
+            <Button
+              aria-controls={chooserIds ? chooserId : undefined}
+              aria-expanded={Boolean(chooserIds)}
+              className="shadow-[var(--shadow-overlay)]"
+              onClick={() => {
+                if (chooserIds) setChooserIds(null);
+                else setChooserIds(routeLines.map((leg) => leg.id));
+              }}
+              ref={routesButtonRef}
+              size="sm"
+              variant="outline"
+            >
+              <Route aria-hidden="true" />
+              {t('routesControl')}
+            </Button>
+          ) : null}
         </div>
       ) : null}
       {chooserIds && status === 'ready' ? (

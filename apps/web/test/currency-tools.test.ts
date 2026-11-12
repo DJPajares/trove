@@ -2,7 +2,13 @@ import { expect, test } from 'vitest';
 
 import { isSavedRateStale } from '@/lib/currency/api';
 import { countriesUsingCurrency } from '@/lib/currency/country-currency';
-import { formatCurrencyAmount, formatCurrencyAmountParts } from '@/lib/currency/money';
+import {
+  formatCurrencyAmount,
+  formatCurrencyAmountParts,
+  formatMoneyWhileTyping,
+  moneyCaretAfterFormat,
+  removeDigitBesideSeparator,
+} from '@/lib/currency/money';
 import { priceTagCurrency, priceTagSteps } from '@/lib/currency/price-tags';
 import { tripCurrencySuggestions } from '@/lib/tools/shelf';
 
@@ -63,4 +69,27 @@ test("an amount splits into its code and figure in the locale's own order", () =
     expect(join(parts)).toBe(formatCurrencyAmount(locale, '9870000', 'VND'));
     expect(parts.filter((part) => part.currency).map((part) => part.value)).toEqual(['VND']);
   }
+});
+
+test('an amount groups as it is typed without rounding away what is unfinished', () => {
+  expect(formatMoneyWhileTyping('1234567', 'en')).toBe('1,234,567');
+  expect(formatMoneyWhileTyping('1234.', 'en')).toBe('1,234.');
+  expect(formatMoneyWhileTyping('1234.50', 'en')).toBe('1,234.50');
+  expect(formatMoneyWhileTyping('1234.5', 'de')).toBe('1.234,5');
+  expect(formatMoneyWhileTyping('', 'en')).toBe('');
+});
+
+test('the caret stays beside the digit just typed when separators move', () => {
+  // "1,234,9|567" before regrouping becomes "12,349,|567".
+  expect(moneyCaretAfterFormat('1,234,9567', 7, '12,349,567', 'en')).toBe(6);
+  expect(moneyCaretAfterFormat('1234', 4, '1,234', 'en')).toBe(5);
+  expect(moneyCaretAfterFormat('1234', 0, '1,234', 'en')).toBe(0);
+});
+
+test('deleting only a separator removes the digit beside it instead', () => {
+  // Backspace after the comma in "1,|234" leaves "1|234"; the 1 goes.
+  expect(removeDigitBesideSeparator('1234', 1, 'backward')).toStrictEqual({ caret: 0, raw: '234' });
+  // Delete before the comma in "1|,234" leaves "1|234"; the 2 goes.
+  expect(removeDigitBesideSeparator('1234', 1, 'forward')).toStrictEqual({ caret: 1, raw: '134' });
+  expect(removeDigitBesideSeparator('1234', 0, 'backward')).toBeNull();
 });

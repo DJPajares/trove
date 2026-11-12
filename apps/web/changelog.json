@@ -990,5 +990,16 @@
     "summaries": {
       "en": ["Clear night hours in the weather now show a moon instead of a sun."]
     }
+  },
+  {
+    "id": "currency-amount-grouping-and-swap",
+    "date": "2026-11-12",
+    "version": "1.20.5",
+    "summaries": {
+      "en": [
+        "The currency converter now adds thousands separators as you type, so you can check a long amount at a glance.",
+        "The swap button now works every time you tap it."
+      ]
+    }
   }
 ]

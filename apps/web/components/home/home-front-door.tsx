@@ -16,23 +16,23 @@ const TENSES = [
 ] as const;
 
 /**
- * Where Home's cover sits on the page. Below `md` there is no header, so the
- * photograph cancels the page's own gutter and top padding and runs to the
- * edges of the screen, under the status area and the floating controls. From
- * `md` it is a rounded photograph inside the layout, like the trip hub's.
+ * Where Home's cover sits on the page: across the whole viewport at every
+ * size, cancelling the page's own gutter and top padding. On a phone it runs
+ * under the status area and the floating controls; from `md` it runs under the
+ * header, which turns to the photograph's ink while the cover is behind it.
  *
  * Shared with the skeleton, so the cover does not move when the trips arrive.
  */
 export const HOME_COVER_FRAME =
-  '-ms-[var(--gutter-inline-start)] -me-[var(--gutter-inline-end)] -mt-[calc(var(--safe-top)+2rem)] min-h-[clamp(25rem,60svh,34rem)] md:mx-0 md:mt-0 md:min-h-[26rem] md:rounded-[var(--radius-2xl)] lg:min-h-[30rem]';
+  'mx-[calc(50%-50vw)] -mt-[calc(var(--safe-top)+2rem)] min-h-[clamp(25rem,60svh,34rem)] md:-mt-[calc(var(--safe-top)+var(--header-height)+3rem)] md:min-h-[34rem] lg:min-h-[38rem]';
 
 /**
- * Everything beneath the cover. On mobile it is a sheet in the page's own
- * colour whose rounded top edge overlaps the photograph; from `md` the cover
- * is a photograph inside the layout and this is simply the page below it.
+ * Everything beneath the cover: a sheet in the page's own colour, as wide as
+ * the cover, whose rounded top edge overlaps the photograph. Its padding puts
+ * the content back on the page's own measure.
  */
 export const HOME_SHEET =
-  'relative z-10 -ms-[var(--gutter-inline-start)] -me-[var(--gutter-inline-end)] -mt-7 space-y-10 rounded-t-[1.75rem] bg-background ps-[var(--gutter-inline-start)] pe-[var(--gutter-inline-end)] pt-6 sm:space-y-12 md:mx-0 md:mt-10 md:rounded-none md:bg-transparent md:px-0 md:pt-0';
+  'relative z-10 mx-[calc(50%-50vw)] -mt-7 space-y-10 rounded-t-[1.75rem] bg-background px-[calc(50vw-50%)] pt-6 motion-safe:animate-in motion-safe:duration-700 motion-safe:ease-[var(--ease-standard)] motion-safe:slide-in-from-bottom-6 sm:space-y-12 md:-mt-10 md:rounded-t-[2.5rem] md:pt-10';
 
 /**
  * The page's heading, in Home's own voice and set on the cover: a quiet line
@@ -50,7 +50,7 @@ export function HomeHeadline({
 }: Readonly<{ href?: string; lead: string; subject: string }>) {
   return (
     <h1
-      className="max-w-[18ch] text-[clamp(2.375rem,9.5vw,4.25rem)] leading-[1] font-semibold tracking-[-0.045em] text-balance text-white [overflow-wrap:anywhere]"
+      className="max-w-[18ch] text-[clamp(2.375rem,9.5vw,4.75rem)] leading-[1] font-semibold tracking-[-0.045em] text-balance text-white [overflow-wrap:anywhere] motion-safe:delay-100 motion-safe:animate-in motion-safe:fill-mode-both motion-safe:duration-700 motion-safe:ease-[var(--ease-standard)] motion-safe:fade-in motion-safe:slide-in-from-bottom-4"
       id="home-heading"
     >
       <span className="block text-white/75">{lead}</span>

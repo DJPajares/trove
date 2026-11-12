@@ -55,7 +55,7 @@ export function HomeComingUp({
       </div>
 
       <ul className="-ms-[var(--gutter-inline-start)] -me-[var(--gutter-inline-end)] flex snap-x gap-3 overflow-x-auto ps-[var(--gutter-inline-start)] pe-[var(--gutter-inline-end)] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0 [&::-webkit-scrollbar]:hidden">
-        {trips.map((trip) => {
+        {trips.map((trip, index) => {
           const editorial = editorialFor(trip);
           const countdown = resolveCountdown(daysUntilTripStart(trip));
           const when =
@@ -64,7 +64,11 @@ export function HomeComingUp({
               : relative.format(countdown.value, countdown.unit);
 
           return (
-            <li className="w-40 shrink-0 snap-start md:w-auto" key={trip.id}>
+            <li
+              className="w-40 shrink-0 snap-start motion-safe:animate-in motion-safe:fill-mode-both motion-safe:duration-700 motion-safe:ease-[var(--ease-standard)] motion-safe:fade-in motion-safe:slide-in-from-bottom-4 md:w-auto"
+              key={trip.id}
+              style={{ animationDelay: `${150 + index * 90}ms` }}
+            >
               <Link
                 className="group relative isolate flex aspect-[3/4] flex-col justify-end overflow-hidden rounded-[var(--radius-2xl)] bg-surface-media p-3.5 text-white shadow-[var(--shadow-card)] outline-none transition-[box-shadow,transform] duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-elevated)] focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transform-none motion-reduce:transition-none"
                 href={`/trips/${trip.id}`}
@@ -77,7 +81,7 @@ export function HomeComingUp({
                         })
                       : ''
                   }
-                  className="absolute inset-0 -z-20 h-full w-full rounded-none"
+                  className="absolute inset-0 -z-20 h-full w-full rounded-none transition-transform duration-[var(--motion-slow)] ease-[var(--ease-standard)] group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
                   sizes="(max-width: 767px) 160px, 20rem"
                   source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
                   variant="card"

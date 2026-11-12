@@ -1,6 +1,7 @@
 'use client';
 
 import { useLocale, useTranslations } from 'next-intl';
+import { useEffect } from 'react';
 
 import { HOME_COVER_FRAME, HomeHeadline } from '@/components/home/home-front-door';
 import { HomeNowStrip } from '@/components/home-now-strip';
@@ -38,17 +39,35 @@ export function HomeCover({
   trip: Trip | null;
 }>) {
   const t = useTranslations('home.hero');
-  const tripsT = useTranslations('trips');
-  const itineraryT = useTranslations('itinerary');
   const mediaT = useTranslations('media');
   const locale = useLocale();
   const active = trip?.lifecycle === 'active';
+
+  // The header and the floating controls take the photograph's ink only while
+  // the page rests at its top (globals.css reads this flag). Once the cover's
+  // own words start to scroll beneath them they need their surface back.
+  useEffect(() => {
+    const root = document.documentElement;
+    const sync = () => {
+      if (window.scrollY <= 16) root.setAttribute('data-cover-under-header', 'true');
+      else root.removeAttribute('data-cover-under-header');
+    };
+    sync();
+    window.addEventListener('scroll', sync, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', sync);
+      root.removeAttribute('data-cover-under-header');
+    };
+  }, []);
+
+  const mediaClass =
+    'absolute inset-0 -z-20 h-full w-full rounded-none motion-safe:animate-in motion-safe:duration-[1400ms] motion-safe:ease-out motion-safe:zoom-in-105';
 
   return (
     <section
       aria-labelledby="home-heading"
       className={cn(
-        'relative isolate flex flex-col justify-end overflow-hidden bg-surface-media text-white',
+        'relative isolate flex flex-col overflow-hidden bg-surface-media text-white',
         HOME_COVER_FRAME,
       )}
       data-slot="home-cover"
@@ -60,20 +79,20 @@ export function HomeCover({
               ? mediaT('alt.tripEditorial', { name: tripDestinationSummary(trip) ?? trip.name })
               : ''
           }
-          className="absolute inset-0 -z-20 h-full w-full rounded-none"
+          className={mediaClass}
           preload
-          sizes="(max-width: 1023px) 100vw, 64rem"
+          sizes="100vw"
           source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
           variant="card"
         />
       ) : (
         <MediaFrame
           alt=""
-          className="absolute inset-0 -z-20 h-full w-full rounded-none"
+          className={mediaClass}
           dataSlot="home-cover-artwork"
           photographicPlaceholder={dayHeaderFallback.preview}
           preload
-          sizes="(max-width: 1023px) 100vw, 64rem"
+          sizes="100vw"
           source={{ kind: 'local', src: dayHeaderFallback.src }}
           variant="card"
         />
@@ -81,71 +100,69 @@ export function HomeCover({
       {/* Fixed in both themes, so the headline never depends on the photograph. */}
       <div
         aria-hidden="true"
-        className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgba(8,18,13,0.58)_0%,rgba(8,18,13,0.12)_26%,rgba(8,18,13,0.4)_56%,rgba(8,18,13,0.9)_100%)]"
+        className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgba(8,18,13,0.62)_0%,rgba(8,18,13,0.14)_28%,rgba(8,18,13,0.4)_56%,rgba(8,18,13,0.9)_100%)]"
       />
 
-      {/* Above the headline's stretched link, so the weather source stays its own link. */}
-      <div className="absolute inset-x-0 top-0 z-10 ps-[var(--gutter-inline-start)] pe-[var(--gutter-inline-end)] pt-[calc(var(--safe-top)+0.75rem)] md:p-6 lg:px-10">
-        <HomeNowStrip tone="onMedia" />
-      </div>
-
-      {/* The sheet below overlaps the photograph on mobile, hence the deeper foot. */}
-      <div className="space-y-3 ps-[var(--gutter-inline-start)] pe-[var(--gutter-inline-end)] pt-28 pb-14 md:p-8 lg:p-10">
-        {trip ? (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <span className="inline-flex items-center gap-2 text-[length:var(--text-metadata)] font-semibold tracking-[0.12em] text-white/80 uppercase">
-              {active ? (
-                <span aria-hidden="true" className="relative flex size-2">
-                  <span className="absolute inset-0 animate-ping rounded-full bg-primary-on-media/70 motion-reduce:animate-none" />
-                  <span className="relative size-2 rounded-full bg-primary-on-media" />
-                </span>
-              ) : null}
-              {t(`kicker.${trip.lifecycle}`)}
-            </span>
-            <TripReadinessBadge
-              lifecycle={trip.lifecycle}
-              readiness={trip.planningReadiness}
-              tone="onMedia"
-            />
+      {/* The page's own measure inside the full-width photograph: the weather
+          cue at the top, clear of the status area or the header, and the
+          moment at the foot, clear of the sheet that overlaps it. */}
+      <div className="mx-auto flex w-full max-w-[var(--layout-app)] flex-1 flex-col ps-[var(--gutter-inline-start)] pe-[var(--gutter-inline-end)]">
+        <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-between gap-12 pt-[calc(var(--safe-top)+0.75rem)] pb-14 md:pt-[calc(var(--safe-top)+var(--header-height)+1.25rem)] md:pb-20">
+          {/* Above the headline's stretched link, so the weather source stays its own link. */}
+          <div className="relative z-10 self-start motion-safe:animate-in motion-safe:duration-700 motion-safe:fade-in">
+            <HomeNowStrip tone="onMedia" />
           </div>
-        ) : null}
 
-        <HomeHeadline
-          href={trip ? `/trips/${trip.id}` : undefined}
-          lead={headline.lead}
-          subject={headline.subject}
-        />
-
-        {trip ? (
           <div className="space-y-3">
-            {active ? (
-              <TripDaySegments
-                className="max-w-xs"
-                day={tripDayProgress(trip).day}
-                total={tripDayCount(trip)}
-              />
-            ) : null}
-            <div className="space-y-1">
-              {trip.countries?.length ? (
-                <TripCountries
-                  className="block truncate text-[length:var(--text-metadata)] font-semibold tracking-[0.12em] text-white/85 uppercase"
-                  countries={trip.countries}
+            {trip ? (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 motion-safe:animate-in motion-safe:fill-mode-both motion-safe:duration-700 motion-safe:ease-[var(--ease-standard)] motion-safe:fade-in motion-safe:slide-in-from-bottom-4">
+                <span className="inline-flex items-center gap-2 text-[length:var(--text-metadata)] font-semibold tracking-[0.12em] text-white/80 uppercase">
+                  {active ? (
+                    <span aria-hidden="true" className="relative flex size-2">
+                      <span className="absolute inset-0 animate-ping rounded-full bg-primary-on-media/70 motion-reduce:animate-none" />
+                      <span className="relative size-2 rounded-full bg-primary-on-media" />
+                    </span>
+                  ) : null}
+                  {t(`kicker.${trip.lifecycle}`)}
+                </span>
+                <TripReadinessBadge
+                  lifecycle={trip.lifecycle}
+                  readiness={trip.planningReadiness}
+                  tone="onMedia"
                 />
-              ) : null}
-              <p className="text-sm font-medium text-white/90 tabular-nums">
-                {formatTripDateRange(trip.startDate, trip.endDate, locale)}
-                <span aria-hidden="true"> · </span>
-                {itineraryT('dayCount', { count: tripDayCount(trip) })}
-                {trip.partySize > 1 ? (
-                  <>
-                    <span aria-hidden="true"> · </span>
-                    {tripsT('travellerCount', { count: trip.partySize })}
-                  </>
+              </div>
+            ) : null}
+
+            <HomeHeadline
+              href={trip ? `/trips/${trip.id}` : undefined}
+              lead={headline.lead}
+              subject={headline.subject}
+            />
+
+            {trip ? (
+              <div className="space-y-3 motion-safe:animate-in motion-safe:fill-mode-both motion-safe:delay-200 motion-safe:duration-700 motion-safe:ease-[var(--ease-standard)] motion-safe:fade-in motion-safe:slide-in-from-bottom-4">
+                {active ? (
+                  <TripDaySegments
+                    className="max-w-xs"
+                    day={tripDayProgress(trip).day}
+                    total={tripDayCount(trip)}
+                  />
                 ) : null}
-              </p>
-            </div>
+                <div className="space-y-1">
+                  {trip.countries?.length ? (
+                    <TripCountries
+                      className="block truncate text-[length:var(--text-metadata)] font-semibold tracking-[0.12em] text-white/85 uppercase"
+                      countries={trip.countries}
+                    />
+                  ) : null}
+                  <p className="text-sm font-medium text-white/90 tabular-nums">
+                    {formatTripDateRange(trip.startDate, trip.endDate, locale)}
+                  </p>
+                </div>
+              </div>
+            ) : null}
           </div>
-        ) : null}
+        </div>
       </div>
     </section>
   );

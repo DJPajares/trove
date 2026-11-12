@@ -77,7 +77,9 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
   const shell = (
     <div
       className={cn(
-        'min-h-dvh bg-surface text-foreground',
+        // Clipped sideways so a full-bleed cover can span the viewport without the
+        // scrollbar's width turning into a horizontal scroll.
+        'min-h-dvh overflow-x-clip bg-surface text-foreground',
         isSignedIn && '[--header-offset:0px] md:[--header-offset:var(--header-height)]',
       )}
       // Named so a screen can restyle the canvas around it without a prop: the

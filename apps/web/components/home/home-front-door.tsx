@@ -1,13 +1,13 @@
 'use client';
 
 import { Plus } from 'lucide-react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
-import { MediaFrame } from '@/components/media-frame';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { dayHeaderFallback } from '@/lib/media/day-header-fallback';
 import * as Icons from '@/lib/icons';
+import { cn } from '@/lib/utils';
 
 const TENSES = [
   { icon: Icons.Itinerary, key: 'plan' },
@@ -16,31 +16,62 @@ const TENSES = [
 ] as const;
 
 /**
- * The page's heading, in Home's own voice: a quiet line that sets the moment,
- * then the subject in full ink - "12 days until / Kyoto in November", "Day 3
- * of / Singapore Art and Eats". It is the one line on Home that changes with
- * where the traveller is, so it is the line that makes Home feel alive.
+ * Where Home's cover sits on the page. Below `md` there is no header, so the
+ * photograph cancels the page's own gutter and top padding and runs to the
+ * edges of the screen, under the status area and the floating controls. From
+ * `md` it is a rounded photograph inside the layout, like the trip hub's.
+ *
+ * Shared with the skeleton, so the cover does not move when the trips arrive.
  */
-export function HomeHeadline({ lead, subject }: Readonly<{ lead: string; subject: string }>) {
+export const HOME_COVER_FRAME =
+  '-ms-[var(--gutter-inline-start)] -me-[var(--gutter-inline-end)] -mt-[calc(var(--safe-top)+2rem)] min-h-[clamp(25rem,60svh,34rem)] md:mx-0 md:mt-0 md:min-h-[26rem] md:rounded-[var(--radius-2xl)] lg:min-h-[30rem]';
+
+/**
+ * Everything beneath the cover. On mobile it is a sheet in the page's own
+ * colour whose rounded top edge overlaps the photograph; from `md` the cover
+ * is a photograph inside the layout and this is simply the page below it.
+ */
+export const HOME_SHEET =
+  'relative z-10 -ms-[var(--gutter-inline-start)] -me-[var(--gutter-inline-end)] -mt-7 space-y-10 rounded-t-[1.75rem] bg-background ps-[var(--gutter-inline-start)] pe-[var(--gutter-inline-end)] pt-6 sm:space-y-12 md:mx-0 md:mt-10 md:rounded-none md:bg-transparent md:px-0 md:pt-0';
+
+/**
+ * The page's heading, in Home's own voice and set on the cover: a quiet line
+ * that sets the moment, then the subject in full - "12 days until / Kyoto in
+ * November", "Day 3 of / Singapore Art and Eats". It is the one line on Home
+ * that changes with where the traveller is.
+ *
+ * With a trip to open, the subject is the link to it, stretched over the whole
+ * cover so the photograph opens the trip while the heading stays a heading.
+ */
+export function HomeHeadline({
+  href,
+  lead,
+  subject,
+}: Readonly<{ href?: string; lead: string; subject: string }>) {
   return (
     <h1
-      className="max-w-[18ch] text-[clamp(2.375rem,9.5vw,4.25rem)] leading-[1] font-semibold tracking-[-0.045em] text-balance [overflow-wrap:anywhere]"
+      className="max-w-[18ch] text-[clamp(2.375rem,9.5vw,4.25rem)] leading-[1] font-semibold tracking-[-0.045em] text-balance text-white [overflow-wrap:anywhere]"
       id="home-heading"
     >
-      <span className="block text-text-subtle">{lead}</span>
-      <span className="block text-foreground">{subject}</span>
+      <span className="block text-white/75">{lead}</span>
+      {href ? (
+        <Link
+          className="block rounded-[var(--radius-sm)] outline-none after:absolute after:inset-0 focus-visible:ring-3 focus-visible:ring-white/70"
+          href={href}
+        >
+          {subject}
+        </Link>
+      ) : (
+        <span className="block">{subject}</span>
+      )}
     </h1>
   );
 }
 
 /**
- * Home for a traveller with no trips yet: an open road and one way forward,
- * with the three tenses Trove is built around laid out beneath it so the
- * first trip has somewhere to go.
- *
- * The photograph is Trove's own bundled artwork, not an editorial lookup:
- * with no trip there is no subject to ask a photograph of, and nothing here
- * should cost a request before the traveller has made anything.
+ * Home for a traveller with no trips yet: one way forward beneath the cover's
+ * open road, with the three tenses Trove is built around laid out under it so
+ * the first trip has somewhere to go.
  */
 export function HomeEmpty({ onCreateTrip }: Readonly<{ onCreateTrip: () => void }>) {
   const t = useTranslations('home.empty');
@@ -48,30 +79,14 @@ export function HomeEmpty({ onCreateTrip }: Readonly<{ onCreateTrip: () => void 
 
   return (
     <div className="space-y-6" data-slot="home-empty">
-      <div className="relative isolate overflow-hidden rounded-[var(--radius-2xl)] bg-surface-media text-white shadow-[var(--shadow-elevated)]">
-        <MediaFrame
-          alt=""
-          className="aspect-[4/5] w-full rounded-none sm:aspect-[16/9]"
-          dataSlot="home-empty-media"
-          photographicPlaceholder={dayHeaderFallback.preview}
-          preload
-          sizes="(max-width: 1023px) 100vw, 1024px"
-          source={{ kind: 'local', src: dayHeaderFallback.src }}
-          variant="card"
-        />
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 bg-[linear-gradient(180deg,transparent_30%,rgba(8,18,13,0.55)_58%,rgba(8,18,13,0.9)_100%)]"
-        />
-        <div className="absolute inset-x-0 bottom-0 space-y-4 p-5 sm:p-8">
-          <p className="max-w-md text-base leading-[1.55] text-pretty text-white/90">
-            {t('description')}
-          </p>
-          <Button onClick={onCreateTrip}>
-            <Plus aria-hidden="true" data-icon="inline-start" />
-            {t('action')}
-          </Button>
-        </div>
+      <div className="flex flex-col items-start gap-4">
+        <p className="max-w-md text-base leading-[1.6] text-pretty text-muted-foreground">
+          {t('description')}
+        </p>
+        <Button onClick={onCreateTrip}>
+          <Plus aria-hidden="true" data-icon="inline-start" />
+          {t('action')}
+        </Button>
       </div>
 
       <ol className="grid gap-px overflow-hidden rounded-[var(--radius-2xl)] border border-border-subtle bg-border-subtle sm:grid-cols-3">
@@ -110,29 +125,19 @@ export function HomeIdle({ onCreateTrip }: Readonly<{ onCreateTrip: () => void }
 }
 
 /**
- * Home while trips are on the way, in Home's own shape: the headline's two
- * lines, the photograph and the panel beside it at their real sizes, so
- * nothing moves when the answer arrives (PRD 4.4). The weather strip above is
- * already its own and waits on its own.
+ * Home while trips are on the way, in Home's own shape: the cover at its real
+ * size and place, then the actions and the panel beneath it, so nothing moves
+ * when the answer arrives (PRD 4.4).
  */
 export function HomeSkeleton({ label }: Readonly<{ label: string }>) {
   return (
-    <div aria-busy="true" aria-live="polite" className="space-y-8" role="status">
+    <div aria-busy="true" aria-live="polite" role="status">
       <span className="sr-only">{label}</span>
-      <div aria-hidden="true" className="space-y-2">
-        <Skeleton className="h-[clamp(2.375rem,9.5vw,4.25rem)] w-2/5 max-w-xs" />
-        <Skeleton className="h-[clamp(2.375rem,9.5vw,4.25rem)] w-4/5 max-w-lg" />
-      </div>
-      <div
-        aria-hidden="true"
-        className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:gap-8"
-      >
-        <div className="space-y-5">
-          <Skeleton className="aspect-[5/4] w-full rounded-[var(--radius-2xl)] sm:aspect-[16/9] lg:aspect-[4/3]" />
-          <div className="flex gap-2">
-            <Skeleton className="h-10 w-36 rounded-full" />
-            <Skeleton className="h-10 w-28 rounded-full" />
-          </div>
+      <Skeleton aria-hidden="true" className={cn('rounded-none', HOME_COVER_FRAME)} />
+      <div aria-hidden="true" className={HOME_SHEET}>
+        <div className="flex gap-2">
+          <Skeleton className="h-10 w-36 rounded-full" />
+          <Skeleton className="h-10 w-28 rounded-full" />
         </div>
         <Skeleton className="min-h-72 rounded-[var(--radius-2xl)]" />
       </div>

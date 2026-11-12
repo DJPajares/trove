@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { usePreferences } from '@/components/preferences-provider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useHereWeather } from '@/lib/home/use-here-weather';
+import { cn } from '@/lib/utils';
 import { weatherConditionIcon, weatherConditionKey } from '@/lib/weather/conditions';
 import { useWeatherEvidenceDescription } from '@/lib/weather/use-evidence-description';
 
@@ -20,14 +21,18 @@ import { useWeatherEvidenceDescription } from '@/lib/weather/use-evidence-descri
  * It is deliberately not a heading. The page's heading is the line beneath it,
  * which says what the traveller's moment is - that is what the page is about.
  */
-export function HomeNowStrip() {
-  return <HomeNowStripContent {...useHereWeather()} />;
+export function HomeNowStrip({ tone }: Readonly<{ tone?: 'onMedia' }>) {
+  return <HomeNowStripContent {...useHereWeather()} tone={tone} />;
 }
 
 export function HomeNowStripContent({
   status,
+  tone,
   weather,
-}: Readonly<ReturnType<typeof useHereWeather>>) {
+}: Readonly<ReturnType<typeof useHereWeather> & { tone?: 'onMedia' }>) {
+  // On Home's cover the strip sits on the photograph's scrim, which is dark in
+  // both themes, and shares its row with the floating controls up to `md`.
+  const onMedia = tone === 'onMedia';
   const t = useTranslations('home');
   const conditionT = useTranslations('tripMode.views.weather');
   const { preferences } = usePreferences();
@@ -65,7 +70,12 @@ export function HomeNowStripContent({
   return (
     // The floating Search/Account stack is pinned to the top right of every
     // signed-in viewport, and on mobile it has no header to sit in.
-    <div className="flex min-h-6 items-center pe-[3.25rem] text-sm sm:pe-0">
+    <div
+      className={cn(
+        'flex items-center pe-[3.25rem] text-sm',
+        onMedia ? 'min-h-11 md:min-h-6 md:pe-0' : 'min-h-6 sm:pe-0',
+      )}
+    >
       {status === 'loading' ? (
         <Skeleton aria-label={t('weather.loading')} className="h-5 w-32" role="status" />
       ) : null}
@@ -81,19 +91,36 @@ export function HomeNowStripContent({
             source: weather.attribution.label,
             temperature: valueLabel,
           })}. ${evidence}`}
-          className="flex min-w-0 items-center gap-2 rounded-[var(--radius-sm)] outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none"
+          className={cn(
+            'flex min-w-0 items-center gap-2 rounded-[var(--radius-sm)] outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-visible:ring-3 motion-reduce:transition-none',
+            onMedia
+              ? 'hover:text-white focus-visible:ring-white/70'
+              : 'hover:text-foreground focus-visible:ring-ring/40',
+          )}
           href={weather.attribution.url}
           rel="noreferrer"
           target="_blank"
           title={`${weather.attribution.label} · ${evidence}`}
         >
-          <Icon aria-hidden="true" className="size-5 shrink-0 text-brand" />
+          <Icon
+            aria-hidden="true"
+            className={cn('size-5 shrink-0', onMedia ? 'text-primary-on-media' : 'text-brand')}
+          />
           {weather.city ? (
-            <span aria-hidden="true" className="truncate font-medium text-foreground">
+            <span
+              aria-hidden="true"
+              className={cn('truncate font-medium', onMedia ? 'text-white' : 'text-foreground')}
+            >
               {weather.city}
             </span>
           ) : null}
-          <span aria-hidden="true" className="shrink-0 text-muted-foreground tabular-nums">
+          <span
+            aria-hidden="true"
+            className={cn(
+              'shrink-0 tabular-nums',
+              onMedia ? 'text-white/80' : 'text-muted-foreground',
+            )}
+          >
             {valueLabel}
           </span>
         </a>

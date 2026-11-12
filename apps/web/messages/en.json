@@ -3204,7 +3204,6 @@
       "emptySubject": "Where will you go first?"
     },
     "hero": {
-      "openTrip": "Open {name}",
       "kicker": {
         "planning": "Up next",
         "active": "On the road",

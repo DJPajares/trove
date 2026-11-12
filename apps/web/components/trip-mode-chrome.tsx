@@ -176,9 +176,11 @@ export function TripModeTopBar({
       {tripName ? (
         <p
           className={cn(
-            'min-w-0 truncate text-center text-base font-semibold text-foreground',
+            // Its own margin from the rails, so a long name stops well short of
+            // Exit and the menu and ends in an ellipsis instead of touching them.
+            'mx-3 min-w-0 truncate text-center text-base font-semibold text-foreground',
             overMap &&
-              'flex h-9 items-center justify-self-center rounded-full bg-background/95 px-3.5 shadow-[var(--shadow-control)]',
+              'flex h-9 max-w-[calc(100%-1.5rem)] items-center justify-self-center rounded-full bg-background/95 px-3.5 shadow-[var(--shadow-control)]',
           )}
         >
           {overMap ? <span className="min-w-0 truncate">{tripName}</span> : tripName}

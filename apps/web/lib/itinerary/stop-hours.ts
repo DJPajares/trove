@@ -7,7 +7,8 @@ import type { PlaceHoursStatus } from './api';
  * - `closed_at`: closed at the planned time; `opens` is its next opening that
  *   day, if it has one.
  * - `closes_during`: open on arrival, closing before the visit ends.
- * - `open_until`: open on arrival and for the whole visit as far as is known.
+ * - `open_until`: open on arrival and for the whole visit as far as is known;
+ *   `open` and `close` are the span the visit falls in.
  * - `open_all_day`: open around the clock.
  *
  * Null when there are no stored hours to go on, or no planned time to hold
@@ -18,7 +19,7 @@ export type StopHoursAt =
   | { kind: 'closed_day' }
   | { kind: 'closed_at'; opens: string | null }
   | { close: string; kind: 'closes_during' }
-  | { close: string; kind: 'open_until' }
+  | { close: string; kind: 'open_until'; open: string }
   | { kind: 'open_all_day' };
 
 const DAY_MINUTES = 24 * 60;
@@ -65,5 +66,5 @@ export function stopHoursAt(
     if (visitEnd > span.closeAt) return { close: span.close, kind: 'closes_during' };
   }
 
-  return { close: span.close, kind: 'open_until' };
+  return { close: span.close, kind: 'open_until', open: span.open };
 }

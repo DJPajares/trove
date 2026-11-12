@@ -1986,7 +1986,8 @@
       },
       "stop": {
         "midnight": "midnight",
-        "openUntil": "Open until {close}",
+        "hoursSpan": "{open} – {close}",
+        "hoursLabel": "Opening hours: ",
         "closesDuring": "Closes at {close}, during your visit",
         "closedAt": "Closed at {time}",
         "closedAtOpens": "Closed at {time} · opens {opens}",

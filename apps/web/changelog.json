@@ -1031,5 +1031,16 @@
         "Clear an amount with one tap, and press Return on your keyboard to finish typing. Works in the currency converter, expenses and reservation costs."
       ]
     }
+  },
+  {
+    "id": "calmer-itinerary-stops",
+    "date": "2026-11-12",
+    "version": "1.21.2",
+    "summaries": {
+      "en": [
+        "Stop cards are calmer: opening hours show just the times, and the move handle sits under the photo where it's harder to grab by accident.",
+        "The day strip fades softly as the plan scrolls under it, and long trip names fit neatly in Trip Mode."
+      ]
+    }
   }
 ]

@@ -936,12 +936,12 @@
     }
   },
   {
-    "id": "drag-day-strip-with-mouse",
+    "id": "steady-all-days-page",
     "date": "2026-11-12",
     "version": "1.19.1",
     "summaries": {
       "en": [
-        "Drag the day row and the weather forecast with your mouse to move along a long trip, just like swiping on your phone."
+        "The All days page no longer slides sideways, so the bottom bar stays put on trips with a long forecast."
       ]
     }
   }

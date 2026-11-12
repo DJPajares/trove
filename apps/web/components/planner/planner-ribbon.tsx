@@ -3,7 +3,6 @@
 import { useTranslations } from 'next-intl';
 import { useEffect, useRef, type KeyboardEvent } from 'react';
 
-import { useDragScroll } from '@/hooks/use-drag-scroll';
 import { TripAllDaysCard, TripDayCard, type TripDayCardDay } from '@/components/trip-day-card';
 
 export { paddedDayNumber } from '@/components/trip-day-card';
@@ -36,7 +35,6 @@ export function PlannerRibbon({
 }>) {
   const t = useTranslations('itinerary.planner.ribbon');
   const listRef = useRef<HTMLOListElement>(null);
-  const dragScroll = useDragScroll(listRef);
   const activeKey = overviewActive ? 'overview' : selectedDayId;
 
   // The open day is kept in view without moving the page: only the strip
@@ -79,7 +77,6 @@ export function PlannerRibbon({
     >
       <ol
         className="interaction-scrollbar relative flex snap-x scroll-px-[var(--gutter-inline-start)] gap-1.5 overflow-x-auto px-[var(--gutter-inline-start)] py-2 md:scroll-px-1 md:px-1"
-        {...dragScroll}
         onKeyDown={moveFocus}
         ref={listRef}
       >

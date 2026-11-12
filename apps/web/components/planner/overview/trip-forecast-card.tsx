@@ -3,9 +3,6 @@
 import { CloudSun, RefreshCw } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
-import { useRef } from 'react';
-
-import { useDragScroll } from '@/hooks/use-drag-scroll';
 import { paddedDayNumber } from '@/components/trip-day-card';
 import { usePreferences } from '@/components/preferences-provider';
 import { Button } from '@/components/ui/button';
@@ -44,8 +41,6 @@ export function TripForecastCard({
   const locale = useLocale();
   const { preferences } = usePreferences();
   const evidenceDescription = useWeatherEvidenceDescription();
-  const listRef = useRef<HTMLOListElement>(null);
-  const dragScroll = useDragScroll(listRef);
   const weekday = new Intl.DateTimeFormat(locale, { timeZone: 'UTC', weekday: 'short' });
   const unit = t(`unit.${preferences.temperatureUnit}`);
 
@@ -106,7 +101,6 @@ export function TripForecastCard({
   return (
     <a
       aria-labelledby="trip-forecast-heading"
-      draggable={false}
       className={cn(
         frameClassName,
         'block outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none',
@@ -119,11 +113,7 @@ export function TripForecastCard({
       <h3 className="text-sm font-semibold" id="trip-forecast-heading">
         {planner('tripTitle')}
       </h3>
-      <ol
-        className="interaction-scrollbar -mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1"
-        ref={listRef}
-        {...dragScroll}
-      >
+      <ol className="interaction-scrollbar relative -mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1">
         {/* Days with nothing to show are covered once, by the line below. */}
         {shown.map(({ day, forecast: entry }) => {
           const forecast = entry?.forecast ?? null;

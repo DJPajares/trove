@@ -44,6 +44,7 @@ export function AppHeader({
         collapsed && '-translate-y-full',
         className,
       )}
+      data-slot="app-header"
       data-translucent-surface
       // Tabbing must never move focus to a control that has scrolled out of
       // sight, so any focus arriving inside the header brings it back first.

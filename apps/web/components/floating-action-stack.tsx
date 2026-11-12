@@ -10,6 +10,7 @@ import { AccountMenu } from '@/components/account-menu';
 import { AppearanceToggle } from '@/components/appearance-toggle';
 import { GlobalSearch } from '@/components/global-search';
 import { NotificationCenter } from '@/components/notification-center';
+import { usePreferences } from '@/components/preferences-provider';
 import { useNotifications } from '@/components/notifications-provider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,9 +19,8 @@ import { navigationTransition } from '@/lib/motion';
 import {
   floatingActionDelay,
   floatingActionOrder,
-  floatingActionTriggerClass,
+  profileInitials,
 } from '@/lib/shell/floating-actions';
-import { cn } from '@/lib/utils';
 
 /**
  * The controls portal their popups to the end of the document, so a tap inside
@@ -31,12 +31,20 @@ const POPUP_SELECTOR =
   '[data-slot="dropdown-menu-content"],[data-slot="popover-content"],[data-slot="sheet-content"],[data-slot="dialog-content"]';
 
 /**
+ * The two buttons always on screen: search and the trigger. On mobile they
+ * stand in for the absent header and carry their own surface; from `md` they
+ * sit in the header's open right rail and borrow it until hovered.
+ */
+const TRIGGER_CLASS =
+  'relative rounded-full border-border-subtle bg-background/95 text-foreground shadow-[var(--nav-action-shadow)] backdrop-blur focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring supports-[backdrop-filter]:bg-background/90 md:border-transparent md:bg-transparent md:shadow-none md:backdrop-blur-none md:hover:border-border-subtle md:hover:bg-background/95 md:hover:shadow-[var(--nav-action-shadow)] md:hover:backdrop-blur md:aria-expanded:bg-transparent md:supports-[backdrop-filter]:bg-transparent';
+
+/**
  * The everyday controls, floating in the upper right of the signed-in shell.
  *
- * The same trigger serves every viewport. On mobile it stands in for the
- * absent header; on tablet and desktop it occupies the header's open right
- * rail. The burger unfolds downwards and turns into an X in the same place, so
- * the way out is where the way in was.
+ * Search stands on its own beside the trigger. The trigger shows the
+ * traveller's initials when their name is known and a burger when it is not;
+ * it unfolds notifications, appearance and account downwards and turns into
+ * an X in the same place, so the way out is where the way in was.
  */
 export function FloatingActionStack() {
   const t = useTranslations('navigation');
@@ -47,6 +55,9 @@ export function FloatingActionStack() {
   const [expanded, setExpanded] = useState(false);
   const reducedMotion = useReducedMotion();
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const searchRef = useRef<HTMLButtonElement | null>(null);
+  // Initials for a traveller whose name is known; the burger otherwise.
+  const initials = profileInitials(usePreferences().profile?.displayName);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
   // An unavailable feed has nothing to count.
@@ -120,25 +131,6 @@ export function FloatingActionStack() {
     account: <AccountMenu onNavigate={collapse} triggerVariant="floating" />,
     appearance: <AppearanceToggle onToggle={collapseAndRestoreFocus} triggerVariant="floating" />,
     notifications: <NotificationCenter onNavigate={collapse} triggerVariant="floating" />,
-    // Search fills the screen, so the stack that opened it has nothing left to
-    // say and folds away. The dialog itself lives outside the stack for exactly
-    // that reason: collapsing must not take its own dialog down with it.
-    search: (
-      <Button
-        aria-label={search('button')}
-        className={cn('text-foreground', floatingActionTriggerClass)}
-        data-translucent-surface
-        onClick={() => {
-          setSearchOpen(true);
-          setExpanded(false);
-        }}
-        size="icon"
-        type="button"
-        variant="ghost"
-      >
-        <Search aria-hidden="true" className="size-5" />
-      </Button>
-    ),
   };
 
   return (
@@ -163,55 +155,85 @@ export function FloatingActionStack() {
           }
         }
       >
-        <Button
-          aria-controls="floating-action-stack"
-          aria-expanded={expanded}
-          aria-label={
-            expanded
-              ? t('closeQuickActions')
-              : unreadCount
-                ? t('openQuickActionsWithNotifications', { count: unreadCount })
-                : t('openQuickActions')
-          }
-          className="relative rounded-full border-border-subtle bg-background/95 text-foreground shadow-[var(--nav-action-shadow)] backdrop-blur focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring supports-[backdrop-filter]:bg-background/90 md:border-transparent md:bg-transparent md:shadow-none md:backdrop-blur-none md:hover:border-border-subtle md:hover:bg-background/95 md:hover:shadow-[var(--nav-action-shadow)] md:hover:backdrop-blur md:aria-expanded:bg-transparent md:supports-[backdrop-filter]:bg-transparent"
-          data-translucent-surface
-          onClick={() => (expanded ? collapseAndRestoreFocus() : setExpanded(true))}
-          ref={triggerRef}
-          size="icon"
-          type="button"
-          variant="ghost"
-        >
-          {/* The icon swaps inside a box that never moves, so the tap target stays
+        <div className="flex items-center gap-2">
+          {/* Search is the one control that starts something, so it is always
+              one tap away rather than folded into the stack. */}
+          <Button
+            aria-label={search('button')}
+            className={TRIGGER_CLASS}
+            data-floating-trigger
+            data-translucent-surface
+            onClick={() => {
+              setSearchOpen(true);
+              setExpanded(false);
+            }}
+            ref={searchRef}
+            size="icon"
+            type="button"
+            variant="ghost"
+          >
+            <Search aria-hidden="true" className="size-5" />
+          </Button>
+          <Button
+            aria-controls="floating-action-stack"
+            aria-expanded={expanded}
+            aria-label={
+              expanded
+                ? t('closeQuickActions')
+                : unreadCount
+                  ? t('openQuickActionsWithNotifications', { count: unreadCount })
+                  : t('openQuickActions')
+            }
+            className={TRIGGER_CLASS}
+            data-floating-trigger
+            data-translucent-surface
+            onClick={() => (expanded ? collapseAndRestoreFocus() : setExpanded(true))}
+            ref={triggerRef}
+            size="icon"
+            type="button"
+            variant="ghost"
+          >
+            {/* The icon swaps inside a box that never moves, so the tap target stays
             put under a finger that is already on it. */}
-          <AnimatePresence initial={false} mode="wait">
-            <motion.span
-              animate={{ opacity: 1, rotate: 0 }}
-              className="flex items-center justify-center"
-              exit={{ opacity: 0, rotate: 90 }}
-              initial={{ opacity: 0, rotate: -90 }}
-              key={expanded ? 'close' : 'open'}
-              transition={navigationTransition}
-            >
-              {expanded ? (
-                <X aria-hidden="true" className="size-5" />
-              ) : (
-                <Menu aria-hidden="true" className="size-5" />
-              )}
-            </motion.span>
-          </AnimatePresence>
-          {/* Expanded, the notification button carries its own count a few pixels
+            <AnimatePresence initial={false} mode="wait">
+              <motion.span
+                animate={{ opacity: 1, rotate: 0 }}
+                className="flex items-center justify-center"
+                exit={{ opacity: 0, rotate: 90 }}
+                initial={{ opacity: 0, rotate: -90 }}
+                key={expanded ? 'close' : 'open'}
+                transition={navigationTransition}
+              >
+                {expanded ? (
+                  <X aria-hidden="true" className="size-5" />
+                ) : initials ? (
+                  // The button's label already says what it opens; the initials
+                  // only say whose it is.
+                  <span
+                    aria-hidden="true"
+                    className="text-[0.8125rem] font-semibold tracking-[0.02em]"
+                  >
+                    {initials}
+                  </span>
+                ) : (
+                  <Menu aria-hidden="true" className="size-5" />
+                )}
+              </motion.span>
+            </AnimatePresence>
+            {/* Expanded, the notification button carries its own count a few pixels
             below. Two badges would read as two different numbers. */}
-          {!expanded && unreadCount ? (
-            <Badge
-              aria-hidden="true"
-              className="absolute top-1 right-1"
-              size="count"
-              variant="solid"
-            >
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </Badge>
-          ) : null}
-        </Button>
+            {!expanded && unreadCount ? (
+              <Badge
+                aria-hidden="true"
+                className="absolute top-1 right-1"
+                size="count"
+                variant="solid"
+              >
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </Badge>
+            ) : null}
+          </Button>
+        </div>
 
         <AnimatePresence>
           {expanded ? (
@@ -252,10 +274,10 @@ export function FloatingActionStack() {
 
       {/* A sibling of the stack, not a child: outside it so a collapse never
           unmounts an open dialog, and outside it so the modal can mark the
-          burger inert along with the rest of the page. Focus comes back to that
-          burger, the one control still on screen when the dialog closes. */}
+          controls inert along with the rest of the page. Focus comes back to
+          the search button that opened it. */}
       <GlobalSearch
-        finalFocus={triggerRef}
+        finalFocus={searchRef}
         onNavigate={collapse}
         onOpenChange={setSearchOpen}
         open={searchOpen}

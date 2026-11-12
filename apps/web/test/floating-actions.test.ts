@@ -5,15 +5,32 @@ import {
   FLOATING_ACTION_STAGGER_S,
   floatingActionDelay,
   floatingActionOrder,
+  profileInitials,
 } from '@/lib/shell/floating-actions';
 
 describe('floating action stack order', () => {
-  it('leads with the one action that starts something', () => {
-    expect(floatingActionOrder[0]).toBe('search');
+  it('leaves search out, as a button of its own beside the trigger', () => {
+    expect(floatingActionOrder).not.toContain('search');
   });
 
-  it('follows with notifications and appearance, then account at the bottom', () => {
-    expect(floatingActionOrder).toEqual(['search', 'notifications', 'appearance', 'account']);
+  it('holds notifications and appearance, then account at the bottom', () => {
+    expect(floatingActionOrder).toEqual(['notifications', 'appearance', 'account']);
+  });
+});
+
+describe('profileInitials', () => {
+  it('takes the first letter of the first and last words', () => {
+    expect(profileInitials('dj pajares')).toBe('DP');
+    expect(profileInitials('  Ana  Maria de Souza ')).toBe('AS');
+  });
+
+  it('gives one letter for a single name', () => {
+    expect(profileInitials('Mika')).toBe('M');
+  });
+
+  it('has nothing to show without a name', () => {
+    expect(profileInitials(null)).toBeNull();
+    expect(profileInitials('   ')).toBeNull();
   });
 });
 

@@ -419,6 +419,47 @@ body {
   --header-offset: 0px;
 }
 
+/* Home's cover runs beneath the header and the floating controls. While it is
+   under them, both sit on the photograph's scrim - dark in both themes - so
+   they take its fixed ivory ink and give up their own surface. Home sets the
+   flag only while the cover is actually behind the header. */
+[data-slot='app-header'] {
+  transition-property: transform, background-color, border-color;
+}
+
+[data-cover-under-header='true'] [data-slot='app-header'],
+[data-cover-under-header='true'] [data-floating-trigger] {
+  --foreground: var(--media-fallback-foreground);
+  --muted-foreground: oklch(0.978 0.013 80 / 0.8);
+  --brand: var(--primary-on-media);
+  --brand-symbol-bar: var(--brand-mark-ink);
+  --brand-mark-type: var(--brand-mark-ink);
+  --ring: var(--media-fallback-foreground);
+}
+
+[data-cover-under-header='true'] [data-slot='app-header'] {
+  border-color: transparent;
+  background-color: transparent;
+  backdrop-filter: none;
+}
+
+[data-cover-under-header='true'] [data-floating-trigger] {
+  border-color: oklch(0.978 0.013 80 / 0.2);
+  background-color: oklch(0.16 0.024 47 / 0.36);
+  box-shadow: none;
+  color: var(--media-fallback-foreground);
+  backdrop-filter: blur(14px);
+}
+
+/* The weather cue shares the header's row on Home, underneath the header. */
+[data-cover-under-header='true'] [data-slot='app-header'] {
+  pointer-events: none;
+}
+
+[data-cover-under-header='true'] [data-slot='app-header'] :is(a, button) {
+  pointer-events: auto;
+}
+
 .interaction-scrollbar {
   scrollbar-width: none;
 }

@@ -32,18 +32,18 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
   const headerContent = (
     <div
       className={cn(
-        'mx-auto grid h-[var(--header-height)] w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 pl-[var(--gutter-inline-start)] pr-[var(--gutter-inline-end)]',
+        'mx-auto grid h-[var(--header-height)] w-full items-center gap-4 pl-[var(--gutter-inline-start)] pr-[var(--gutter-inline-end)]',
         isSignedIn
-          ? 'md:pr-[calc(var(--gutter-inline-end)+3.25rem)]'
-          : 'md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]',
+          ? 'grid-cols-[auto_minmax(0,1fr)] md:gap-8 md:pr-[calc(var(--gutter-inline-end)+6rem)]'
+          : 'grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]',
       )}
     >
       <Link className="inline-flex min-w-0 items-center text-sm text-foreground" href="/">
         <BrandLogo className="h-6" name={app('name')} />
       </Link>
 
-      {/* On desktop, destinations sit immediately beside the quick-actions
-          trigger. The reserved right padding keeps the two controls distinct. */}
+      {/* On desktop, destinations sit beside the brand. The reserved right
+          padding keeps the header's content clear of the floating controls. */}
       {isSignedIn ? <PrimaryNavigation variant="desktop" /> : <span className="hidden md:block" />}
 
       {!isSignedIn ? (
@@ -77,7 +77,9 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
   const shell = (
     <div
       className={cn(
-        'min-h-dvh bg-surface text-foreground',
+        // Clipped sideways so a full-bleed cover can span the viewport without the
+        // scrollbar's width turning into a horizontal scroll.
+        'min-h-dvh overflow-x-clip bg-surface text-foreground',
         isSignedIn && '[--header-offset:0px] md:[--header-offset:var(--header-height)]',
       )}
       // Named so a screen can restyle the canvas around it without a prop: the

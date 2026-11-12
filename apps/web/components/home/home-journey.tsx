@@ -1,11 +1,12 @@
 'use client';
 
-import { X } from 'lucide-react';
+import { ChevronRight, X } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
+import type { CSSProperties } from 'react';
 
 import { ExperienceRatingMark } from '@/components/experience-rating';
-import { JourneyPrintFan } from '@/components/journey-prints';
+import { JourneyPrint, JourneyPrintFan, journeyPrints } from '@/components/journey-prints';
 import { Button } from '@/components/ui/button';
 import type { CompletedPromptKey } from '@/lib/home/completed-prompt';
 import type { HomeJourney as HomeJourneyModel } from '@/lib/home/moment';
@@ -67,6 +68,48 @@ export function HomeJourney(props: Readonly<HomeJourneyProps>) {
     : props.journey.kind === 'anniversary'
       ? t('anniversary', { years: props.journey.years })
       : t('eyebrow');
+
+  if (props.variant === 'journey') {
+    const { cover, prints } = journeyPrints(trip, editorial);
+
+    return (
+      <section
+        aria-labelledby={headingId}
+        className="group relative flex items-center gap-5 rounded-[var(--radius-2xl)] bg-paper p-5 transition-shadow duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-within:ring-3 focus-within:ring-ring/40 hover:shadow-[var(--shadow-card)] motion-reduce:transition-none sm:gap-7 sm:p-6"
+        data-slot="home-journey"
+      >
+        <span aria-hidden="true" className="w-24 shrink-0 sm:w-28">
+          <JourneyPrint
+            className="group-hover:rotate-0"
+            cover={cover}
+            sizes="7rem"
+            source={prints[0] ?? cover}
+            style={{ '--tilt': '-4deg' } as CSSProperties}
+          />
+        </span>
+        <div className="min-w-0">
+          <p className={cn(EYEBROW, 'tabular-nums')}>{eyebrow}</p>
+          <h2
+            className="mt-1.5 text-[length:var(--text-section-title)] leading-[1.18] font-semibold tracking-[-0.022em] text-balance text-foreground [overflow-wrap:anywhere]"
+            id={headingId}
+          >
+            {trip.name}
+          </h2>
+          {/* Stretched over the card, so the print and the name open the story too. */}
+          <Link
+            className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-brand outline-none after:absolute after:inset-0 after:rounded-[var(--radius-2xl)] hover:underline"
+            href={`/trips/${trip.id}/memories`}
+          >
+            {trip.memoryCount ? t('openStory') : homeT('addMemories')}
+            <ChevronRight
+              aria-hidden="true"
+              className="size-4 transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
+            />
+          </Link>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section

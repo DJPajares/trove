@@ -1082,5 +1082,17 @@
         "When you add or edit an expense, Linked place now lists that day's stops, in alphabetical order."
       ]
     }
+  },
+  {
+    "id": "home-immersive-cover",
+    "date": "2026-11-13",
+    "version": "1.22.0",
+    "summaries": {
+      "en": [
+        "Home now opens on a full photo of your next trip, with what matters right now set on it.",
+        "Trips coming up appear as photo cards you can swipe through.",
+        "Search now has its own button at the top of every screen, beside your initials."
+      ]
+    }
   }
 ]

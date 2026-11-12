@@ -225,7 +225,7 @@ export function HomeBeforeYouGo({ trip }: Readonly<{ trip: Trip }>) {
   return (
     <section
       aria-labelledby="home-before-heading"
-      className="flex flex-col rounded-[var(--radius-2xl)] border border-border-subtle bg-card p-5 shadow-[var(--shadow-card)] sm:p-6"
+      className="space-y-4"
       data-slot="home-before-you-go"
     >
       <h2
@@ -235,20 +235,22 @@ export function HomeBeforeYouGo({ trip }: Readonly<{ trip: Trip }>) {
         {t('title')}
       </h2>
 
-      {/* A forecast is worth knowing but asks nothing, so a trip whose list
+      <div className="flex flex-col rounded-[var(--radius-2xl)] border border-border-subtle bg-card p-5 shadow-[var(--shadow-card)] sm:p-6 [&>*:first-child]:mt-0">
+        {/* A forecast is worth knowing but asks nothing, so a trip whose list
           holds only that is still a trip with nothing left to do. */}
-      {steps.every((step) => step.kind === 'weather') ? (
-        <p className="mt-3 text-sm leading-6 text-muted-foreground">{t('allSet')}</p>
-      ) : null}
-      {steps.length ? (
-        <ul className="mt-3 divide-y divide-border-subtle">
-          {steps.map((step) => (
-            <li key={step.kind}>
-              <Step step={step} trip={trip} />
-            </li>
-          ))}
-        </ul>
-      ) : null}
+        {steps.every((step) => step.kind === 'weather') ? (
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">{t('allSet')}</p>
+        ) : null}
+        {steps.length ? (
+          <ul className="mt-3 divide-y divide-border-subtle">
+            {steps.map((step) => (
+              <li key={step.kind}>
+                <Step step={step} trip={trip} />
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
     </section>
   );
 }

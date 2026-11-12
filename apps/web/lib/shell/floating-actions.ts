@@ -1,15 +1,33 @@
 /**
- * The signed-in quick-actions stack that unfolds from the floating burger button.
+ * The signed-in quick-actions stack that unfolds from the floating account button.
  *
  * The order is the hierarchy the traveller reads top to bottom, nearest the
- * trigger first. Search leads because it is the only one that starts something
- * — the other three answer a question about the app rather than about the trip,
- * and they are reached once where search is reached again and again. Notifications
- * and appearance follow, with the account/profile control at the bottom.
+ * trigger first: notifications, then appearance, with the account/profile
+ * control at the bottom. Search is not among them. It is the only one that
+ * starts something, and it is reached again and again where these are reached
+ * once, so it stands beside the trigger as a button of its own.
  */
-export const floatingActionOrder = ['search', 'notifications', 'appearance', 'account'] as const;
+export const floatingActionOrder = ['notifications', 'appearance', 'account'] as const;
 
 export type FloatingAction = (typeof floatingActionOrder)[number];
+
+/**
+ * What the trigger shows for a traveller whose name Trove knows: the first
+ * letter of the first and last words of it, never a photograph. Without a name
+ * - signed out, or a profile that could not be read - there are no initials,
+ * and the trigger keeps its burger.
+ */
+export function profileInitials(name: string | null | undefined) {
+  const words = (name ?? '').trim().split(/\s+/).filter(Boolean);
+  const first = words[0];
+  if (!first) return null;
+
+  const letters = [first, words.length > 1 ? words[words.length - 1] : undefined]
+    .map((word) => (word ? Array.from(word)[0] : undefined))
+    .filter((letter): letter is string => Boolean(letter));
+
+  return letters.join('').toLocaleUpperCase();
+}
 
 /**
  * Seconds between one button appearing and the next.

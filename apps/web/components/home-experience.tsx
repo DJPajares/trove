@@ -8,12 +8,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { AiPlanningDraftCard } from '@/components/ai-planning-draft-card';
 import { HomeBeforeYouGo } from '@/components/home/home-before-you-go';
 import { HomeComingUp } from '@/components/home/home-coming-up';
-import { HomeEmpty, HomeHeadline, HomeIdle, HomeSkeleton } from '@/components/home/home-front-door';
-import { HomeHero } from '@/components/home/home-hero';
+import { HOME_SHEET, HomeEmpty, HomeIdle, HomeSkeleton } from '@/components/home/home-front-door';
+import { HomeCover } from '@/components/home/home-hero';
 import { HomeJourney } from '@/components/home/home-journey';
 import { HomeToday } from '@/components/home/home-today';
-import { HomeNowStrip } from '@/components/home-now-strip';
 import { PageState } from '@/components/page-state';
+import { TripDestinationActions } from '@/components/trip-destination-actions';
 import { useTripCreation } from '@/components/trip-creation-provider';
 import { Button } from '@/components/ui/button';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
@@ -25,6 +25,7 @@ import { queryKeys } from '@/lib/query/keys';
 import { fetchTrips, type Trip } from '@/lib/trips/api';
 import { tripDayProgress } from '@/lib/trips/library';
 import { daysUntilTripStart, resolveCountdown } from '@/lib/trips/lifecycle';
+import { primaryTripDestinations, withLiveTripModeFirst } from '@/lib/trips/navigation';
 import { tripEditorialSubject } from '@/lib/trips/summary';
 
 /**
@@ -58,9 +59,10 @@ const EMPTY_TRIPS: Trip[] = [];
  * Home: the front door to the traveller's world in Trove, and the one screen
  * that changes with where they are in it (PRD 9).
  *
- * It opens on a single sentence about right now - "12 days until Kyoto in
- * November", "Day 3 of Singapore Art and Eats", "Welcome back from Lisbon" -
- * and then shows only what that moment needs. A trip being planned brings the
+ * It opens on the photograph of where they are going, with a single sentence
+ * about right now set on it - "12 days until Kyoto in November", "Day 3 of
+ * Singapore Art and Eats", "Welcome back from Lisbon" - and then shows only
+ * what that moment needs. A trip being planned brings the
  * few things it still asks for; a trip under way brings the rest of today; a
  * trip just finished brings its photographs and the way into its story. After
  * that, a glance at what is coming and one past journey worth returning to.
@@ -141,8 +143,7 @@ export function HomeExperience() {
 
   if (status === 'loading') {
     return (
-      <div className="mx-auto w-full max-w-5xl space-y-5">
-        <HomeNowStrip />
+      <div className="mx-auto w-full max-w-5xl">
         <HomeSkeleton label={t('loading')} />
       </div>
     );
@@ -183,65 +184,93 @@ export function HomeExperience() {
     return { lead: t('headline.returned'), subject: lead.name };
   })();
 
+  const planningOrActive = lead && lead.lifecycle !== 'completed' ? lead : null;
+
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-10 sm:space-y-12">
-      <header className="space-y-5">
-        <HomeNowStrip />
-        <HomeHeadline lead={headline.lead} subject={headline.subject} />
+    <div className="mx-auto w-full max-w-5xl">
+      <HomeCover editorial={lead ? editorialFor(lead) : null} headline={headline} trip={lead} />
+
+      <div className={HOME_SHEET}>
         {!lead && trips.length ? <HomeIdle onCreateTrip={openCreateTrip} /> : null}
-      </header>
 
-      {trips.length === 0 ? (
-        <>
-          {/* A draft is reachable on a traveller's very first visit, before
-              there is any trip for it to sit among. */}
-          <AiPlanningDraftCard />
-          <HomeEmpty onCreateTrip={openCreateTrip} />
-        </>
-      ) : null}
+        {trips.length === 0 ? (
+          <>
+            {/* A draft is reachable on a traveller's very first visit, before
+                there is any trip for it to sit among. */}
+            <AiPlanningDraftCard />
+            <HomeEmpty onCreateTrip={openCreateTrip} />
+          </>
+        ) : null}
 
-      {lead && lead.lifecycle !== 'completed' ? (
-        <section
-          aria-labelledby="home-heading"
-          className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:items-start lg:gap-8"
-        >
-          <HomeHero editorial={editorialFor(lead)} trip={lead} />
-          {lead.lifecycle === 'active' ? (
-            <HomeToday
-              context={tripModeContextQuery.data ?? null}
-              loading={tripModeContextQuery.isPending}
-              trip={lead}
-            />
-          ) : (
-            <HomeBeforeYouGo trip={lead} />
-          )}
-        </section>
-      ) : null}
+        {planningOrActive ? (
+          <div
+            className={
+              comingUp.length
+                ? 'grid grid-cols-[minmax(0,1fr)] gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-start lg:gap-8'
+                : 'max-w-2xl'
+            }
+          >
+            <div className="space-y-6">
+              <TripDestinationActions
+                destinations={withLiveTripModeFirst(
+                  primaryTripDestinations(
+                    planningOrActive.id,
+                    planningOrActive.lifecycle,
+                    planningOrActive.startDate,
+                  ),
+                  planningOrActive.lifecycle,
+                )}
+                labelOverrides={{
+                  itinerary: t('continuePlanning'),
+                  // A trip under way is carried on with, not started again; one
+                  // that has not left yet is honestly offering a preview.
+                  mode: t(
+                    planningOrActive.lifecycle === 'active' ? 'continueTrip' : 'previewTripMode',
+                  ),
+                }}
+              />
+              {planningOrActive.lifecycle === 'active' ? (
+                <HomeToday
+                  context={tripModeContextQuery.data ?? null}
+                  loading={tripModeContextQuery.isPending}
+                  trip={planningOrActive}
+                />
+              ) : (
+                <HomeBeforeYouGo trip={planningOrActive} />
+              )}
+            </div>
+            {comingUp.length ? <HomeComingUp editorialFor={editorialFor} trips={comingUp} /> : null}
+          </div>
+        ) : null}
 
-      {lead?.lifecycle === 'completed' ? (
-        <HomeJourney
-          editorial={editorialFor(lead)}
-          onDismissPrompt={dismissCompletedPrompt}
-          promptKey={selectCompletedPrompt(lead, dismissedPrompts)}
-          trip={lead}
-          variant="returned"
-        />
-      ) : null}
+        {lead?.lifecycle === 'completed' ? (
+          <HomeJourney
+            editorial={editorialFor(lead)}
+            onDismissPrompt={dismissCompletedPrompt}
+            promptKey={selectCompletedPrompt(lead, dismissedPrompts)}
+            trip={lead}
+            variant="returned"
+          />
+        ) : null}
 
-      {trips.length ? <AiPlanningDraftCard /> : null}
+        {trips.length ? <AiPlanningDraftCard /> : null}
 
-      {comingUp.length ? <HomeComingUp editorialFor={editorialFor} trips={comingUp} /> : null}
+        {/* Beside the lead trip's panel when there is one; otherwise on its own. */}
+        {comingUp.length && !planningOrActive ? (
+          <HomeComingUp editorialFor={editorialFor} trips={comingUp} />
+        ) : null}
 
-      {/* One paper band per screen: a trip just finished already is Home's
-          story, so no second journey is offered beneath it. */}
-      {journey && lead?.lifecycle !== 'completed' ? (
-        <HomeJourney
-          editorial={editorialFor(journey.trip)}
-          journey={journey}
-          trip={journey.trip}
-          variant="journey"
-        />
-      ) : null}
+        {/* One paper band per screen: a trip just finished already is Home's
+            story, so no second journey is offered beneath it. */}
+        {journey && lead?.lifecycle !== 'completed' ? (
+          <HomeJourney
+            editorial={editorialFor(journey.trip)}
+            journey={journey}
+            trip={journey.trip}
+            variant="journey"
+          />
+        ) : null}
+      </div>
     </div>
   );
 }

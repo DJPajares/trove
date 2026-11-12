@@ -13,7 +13,7 @@
           {
             "name": "lucide-react",
             "importNames": [
-              "Toolbox",
+              "PocketKnife",
               "BookMarked",
               "Bookmark",
               "ClipboardList",
@@ -22,7 +22,7 @@
               "Gauge",
               "Gem",
               "ListChecks",
-              "Luggage",
+              "PlaneTakeoff",
               "MapPinPen",
               "MapPinned",
               "Navigation",

@@ -93,7 +93,7 @@ Don't recolour the parts, swap their colours, or set the full-colour symbol on o
 
 | Area | Concepts |
 |---|---|
-| Navigation | Home (House), Trips (Luggage), Saved (Bookmark), Tools (Toolbox), Create (Plus) |
+| Navigation | Home (House), Trips (PlaneTakeoff), Saved (Bookmark), Tools (PocketKnife), Create (Plus) |
 | Experiences | Itinerary (CalendarDays), TripMode (Compass), Preview (Eye), Memories (BookMarked), Highlight (Gem), Now (Clock3) |
 | Places | Places (MapPinned), Place (MapPin), CustomPlace (MapPinPen), DailyBase (BedDouble), MapView (Map), Directions (Navigation) |
 | Planning | PlanScore (Gauge), Ai (Sparkles), Reservations (Ticket), Expenses (WalletCards), Tasks (ListChecks), TaskTemplates (ClipboardList), Notes (StickyNote), TripInfo (Info), Currency (Coins), MustGo (Flag), Other (Shapes) |

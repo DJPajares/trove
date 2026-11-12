@@ -6,7 +6,8 @@ import {
   DragOverlay,
   KeyboardSensor,
   MeasuringStrategy,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
@@ -34,7 +35,12 @@ import { dropPosition } from '@/lib/itinerary/optimistic';
 
 import { InsertButton, InsertGap } from './insert-gap';
 import { LegConnector } from './leg-connector';
-import { SortableStopCard, StopDragPreview, useStopReorderSpeech } from './sortable-stop';
+import {
+  SortableStopCard,
+  STOP_HOLD_MS,
+  StopDragPreview,
+  useStopReorderSpeech,
+} from './sortable-stop';
 import { SpineRow, type SpineLine } from './spine';
 import { StayAnchor } from './stay-anchor';
 import type { StopView } from './stop-card';
@@ -125,9 +131,14 @@ export function DayTimeline({
   const { preferences } = usePreferences();
   const reducedMotion = useReducedMotion();
   const [activeId, setActiveId] = useState<string | null>(null);
+  // The stop whose grip a finger is holding, before it lifts.
+  const [holdingId, setHoldingId] = useState<string | null>(null);
   const sensors = useSensors(
-    // A few pixels of travel before a drag starts, so a tap on the grip is a tap.
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    // A few pixels of travel before a mouse drag starts, so a click on the grip is a click.
+    useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
+    // A finger must hold the grip still first: a swipe that starts on it scrolls
+    // the day instead of grabbing the stop, which used to happen mid-scroll.
+    useSensor(TouchSensor, { activationConstraint: { delay: STOP_HOLD_MS, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
@@ -298,6 +309,7 @@ export function DayTimeline({
         below={endsAtLastStop && item.id === stops.at(-1)?.id ? 'solid' : below}
         dragDisabled={dragDisabled}
         dragLabel={reorderT('handle', { name: view.name })}
+        holding={holdingId === item.id}
         hours={hoursFor(item)}
         item={item}
         key={item.id}
@@ -340,6 +352,7 @@ export function DayTimeline({
       // as they are, not as they were.
       measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
       modifiers={[restrictToVerticalAxis]}
+      onDragAbort={() => setHoldingId(null)}
       onDragCancel={() => setActiveId(null)}
       onDragEnd={({ active, over }) => {
         setActiveId(null);
@@ -351,7 +364,18 @@ export function DayTimeline({
         });
         if (item && position !== null) onReorder?.(item, position);
       }}
-      onDragStart={({ active }) => setActiveId(String(active.id))}
+      // Only a touch hold has a delay to show progress for; a mouse drag starts at once.
+      onDragPending={({ constraint, id }) => {
+        if ('delay' in constraint) setHoldingId(String(id));
+      }}
+      onDragStart={({ active, activatorEvent }) => {
+        setHoldingId(null);
+        setActiveId(String(active.id));
+        // A small tick where the phone supports one, so the lift is felt as well as seen.
+        if (typeof TouchEvent !== 'undefined' && activatorEvent instanceof TouchEvent) {
+          navigator.vibrate?.(10);
+        }
+      }}
       sensors={sensors}
     >
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>

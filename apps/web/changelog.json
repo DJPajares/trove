@@ -962,5 +962,15 @@
     "summaries": {
       "en": ["The bottom bar has clearer icons: a plane for Trips and a pocket knife for Tools."]
     }
+  },
+  {
+    "id": "hold-to-move-stops",
+    "date": "2026-11-12",
+    "version": "1.20.2",
+    "summaries": {
+      "en": [
+        "Scrolling through a day no longer moves your stops by accident. On a phone, press and hold a stop's handle until its ring fills, then drag."
+      ]
+    }
   }
 ]

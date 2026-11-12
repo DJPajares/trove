@@ -1052,5 +1052,15 @@
         "Stop cards are easier to scan: the time and opening hours sit in their own chips, your notes read as notes, and warnings fit in one slim strip."
       ]
     }
+  },
+  {
+    "id": "profile-page-refresh",
+    "date": "2026-11-12",
+    "version": "1.21.4",
+    "summaries": {
+      "en": [
+        "Profile now looks like the rest of Trove, with a clearer heading and your photo up top. The theme switch is gone from here; you can still change it from the menu."
+      ]
+    }
   }
 ]

@@ -93,7 +93,7 @@ export function CollectionPlacesSheet({
           description={t('addPlacesDescription')}
           title={t('addPlacesTitle', { name: collection?.name ?? '' })}
         />
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto scroll-shadow-y p-5">
           {error ? (
             <Alert role="alert" variant="destructive">
               <CircleAlert aria-hidden="true" />

@@ -336,7 +336,7 @@ export function StaySheet({
             }
             description={view === 'trip' ? t('description') : t('dayDescription')}
           />
-          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-6">
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto scroll-shadow-y px-5 py-5 sm:px-6">
             {day && view === 'day' ? (
               <Button
                 type="button"

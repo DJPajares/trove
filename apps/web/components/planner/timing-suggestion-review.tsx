@@ -100,7 +100,7 @@ export function TimingSuggestionReview({
           title={t('connectedTiming.repairTitle')}
           description={t('connectedTiming.repairHint')}
         />
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-5">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto scroll-shadow-y px-5 pb-5">
           {!online || review.isPending || review.isFetching ? (
             <p className="text-sm text-muted-foreground" role="status">
               {t(!online ? 'connectedTiming.onlineReview' : 'connectedTiming.loadingReview')}

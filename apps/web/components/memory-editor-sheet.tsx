@@ -400,7 +400,7 @@ export function MemoryEditorSheet({
             description={isCreate ? t('addDescription') : t('editDescription')}
           />
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-3 pb-5">
+          <div className="min-h-0 flex-1 overflow-y-auto scroll-shadow-y px-5 pt-3 pb-5">
             <input
               accept="image/heic,image/jpeg,image/png,image/webp"
               className="sr-only"

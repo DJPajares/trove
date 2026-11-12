@@ -45,7 +45,7 @@ export function PlanScoreSheet({
         closeLabel={t('close')}
       >
         <SheetHeading title={title} />
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(var(--safe-bottom)+1.5rem)] sm:px-6">
+        <div className="min-h-0 flex-1 overflow-y-auto scroll-shadow-y px-4 pb-[calc(var(--safe-bottom)+1.5rem)] sm:px-6">
           {open ? (
             <PlanScorePanel
               {...panel}

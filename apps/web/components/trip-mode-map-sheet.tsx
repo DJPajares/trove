@@ -101,7 +101,7 @@ export function TripModeMapSheet({
           behind the handle, which is what the handle is for. */}
       <div
         className={cn(
-          'min-h-0 space-y-5 overflow-y-auto overscroll-contain px-[var(--gutter-inline-start)] transition-[max-height,opacity] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none lg:max-h-none lg:overflow-visible lg:px-0 lg:pt-5 lg:pb-0 lg:opacity-100',
+          'min-h-0 space-y-5 overflow-y-auto scroll-shadow-y overscroll-contain px-[var(--gutter-inline-start)] transition-[max-height,opacity] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none lg:max-h-none lg:overflow-visible lg:px-0 lg:pt-5 lg:pb-0 lg:opacity-100',
           // `flex-auto`, not `flex-1`: a zero basis would leave the body
           // contributing nothing to the sheet's own height, so the sheet would
           // size to the handle and the peek and hand the body no room back.

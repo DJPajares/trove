@@ -59,7 +59,7 @@ export function MemoryPrintTray({
   return (
     <ul
       aria-label={t('photoList')}
-      className="interaction-scrollbar -mx-2 flex gap-3.5 overflow-x-auto px-3 pt-2 pb-6"
+      className="interaction-scrollbar -mx-2 flex gap-3.5 overflow-x-auto scroll-shadow-x px-3 pt-2 pb-6"
     >
       {photos.map((photo, index) => (
         <li className="w-[5.5rem] shrink-0" key={photo.id}>

@@ -98,7 +98,7 @@ export function SpendDayStrip({
     <div className="space-y-2">
       <ol
         aria-label={t('day.label')}
-        className="interaction-scrollbar -mx-1 flex gap-0.5 overflow-x-auto px-1 pb-1"
+        className="interaction-scrollbar -mx-1 flex gap-0.5 overflow-x-auto scroll-shadow-x px-1 pb-1"
       >
         {breakdown.days.map(column)}
       </ol>

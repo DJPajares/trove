@@ -86,7 +86,7 @@ export function JournalMoment({
       {template?.kind === 'spread' && photos[0] ? (
         <div className="space-y-4">
           {print(photos[0], 0, template.leadAspect)}
-          <ul className="interaction-scrollbar flex snap-x snap-mandatory gap-5 overflow-x-auto px-2 py-4">
+          <ul className="interaction-scrollbar flex snap-x snap-mandatory gap-5 overflow-x-auto scroll-shadow-x px-2 py-4">
             {photos.slice(1).map((photo, offset) => (
               <li className="w-[44%] shrink-0 snap-start sm:w-[36%]" key={photo.id}>
                 {print(photo, offset + 1, template.stripAspect)}

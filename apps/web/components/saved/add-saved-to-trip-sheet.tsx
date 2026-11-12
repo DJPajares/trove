@@ -69,7 +69,7 @@ export function AddSavedToTripSheet({
       <SheetContent className="gap-0" closeLabel={t('close')}>
         <SheetHeading title={t('title', { name })} description={t('description')} />
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={(event) => void submit(event)}>
-          <div className="flex-1 space-y-2 overflow-y-auto p-5">
+          <div className="flex-1 space-y-2 overflow-y-auto scroll-shadow-y p-5">
             {status === 'added' && selected ? (
               <div className="space-y-3" role="status">
                 <p className="font-semibold">{t('added', { trip: selected.name })}</p>

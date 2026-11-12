@@ -1072,7 +1072,7 @@ export function AiPlanningReview({
             {draft.days.length > 1 ? (
               <nav
                 aria-label={t('jumpToDay')}
-                className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:px-0"
+                className="-mx-4 flex gap-2 overflow-x-auto scroll-shadow-x px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:px-0"
               >
                 {draft.days.map((day, dayIndex) => (
                   <a

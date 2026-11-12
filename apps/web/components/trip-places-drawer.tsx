@@ -282,7 +282,7 @@ export function TripPlacesDrawer({
           />
         ) : null}
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-5">
+        <div className="min-h-0 flex-1 overflow-y-auto scroll-shadow-y overscroll-contain pb-5">
           <p aria-live="polite" className="sr-only" role="status">
             {feedback}
           </p>

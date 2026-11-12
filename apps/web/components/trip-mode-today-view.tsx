@@ -566,7 +566,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
           the morning held had to go back to Planning to find out. The strip is
           a reading position, not a claim about where anyone is. */}
       <nav aria-label={t('dayStripLabel')} className="-mx-[var(--gutter-inline-start)]">
-        <ul className="interaction-scrollbar flex snap-x snap-mandatory gap-2 overflow-x-auto px-[var(--gutter-inline-start)] pb-1">
+        <ul className="interaction-scrollbar flex snap-x snap-mandatory gap-2 overflow-x-auto scroll-shadow-x px-[var(--gutter-inline-start)] pb-1">
           {itinerary.days.map((candidate, index) => {
             const active = candidate.date === day.date;
             const isContextDay = candidate.date === context.selectedDate;

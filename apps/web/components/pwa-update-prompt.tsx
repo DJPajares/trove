@@ -28,7 +28,7 @@ function UpdateDetails({ releases }: { releases: UnseenRelease[] }) {
   return (
     <CollapsiblePanel>
       <div className="mx-4 border-t border-border-subtle">
-        <div className="max-h-[40dvh] space-y-3 overflow-y-auto overscroll-contain py-3">
+        <div className="max-h-[40dvh] space-y-3 overflow-y-auto scroll-shadow-y overscroll-contain py-3">
           {shown.map((release) => (
             <section key={release.version}>
               <h3 className="mb-1.5 text-xs leading-4 font-medium text-text-subtle tabular-nums">

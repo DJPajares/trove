@@ -134,7 +134,7 @@ export function TripPlacesToolbar({
       {searchable && view.categoriesPresent.length > 1 ? (
         <ChipGroup
           aria-label={t('categoryFilterLabel')}
-          className="-mx-5 flex-nowrap overflow-x-auto px-5 pb-0.5"
+          className="-mx-5 flex-nowrap overflow-x-auto scroll-shadow-x px-5 pb-0.5"
           multiple={false}
           onValueChange={([value]) => view.setCategory((value as TrovePlaceCategory) ?? 'all')}
           value={[view.category]}

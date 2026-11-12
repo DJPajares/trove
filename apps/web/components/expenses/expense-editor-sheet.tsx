@@ -128,7 +128,7 @@ export function ExpenseEditorSheet({
           {editor.kind === 'budget' ? (
             <form className="flex min-h-0 flex-1 flex-col" onSubmit={onBudgetSubmit}>
               <fieldset disabled={readOnly} className="contents">
-                <div className="min-h-0 flex-1 overflow-y-auto p-5">
+                <div className="min-h-0 flex-1 overflow-y-auto scroll-shadow-y p-5">
                   <FieldGroup>
                     {formError ? (
                       <Alert role="alert" variant="destructive">
@@ -176,7 +176,7 @@ export function ExpenseEditorSheet({
           ) : editor.kind !== 'closed' ? (
             <form className="flex min-h-0 flex-1 flex-col" onSubmit={onExpenseSubmit}>
               <fieldset disabled={readOnly} className="contents">
-                <div className="min-h-0 flex-1 overflow-y-auto p-5">
+                <div className="min-h-0 flex-1 overflow-y-auto scroll-shadow-y p-5">
                   <FieldGroup>
                     {formError ? (
                       <Alert role="alert" variant="destructive">

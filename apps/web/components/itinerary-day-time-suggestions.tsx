@@ -102,7 +102,7 @@ export function ItineraryDayTimeSuggestions({
     <Sheet onOpenChange={onOpenChange} open={open}>
       <SheetContent closeLabel={t('close')}>
         <SheetHeading title={t('dayTimes.title')} description={t('dayTimes.description')} />
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+        <div className="min-h-0 flex-1 overflow-y-auto scroll-shadow-y p-5">
           {status === 'loading' ? (
             <p aria-live="polite" className="text-sm text-muted-foreground" role="status">
               {t('dayTimes.loading')}

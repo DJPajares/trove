@@ -89,7 +89,7 @@ export function ItineraryBetterOrder({
     <Sheet onOpenChange={onOpenChange} open={day !== null}>
       <SheetContent closeLabel={t('close')}>
         <SheetHeading title={t('title')} description={t('description')} />
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto scroll-shadow-y p-5">
           {status === 'loading' ? (
             <p aria-live="polite" className="text-sm text-muted-foreground" role="status">
               {t('loading')}

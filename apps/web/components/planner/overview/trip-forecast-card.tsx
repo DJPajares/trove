@@ -113,7 +113,7 @@ export function TripForecastCard({
       <h3 className="text-sm font-semibold" id="trip-forecast-heading">
         {planner('tripTitle')}
       </h3>
-      <ol className="interaction-scrollbar relative -mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1">
+      <ol className="interaction-scrollbar relative -mx-1 mt-3 flex gap-2 overflow-x-auto scroll-shadow-x px-1 pb-1">
         {/* Days with nothing to show are covered once, by the line below. */}
         {shown.map(({ day, forecast: entry }) => {
           const forecast = entry?.forecast ?? null;

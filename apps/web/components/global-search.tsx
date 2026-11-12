@@ -415,7 +415,7 @@ export function GlobalSearch({
         {showResults && allResults.length ? (
           <div
             aria-label={t('scopeLabel')}
-            className="flex gap-1.5 overflow-x-auto border-b border-border-subtle px-4 pb-3 [scrollbar-width:none] sm:px-5 sm:py-3"
+            className="flex gap-1.5 overflow-x-auto scroll-shadow-x border-b border-border-subtle px-4 pb-3 [scrollbar-width:none] sm:px-5 sm:py-3"
             role="group"
           >
             {(Object.keys(scopes) as Scope[])
@@ -438,7 +438,7 @@ export function GlobalSearch({
           <div className="border-b border-border-subtle sm:hidden" />
         )}
 
-        <div className="min-h-0 overflow-y-auto px-1.5 pb-4 sm:px-2" ref={listRef}>
+        <div className="min-h-0 overflow-y-auto scroll-shadow-y px-1.5 pb-4 sm:px-2" ref={listRef}>
           <p aria-live="polite" className="sr-only" role="status">
             {status === 'loading'
               ? t('searching')

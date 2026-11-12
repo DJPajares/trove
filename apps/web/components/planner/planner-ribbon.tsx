@@ -76,7 +76,7 @@ export function PlannerRibbon({
       data-slot="planner-ribbon"
     >
       <ol
-        className="interaction-scrollbar relative flex snap-x scroll-px-[var(--gutter-inline-start)] gap-1.5 overflow-x-auto px-[var(--gutter-inline-start)] py-2 md:scroll-px-1 md:px-1"
+        className="interaction-scrollbar relative flex snap-x scroll-px-[var(--gutter-inline-start)] gap-1.5 overflow-x-auto scroll-shadow-x px-[var(--gutter-inline-start)] py-2 md:scroll-px-1 md:px-1"
         onKeyDown={moveFocus}
         ref={listRef}
       >

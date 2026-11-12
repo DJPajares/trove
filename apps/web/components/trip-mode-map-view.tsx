@@ -547,7 +547,7 @@ export function TripModeMapView({
               {!mapControlsExpanded && day.items.length ? (
                 <ul
                   aria-label={t('todayItinerary')}
-                  className="interaction-scrollbar -mx-[var(--gutter-inline-start)] flex gap-2 overflow-x-auto px-[var(--gutter-inline-start)] pt-1 pb-2 lg:hidden"
+                  className="interaction-scrollbar -mx-[var(--gutter-inline-start)] flex gap-2 overflow-x-auto scroll-shadow-x px-[var(--gutter-inline-start)] pt-1 pb-2 lg:hidden"
                 >
                   {day.items.map((item, index) => {
                     const point = scheduledPoints.find((candidate) => candidate.itemId === item.id);

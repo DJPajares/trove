@@ -80,7 +80,7 @@ export function ExperienceRatingSheet({
       <SheetContent className={cn(journalSerif.variable, 'bg-paper')} closeLabel={t('close')}>
         <SheetHeading description={description} title={title} />
 
-        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 pb-6">
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto scroll-shadow-y px-5 pb-6">
           {/* Toggle buttons rather than radios: choosing the current value
               clears the rating, which a radio group cannot express. */}
           <div aria-label={title} className="-mx-2 flex items-center gap-1" role="group">

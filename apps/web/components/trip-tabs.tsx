@@ -62,7 +62,7 @@ export function TripTabs({
       {/* `overflow-x-auto` also clips vertically, which would cut the tabs'
         focus ring. The negative margin buys it room without moving the margin
         box, so each tab's active underline stays welded to the border below. */}
-      <ul className="-m-1 flex items-center gap-1 overflow-x-auto p-1">
+      <ul className="-m-1 flex items-center gap-1 overflow-x-auto scroll-shadow-x p-1">
         {tabs.map((tab) => (
           <li key={tab.key}>
             <Link

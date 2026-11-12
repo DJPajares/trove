@@ -204,7 +204,7 @@ export function AiPlanningBriefField({
               // A first brief has few enough chips to wrap; quick changes scroll.
               mode === 'ingredients'
                 ? 'flex-wrap'
-                : 'overflow-x-auto [scrollbar-width:none] md:flex-wrap',
+                : 'overflow-x-auto scroll-shadow-x [scrollbar-width:none] md:flex-wrap',
             )}
           >
             {ingredients.map((key) => {

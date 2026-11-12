@@ -186,7 +186,7 @@ export function TripsManager() {
         // itself always one tap away. A lens with nothing in it is not offered.
         <ChipGroup
           aria-label={lensT('label')}
-          className="-mx-1 mb-5 flex-nowrap overflow-x-auto px-1 pb-1 sm:mb-6"
+          className="-mx-1 mb-5 flex-nowrap overflow-x-auto scroll-shadow-x px-1 pb-1 sm:mb-6"
           multiple={false}
           onValueChange={([value]) => chooseLens(parseTripLens(value))}
           value={[activeLens]}

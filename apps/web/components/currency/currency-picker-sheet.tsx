@@ -127,7 +127,7 @@ export function CurrencyPickerSheet({
           />
         </label>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-6">
+        <div className="min-h-0 flex-1 overflow-y-auto scroll-shadow-y px-3 pb-6">
           {needle ? (
             <PickerGroup label={t('results')}>
               {matches.map((currency) => row(currency.code))}

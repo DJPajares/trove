@@ -256,7 +256,7 @@ export function PlaceDetailsSheet({
           evidenceFetchedAt={richDetails.data?.freshness.fetchedAt}
         />
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6">
+        <div className="min-h-0 flex-1 overflow-y-auto scroll-shadow-y overscroll-contain pb-6">
           <section className="grid gap-4 px-6 pt-5">
             {loadingEvidence ? (
               <Skeleton className="h-5 w-48" />

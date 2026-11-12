@@ -273,7 +273,7 @@ export function AddTripPlaceSheet({
       >
         <SheetHeading title={t('addPlaceTitle')} description={t('addPlaceDescription')} />
 
-        <div className="min-h-0 space-y-5 overflow-y-auto p-5">
+        <div className="min-h-0 space-y-5 overflow-y-auto scroll-shadow-y p-5">
           <SearchField
             autoFocus
             enterKeyHint="search"

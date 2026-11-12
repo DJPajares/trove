@@ -525,7 +525,7 @@ function EditorForm({
   return (
     <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
       <fieldset disabled={readOnly} className="contents">
-        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 pt-4 pb-6">
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto scroll-shadow-y px-5 pt-4 pb-6">
           {error ? (
             <Alert role="alert" variant="destructive">
               <CircleAlert aria-hidden="true" />

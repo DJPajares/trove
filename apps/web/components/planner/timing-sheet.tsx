@@ -95,7 +95,7 @@ function TimingBody({
     <>
       <SheetHeading title={timingT('title', { name })} description={timingT('description')} />
       <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+        <div className="min-h-0 flex-1 overflow-y-auto scroll-shadow-y p-5">
           <FieldGroup>
             {formError ? (
               <Alert role="alert" variant="destructive">

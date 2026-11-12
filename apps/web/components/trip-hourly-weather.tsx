@@ -133,7 +133,7 @@ export function TripHourlyWeather({
       {cells.length ? (
         <ul
           className={cn(
-            'interaction-scrollbar -mx-1 flex snap-x gap-1.5 overflow-x-auto px-1 pb-1',
+            'interaction-scrollbar -mx-1 flex snap-x gap-1.5 overflow-x-auto scroll-shadow-x px-1 pb-1',
             lead && 'mt-3',
           )}
           // The list is inside the link, so it is the link that is announced;

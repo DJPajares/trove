@@ -200,7 +200,7 @@ function TimingReviewBody({
               : 'connectedTiming.reviewUnresolvedHint',
         )}
       />
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-5">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto scroll-shadow-y px-5 pb-5">
         {!online ? (
           <p role="status" className="text-sm text-muted-foreground">
             {t('connectedTiming.onlineReview')}

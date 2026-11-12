@@ -64,7 +64,7 @@ export function DayPlanningContextSheet({
       <SheetContent closeLabel={t('cancel')}>
         <SheetHeading title={t('title')} description={t('hint')} />
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={save}>
-          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-5">
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto scroll-shadow-y p-5">
             <Field>
               <FieldLabel htmlFor="day-intent">{t('intent')}</FieldLabel>
               <Select

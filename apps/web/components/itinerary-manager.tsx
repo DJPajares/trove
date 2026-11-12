@@ -1455,7 +1455,7 @@ export function ItineraryManager({
       >
         <SheetContent closeLabel={t('close')}>
           <SheetHeading title={t('movement.swap')} description={t('movement.swapDescription')} />
-          <div className="space-y-4 overflow-y-auto p-5">
+          <div className="space-y-4 overflow-y-auto scroll-shadow-y p-5">
             {itinerary?.days.map((day) => (
               <section key={day.id} className="space-y-2">
                 <h3 className="text-sm font-semibold">
@@ -2090,7 +2090,7 @@ export function ItineraryManager({
                   ),
                 })}
               />
-              <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+              <div className="min-h-0 flex-1 space-y-5 overflow-y-auto scroll-shadow-y p-5">
                 <FieldGroup>
                   <Field>
                     <FieldLabel htmlFor="itinerary-day-move-target">

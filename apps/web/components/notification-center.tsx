@@ -89,7 +89,7 @@ export function NotificationCenter({
         </PopoverHeader>
 
         {count ? (
-          <div className="max-h-80 overflow-y-auto">
+          <div className="max-h-80 overflow-y-auto scroll-shadow-y">
             <ItemGroup variant="list">
               {notifications.slice(0, 5).map((notification) => (
                 <Item

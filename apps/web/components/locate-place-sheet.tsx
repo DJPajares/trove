@@ -118,7 +118,7 @@ export function LocatePlaceSheet({
       >
         <SheetHeading title={t('locate.title')} description={t('locate.description')} />
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto scroll-shadow-y p-5">
           <form
             onSubmit={(event) => {
               event.preventDefault();

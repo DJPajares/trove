@@ -68,7 +68,7 @@ export function AiPlanningAdjustSheet({
       >
         <SheetHeading description={t('adjustHint')} title={t('adjustEyebrow')} />
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-          <div className="flex-1 space-y-4 overflow-y-auto px-4 pt-2 pb-6 sm:px-6">
+          <div className="flex-1 space-y-4 overflow-y-auto scroll-shadow-y px-4 pt-2 pb-6 sm:px-6">
             <AiPlanningBriefField
               disabled={busy}
               id={ADJUST_PROMPT_ID}

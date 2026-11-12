@@ -121,7 +121,7 @@ export function MemoryWhereSheet({
         closeLabel={t('cancel')}
       >
         <SheetHeading description={t('whereDescription')} title={t('whereTitle')} />
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[calc(var(--safe-bottom)+1.5rem)] sm:px-5">
+        <div className="min-h-0 flex-1 overflow-y-auto scroll-shadow-y px-3 pb-[calc(var(--safe-bottom)+1.5rem)] sm:px-5">
           {!dayChosen ? (
             <div className="mb-3 space-y-2 rounded-[var(--radius-lg)] bg-muted/50 p-4">
               <p className="text-sm text-muted-foreground">{t('chooseDayFirst')}</p>
@@ -204,7 +204,7 @@ export function MemoryWhenSheet({
         closeLabel={t('cancel')}
       >
         <SheetHeading description={t('whenDescription')} title={t('whenTitle')} />
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-4 sm:px-6">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto scroll-shadow-y px-4 pb-4 sm:px-6">
           <div aria-label={t('whenDay')} className="grid grid-cols-3 gap-2" role="group">
             {days.map((day) => dayChip(day.id, t('dayNumber', { number: day.number }), day.label))}
           </div>

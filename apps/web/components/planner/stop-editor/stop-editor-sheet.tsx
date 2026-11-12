@@ -304,7 +304,7 @@ function StopEditorBody({
       {/* The place field explains itself, so the title stands alone. */}
       <SheetHeading title={title} />
       <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
-        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 pt-4 pb-6">
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto scroll-shadow-y px-5 pt-4 pb-6">
           {formError ? (
             <Alert role="alert" variant="destructive">
               <CircleAlert aria-hidden="true" />

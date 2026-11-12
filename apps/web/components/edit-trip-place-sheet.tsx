@@ -94,7 +94,7 @@ export function EditTripPlaceSheet({
       >
         <SheetHeading title={t('editPlaceTitle')} description={t('editPlaceDescription')} />
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto scroll-shadow-y p-5">
           <Field>
             <FieldLabel htmlFor="trip-place-name-editor">{t('placeNameLabel')}</FieldLabel>
             <Input

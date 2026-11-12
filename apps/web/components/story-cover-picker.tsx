@@ -49,7 +49,7 @@ export function StoryCoverPicker({
       <SheetContent closeLabel={t('close')}>
         <SheetHeading title={t('title')} description={t('description')} />
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
+        <div className="min-h-0 flex-1 overflow-y-auto scroll-shadow-y px-5 pb-5">
           {photos.length ? (
             <ul className="grid grid-cols-3 gap-2">
               {photos.map(({ memory, photo }) => (

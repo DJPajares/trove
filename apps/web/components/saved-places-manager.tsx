@@ -1070,7 +1070,7 @@ export function SavedPlacesManager({
                 ) : null}
               </div>
               {collections.length ? (
-                <div className="-mx-[var(--gutter-inline-start)] flex snap-x scroll-px-[var(--gutter-inline-start)] gap-3 overflow-x-auto px-[var(--gutter-inline-start)] pb-1 [scrollbar-width:none]">
+                <div className="-mx-[var(--gutter-inline-start)] flex snap-x scroll-px-[var(--gutter-inline-start)] gap-3 overflow-x-auto scroll-shadow-x px-[var(--gutter-inline-start)] pb-1 [scrollbar-width:none]">
                   {collections.map((collection) => {
                     const tiles = coverTiles.get(collection.id) ?? [];
                     return (
@@ -1171,7 +1171,7 @@ export function SavedPlacesManager({
             )}
             {small ? null : (
               <ChipGroup
-                className="-mx-1 flex-nowrap overflow-x-auto px-1 pb-1"
+                className="-mx-1 flex-nowrap overflow-x-auto scroll-shadow-x px-1 pb-1"
                 multiple={false}
                 onValueChange={([value]) => setCategoryFilter((value ?? 'all') as CategoryFilter)}
                 value={[categoryFilter]}
@@ -1287,7 +1287,7 @@ export function SavedPlacesManager({
                 : t('addPlaceDescription')
             }
           />
-          <div className="min-h-0 overflow-y-auto p-5">
+          <div className="min-h-0 overflow-y-auto scroll-shadow-y p-5">
             {addMode === 'search' ? (
               <div className="space-y-5">
                 <SearchField
@@ -1442,7 +1442,7 @@ export function SavedPlacesManager({
                   : t('createCollectionDescription')
               }
             />
-            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto scroll-shadow-y p-5">
               {collectionError ? (
                 <Alert role="alert" variant="destructive">
                   <CircleAlert aria-hidden="true" />
@@ -1522,7 +1522,7 @@ export function SavedPlacesManager({
               name: collectionPickerPlace ? getPlaceName(collectionPickerPlace) : '',
             })}
           />
-          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto scroll-shadow-y p-5">
             {collectionError ? (
               <Alert role="alert" variant="destructive">
                 <CircleAlert aria-hidden="true" />
@@ -1611,7 +1611,7 @@ export function SavedPlacesManager({
                 name: noteEditorPlace ? getPlaceName(noteEditorPlace) : '',
               })}
             />
-            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto scroll-shadow-y p-5">
               <div className="space-y-2">
                 <Label htmlFor="saved-place-note">{t('personalNote')}</Label>
                 <Input

@@ -168,7 +168,7 @@ export function JournalContents({
       </h2>
 
       <nav aria-label={t('daysLabel')}>
-        <ol className="interaction-scrollbar -mx-[var(--gutter-inline-start)] flex snap-x snap-mandatory gap-3 overflow-x-auto px-[var(--gutter-inline-start)] pt-2 pb-4 md:mx-0 md:px-1">
+        <ol className="interaction-scrollbar -mx-[var(--gutter-inline-start)] flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-shadow-x px-[var(--gutter-inline-start)] pt-2 pb-4 md:mx-0 md:px-1">
           {contents.map((entry) => {
             const label = entry.day.dayNumber
               ? t('dayNumber', { number: entry.day.dayNumber })
@@ -231,7 +231,7 @@ export function JournalContents({
       {lensChips.length > 1 ? (
         <ChipGroup
           aria-label={t('lensLabel')}
-          className="-m-1 flex-nowrap overflow-x-auto p-1 pr-6 [mask-image:linear-gradient(to_right,black_calc(100%-1.5rem),transparent)] [&>*]:shrink-0"
+          className="-m-1 flex-nowrap overflow-x-auto scroll-shadow-x p-1 [&>*]:shrink-0"
           multiple={false}
           onValueChange={([value]) => {
             const chip = lensChips.find((candidate) => (candidate.id ?? ALL_LENS_VALUE) === value);

@@ -437,7 +437,10 @@ export function TripForm({ alternative, onCancel, onDelete, onSaved, trip }: Tri
     <>
       <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
         <div
-          className={cn('flex-1 overflow-y-auto px-5', trip ? 'space-y-8 pb-8' : 'space-y-6 pb-6')}
+          className={cn(
+            'flex-1 overflow-y-auto scroll-shadow-y px-5',
+            trip ? 'space-y-8 pb-8' : 'space-y-6 pb-6',
+          )}
         >
           {error ? (
             <Alert role="alert" variant="destructive">

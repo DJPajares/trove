@@ -4,6 +4,7 @@ import {
   CloudRain,
   CloudSun,
   Cloudy,
+  Moon,
   Snowflake,
   Sun,
   Zap,
@@ -56,7 +57,15 @@ const icons: Record<WeatherConditionKey, LucideIcon> = {
   unknown: CloudSun,
 };
 
-/** The icon carries no meaning on its own; every use pairs it with the label. */
-export function weatherConditionIcon(code: number) {
-  return icons[weatherConditionKey(code)];
+/**
+ * The icon carries no meaning on its own; every use pairs it with the label.
+ *
+ * Only a reading tied to an hour knows whether the sun is up, so `isDay` is
+ * passed for those alone; a clear night then draws a moon rather than a sun.
+ * Everything else keeps its icon, which reads the same by night.
+ */
+export function weatherConditionIcon(code: number, isDay = true) {
+  const key = weatherConditionKey(code);
+  if (key === 'clear' && !isDay) return Moon;
+  return icons[key];
 }

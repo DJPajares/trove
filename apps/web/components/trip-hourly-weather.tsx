@@ -25,6 +25,8 @@ export type TripWeatherLead = {
   tag: string;
   temperature: string;
   weatherCode: number;
+  /** Known only for a live reading; a day's forecast is drawn as daytime. */
+  isDay?: boolean;
 };
 
 /** One line: what it is like, and the day's high and low beside it. */
@@ -32,7 +34,7 @@ export function TripWeatherHeadline({
   lead,
   range,
 }: Readonly<{ lead: TripWeatherLead; range: string | null }>) {
-  const Icon = weatherConditionIcon(lead.weatherCode);
+  const Icon = weatherConditionIcon(lead.weatherCode, lead.isDay);
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="flex min-w-0 items-center gap-2">
@@ -145,7 +147,7 @@ export function TripHourlyWeather({
           role="list"
         >
           {cells.map((hour, index) => {
-            const Icon = weatherConditionIcon(hour.weatherCode);
+            const Icon = weatherConditionIcon(hour.weatherCode, hour.isDay);
             const condition = t(`condition.${weatherConditionKey(hour.weatherCode)}`);
             const temperature = `${Math.round(hour.temperature)}${unit}`;
             const probability = hour.precipitationProbability;

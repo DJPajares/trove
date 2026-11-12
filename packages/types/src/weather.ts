@@ -27,6 +27,8 @@ export type WeatherCurrent = {
   weatherCode: number;
 };
 export type WeatherHour = {
+  /** Absent on snapshots cached before it was asked for; read as daytime. */
+  isDay?: boolean;
   precipitationProbability: number | null;
   temperature: number;
   time: string;

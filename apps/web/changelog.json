@@ -934,5 +934,15 @@
         "Copies always credit the traveller who planned the original."
       ]
     }
+  },
+  {
+    "id": "steady-all-days-page",
+    "date": "2026-11-12",
+    "version": "1.19.1",
+    "summaries": {
+      "en": [
+        "The All days page no longer slides sideways, so the bottom bar stays put on trips with a long forecast."
+      ]
+    }
   }
 ]

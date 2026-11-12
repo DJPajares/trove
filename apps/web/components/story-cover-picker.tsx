@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { TripMedia } from '@/components/trip-media';
 import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import { setStoryCoverPhoto, type Memory, type StoryCover } from '@/lib/memories/api';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 /**
  * The Trip Story cover is chosen from photos the traveller already uploaded to
@@ -49,7 +50,7 @@ export function StoryCoverPicker({
       <SheetContent closeLabel={t('close')}>
         <SheetHeading title={t('title')} description={t('description')} />
 
-        <div className="min-h-0 flex-1 overflow-y-auto scroll-shadow-y px-5 pb-5">
+        <ScrollShadow className="min-h-0 flex-1 px-5 pb-5">
           {photos.length ? (
             <ul className="grid grid-cols-3 gap-2">
               {photos.map(({ memory, photo }) => (
@@ -80,7 +81,7 @@ export function StoryCoverPicker({
           ) : (
             <p className="py-4 text-sm leading-6 text-muted-foreground">{t('empty')}</p>
           )}
-        </div>
+        </ScrollShadow>
 
         {storyCover ? (
           <SheetFooter>

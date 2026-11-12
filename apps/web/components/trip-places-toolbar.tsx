@@ -29,6 +29,7 @@ import type { TripPlaceDaySort } from '@/lib/trip-places/signals';
 import type { TripPlacesView } from '@/lib/trip-places/use-trip-places-view';
 import * as Icons from '@/lib/icons';
 import { cn } from '@/lib/utils';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 export type TripPlacesLens = 'all' | 'day' | 'unplanned';
 
@@ -133,8 +134,9 @@ export function TripPlacesToolbar({
       {/* Narrowing by kind of place is offered once the trip holds more than one kind. */}
       {searchable && view.categoriesPresent.length > 1 ? (
         <ChipGroup
+          render={<ScrollShadow orientation="horizontal" />}
           aria-label={t('categoryFilterLabel')}
-          className="-mx-5 flex-nowrap overflow-x-auto scroll-shadow-x px-5 pb-0.5"
+          className="-mx-5 flex-nowrap px-5 pb-0.5"
           multiple={false}
           onValueChange={([value]) => view.setCategory((value as TrovePlaceCategory) ?? 'all')}
           value={[view.category]}

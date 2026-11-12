@@ -103,6 +103,7 @@ import { formatSegmentedTime } from '@/lib/time/time-segments';
 import type { Trip } from '@/lib/trips/api';
 import * as Icons from '@/lib/icons';
 import { cn } from '@/lib/utils';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 const INITIAL_SESSION_POLL_MS = 3_000;
 const LATER_SESSION_POLL_MS = 5_000;
@@ -1070,9 +1071,11 @@ export function AiPlanningReview({
               ) : null}
             </div>
             {draft.days.length > 1 ? (
-              <nav
+              <ScrollShadow
+                orientation="horizontal"
+                render={<nav />}
                 aria-label={t('jumpToDay')}
-                className="-mx-4 flex gap-2 overflow-x-auto scroll-shadow-x px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:px-0"
+                className="-mx-4 flex gap-2 px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:px-0"
               >
                 {draft.days.map((day, dayIndex) => (
                   <a
@@ -1089,7 +1092,7 @@ export function AiPlanningReview({
                     </span>
                   </a>
                 ))}
-              </nav>
+              </ScrollShadow>
             ) : null}
             {draft.days.map((day, dayIndex) => (
               <Collapsible

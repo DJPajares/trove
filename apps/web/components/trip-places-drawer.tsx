@@ -38,6 +38,7 @@ import { useTripPlaces } from '@/lib/trip-places/use-trip-places';
 import { useTripPlacesView } from '@/lib/trip-places/use-trip-places-view';
 import * as Icons from '@/lib/icons';
 import { cn } from '@/lib/utils';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 export type TripPlacesDayContext = {
   /** The located stops (and base) of the day being planned, for "nearest to this day". */
@@ -282,7 +283,7 @@ export function TripPlacesDrawer({
           />
         ) : null}
 
-        <div className="min-h-0 flex-1 overflow-y-auto scroll-shadow-y overscroll-contain pb-5">
+        <ScrollShadow className="min-h-0 flex-1 overscroll-contain pb-5">
           <p aria-live="polite" className="sr-only" role="status">
             {feedback}
           </p>
@@ -417,7 +418,7 @@ export function TripPlacesDrawer({
               <SavedPlacesForTrip onAdded={placeAdded} tripId={tripId} tripPlaces={places.places} />
             </div>
           ) : null}
-        </div>
+        </ScrollShadow>
       </SheetContent>
 
       {addQuery !== null ? (

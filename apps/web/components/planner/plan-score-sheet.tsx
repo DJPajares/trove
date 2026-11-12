@@ -5,6 +5,7 @@ import { useRef, type ComponentProps } from 'react';
 
 import { PlanScorePanel } from '@/components/plan-score-panel';
 import { Sheet, SheetContent, SheetHeading } from '@/components/ui/sheet';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 /**
  * A day's score, opened from the chip on its header: the breakdown the chip
@@ -45,7 +46,7 @@ export function PlanScoreSheet({
         closeLabel={t('close')}
       >
         <SheetHeading title={title} />
-        <div className="min-h-0 flex-1 overflow-y-auto scroll-shadow-y px-4 pb-[calc(var(--safe-bottom)+1.5rem)] sm:px-6">
+        <ScrollShadow className="min-h-0 flex-1 px-4 pb-[calc(var(--safe-bottom)+1.5rem)] sm:px-6">
           {open ? (
             <PlanScorePanel
               {...panel}
@@ -63,7 +64,7 @@ export function PlanScoreSheet({
               surface="inset"
             />
           ) : null}
-        </div>
+        </ScrollShadow>
       </SheetContent>
     </Sheet>
   );

@@ -51,6 +51,7 @@ import {
 } from '@/lib/reservations/api';
 import { isJourneyType, stayDayIds } from '@/lib/reservations/view';
 import { cn } from '@/lib/utils';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 /** The kinds most bookings are, first; the rest one tap away. */
 const PRIMARY_TYPES: readonly ReservationType[] = [
@@ -525,7 +526,7 @@ function EditorForm({
   return (
     <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
       <fieldset disabled={readOnly} className="contents">
-        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto scroll-shadow-y px-5 pt-4 pb-6">
+        <ScrollShadow className="min-h-0 flex-1 space-y-6 px-5 pt-4 pb-6">
           {error ? (
             <Alert role="alert" variant="destructive">
               <CircleAlert aria-hidden="true" />
@@ -1031,7 +1032,7 @@ function EditorForm({
               <p className="text-sm text-muted-foreground">{t('documentsAfterSave')}</p>
             )}
           </section>
-        </div>
+        </ScrollShadow>
       </fieldset>
       <SheetFooter className="px-5 pt-4">
         {editing && !readOnly ? (

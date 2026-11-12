@@ -40,6 +40,7 @@ import { isAccommodation } from '@/lib/trip-places/categories';
 import type { TrovePlaceCategory } from '@/lib/place-categories';
 import { queryKeys } from '@/lib/query/keys';
 import * as Icons from '@/lib/icons';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 type AddTripPlaceSheetProps = {
   finalFocus?: () => HTMLElement | boolean;
@@ -273,7 +274,7 @@ export function AddTripPlaceSheet({
       >
         <SheetHeading title={t('addPlaceTitle')} description={t('addPlaceDescription')} />
 
-        <div className="min-h-0 space-y-5 overflow-y-auto scroll-shadow-y p-5">
+        <ScrollShadow className="min-h-0 space-y-5 p-5">
           <SearchField
             autoFocus
             enterKeyHint="search"
@@ -470,7 +471,7 @@ export function AddTripPlaceSheet({
               </Button>
             )}
           </div>
-        </div>
+        </ScrollShadow>
       </SheetContent>
     </Sheet>
   );

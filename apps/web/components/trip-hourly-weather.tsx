@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 
 import type { TemperatureUnit } from '@/lib/profile/preferences';
 import type { WeatherHourlyForecast } from '@/lib/weather/api';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 /**
  * The reading a weather card leads with: the conditions in hand when there is a
@@ -131,9 +132,11 @@ export function TripHourlyWeather({
       {lead ? <TripWeatherHeadline lead={lead} range={range} /> : null}
 
       {cells.length ? (
-        <ul
+        <ScrollShadow
+          orientation="horizontal"
+          render={<ul />}
           className={cn(
-            'interaction-scrollbar -mx-1 flex snap-x gap-1.5 overflow-x-auto scroll-shadow-x px-1 pb-1',
+            'interaction-scrollbar -mx-1 flex snap-x gap-1.5 px-1 pb-1',
             lead && 'mt-3',
           )}
           // The list is inside the link, so it is the link that is announced;
@@ -198,7 +201,7 @@ export function TripHourlyWeather({
               </li>
             );
           })}
-        </ul>
+        </ScrollShadow>
       ) : null}
     </a>
   );

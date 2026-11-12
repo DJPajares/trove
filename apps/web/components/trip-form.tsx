@@ -48,6 +48,7 @@ import {
   uploadTripCover,
 } from '@/lib/trips/api';
 import { cn } from '@/lib/utils';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 type TripFormProps = {
   /**
@@ -436,12 +437,7 @@ export function TripForm({ alternative, onCancel, onDelete, onSaved, trip }: Tri
   return (
     <>
       <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-        <div
-          className={cn(
-            'flex-1 overflow-y-auto scroll-shadow-y px-5',
-            trip ? 'space-y-8 pb-8' : 'space-y-6 pb-6',
-          )}
-        >
+        <ScrollShadow className={cn('flex-1 px-5', trip ? 'space-y-8 pb-8' : 'space-y-6 pb-6')}>
           {error ? (
             <Alert role="alert" variant="destructive">
               <CircleAlert aria-hidden="true" />
@@ -613,7 +609,7 @@ export function TripForm({ alternative, onCancel, onDelete, onSaved, trip }: Tri
               </CollapsiblePanel>
             </Collapsible>
           </section>
-        </div>
+        </ScrollShadow>
 
         <SheetFooter>
           {onDelete ? (

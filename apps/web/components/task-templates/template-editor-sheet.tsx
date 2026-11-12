@@ -11,6 +11,7 @@ import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Sheet, SheetClose, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
 import type { TaskTemplateInput } from '@/lib/tasks/api';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 export const MAX_TEMPLATE_TASKS = 20;
 
@@ -120,7 +121,7 @@ function EditorForm({
         title={editing ? t('editTitle') : t('createTitle')}
       />
 
-      <div className="min-h-0 flex-1 overflow-y-auto scroll-shadow-y px-5 pt-4 pb-4">
+      <ScrollShadow className="min-h-0 flex-1 px-5 pt-4 pb-4">
         {error ? (
           <Alert className="mb-3" role="alert" variant="destructive">
             <CircleAlert aria-hidden="true" />
@@ -209,7 +210,7 @@ function EditorForm({
             {t('taskLimit', { count: MAX_TEMPLATE_TASKS })}
           </p>
         ) : null}
-      </div>
+      </ScrollShadow>
 
       <SheetFooter className="px-5 pt-4">
         {editing && onDelete ? (

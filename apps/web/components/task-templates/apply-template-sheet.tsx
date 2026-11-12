@@ -12,6 +12,7 @@ import { applyTaskTemplate, type TaskTemplate } from '@/lib/tasks/api';
 import { formatTripDateRange } from '@/lib/trips/format';
 import type { Trip } from '@/lib/trips/api';
 import { cn } from '@/lib/utils';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 export type AppliedTemplate = { count: number; trip: Pick<Trip, 'id' | 'name'> };
 
@@ -145,7 +146,7 @@ function ApplyForm({
         title={t('addNamedToTrip', { name: template.name })}
       />
 
-      <div className="min-h-0 flex-1 overflow-y-auto scroll-shadow-y px-5 pt-4 pb-4">
+      <ScrollShadow className="min-h-0 flex-1 px-5 pt-4 pb-4">
         {error ? (
           <Alert className="mb-3" role="alert" variant="destructive">
             <CircleAlert aria-hidden="true" />
@@ -186,7 +187,7 @@ function ApplyForm({
         ) : (
           <p className="text-sm text-muted-foreground">{t('noTrips')}</p>
         )}
-      </div>
+      </ScrollShadow>
 
       <SheetFooter className="px-5 pt-4">
         <p className="text-[0.8125rem] leading-5 text-muted-foreground" data-footer-lead>

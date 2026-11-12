@@ -23,6 +23,7 @@ import {
 import { mapDayTint } from '@/lib/maps/map-day-tints';
 import { queryKeys } from '@/lib/query/keys';
 import { cn } from '@/lib/utils';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 const ALL_DAYS = 'all';
 
@@ -171,8 +172,9 @@ export function ItineraryTripMap({
               stops are drawn in. A day with nothing located cannot be chosen,
               so the map is never asked to show nothing. */}
           <ChipGroup
+            render={<ScrollShadow orientation="horizontal" />}
             aria-label={t('map.tripDaysLabel')}
-            className="-mx-1 min-w-0 flex-nowrap overflow-x-auto scroll-shadow-x px-1"
+            className="-mx-1 min-w-0 flex-nowrap px-1"
             multiple={false}
             onValueChange={([value]) => {
               setRequestedFocusDayId(!value || value === ALL_DAYS ? null : value);

@@ -29,6 +29,7 @@ import {
   type TaskScope,
 } from '@/lib/tasks/context';
 import type { Task, TaskContext, TaskInput, TasksResponse } from '@/lib/tasks/api';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 export type TaskEditorSubmission = Required<Pick<TaskInput, 'context' | 'label'>> & TaskInput;
 
@@ -233,7 +234,7 @@ export function TaskEditorSheet({
           description={task ? t('editDescription') : t('createDescription')}
         />
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-          <div className="min-h-0 flex-1 overflow-y-auto scroll-shadow-y p-5">
+          <ScrollShadow className="min-h-0 flex-1 p-5">
             <FieldGroup>
               {formError ? (
                 <Alert role="alert" variant="destructive">
@@ -367,7 +368,7 @@ export function TaskEditorSheet({
                 />
               </Field>
             </FieldGroup>
-          </div>
+          </ScrollShadow>
           <SheetFooter>
             {task && onDeleteRequest ? (
               <Button

@@ -12,6 +12,7 @@ import { printTilts } from '@/lib/memories/photo-layout';
 import type { RouteSketch } from '@/lib/maps/route-sketch';
 import { cn } from '@/lib/utils';
 import * as Icons from '@/lib/icons';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 /** A ChipGroup value has to be a string; no real lens id is ever this literal. */
 const ALL_LENS_VALUE = '__all__';
@@ -168,7 +169,11 @@ export function JournalContents({
       </h2>
 
       <nav aria-label={t('daysLabel')}>
-        <ol className="interaction-scrollbar -mx-[var(--gutter-inline-start)] flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-shadow-x px-[var(--gutter-inline-start)] pt-2 pb-4 md:mx-0 md:px-1">
+        <ScrollShadow
+          orientation="horizontal"
+          render={<ol />}
+          className="interaction-scrollbar -mx-[var(--gutter-inline-start)] flex snap-x snap-mandatory gap-3 px-[var(--gutter-inline-start)] pt-2 pb-4 md:mx-0 md:px-1"
+        >
           {contents.map((entry) => {
             const label = entry.day.dayNumber
               ? t('dayNumber', { number: entry.day.dayNumber })
@@ -223,15 +228,16 @@ export function JournalContents({
               </li>
             );
           })}
-        </ol>
+        </ScrollShadow>
       </nav>
 
       {sketch ? <JournalRouteSketch sketch={sketch} /> : null}
 
       {lensChips.length > 1 ? (
         <ChipGroup
+          render={<ScrollShadow orientation="horizontal" />}
           aria-label={t('lensLabel')}
-          className="-m-1 flex-nowrap overflow-x-auto scroll-shadow-x p-1 [&>*]:shrink-0"
+          className="-m-1 flex-nowrap p-1 [&>*]:shrink-0"
           multiple={false}
           onValueChange={([value]) => {
             const chip = lensChips.find((candidate) => (candidate.id ?? ALL_LENS_VALUE) === value);

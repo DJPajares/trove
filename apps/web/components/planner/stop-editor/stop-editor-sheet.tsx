@@ -38,6 +38,7 @@ import { fetchSavedPlaces } from '@/lib/saved/api';
 import type { ProviderSearchLocationBias } from '@/lib/saved/provider-search-session';
 import type { TripPlace } from '@/lib/trip-places/api';
 import { savedPlacesNearTrip } from '@/lib/trip-places/saved-near-trip';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 import { EditRow, EditRows } from './edit-row';
 import { PlaceField, tripPlaceName } from './place-field';
@@ -304,7 +305,7 @@ function StopEditorBody({
       {/* The place field explains itself, so the title stands alone. */}
       <SheetHeading title={title} />
       <form className="flex min-h-0 flex-1 flex-col" onSubmit={submit}>
-        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto scroll-shadow-y px-5 pt-4 pb-6">
+        <ScrollShadow className="min-h-0 flex-1 space-y-6 px-5 pt-4 pb-6">
           {formError ? (
             <Alert role="alert" variant="destructive">
               <CircleAlert aria-hidden="true" />
@@ -432,7 +433,7 @@ function StopEditorBody({
               </Button>
             </div>
           ) : null}
-        </div>
+        </ScrollShadow>
         <SheetFooter className="px-5 py-4">
           <Button disabled={saving} onClick={onClose} type="button" variant="outline">
             {t('cancel')}

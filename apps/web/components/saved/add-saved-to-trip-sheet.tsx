@@ -14,6 +14,7 @@ import { tripsForSavedPlace } from '@/lib/saved/collection-view';
 import { addTripPlace } from '@/lib/trip-places/api';
 import { fetchTrips } from '@/lib/trips/api';
 import { cn } from '@/lib/utils';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 /**
  * Moves a saved place from inspiration into a plan. It joins the chosen trip's
@@ -69,7 +70,7 @@ export function AddSavedToTripSheet({
       <SheetContent className="gap-0" closeLabel={t('close')}>
         <SheetHeading title={t('title', { name })} description={t('description')} />
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={(event) => void submit(event)}>
-          <div className="flex-1 space-y-2 overflow-y-auto scroll-shadow-y p-5">
+          <ScrollShadow className="flex-1 space-y-2 p-5">
             {status === 'added' && selected ? (
               <div className="space-y-3" role="status">
                 <p className="font-semibold">{t('added', { trip: selected.name })}</p>
@@ -129,7 +130,7 @@ export function AddSavedToTripSheet({
                 {t('error')}
               </p>
             ) : null}
-          </div>
+          </ScrollShadow>
           <SheetFooter>
             <p
               className="text-[length:var(--text-metadata)] text-muted-foreground"

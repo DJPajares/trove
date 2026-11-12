@@ -23,6 +23,7 @@ import {
   saveItineraryTimingReview,
   ItineraryApiError,
 } from '@/lib/itinerary/api';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 type Props = {
   outcome: SchedulingOutcome | null;
@@ -200,7 +201,7 @@ function TimingReviewBody({
               : 'connectedTiming.reviewUnresolvedHint',
         )}
       />
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto scroll-shadow-y px-5 pb-5">
+      <ScrollShadow className="min-h-0 flex-1 space-y-4 px-5 pb-5">
         {!online ? (
           <p role="status" className="text-sm text-muted-foreground">
             {t('connectedTiming.onlineReview')}
@@ -352,7 +353,7 @@ function TimingReviewBody({
             ) : null}
           </>
         )}
-      </div>
+      </ScrollShadow>
       <SheetFooter className="px-5 py-4">
         <Button
           disabled={busy}

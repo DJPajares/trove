@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/
 import { Textarea } from '@/components/ui/textarea';
 import { updateCustomPlace } from '@/lib/saved/api';
 import type { TripPlace } from '@/lib/trip-places/api';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 type EditTripPlaceSheetProps = {
   finalFocus?: () => HTMLElement | boolean;
@@ -94,7 +95,7 @@ export function EditTripPlaceSheet({
       >
         <SheetHeading title={t('editPlaceTitle')} description={t('editPlaceDescription')} />
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto scroll-shadow-y p-5">
+        <ScrollShadow className="min-h-0 flex-1 space-y-4 p-5">
           <Field>
             <FieldLabel htmlFor="trip-place-name-editor">{t('placeNameLabel')}</FieldLabel>
             <Input
@@ -126,7 +127,7 @@ export function EditTripPlaceSheet({
               {t('actionError')}
             </p>
           ) : null}
-        </div>
+        </ScrollShadow>
 
         <SheetFooter>
           <Button disabled={saving} onClick={() => onOpenChange(false)} variant="outline">

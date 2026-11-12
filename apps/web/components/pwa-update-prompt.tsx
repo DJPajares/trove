@@ -10,6 +10,7 @@ import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/
 import { motionDuration, motionEase } from '@/lib/motion';
 import { unseenSummaries, type UnseenRelease } from '@/lib/updates/release';
 import { useAppUpdate } from '@/lib/updates/use-app-update';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 const COLLAPSED_LINES = 5;
 
@@ -28,7 +29,7 @@ function UpdateDetails({ releases }: { releases: UnseenRelease[] }) {
   return (
     <CollapsiblePanel>
       <div className="mx-4 border-t border-border-subtle">
-        <div className="max-h-[40dvh] space-y-3 overflow-y-auto scroll-shadow-y overscroll-contain py-3">
+        <ScrollShadow className="max-h-[40dvh] space-y-3 overscroll-contain py-3">
           {shown.map((release) => (
             <section key={release.version}>
               <h3 className="mb-1.5 text-xs leading-4 font-medium text-text-subtle tabular-nums">
@@ -51,7 +52,7 @@ function UpdateDetails({ releases }: { releases: UnseenRelease[] }) {
               {showAll ? t('showLess') : t('showMore', { count: total - COLLAPSED_LINES })}
             </Button>
           ) : null}
-        </div>
+        </ScrollShadow>
       </div>
     </CollapsiblePanel>
   );

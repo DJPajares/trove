@@ -10,6 +10,7 @@ import type { CurrencyMetadata } from '@/lib/currency/api';
 import { countriesUsingCurrency } from '@/lib/currency/country-currency';
 import { isCurrencyCode } from '@/lib/currency/recent-pairs';
 import { cn } from '@/lib/utils';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 export type TripCurrencySuggestion = { code: string; meta: string };
 
@@ -127,7 +128,7 @@ export function CurrencyPickerSheet({
           />
         </label>
 
-        <div className="min-h-0 flex-1 overflow-y-auto scroll-shadow-y px-3 pb-6">
+        <ScrollShadow className="min-h-0 flex-1 px-3 pb-6">
           {needle ? (
             <PickerGroup label={t('results')}>
               {matches.map((currency) => row(currency.code))}
@@ -162,7 +163,7 @@ export function CurrencyPickerSheet({
               ) : null}
             </>
           )}
-        </div>
+        </ScrollShadow>
       </SheetContent>
     </Sheet>
   );

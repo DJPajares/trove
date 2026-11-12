@@ -22,6 +22,7 @@ import { nextTripForTools, tripLocalCurrency } from '@/lib/tools/shelf';
 import { fetchTrips } from '@/lib/trips/api';
 import * as Icons from '@/lib/icons';
 import { cn } from '@/lib/utils';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 /** The converter's own default when the traveller has no home currency set. */
 const FALLBACK_SOURCE = 'USD';
@@ -147,7 +148,10 @@ export function ToolsLauncher() {
             tone="olive"
           >
             {recentPairs.length > 1 ? (
-              <div className="flex gap-2 overflow-x-auto scroll-shadow-x pr-4 pb-3 pl-[4.5rem] [scrollbar-width:none]">
+              <ScrollShadow
+                orientation="horizontal"
+                className="flex gap-2 pr-4 pb-3 pl-[4.5rem] [scrollbar-width:none]"
+              >
                 {recentPairs.slice(1).map((pair) => (
                   <Link
                     className="inline-flex h-9 shrink-0 items-center rounded-full border border-border bg-background px-3 text-[0.8125rem] font-semibold outline-none hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40"
@@ -157,7 +161,7 @@ export function ToolsLauncher() {
                     {pair.source} → {pair.target}
                   </Link>
                 ))}
-              </div>
+              </ScrollShadow>
             ) : null}
           </ToolRow>
         </ShelfGroup>

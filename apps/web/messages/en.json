@@ -1809,6 +1809,7 @@
     "description": "Convert prices at today's reference rate.",
     "back": "Tools",
     "amountIn": "Amount in {currency}",
+    "clearAmount": "Clear amount",
     "amountPlaceholder": "100",
     "convertedValue": "Converted value in {currency}",
     "changeFrom": "Convert from {currency}. Change currency",

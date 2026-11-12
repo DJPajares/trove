@@ -1021,5 +1021,15 @@
         "Maps have a new Other places button to show or hide the rest of your trip's places, so you can focus on the day or see what's nearby."
       ]
     }
+  },
+  {
+    "id": "currency-amount-clear-and-done",
+    "date": "2026-11-12",
+    "version": "1.21.1",
+    "summaries": {
+      "en": [
+        "Clear an amount with one tap, and press Return on your keyboard to finish typing. Works in the currency converter, expenses and reservation costs."
+      ]
+    }
   }
 ]

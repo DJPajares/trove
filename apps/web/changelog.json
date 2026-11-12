@@ -1001,5 +1001,15 @@
         "The swap button now works every time you tap it."
       ]
     }
+  },
+  {
+    "id": "photo-arrows-every-tap",
+    "date": "2026-11-12",
+    "version": "1.20.6",
+    "summaries": {
+      "en": [
+        "The arrows on place photos and memories now respond to every tap, wherever on the button you press."
+      ]
+    }
   }
 ]

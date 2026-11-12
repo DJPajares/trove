@@ -271,10 +271,13 @@ export function PlacePhotoCarousel({
       {total > 1 && !pending ? (
         <>
           {/* On a phone the cover is short enough that centred arrows sit on
-              the title; there the track swipes and the dots still navigate. */}
+              the title; there the track swipes and the dots still navigate.
+              Centred with top, not a translate: the Button's press nudge sets
+              translate-y and would drop a translate-centred arrow by half its
+              height, so a tap on its top half released off it. */}
           <Button
             aria-label={t('previousPhoto')}
-            className={cn('absolute top-1/2 left-3 -translate-y-1/2 max-md:hidden', overlayControl)}
+            className={cn('absolute top-[calc(50%-1.125rem)] left-3 max-md:hidden', overlayControl)}
             disabled={activeIndex === 0}
             onClick={() => goTo(activeIndex - 1)}
             size="icon-sm"
@@ -286,7 +289,7 @@ export function PlacePhotoCarousel({
           <Button
             aria-label={t('nextPhoto')}
             className={cn(
-              'absolute top-1/2 right-3 -translate-y-1/2 max-md:hidden',
+              'absolute top-[calc(50%-1.125rem)] right-3 max-md:hidden',
               overlayControl,
             )}
             disabled={activeIndex === total - 1}

@@ -34,7 +34,7 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
       className={cn(
         'mx-auto grid h-[var(--header-height)] w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 pl-[var(--gutter-inline-start)] pr-[var(--gutter-inline-end)]',
         isSignedIn
-          ? 'md:pr-[calc(var(--gutter-inline-end)+3.25rem)]'
+          ? 'md:pr-[calc(var(--gutter-inline-end)+6rem)]'
           : 'md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]',
       )}
     >

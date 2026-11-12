@@ -23,6 +23,7 @@ import { readPushAccount } from '@/lib/notifications/push-account';
 import { shouldShowPush } from '@/lib/notifications/push-payload';
 import { brandAssets } from '@/lib/brand/assets';
 import { isSensitiveAuthUrl } from '@/lib/auth/redirect';
+import { isOfflineTripPagePath } from '@/lib/offline/trip-pages';
 import { RELEASE_MESSAGE, type ReleaseManifest } from '@/lib/updates/release';
 
 declare global {
@@ -119,9 +120,6 @@ const tripModeRscCacheKey: SerwistPlugin = {
     return url.toString();
   },
 };
-
-const offlineTripPath =
-  /^\/trips\/[^/]+\/(?:expenses|info|itinerary|memories|mode(?:\/[^/]+)?|places|reservations|tasks)\/?$/;
 
 const runtimeCaching: RuntimeCaching[] = [
   {
@@ -224,7 +222,7 @@ const runtimeCaching: RuntimeCaching[] = [
     }),
     matcher: ({ request, url }) =>
       request.method === 'GET' &&
-      offlineTripPath.test(url.pathname) &&
+      isOfflineTripPagePath(url.pathname) &&
       (request.headers.get('RSC') === '1' || request.headers.get('Next-Router-Prefetch') === '1'),
     method: 'GET',
   },
@@ -234,7 +232,7 @@ const runtimeCaching: RuntimeCaching[] = [
       networkTimeoutSeconds: 3,
     }),
     matcher: ({ request, url }) =>
-      request.mode === 'navigate' && offlineTripPath.test(url.pathname),
+      request.mode === 'navigate' && isOfflineTripPagePath(url.pathname),
     method: 'GET',
   },
   {

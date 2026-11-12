@@ -912,5 +912,16 @@
         "A stop that still needs a location now says so once, and the all-days view shows full day names."
       ]
     }
+  },
+  {
+    "id": "offline-launch-opens-prepared-trips",
+    "date": "2026-11-12",
+    "version": "1.18.3",
+    "summaries": {
+      "en": [
+        "Opening Trove with no connection now takes you straight to the trips you prepared, and into today's trip if you're travelling.",
+        "Prepared trips, including each trip's overview, keep opening offline after an app update."
+      ]
+    }
   }
 ]

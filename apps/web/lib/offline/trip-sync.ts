@@ -41,7 +41,15 @@ export class OfflineSyncError extends Error {
   }
 }
 
-export async function getOfflineAuthContext() {
+/**
+ * `assumeOffline` is for callers that already know the network failed - the
+ * offline fallback is only ever served because a navigation could not reach
+ * the server. `navigator.onLine` stays true on a captive or dead connection,
+ * and an expired token cannot refresh there, so without it the remembered
+ * traveller's prepared trips would vanish exactly when they are needed.
+ * Signing out forgets the remembered traveller, so this never crosses accounts.
+ */
+export async function getOfflineAuthContext(options: { assumeOffline?: boolean } = {}) {
   const supabase = createBrowserSupabaseClient();
   if (!supabase) throw new OfflineSyncError('supabase_not_configured');
   const { data, error } = await getProtectedSession(supabase);
@@ -52,7 +60,8 @@ export async function getOfflineAuthContext() {
       userId: data.session.user.id,
     };
   }
-  const rememberedUser = !navigator.onLine ? getRememberedOfflineUser() : null;
+  const rememberedUser =
+    options.assumeOffline || !navigator.onLine ? getRememberedOfflineUser() : null;
   if (rememberedUser) return { accessToken: null, userId: rememberedUser };
   throw new OfflineSyncError('not_authenticated');
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import type { TripOverviewData } from '@trove/types';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, CopyPlus } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useRef } from 'react';
@@ -238,6 +238,16 @@ export function TripHubCover({
           {hub('duration', { count: totalDays })}
         </p>
         <CoverSignature overview={overview} stage={stage} trip={trip} />
+        {/* Always shown on a saved copy (PRD 8.1): the credit is not the
+            traveller's to remove, and it names rather than links. */}
+        {trip.basedOn ? (
+          <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-white/80">
+            <CopyPlus aria-hidden="true" className="size-3.5" />
+            {trip.basedOn.creatorName
+              ? t('basedOn', { name: trip.basedOn.creatorName })
+              : t('basedOnAnonymous')}
+          </p>
+        ) : null}
       </div>
     </section>
   );

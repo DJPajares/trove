@@ -62,6 +62,12 @@ export type Trip = {
    * Only the trips list carries it, and only a completed trip has any.
    */
   memoryPhotos?: { contentType: string; id: string; url: string }[];
+  /**
+   * Set on a trip saved as a copy of someone's shared trip (PRD 8.1), naming its
+   * first creator; null where they had no display name. Optional so snapshots
+   * written before copies existed stay readable.
+   */
+  basedOn?: { creatorName: string | null } | null;
   hasStoryContent?: boolean;
   name: string;
   partySize: number;
@@ -340,6 +346,20 @@ export async function updateTripExperienceRating(
  * `saveTrip`, because publishing a trip is the one change that alters who can
  * see it and should not be able to ride along with an unrelated edit.
  */
+/**
+ * Save a copy of a trip someone shared (PRD 8.1). Like sharing itself, this
+ * is a direct write and never queued: a copy that has not reached the server
+ * does not exist, and the traveller is told so rather than shown a trip.
+ */
+export async function copySharedTrip(tripId: string, input: { name: string; startDate: string }) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine)
+    throw new TripApiError('copy_offline', 503);
+  return tripRequest<{ trip: Trip }>(`/shared-trips/${encodeURIComponent(tripId)}/copies`, {
+    body: JSON.stringify(input),
+    method: 'POST',
+  });
+}
+
 export async function updateTripVisibility(tripId: string, visibility: 'private' | 'public') {
   return tripRequest<{ trip: Trip }>(`/trips/${tripId}/visibility`, {
     body: JSON.stringify({ visibility }),

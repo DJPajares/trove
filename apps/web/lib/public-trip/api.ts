@@ -23,6 +23,11 @@ export type PublicItinerary = {
   days: PublicItineraryDay[];
   trip: {
     /**
+     * Set when the shared trip is itself a saved copy, naming its first creator.
+     * Optional, like the owner's name, for an API that predates saving copies.
+     */
+    basedOn?: { creatorName: string | null } | null;
+    /**
      * ISO 3166-1 alpha-2, in the order the traveller picked them. Optional
      * because a plan shared before trips declared one is still readable.
      */
@@ -32,6 +37,8 @@ export type PublicItinerary = {
     endDate: string;
     id: string;
     name: string;
+    /** The sharer's display name; null where they have none. */
+    ownerName?: string | null;
     startDate: string;
   };
 };

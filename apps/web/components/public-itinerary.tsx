@@ -1,12 +1,15 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
+import { Suspense } from 'react';
 
+import { SaveTripCopy } from '@/components/save-trip-copy';
 import { Button } from '@/components/ui/button';
 import { formatItineraryTimeRange } from '@/lib/itinerary/item-timing';
 import { namedCountries } from '@/lib/trips/countries';
 import type { PublicItinerary as PublicItineraryData } from '@/lib/public-trip/api';
 
 type PublicItineraryProps = {
+  isSignedIn: boolean;
   itinerary: PublicItineraryData;
   locale: string;
 };
@@ -22,9 +25,14 @@ type PublicItineraryProps = {
  * cannot keep. Every day is open for the same reason: there is no state to
  * restore, so there is nothing to be gained by making a reader ask twice.
  *
- * A server component. There is nothing to hydrate, so it ships no JavaScript.
+ * A server component. The itinerary has nothing to hydrate; the only JavaScript
+ * is the small Save a copy island (`SaveTripCopy`).
  */
-export async function PublicItinerary({ itinerary, locale }: Readonly<PublicItineraryProps>) {
+export async function PublicItinerary({
+  isSignedIn,
+  itinerary,
+  locale,
+}: Readonly<PublicItineraryProps>) {
   const t = await getTranslations('sharedTrip');
   const dateFormatter = new Intl.DateTimeFormat(locale, {
     day: 'numeric',
@@ -35,6 +43,7 @@ export async function PublicItinerary({ itinerary, locale }: Readonly<PublicItin
   });
   const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00.000Z`));
   const countries = namedCountries(itinerary.trip.countries, locale);
+  const { basedOn, ownerName } = itinerary.trip;
 
   return (
     <div className="flex flex-col gap-6">
@@ -70,7 +79,25 @@ export async function PublicItinerary({ itinerary, locale }: Readonly<PublicItin
             {itinerary.trip.description}
           </p>
         ) : null}
+        <p className="text-sm text-muted-foreground">
+          {ownerName ? t('sharedBy', { name: ownerName }) : t('sharedByAnonymous')}
+          {basedOn ? (
+            <>
+              <span aria-hidden="true"> · </span>
+              {basedOn.creatorName
+                ? t('basedOn', { name: basedOn.creatorName })
+                : t('basedOnAnonymous')}
+            </>
+          ) : null}
+        </p>
         <p className="text-sm text-muted-foreground">{t('readOnly')}</p>
+        {/* Reads the query string, so it waits for the request rather than
+            holding up the itinerary. */}
+        <Suspense fallback={null}>
+          <div className="mt-2">
+            <SaveTripCopy isSignedIn={isSignedIn} trip={itinerary.trip} />
+          </div>
+        </Suspense>
       </header>
 
       {itinerary.days.length ? (
@@ -170,12 +197,20 @@ export async function PublicItinerary({ itinerary, locale }: Readonly<PublicItin
         </p>
       )}
 
-      <footer className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-xl)] border border-border-subtle px-4 py-4">
-        <p className="text-sm text-muted-foreground">{t('footerPrompt')}</p>
-        <Button nativeButton={false} render={<Link href="/sign-up" />} size="sm">
-          {t('footerAction')}
-        </Button>
-      </footer>
+      {/* A signed-in reader's footer belongs to the copy island, which knows
+          whether they own this trip; a stranger is invited to try Trove. */}
+      {isSignedIn ? (
+        <Suspense fallback={null}>
+          <SaveTripCopy isSignedIn placement="footer" trip={itinerary.trip} />
+        </Suspense>
+      ) : (
+        <footer className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-xl)] border border-border-subtle px-4 py-4">
+          <p className="text-sm text-muted-foreground">{t('footerPrompt')}</p>
+          <Button nativeButton={false} render={<Link href="/sign-up" />} size="sm">
+            {t('footerAction')}
+          </Button>
+        </footer>
+      )}
     </div>
   );
 }

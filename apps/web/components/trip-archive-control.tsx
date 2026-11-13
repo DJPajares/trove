@@ -100,7 +100,7 @@ export function TripArchiveControl({
       {error && !confirming ? (
         <Alert role="alert" variant="destructive">
           <AlertDescription>
-            {error} <Link href="/profile#offline-storage">{t('syncLink')}</Link>
+            {error} <Link href="/settings#offline-storage">{t('syncLink')}</Link>
           </AlertDescription>
         </Alert>
       ) : null}
@@ -118,7 +118,7 @@ export function TripArchiveControl({
           {error ? (
             <Alert role="alert" variant="destructive">
               <AlertDescription>
-                {error} <Link href="/profile#offline-storage">{t('syncLink')}</Link>
+                {error} <Link href="/settings#offline-storage">{t('syncLink')}</Link>
               </AlertDescription>
             </Alert>
           ) : null}

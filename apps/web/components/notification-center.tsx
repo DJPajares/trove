@@ -142,7 +142,7 @@ export function NotificationCenter({
           <Button
             className="w-full justify-start"
             nativeButton={false}
-            render={<Link href="/profile#notifications" onClick={onNavigate} />}
+            render={<Link href="/settings#notifications" onClick={onNavigate} />}
             size="sm"
             variant="ghost"
           >

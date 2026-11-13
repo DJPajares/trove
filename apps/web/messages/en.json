@@ -39,6 +39,7 @@
     "button": "Open account menu",
     "signedOut": "Not signed in",
     "profile": "Profile",
+    "settings": "Settings",
     "signIn": "Sign in",
     "signUp": "Create account",
     "signOut": "Sign out",
@@ -49,9 +50,50 @@
     "keepSignedIn": "Keep me signed in",
     "discardAndSignOut": "Discard and sign out"
   },
+  "travellerProfile": {
+    "loading": "Loading your profile…",
+    "loadError": "We couldn't load your profile",
+    "loadErrorDescription": "Check your connection and try again.",
+    "tryAgain": "Try again",
+    "anonymous": "Traveller",
+    "basedIn": "Based in {country}",
+    "travellingSince": "Travelling since {year}",
+    "editProfile": "Edit profile",
+    "glance": {
+      "title": "Travel at a glance",
+      "countries": "{count, plural, one {country} other {countries}}",
+      "cities": "{count, plural, one {city} other {cities}}",
+      "trips": "{count, plural, one {trip} other {trips}}",
+      "days": "{count, plural, one {day away} other {days away}}",
+      "firstTrip": "first trip"
+    },
+    "map": {
+      "title": "Where you've been",
+      "label": "World map with {count, plural, one {# place} other {# places}} you've visited",
+      "visited": "Places you've visited"
+    },
+    "stamps": {
+      "since": "{code} · {year}",
+      "trips": "{count, plural, one {# trip} other {# trips}}"
+    },
+    "journeys": {
+      "title": "Journeys",
+      "all": "All {count}",
+      "open": "Open the story"
+    },
+    "favourites": {
+      "title": "Favourite moments",
+      "description": "From the trips you rated highest."
+    },
+    "empty": {
+      "title": "Your travels will gather here",
+      "description": "Finish a trip and its countries, journeys and favourite moments appear on your profile.",
+      "action": "See your trips"
+    }
+  },
   "profile": {
     "eyebrow": "Your account",
-    "title": "Profile",
+    "title": "Settings",
     "description": "Set these once, and every new trip starts pointed the right way.",
     "appVersion": "Web {web} · API {api}",
     "versionUnknown": "—",

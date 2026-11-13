@@ -741,8 +741,15 @@
         "remembered": "{count} remembered",
         "countries": "{count, plural, one {# country} other {# countries}}"
       },
+      "cover": {
+        "label": "Trips under way and ahead",
+        "previous": "Previous trip",
+        "next": "Next trip",
+        "position": "{current} of {total}"
+      },
       "lead": {
         "kickerPlanning": "Up next",
+        "kickerLater": "Coming up",
         "kickerActive": "On the road",
         "countdownUnit": "{unit, select, day {{count, plural, one {day to go} other {days to go}}} week {{count, plural, one {week to go} other {weeks to go}}} other {{count, plural, one {month to go} other {months to go}}}}",
         "dayKicker": "Day",

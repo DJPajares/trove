@@ -1,7 +1,6 @@
 'use client';
 
 import { useLocale, useTranslations } from 'next-intl';
-import { useEffect } from 'react';
 
 import { HOME_COVER_FRAME, HomeHeadline } from '@/components/home/home-front-door';
 import { HomeNowStrip } from '@/components/home-now-strip';
@@ -10,6 +9,7 @@ import { TripCountries } from '@/components/trip-countries';
 import { TripDaySegments } from '@/components/trip-day-segments';
 import { TripMedia } from '@/components/trip-media';
 import { TripReadinessBadge } from '@/components/trip-readiness-badge';
+import { useCoverUnderHeader } from '@/hooks/use-cover-under-header';
 import { dayHeaderFallback } from '@/lib/media/day-header-fallback';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
@@ -43,22 +43,7 @@ export function HomeCover({
   const locale = useLocale();
   const active = trip?.lifecycle === 'active';
 
-  // The header and the floating controls take the photograph's ink only while
-  // the page rests at its top (globals.css reads this flag). Once the cover's
-  // own words start to scroll beneath them they need their surface back.
-  useEffect(() => {
-    const root = document.documentElement;
-    const sync = () => {
-      if (window.scrollY <= 16) root.setAttribute('data-cover-under-header', 'true');
-      else root.removeAttribute('data-cover-under-header');
-    };
-    sync();
-    window.addEventListener('scroll', sync, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', sync);
-      root.removeAttribute('data-cover-under-header');
-    };
-  }, []);
+  useCoverUnderHeader();
 
   const mediaClass =
     'absolute inset-0 -z-20 h-full w-full rounded-none motion-safe:animate-in motion-safe:duration-[1400ms] motion-safe:ease-out motion-safe:zoom-in-105';

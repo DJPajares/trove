@@ -1124,5 +1124,16 @@
     "summaries": {
       "en": ["Search opens as a card in the middle of the screen instead of filling it on phones."]
     }
+  },
+  {
+    "id": "trips-swipeable-cover",
+    "date": "2026-11-13",
+    "version": "1.23.0",
+    "summaries": {
+      "en": [
+        "Trips now opens on a full photo of your next trip. Swipe it to see the trips after that.",
+        "The buttons beneath follow the trip in view, and past journeys span the full page."
+      ]
+    }
   }
 ]

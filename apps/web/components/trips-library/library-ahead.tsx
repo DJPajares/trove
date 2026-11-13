@@ -47,8 +47,8 @@ function departsIn(trip: Trip, locale: string) {
 
 /**
  * The calendar leaf in the corner of a ticket: the weekday and the date it
- * leaves on, or the day a trip under way has reached. The ticket's own footer
- * says the same in words, so the leaf is for the eye.
+ * leaves on, or the day a trip under way has reached. The line at the ticket's
+ * foot says the same in words, so the leaf is for the eye.
  */
 function DateLeaf({ trip }: Readonly<{ trip: Trip }>) {
   const t = useTranslations('trips.library.ahead');
@@ -80,8 +80,8 @@ function DateLeaf({ trip }: Readonly<{ trip: Trip }>) {
 
 /**
  * How much of a trip has a plan, as a fraction and a short bar - the same
- * itinerary coverage the trip's own screens describe, compact enough to sit in
- * a ticket's footer (PRD 9.2).
+ * itinerary coverage the trip's own screens describe, compact enough to sit at
+ * the foot of a ticket's photograph (PRD 9.2), in the photograph's own ink.
  */
 function CoverageMeter({
   coverage,
@@ -97,11 +97,11 @@ function CoverageMeter({
       locale={locale}
       value={coverage.percentage}
     >
-      <Progress.Label className="text-muted-foreground tabular-nums">
+      <Progress.Label className="text-white/85 tabular-nums">
         {t('planned', coverage)}
       </Progress.Label>
-      <Progress.Track className="h-1 w-12 overflow-hidden rounded-full bg-primary/20">
-        <Progress.Indicator className="rounded-full bg-primary" />
+      <Progress.Track className="h-1 w-12 overflow-hidden rounded-full bg-white/25">
+        <Progress.Indicator className="rounded-full bg-primary-on-media" />
       </Progress.Track>
     </Progress.Root>
   );
@@ -114,7 +114,7 @@ function TicketStatus({ trip }: Readonly<{ trip: Trip }>) {
   if (trip.lifecycle === 'active') {
     const { day, total } = tripDayProgress(trip);
     return (
-      <span className="shrink-0 font-medium text-brand tabular-nums">
+      <span className="shrink-0 font-medium text-primary-on-media tabular-nums">
         {t('dayProgress', { day, total })}
       </span>
     );
@@ -124,7 +124,7 @@ function TicketStatus({ trip }: Readonly<{ trip: Trip }>) {
   // rather than sitting beside it (PRD 6.2, 9.2).
   if (trip.planningReadiness === 'ready') {
     return (
-      <span className="inline-flex shrink-0 items-center gap-1.5 font-medium text-status-success">
+      <span className="inline-flex shrink-0 items-center gap-1.5 font-medium text-white">
         <CircleCheck aria-hidden="true" className="size-3.5" />
         {tripsT('readinessState.ready')}
       </span>
@@ -135,9 +135,10 @@ function TicketStatus({ trip }: Readonly<{ trip: Trip }>) {
 }
 
 /**
- * One trip ahead, as a ticket: its photograph with the date it leaves on and
- * its name, then a single line of what it is - when, how long, how planned.
- * The whole ticket opens the trip, whose overview leads with planning.
+ * One trip ahead, as a ticket that is all photograph: the date it leaves on
+ * in the corner, then its name and a single line of what it is - when, how
+ * long, how planned - set over a fixed scrim. The whole ticket opens the trip,
+ * whose overview leads with planning.
  */
 function AheadTicket({
   editorial,
@@ -153,50 +154,50 @@ function AheadTicket({
   return (
     <Link
       aria-label={trip.name}
-      className="group relative isolate flex h-full flex-col overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-card shadow-[var(--shadow-card)] outline-none transition-[transform,box-shadow,border-color] duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-visible:border-border-strong focus-visible:ring-3 focus-visible:ring-ring/40 hover:-translate-y-0.5 hover:border-border-strong hover:shadow-[var(--shadow-elevated)] motion-reduce:transform-none motion-reduce:transition-none"
+      className="group relative isolate flex aspect-[16/10] h-full flex-col justify-end overflow-hidden rounded-[var(--radius-2xl)] bg-surface-media text-white shadow-[var(--shadow-card)] outline-none transition-[transform,box-shadow] duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-visible:ring-3 focus-visible:ring-ring/50 hover:-translate-y-0.5 hover:shadow-[var(--shadow-elevated)] motion-reduce:transform-none motion-reduce:transition-none md:aspect-[4/5]"
       data-slot="library-ticket"
       href={`/trips/${trip.id}`}
     >
-      <div className="relative aspect-[2/1] md:aspect-[4/3]">
-        <TripMedia
-          alt={editorial ? mediaT('alt.tripEditorial', { name: subject }) : ''}
-          className="absolute inset-0 -z-10 h-full w-full rounded-none transition-transform duration-[var(--motion-slow)] ease-[var(--ease-standard)] group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-          sizes="(max-width: 767px) 92vw, (max-width: 1023px) 46vw, 20rem"
-          source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
-          variant="card"
-        />
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,transparent_38%,rgba(8,18,13,0.5)_64%,rgba(8,18,13,0.88)_100%)]"
-        />
-        <DateLeaf trip={trip} />
-        <div className="absolute inset-x-0 bottom-0 space-y-1 p-4 text-white">
-          {trip.countries?.length ? (
-            <TripCountries
-              className="block truncate text-[0.6875rem] font-semibold tracking-[0.12em] text-white/85 uppercase"
-              countries={trip.countries}
-            />
-          ) : null}
-          <h4 className="line-clamp-2 text-lg leading-[1.15] font-semibold tracking-[-0.02em] text-balance">
-            {trip.name}
-          </h4>
-        </div>
-      </div>
+      <TripMedia
+        alt={editorial ? mediaT('alt.tripEditorial', { name: subject }) : ''}
+        className="absolute inset-0 -z-20 h-full w-full rounded-none transition-transform duration-[var(--motion-slow)] ease-[var(--ease-standard)] group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+        sizes="(max-width: 767px) 92vw, (max-width: 1023px) 46vw, 20rem"
+        source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
+        variant="card"
+      />
+      {/* Fixed in both themes, and deep enough at the foot for the small line
+          of status to hold its contrast over a bright photograph. */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgba(8,18,13,0.18)_0%,transparent_30%,rgba(8,18,13,0.55)_60%,rgba(8,18,13,0.92)_100%)]"
+      />
+      <DateLeaf trip={trip} />
 
-      <div className="flex min-h-12 items-center justify-between gap-3 px-4 py-3 text-[length:var(--text-metadata)]">
-        <span className="min-w-0 truncate text-muted-foreground tabular-nums">
-          <span className="inline-block font-medium text-foreground first-letter:uppercase">
-            {when}
+      <div className="space-y-1 p-4">
+        {trip.countries?.length ? (
+          <TripCountries
+            className="block truncate text-[0.6875rem] font-semibold tracking-[0.12em] text-white/85 uppercase"
+            countries={trip.countries}
+          />
+        ) : null}
+        <h4 className="line-clamp-2 text-lg leading-[1.15] font-semibold tracking-[-0.02em] text-balance">
+          {trip.name}
+        </h4>
+        <div className="flex items-center justify-between gap-3 pt-1.5 text-[length:var(--text-metadata)]">
+          <span className="min-w-0 truncate text-white/85 tabular-nums">
+            <span className="inline-block font-medium text-white first-letter:uppercase">
+              {when}
+            </span>
+            <span aria-hidden="true"> · </span>
+            {itineraryT('dayCount', { count: tripDayCount(trip) })}
+            {/* The leaf in the photograph's corner is drawn for the eye; the
+                dates themselves are said here. */}
+            <span className="sr-only">
+              {`, ${formatTripDateRange(trip.startDate, trip.endDate, locale)}`}
+            </span>
           </span>
-          <span aria-hidden="true"> · </span>
-          {itineraryT('dayCount', { count: tripDayCount(trip) })}
-          {/* The leaf in the photograph's corner is drawn for the eye; the
-              dates themselves are said here. */}
-          <span className="sr-only">
-            {`, ${formatTripDateRange(trip.startDate, trip.endDate, locale)}`}
-          </span>
-        </span>
-        <TicketStatus trip={trip} />
+          <TicketStatus trip={trip} />
+        </div>
       </div>
     </Link>
   );

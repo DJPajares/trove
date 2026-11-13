@@ -182,7 +182,7 @@ export function LibraryRemembered({
   return (
     <section
       aria-labelledby="library-remembered-heading"
-      className="-ms-[var(--gutter-inline-start)] -me-[var(--gutter-inline-end)] bg-paper ps-[var(--gutter-inline-start)] pe-[var(--gutter-inline-end)] pt-10 pb-12 md:mx-0 md:rounded-[var(--radius-2xl)] md:px-10 md:pt-12"
+      className="mx-[calc(50%-50vw)] bg-paper px-[calc(50vw-50%)] pt-10 pb-12 md:pt-14 md:pb-16"
       data-slot="library-remembered"
     >
       <h2

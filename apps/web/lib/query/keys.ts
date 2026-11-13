@@ -21,6 +21,8 @@ import type { TemperatureUnit } from '@/lib/profile/preferences';
  */
 const PLACES_CONTRACT_VERSION = 'places-v2';
 
+const PROFILE_CONTRACT_VERSION = 2;
+
 export const queryKeys = {
   aiPlanningAvailability: () => ['ai-planning', 'availability'] as const,
   aiPlanningRecovery: () => ['ai-planning', 'recovery'] as const,
@@ -99,7 +101,9 @@ export const queryKeys = {
    */
   tripContext: (tripId: string, languageCode: string) =>
     ['trip-context', tripId, TRIP_CONTEXT_VERSION, languageCode] as const,
-  profile: () => ['profile'] as const,
+  // The profile is persisted, so its contract version is in the key: a cached
+  // answer from before bio, travel style and cover existed is never reused.
+  profile: () => ['profile', PROFILE_CONTRACT_VERSION] as const,
   reservations: (tripId: string) => ['reservations', tripId] as const,
   savedPlaces: () => ['saved', PLACES_CONTRACT_VERSION] as const,
   knownPlaces: () => ['places', 'known', PLACES_CONTRACT_VERSION] as const,

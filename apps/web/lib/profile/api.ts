@@ -9,6 +9,10 @@ export type Profile = {
   appearance: 'dark' | 'light' | null;
   avatarPath: string | null;
   avatarUrl: string | null;
+  /** A line or two about the traveller, shown on their profile. */
+  bio?: string | null;
+  /** The Memory photo chosen as the profile's cover, signed for an hour. */
+  coverPhoto?: { contentType: string; id: string; url: string } | null;
   dateFormat: 'dmy' | 'mdy' | 'ymd' | null;
   displayName: string | null;
   distanceUnit: 'km' | 'mi' | null;
@@ -19,9 +23,13 @@ export type Profile = {
   id: string;
   temperatureUnit: 'celsius' | 'fahrenheit' | null;
   timeFormat: '12h' | '24h' | null;
+  /** Short tags for how they like to travel. */
+  travelStyles?: string[];
 };
 
-export type ProfileUpdate = Partial<Omit<Profile, 'avatarUrl' | 'homeTimeZone' | 'id'>>;
+export type ProfileUpdate = Partial<
+  Omit<Profile, 'avatarUrl' | 'coverPhoto' | 'homeTimeZone' | 'id'>
+> & { coverMemoryPhotoId?: string | null };
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 

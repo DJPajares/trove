@@ -59,6 +59,7 @@
     "basedIn": "Based in {country}",
     "travellingSince": "Travelling since {year}",
     "editProfile": "Edit profile",
+    "styles": "How you travel",
     "glance": {
       "title": "Travel at a glance",
       "countries": "{count, plural, one {country} other {countries}}",
@@ -92,6 +93,28 @@
     }
   },
   "profile": {
+    "about": {
+      "title": "About you",
+      "description": "What your profile says about you and how you travel.",
+      "bio": "Bio",
+      "bioPlaceholder": "Slow mornings, long walks, and always the night market.",
+      "bioCount": "{count} of {limit}",
+      "styles": "Travel style",
+      "stylePlaceholder": "Food first",
+      "addStyle": "Add",
+      "removeStyle": "Remove {style}",
+      "stylesHint": "Up to {limit} short tags.",
+      "cover": "Profile cover",
+      "coverHint": "Choose one of your Memory photos, or let Trove pick from your favourite trip.",
+      "coverEmpty": "Add photos to a finished trip's Memories to choose a cover. Until then Trove picks one for you.",
+      "coverAuto": "Let Trove pick",
+      "coverFrom": "Photo from {trip}",
+      "coverCurrent": "Your current cover",
+      "save": "Save",
+      "saving": "Saving…",
+      "saved": "Saved",
+      "error": "We couldn't save that. Try again."
+    },
     "eyebrow": "Your account",
     "title": "Settings",
     "description": "Set these once, and every new trip starts pointed the right way.",

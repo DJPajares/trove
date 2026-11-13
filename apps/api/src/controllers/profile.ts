@@ -3,7 +3,12 @@ import { timeZoneForCountry } from '@trove/types';
 import { z } from 'zod';
 
 import { getBearerToken } from '../services/request-auth.js';
-import { getProfile, normalizeLegacyAppearance, updateProfile } from '../services/profile.js';
+import {
+  getProfile,
+  InvalidCoverPhotoError,
+  normalizeLegacyAppearance,
+  updateProfile,
+} from '../services/profile.js';
 
 const profileUpdateSchema = z
   .object({
@@ -13,6 +18,8 @@ const profileUpdateSchema = z
       .nullable()
       .optional(),
     avatarPath: z.string().trim().max(512).nullable().optional(),
+    bio: z.string().trim().max(160).nullable().optional(),
+    coverMemoryPhotoId: z.uuid().nullable().optional(),
     dateFormat: z.enum(['dmy', 'mdy', 'ymd']).nullable().optional(),
     displayName: z.string().trim().max(100).nullable().optional(),
     distanceUnit: z.enum(['km', 'mi']).nullable().optional(),
@@ -32,6 +39,7 @@ const profileUpdateSchema = z
       .optional(),
     temperatureUnit: z.enum(['celsius', 'fahrenheit']).nullable().optional(),
     timeFormat: z.enum(['12h', '24h']).nullable().optional(),
+    travelStyles: z.array(z.string().trim().max(32)).max(6).optional(),
   })
   .strict();
 
@@ -78,5 +86,12 @@ export async function updateProfileController(request: FastifyRequest, reply: Fa
     return reply.code(400).send({ code: 'invalid_avatar_path' });
   }
 
-  return { profile: await updateProfile(context.userId, context.accessToken, parsed.data) };
+  try {
+    return { profile: await updateProfile(context.userId, context.accessToken, parsed.data) };
+  } catch (error) {
+    if (error instanceof InvalidCoverPhotoError) {
+      return reply.code(400).send({ code: 'invalid_cover_photo' });
+    }
+    throw error;
+  }
 }

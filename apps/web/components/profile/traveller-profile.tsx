@@ -287,7 +287,17 @@ export function TravellerProfile() {
         )}
         data-slot="profile-cover"
       >
-        {coverPrint ? (
+        {profile?.coverPhoto ? (
+          <TripMedia
+            alt=""
+            className={mediaClass}
+            fallbackSources={coverPrint ? [coverPrint.prints[0] ?? coverPrint.cover] : []}
+            preload
+            sizes="100vw"
+            source={{ kind: 'memory', url: profile.coverPhoto.url }}
+            variant="cover"
+          />
+        ) : coverPrint ? (
           <TripMedia
             alt=""
             className={mediaClass}
@@ -351,6 +361,11 @@ export function TravellerProfile() {
                   ) : null}
                 </p>
               ) : null}
+              {profile?.bio ? (
+                <p className="max-w-[36ch] font-journal text-xl leading-snug text-pretty text-white/92 italic">
+                  {profile.bio}
+                </p>
+              ) : null}
             </div>
             <Button
               className="self-start rounded-full border-transparent bg-white/94 text-[oklch(0.285_0.039_47)] hover:bg-white md:self-end"
@@ -366,6 +381,23 @@ export function TravellerProfile() {
       </section>
 
       <HomeSheet>
+        {profile?.travelStyles?.length ? (
+          <section aria-labelledby="profile-styles" className="space-y-3">
+            <h2 className={SECTION_TITLE} id="profile-styles">
+              {t('styles')}
+            </h2>
+            <ul className="flex flex-wrap gap-2">
+              {profile.travelStyles.map((style) => (
+                <li
+                  className="inline-flex h-9 items-center rounded-full bg-secondary px-4 text-sm font-medium text-secondary-foreground"
+                  key={style}
+                >
+                  {style}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         {summary.completed.length === 0 ? (
           <PageState
             actions={

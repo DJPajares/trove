@@ -2,6 +2,7 @@
 
 import type { User } from '@supabase/supabase-js';
 import { LogIn, LogOut, UserPlus, UserRound } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
@@ -62,6 +63,7 @@ export function AccountMenu({
   const t = useTranslations('account');
   const { profile } = usePreferences();
   const floating = triggerVariant === 'floating';
+  const avatarUrl = profile?.avatarUrl ?? null;
   const [user, setUser] = useState<User | null>(null);
   const [isReady, setIsReady] = useState(false);
   const {
@@ -130,7 +132,14 @@ export function AccountMenu({
           render={
             <Button
               aria-label={t('button')}
-              className={cn('text-foreground', floating && floatingActionTriggerClass)}
+              className={cn(
+                'text-foreground',
+                floating && floatingActionTriggerClass,
+                // The photograph is its own edge, as on the trigger.
+                floating &&
+                  avatarUrl &&
+                  'overflow-hidden border-0 bg-transparent p-0 supports-[backdrop-filter]:bg-transparent',
+              )}
               data-translucent-surface={floating ? '' : undefined}
               size={floating ? 'icon' : 'icon-sm'}
               type="button"
@@ -138,7 +147,19 @@ export function AccountMenu({
             />
           }
         >
-          <UserRound aria-hidden="true" className={floating ? 'size-5' : 'size-4'} />
+          {floating && avatarUrl ? (
+            // Decorative: the button's label already says what it opens.
+            <Image
+              alt=""
+              className="size-full rounded-full object-cover"
+              height={44}
+              src={avatarUrl}
+              unoptimized
+              width={44}
+            />
+          ) : (
+            <UserRound aria-hidden="true" className={floating ? 'size-5' : 'size-4'} />
+          )}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
           <DropdownMenuGroup>

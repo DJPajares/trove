@@ -216,7 +216,14 @@ export function FloatingActionStack() {
                   ? t('openQuickActionsWithNotifications', { count: unreadCount })
                   : t('openQuickActions')
             }
-            className={TRIGGER_CLASS}
+            className={cn(
+              TRIGGER_CLASS,
+              // A photograph is its own edge: no ring or backing around it,
+              // and it fills the button. Open, the X takes the usual surface.
+              avatarUrl &&
+                !expanded &&
+                'overflow-hidden border-0 bg-transparent p-0 supports-[backdrop-filter]:bg-transparent',
+            )}
             data-floating-trigger
             data-translucent-surface
             onClick={() => (expanded ? collapseAndRestoreFocus() : setExpanded(true))}
@@ -242,11 +249,11 @@ export function FloatingActionStack() {
                   // Decorative: the button's label already says what it opens.
                   <Image
                     alt=""
-                    className="size-9 rounded-full object-cover"
-                    height={36}
+                    className="size-full rounded-full object-cover"
+                    height={44}
                     src={avatarUrl}
                     unoptimized
-                    width={36}
+                    width={44}
                   />
                 ) : initials ? (
                   // The button's label already says what it opens; the initials

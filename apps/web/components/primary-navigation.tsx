@@ -96,15 +96,22 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
   }
 
   return (
-    // The bar is one plain frosted strip, and the create action rides over its
-    // top edge. An earlier notch carved under the button let the page show
-    // through sharp there, which made the button look cut out of the page.
-    // Padding lives on the content wrapper so the surface layer can fill the
-    // whole bar.
+    // The bar itself only sizes and positions. Its surface is a separate masked
+    // layer, because the mask that carves the notch would otherwise carve the
+    // create action out of existence along with it. Padding lives on the content
+    // wrapper for the same reason: `inset-0` resolves against the padding box
+    // while the mask resolves against the border box, and the two must agree.
     <div className="fixed inset-x-0 bottom-0 z-[var(--layer-sticky)] h-[calc(var(--bottom-bar-height)+var(--safe-bottom))] md:hidden">
+      {/* The hairline is its own layer, cut to the same silhouette grown by 1px,
+          because a `border-top` can only draw the flat part and would die at the
+          shoulders where the curve begins. */}
       <span
         aria-hidden="true"
-        className="absolute inset-0 z-0 border-t border-border-subtle bg-background/96 backdrop-blur supports-[backdrop-filter]:bg-background/90"
+        className="nav-notch-edge absolute -top-px right-0 bottom-0 left-0 z-0 bg-border-subtle"
+      />
+      <span
+        aria-hidden="true"
+        className="nav-notch-surface absolute inset-0 z-0 bg-background/96 backdrop-blur supports-[backdrop-filter]:bg-background/90"
         data-translucent-surface
       />
       <div className="relative z-10 mx-auto h-full max-w-xl px-[max(0.5rem,var(--safe-left),var(--safe-right))] pt-2 pb-[var(--safe-bottom)]">
@@ -145,8 +152,9 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
       </div>
 
       {/* Creation is an action, not a destination: the shared sheet opens over
-          whichever screen the traveller is already using. It rides half above
-          the bar's top edge, lifted off it by its own shadow.
+          whichever screen the traveller is already using. It sits outside the
+          masked surface and rides above the notch rather than inside it, so the
+          curve reads as the bar giving way to the button.
 
           What it creates is the screen's to name. On a day of the itinerary the
           nearest thing to make is a stop on that day, and in the saved library

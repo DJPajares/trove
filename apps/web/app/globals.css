@@ -226,41 +226,42 @@
 
 .dark {
   color-scheme: dark;
-  --background: oklch(0.182 0.011 115);
-  --foreground: oklch(0.935 0.016 79);
-  --card: oklch(0.222 0.012 115);
-  --card-foreground: oklch(0.935 0.016 79);
-  --popover: oklch(0.222 0.012 115);
-  --popover-foreground: oklch(0.935 0.016 79);
-  --primary: oklch(0.78 0.085 115);
-  --primary-foreground: oklch(0.222 0.028 115);
-  /* Deliberately the same value as in :root; the scrim below it is dark in both. */
-  --primary-on-media: oklch(0.78 0.085 115);
-  --secondary: oklch(0.315 0.032 108);
-  --secondary-foreground: oklch(0.895 0.035 112);
-  --muted: oklch(0.258 0.012 115);
-  --muted-foreground: oklch(0.735 0.031 77);
-  --accent: oklch(0.745 0.112 42);
-  --accent-foreground: oklch(0.245 0.03 42);
-  --accent-strong: oklch(0.775 0.115 42);
-  --destructive: oklch(0.715 0.163 26);
-  --border: oklch(0.365 0.013 115);
-  --border-subtle: oklch(0.305 0.012 115);
-  --border-strong: oklch(0.445 0.015 115);
-  --input: oklch(0.365 0.013 115);
-  --ring: oklch(0.725 0.078 115);
-  --surface: oklch(0.182 0.011 115);
-  --surface-raised: oklch(0.222 0.012 115);
-  --surface-sunken: oklch(0.152 0.01 115);
-  --surface-hover: oklch(0.275 0.013 115);
-  --surface-tint: oklch(0.248 0.026 112);
-  --surface-media: oklch(0.288 0.046 115);
-  /* Night paper: warmer than the olive-black ground, with prints a step lighter
-     than the page they lie on. Muted text measures 7.70:1 on paper and 6.00:1
-     on a print; the stamp ink 8.56:1. */
-  --paper: oklch(0.2 0.014 75);
-  --paper-print: oklch(0.29 0.012 75);
-  --paper-rule: oklch(0.735 0.031 77 / 0.14);
+  --background: oklch(0.175 0.014 55);
+  --foreground: oklch(0.945 0.015 80);
+  --card: oklch(0.215 0.016 55);
+  --card-foreground: oklch(0.945 0.015 80);
+  --popover: oklch(0.215 0.016 55);
+  --popover-foreground: oklch(0.945 0.015 80);
+  --primary: oklch(0.78 0.15 58);
+  --primary-foreground: oklch(0.21 0.04 55);
+  /* Ember's orange rather than :root's olive, so bars and dots on a cover
+     match the primary in the dark. The scrim beneath is dark in both themes. */
+  --primary-on-media: oklch(0.82 0.14 64);
+  --secondary: oklch(0.315 0.045 58);
+  --secondary-foreground: oklch(0.91 0.05 65);
+  --muted: oklch(0.252 0.016 55);
+  --muted-foreground: oklch(0.755 0.03 70);
+  --accent: oklch(0.8 0.085 118);
+  --accent-foreground: oklch(0.22 0.03 115);
+  --accent-strong: oklch(0.8 0.085 118);
+  --destructive: oklch(0.7 0.18 18);
+  --border: oklch(0.36 0.018 55);
+  --border-subtle: oklch(0.3 0.016 55);
+  --border-strong: oklch(0.44 0.02 55);
+  --input: oklch(0.36 0.018 55);
+  --ring: oklch(0.74 0.13 58);
+  --surface: oklch(0.175 0.014 55);
+  --surface-raised: oklch(0.215 0.016 55);
+  --surface-sunken: oklch(0.145 0.012 55);
+  --surface-hover: oklch(0.27 0.018 55);
+  --surface-tint: oklch(0.245 0.03 58);
+  --surface-media: oklch(0.29 0.05 55);
+  /* Night paper: warmer than the espresso ground, with prints a step lighter
+     than the page they lie on. Muted text measures 8.35:1 on paper and 6.45:1
+     on a print; the stamp ink, olive in the dark, 9.98:1. */
+  --paper: oklch(0.195 0.018 65);
+  --paper-print: oklch(0.29 0.016 65);
+  --paper-rule: oklch(0.755 0.03 70 / 0.14);
   /* Deliberately the same value as in :root. The tints below it are dark in
      both themes, so their ink does not flip with the theme. */
   --media-fallback-foreground: oklch(0.978 0.013 80);
@@ -278,18 +279,18 @@
   --media-fallback-transport-to: oklch(0.276 0.041 250);
   --media-fallback-other-from: oklch(0.243 0.015 79);
   --media-fallback-other-to: oklch(0.276 0.015 79);
-  --surface-overlay: oklch(0.105 0.01 115 / 0.78);
-  --text-subtle: oklch(0.735 0.031 77);
-  --brand: oklch(0.78 0.085 115);
-  --brand-strong: oklch(0.845 0.072 115);
+  --surface-overlay: oklch(0.1 0.012 55 / 0.78);
+  --text-subtle: oklch(0.755 0.03 70);
+  --brand: oklch(0.8 0.14 60);
+  --brand-strong: oklch(0.86 0.12 64);
   --brand-symbol-bar: var(--brand-mark-ink);
   --rating: oklch(0.83 0.13 82);
   /* Deliberately the same value as in :root; the scrim below it is dark in both. */
   --rating-on-media: oklch(0.85 0.13 82);
   --status-success: oklch(0.755 0.115 155);
-  --status-warning: oklch(0.806 0.113 74);
+  --status-warning: oklch(0.86 0.14 95);
   --status-info: oklch(0.742 0.062 225);
-  --status-danger: oklch(0.715 0.163 26);
+  --status-danger: oklch(0.7 0.18 18);
   /* The same hue angles as in :root, lightened to stay legible on a dark surface. */
   --category-food: oklch(0.76 0.12 40);
   --category-transport: oklch(0.74 0.1 250);
@@ -297,21 +298,22 @@
   --category-activities: oklch(0.77 0.11 75);
   --category-shopping: oklch(0.75 0.11 330);
   --category-other: oklch(0.74 0.028 79);
-  /* The same hue angles as in :root, lightened for a dark map and carrying a
-     dark numeral instead; the lowest, day 4, measures 7.6:1 against it. */
-  --map-day-1: oklch(0.78 0.085 115);
-  --map-day-2: oklch(0.76 0.12 40);
+  /* Lightened for a dark map and carrying a dark numeral instead; the lowest,
+     day 4, measures 7.9:1 against it. Day 1 is Ember's orange, the primary, so
+     day 2 takes the olive and day 6 a yellow that orange cannot be mistaken for. */
+  --map-day-1: oklch(0.8 0.14 60);
+  --map-day-2: oklch(0.78 0.085 115);
   --map-day-3: oklch(0.76 0.085 195);
   --map-day-4: oklch(0.76 0.11 330);
   --map-day-5: oklch(0.76 0.09 255);
-  --map-day-6: oklch(0.8 0.12 78);
-  --map-day-foreground: oklch(0.222 0.028 115);
-  --shadow-surface: 0 1px 2px oklch(0.09 0.01 115 / 0.16), 0 16px 40px oklch(0.09 0.01 115 / 0.18);
-  --shadow-overlay: 0 24px 72px oklch(0.09 0.01 115 / 0.48);
-  --shadow-control: 0 1px 2px oklch(0.09 0.01 115 / 0.32);
-  --shadow-card: 0 1px 2px oklch(0.09 0.01 115 / 0.22), 0 10px 28px oklch(0.09 0.01 115 / 0.24);
-  --shadow-elevated: 0 2px 4px oklch(0.09 0.01 115 / 0.28), 0 18px 44px oklch(0.09 0.01 115 / 0.36);
-  --shadow-print: 0 1px 1px oklch(0.09 0.01 115 / 0.5), 0 10px 24px -8px oklch(0.09 0.01 115 / 0.7);
+  --map-day-6: oklch(0.86 0.12 95);
+  --map-day-foreground: oklch(0.21 0.04 55);
+  --shadow-surface: 0 1px 2px oklch(0.08 0.012 55 / 0.16), 0 16px 40px oklch(0.08 0.012 55 / 0.18);
+  --shadow-overlay: 0 24px 72px oklch(0.08 0.012 55 / 0.48);
+  --shadow-control: 0 1px 2px oklch(0.08 0.012 55 / 0.32);
+  --shadow-card: 0 1px 2px oklch(0.08 0.012 55 / 0.22), 0 10px 28px oklch(0.08 0.012 55 / 0.24);
+  --shadow-elevated: 0 2px 4px oklch(0.08 0.012 55 / 0.28), 0 18px 44px oklch(0.08 0.012 55 / 0.36);
+  --shadow-print: 0 1px 1px oklch(0.08 0.012 55 / 0.5), 0 10px 24px -8px oklch(0.08 0.012 55 / 0.7);
 }
 
 @theme inline {

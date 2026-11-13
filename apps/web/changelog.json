@@ -1135,5 +1135,16 @@
         "The buttons beneath follow the trip in view, and past journeys span the full page."
       ]
     }
+  },
+  {
+    "id": "dark-mode-ember",
+    "date": "2026-11-13",
+    "version": "1.23.1",
+    "summaries": {
+      "en": [
+        "Dark mode has a warmer look: a glowing orange accent on deep espresso tones.",
+        "Warnings and delete actions use their own yellow and red, so they never look like a main button."
+      ]
+    }
   }
 ]

@@ -36,7 +36,7 @@ export const statusBarStyle = 'default';
  * the pair cannot drift unnoticed.
  */
 export const themeColor = {
-  dark: '#12130d',
+  dark: '#150f0b',
   light: '#f8f1e7',
 } as const;
 

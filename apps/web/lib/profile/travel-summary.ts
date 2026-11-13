@@ -1,9 +1,21 @@
+import { COUNTRY_CENTRES } from '@/lib/profile/country-centres';
 import type { Trip } from '@/lib/trips/api';
 import { isKnownCountry } from '@/lib/trips/countries';
 import { tripDayCount } from '@/lib/trips/facts';
 
 export type CountryStamp = { code: string; firstYear: number; trips: number };
-export type VisitedPlace = { latitude: number; longitude: number; name: string; placeId: string };
+/**
+ * A point to light on the map: a destination where Trove has its coordinates,
+ * or - for a trip whose destinations it has none for - the centre of a country
+ * the trip visited. `key` is unique across both.
+ */
+export type VisitedPlace = {
+  countryCode: string | null;
+  key: string;
+  latitude: number;
+  longitude: number;
+  name: string;
+};
 
 export type TravelSummary = {
   /** Completed, unarchived trips, most recent first. */
@@ -14,7 +26,7 @@ export type TravelSummary = {
   cities: number;
   daysAway: number;
   firstYear: number | null;
-  /** Destinations with known coordinates, once each. */
+  /** Destinations with known coordinates, else the trip's countries, once each, oldest first. */
   places: VisitedPlace[];
   /** Completed trips the traveller rated 4 or 5 that have Memory photos, best first. */
   favourites: Trip[];
@@ -59,14 +71,35 @@ export function summarizeTravels(trips: readonly Trip[]): TravelSummary {
       }
     }
 
+    let located = false;
     for (const destination of trip.destinations) {
       cities.add(destination.placeId);
-      if (destination.location && !places.has(destination.placeId)) {
+      if (!destination.location) continue;
+      located = true;
+      if (!places.has(destination.placeId)) {
         places.set(destination.placeId, {
+          countryCode: null,
+          key: destination.placeId,
           latitude: destination.location.latitude,
           longitude: destination.location.longitude,
           name: destination.name,
-          placeId: destination.placeId,
+        });
+      }
+    }
+
+    // Coordinates are a provider snapshot Trove may only keep for a while, so
+    // an older trip can have none. Its countries still mark where it went.
+    if (!located) {
+      for (const code of new Set(trip.countries ?? [])) {
+        const centre = COUNTRY_CENTRES[code];
+        const key = `country:${code}`;
+        if (!centre || places.has(key)) continue;
+        places.set(key, {
+          countryCode: code,
+          key,
+          latitude: centre[0],
+          longitude: centre[1],
+          name: code,
         });
       }
     }

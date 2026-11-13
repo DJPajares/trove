@@ -77,7 +77,22 @@ describe('summarizeTravels', () => {
     ]);
 
     expect(summary.cities).toBe(2);
-    expect(summary.places.map(({ placeId }) => placeId)).toEqual(['kyoto']);
+    expect(summary.places.map(({ key }) => key)).toEqual(['kyoto']);
+  });
+
+  it("lights a trip's countries when none of its destinations has coordinates", () => {
+    const summary = summarizeTravels([
+      trip({ countries: ['JP'], destinations: [destination('tokyo', null)], id: 'a' }),
+      trip({
+        countries: ['TH'],
+        destinations: [destination('bangkok', { latitude: 13.7, longitude: 100.5 })],
+        endDate: '2025-02-05',
+        id: 'b',
+        startDate: '2025-02-01',
+      }),
+    ]);
+
+    expect(summary.places.map(({ key }) => key)).toEqual(['country:JP', 'bangkok']);
   });
 
   it('takes favourites from highly rated trips that have Memory photos, best first', () => {

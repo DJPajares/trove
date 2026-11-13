@@ -1116,5 +1116,16 @@
         "Home's sheet keeps its rounded edge until it reaches the top of the screen."
       ]
     }
+  },
+  {
+    "id": "frosted-bottom-bar-and-search-card",
+    "date": "2026-11-13",
+    "version": "1.22.3",
+    "summaries": {
+      "en": [
+        "The bottom bar now softly blurs whatever scrolls behind it, around the create button too.",
+        "On phones, search opens as a card near the top instead of filling the whole screen."
+      ]
+    }
   }
 ]

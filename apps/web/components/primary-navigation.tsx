@@ -111,7 +111,17 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
       />
       <span
         aria-hidden="true"
-        className="nav-notch-surface absolute inset-0 z-0 bg-background/96 backdrop-blur supports-[backdrop-filter]:bg-background/90"
+        className="nav-notch-surface absolute inset-0 z-0 bg-background/96 backdrop-blur-xl supports-[backdrop-filter]:bg-background/80"
+        data-translucent-surface
+      />
+      {/* The notch, filled. The bar gives way to the create action, but what
+          scrolls through the gap beneath the button was showing sharp, so the
+          button looked cut out of the page. This disc is the notch's own circle
+          (its centre on the bar's top edge, its radius the curve's), clipped to
+          the half inside the bar, in the bar's own frosted surface. */}
+      <span
+        aria-hidden="true"
+        className="absolute top-[calc(-1*var(--nav-notch-radius))] left-1/2 z-0 size-[calc(2*var(--nav-notch-radius))] -translate-x-1/2 rounded-full bg-background/96 backdrop-blur-xl [--nav-notch-radius:2.5rem] [clip-path:inset(50%_0_0_0)] supports-[backdrop-filter]:bg-background/80"
         data-translucent-surface
       />
       <div className="relative z-10 mx-auto h-full max-w-xl px-[max(0.5rem,var(--safe-left),var(--safe-right))] pt-2 pb-[var(--safe-bottom)]">

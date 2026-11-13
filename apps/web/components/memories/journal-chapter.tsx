@@ -37,7 +37,7 @@ export function chapterTitle(day: JournalDay, locale: string) {
  * traveller's reflection on the day if they wrote one, and its moments.
  *
  * The day's rating is reachable from the chapter's own marker, offered and
- * never asked: the rating itself once given, five hollow dots until then.
+ * never asked: the rating itself once given, five hollow stars until then.
  *
  * On a wide screen the marker becomes a margin that stays in view beside the
  * moments, the way a spread keeps its chapter title on the facing page. The

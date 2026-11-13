@@ -28,7 +28,7 @@ function formatDate(value: string, locale: string, options: Intl.DateTimeFormatO
  * On a phone it runs to the top edge, under the status bar and the header,
  * the way a book's cover fills its front. The trip's name is set in the
  * journal's serif; the trip's rating sits here as itself, or as the quiet
- * five-dot control, and nowhere else on the page.
+ * five-star control, and nowhere else on the page.
  */
 export function JournalCover({
   cover,

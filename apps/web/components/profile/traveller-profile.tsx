@@ -88,11 +88,14 @@ function TravelMap({
       locale,
     ).map((country) => [country.code, country.name]),
   );
+  // Keyed by the place an arc leads to: two places can land on the same dot,
+  // and identical paths must not share a key.
   const arcs = home
-    ? points.map((point) => arcPath(home, point))
-    : points
-        .slice(1)
-        .map((point, index) => arcPath(points[index] as (typeof points)[number], point));
+    ? points.map((point) => ({ d: arcPath(home, point), key: point.key }))
+    : points.slice(1).map((point, index) => ({
+        d: arcPath(points[index] as (typeof points)[number], point),
+        key: point.key,
+      }));
 
   return (
     <figure className="overflow-hidden rounded-[var(--radius-2xl)] border border-border-subtle bg-card p-3 sm:p-5">
@@ -114,8 +117,8 @@ function TravelMap({
           strokeLinecap="round"
           strokeWidth="0.6"
         >
-          {arcs.map((path) => (
-            <path d={path} key={path} />
+          {arcs.map((arc) => (
+            <path d={arc.d} key={arc.key} />
           ))}
         </g>
         <g className="fill-brand">
@@ -434,7 +437,10 @@ export function TravellerProfile() {
               ) : null}
             </div>
             <Button
-              className="self-start rounded-full border-transparent bg-white/94 text-[oklch(0.285_0.039_47)] hover:bg-white md:self-end"
+              // Ivory on the photograph's scrim in both themes. The outline variant's own
+              // dark-mode surface and hover ink are overridden, or the label (fixed dark)
+              // lands on a dark tint and turns light on hover.
+              className="self-start rounded-full border-transparent bg-white/94 text-[oklch(0.285_0.039_47)] hover:bg-white hover:text-[oklch(0.285_0.039_47)] md:self-end dark:bg-white/94 dark:hover:bg-white"
               nativeButton={false}
               render={<Link href="/settings" />}
               variant="outline"

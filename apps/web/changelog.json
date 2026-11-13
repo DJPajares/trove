@@ -1199,5 +1199,13 @@
         "Your profile map now draws a route from home to everywhere you've been, and lights every country you've visited, even on older trips."
       ]
     }
+  },
+  {
+    "id": "profile-edit-button-dark",
+    "date": "2026-11-13",
+    "version": "1.25.2",
+    "summaries": {
+      "en": ["The Edit profile button on your profile is readable again in dark mode."]
+    }
   }
 ]

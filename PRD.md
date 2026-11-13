@@ -2143,7 +2143,7 @@ Rules:
 - The MVP does not create Place-level or Memory-level Experience Ratings.
 - Live Memory capture does not require a rating.
 
-Presentation: a rating reads as five dots, filled up to the value, and a word for it — 1 Hard going, 2 Mixed, 3 Good, 4 Wonderful, 5 Unforgettable — never as stars, a number or a meter, so it cannot be mistaken for a public review score or for Plan Score. Assistive technology hears the word and the value out of five. A rating not yet given is five hollow dots, the single quiet control described in Section 31.2.
+Presentation: a rating reads as five four-point compass stars, filled up to the value, in the rating's gold, and a word for it — 1 Rough, 2 Mixed, 3 Pleasant, 4 Loved it, 5 Unforgettable. It is never a five-point review star, a number or a meter, so it cannot be mistaken for a public review score or for Plan Score. Assistive technology hears the word and the value out of five. A rating not yet given is five hollow compass stars, the single quiet control described in Section 31.2.
 
 ---
 

@@ -8,16 +8,44 @@ import { cn } from '@/lib/utils';
 
 type RatingTone = 'default' | 'onImage';
 
+/** A four-point compass star: read at a glance as a rating, never as the
+ * five-point review star a provider's public score uses. */
+const COMPASS_STAR_PATH = 'M12 1.5 14.3 9.7 22.5 12 14.3 14.3 12 22.5 9.7 14.3 1.5 12 9.7 9.7Z';
+
 /**
- * Five ink dots, filled up to the rating. Drawn in `currentColor` so forced
- * colours keep both states legible: a filled dot stays a disc and an empty one
- * stays a ring, so colour is never the only thing telling them apart.
+ * One compass star, drawn in `currentColor` so forced colours keep both states
+ * legible: a filled star stays solid and an empty one stays an outline, so
+ * colour is never the only thing telling them apart.
+ */
+export function CompassStar({
+  className,
+  filled,
+}: Readonly<{ className?: string; filled: boolean }>) {
+  return (
+    <svg aria-hidden="true" className={cn('shrink-0', className)} viewBox="0 0 24 24">
+      {filled ? (
+        <path d={COMPASS_STAR_PATH} fill="currentColor" />
+      ) : (
+        <path
+          d={COMPASS_STAR_PATH}
+          fill="none"
+          stroke="currentColor"
+          strokeLinejoin="round"
+          strokeWidth="1.5"
+        />
+      )}
+    </svg>
+  );
+}
+
+/**
+ * Five compass stars, filled up to the rating.
  *
- * Filled dots take the rating's own gold (3:1 against every paper and surface
+ * Filled stars take the rating's own gold (3:1 against every paper and surface
  * they land on). Empty ones take the muted ink rather than a border tone, which
  * would fall to 1.86:1 on the journal's paper.
  */
-export function ExperienceRatingDots({
+export function ExperienceRatingStars({
   className,
   rating,
   size = 'default',
@@ -29,18 +57,17 @@ export function ExperienceRatingDots({
   tone?: RatingTone;
 }>) {
   const onImage = tone === 'onImage';
-  const dot = size === 'large' ? 'size-3.5' : 'size-2';
+  const star = size === 'large' ? 'size-4' : 'size-3';
 
   return (
-    <span aria-hidden="true" className={cn('inline-flex items-center gap-1', className)}>
+    <span aria-hidden="true" className={cn('inline-flex items-center gap-0.5', className)}>
       {EXPERIENCE_RATING_VALUES.map((value) => {
         const filled = rating !== null && value <= rating;
 
         return (
-          <svg
+          <CompassStar
             className={cn(
-              dot,
-              'shrink-0',
+              star,
               filled
                 ? onImage
                   ? 'text-rating-on-media'
@@ -49,15 +76,9 @@ export function ExperienceRatingDots({
                   ? 'text-media-fallback-foreground/75'
                   : 'text-muted-foreground',
             )}
+            filled={filled}
             key={value}
-            viewBox="0 0 10 10"
-          >
-            {filled ? (
-              <circle cx="5" cy="5" fill="currentColor" r="4.5" />
-            ) : (
-              <circle cx="5" cy="5" fill="none" r="4" stroke="currentColor" strokeWidth="1.25" />
-            )}
-          </svg>
+          />
         );
       })}
     </span>
@@ -65,7 +86,7 @@ export function ExperienceRatingDots({
 }
 
 /**
- * The dots with the word they stand for, and the number for a screen reader.
+ * The stars with the word they stand for, and the number for a screen reader.
  * The word inherits its face, so the journal sets it in its serif and every
  * other surface in Trove's sans.
  */
@@ -86,7 +107,7 @@ export function ExperienceRatingMark({
 
   return (
     <span className={cn('inline-flex items-center gap-2', className)}>
-      <ExperienceRatingDots rating={rating} tone={tone} />
+      <ExperienceRatingStars rating={rating} tone={tone} />
       <span className={wordClassName}>{t(`words.${word}`)}</span>
       <span className="sr-only">{t('outOf', { value: rating })}</span>
     </span>
@@ -122,7 +143,7 @@ export function ExperienceRatingSummary({
 
 /**
  * Rating offered, never asked (PRD 31.2). A rating already given shows as
- * itself - dots and a word - and one not yet given is five hollow dots, a
+ * itself - stars and a word - and one not yet given is five hollow stars, a
  * single quiet control rather than a question standing beside the page. Either
  * way it opens the place the rating is changed.
  */
@@ -162,7 +183,7 @@ export function ExperienceRatingControl({
       onClick={onOpen}
       type="button"
     >
-      <ExperienceRatingDots rating={rating} tone={tone} />
+      <ExperienceRatingStars rating={rating} tone={tone} />
       {word ? (
         <span
           className={cn(

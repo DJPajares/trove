@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
+import { CompassStar } from '@/components/experience-rating';
 import { journalSerif } from '@/components/memories/journal-font';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetClose, SheetContent, SheetFooter, SheetHeading } from '@/components/ui/sheet';
@@ -20,8 +21,8 @@ import { ScrollShadow } from '@/components/ui/scroll-shadow';
  * Where a rating is given, changed or taken back - only ever opened on
  * purpose, from the quiet control on the cover or on a day's chapter.
  *
- * Five large dots rather than stars, with the word the chosen one stands for
- * set large in the journal's serif. A dot saves the moment it is chosen and
+ * Five large compass stars, with the word the chosen one stands for set large
+ * in the journal's serif. A star saves the moment it is chosen and
  * choosing the same one again clears it; the note saves when it is left.
  */
 export function ExperienceRatingSheet({
@@ -96,27 +97,19 @@ export function ExperienceRatingSheet({
                     word: valueWord ? t(`words.${valueWord}`) : String(value),
                   })}
                   aria-pressed={rating === value}
-                  className="group/dot flex size-11 items-center justify-center rounded-full outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:bg-surface-hover/70 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-60 motion-reduce:transition-none"
+                  className="group/star flex size-11 items-center justify-center rounded-full outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:bg-surface-hover/70 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-60 motion-reduce:transition-none"
                   disabled={saving}
                   key={value}
                   onClick={() => choose(value)}
                   type="button"
                 >
-                  <svg aria-hidden="true" className="size-5" viewBox="0 0 10 10">
-                    {filled ? (
-                      <circle className="text-rating" cx="5" cy="5" fill="currentColor" r="4.5" />
-                    ) : (
-                      <circle
-                        className="text-muted-foreground group-hover/dot:text-rating"
-                        cx="5"
-                        cy="5"
-                        fill="none"
-                        r="4"
-                        stroke="currentColor"
-                        strokeWidth="1"
-                      />
+                  <CompassStar
+                    className={cn(
+                      'size-7',
+                      filled ? 'text-rating' : 'text-muted-foreground group-hover/star:text-rating',
                     )}
-                  </svg>
+                    filled={filled}
+                  />
                 </button>
               );
             })}

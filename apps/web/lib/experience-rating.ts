@@ -1,8 +1,8 @@
 /**
  * Experience Rating is the traveller's own reflection on how something felt:
  * an optional 1-5 for a completed day or the whole trip (PRD section 30). It is
- * shown as five ink dots and a word rather than as stars, so it never reads as
- * a review site's score, and never as Plan Score's computed signal.
+ * shown as five four-point compass stars and a word, never the five-point
+ * review star, so it never reads as a review site's score, and never as Plan Score's computed signal.
  */
 export const EXPERIENCE_RATING_VALUES = [1, 2, 3, 4, 5] as const;
 

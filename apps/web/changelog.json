@@ -1207,5 +1207,16 @@
     "summaries": {
       "en": ["The Edit profile button on your profile is readable again in dark mode."]
     }
+  },
+  {
+    "id": "compass-star-ratings",
+    "date": "2026-11-13",
+    "version": "1.25.3",
+    "summaries": {
+      "en": [
+        "Rating a day or a trip now uses compass stars, so it's clear at a glance how it felt.",
+        "Each rating has its own word, from Rough to Unforgettable, so no two levels sound alike."
+      ]
+    }
   }
 ]

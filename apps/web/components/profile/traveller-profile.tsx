@@ -29,6 +29,7 @@ import {
   type CountryStamp,
   type VisitedPlace,
 } from '@/lib/profile/travel-summary';
+import { COUNTRY_CENTRES } from '@/lib/profile/country-centres';
 import { projectToWorld, WORLD_VIEW, worldLandDots } from '@/lib/profile/world-dots';
 import { queryKeys } from '@/lib/query/keys';
 import { profileInitials } from '@/lib/shell/floating-actions';
@@ -52,13 +53,46 @@ function monthYear(date: string, locale: string) {
   }).format(new Date(`${date}T00:00:00.000Z`));
 }
 
+/** Room around the drawing, so dots on its edges and the arcs' peaks are never clipped. */
+const MAP_PAD = 6;
+
+/** A dotted arc between two points, bowed upwards like a flight path. */
+function arcPath(from: { x: number; y: number }, to: { x: number; y: number }) {
+  const lift = Math.abs(to.x - from.x) * 0.22 + 6;
+  const peak = { x: (from.x + to.x) / 2, y: Math.max(-MAP_PAD + 1, Math.min(from.y, to.y) - lift) };
+  return `M${from.x.toFixed(1)} ${from.y.toFixed(1)} Q${peak.x.toFixed(1)} ${peak.y.toFixed(1)} ${to.x.toFixed(1)} ${to.y.toFixed(1)}`;
+}
+
 /**
  * The places a traveller has been, drawn by Trove: land as a field of dots,
- * each visited destination lit. No map provider, so no request and no terms.
+ * each visited place lit, and a dotted arc out to each from home - or, without
+ * a home country, from one place to the next in the order they went. No map
+ * provider, so no request and no terms.
  */
-function TravelMap({ places }: Readonly<{ places: VisitedPlace[] }>) {
+function TravelMap({
+  homeCountryCode,
+  places,
+}: Readonly<{ homeCountryCode: string | null; places: VisitedPlace[] }>) {
   const t = useTranslations('travellerProfile.map');
+  const locale = useLocale();
   const land = worldLandDots();
+  const homeCentre = homeCountryCode ? COUNTRY_CENTRES[homeCountryCode] : undefined;
+  const home = homeCentre ? projectToWorld(homeCentre[1], homeCentre[0]) : null;
+  const points = places.map((place) => ({
+    ...place,
+    ...projectToWorld(place.longitude, place.latitude),
+  }));
+  const countryNames = new Map(
+    namedCountries(
+      places.flatMap(({ countryCode }) => countryCode ?? []),
+      locale,
+    ).map((country) => [country.code, country.name]),
+  );
+  const arcs = home
+    ? points.map((point) => arcPath(home, point))
+    : points
+        .slice(1)
+        .map((point, index) => arcPath(points[index] as (typeof points)[number], point));
 
   return (
     <figure className="overflow-hidden rounded-[var(--radius-2xl)] border border-border-subtle bg-card p-3 sm:p-5">
@@ -66,30 +100,62 @@ function TravelMap({ places }: Readonly<{ places: VisitedPlace[] }>) {
         aria-label={t('label', { count: places.length })}
         className="block h-auto w-full"
         role="img"
-        viewBox={`0 0 ${WORLD_VIEW.width} ${WORLD_VIEW.height}`}
+        viewBox={`${-MAP_PAD} ${-MAP_PAD} ${WORLD_VIEW.width + MAP_PAD * 2} ${WORLD_VIEW.height + MAP_PAD * 2}`}
       >
         <g className="fill-muted-foreground/30">
           {land.map(({ x, y }) => (
             <circle cx={x.toFixed(1)} cy={y.toFixed(1)} key={`${x}:${y}`} r="1.25" />
           ))}
         </g>
-        <g className="fill-brand">
-          {places.map((place) => {
-            const { x, y } = projectToWorld(place.longitude, place.latitude);
-            return (
-              <g key={place.placeId}>
-                <circle cx={x} cy={y} opacity="0.22" r="4.2" />
-                <circle cx={x} cy={y} r="2">
-                  <title>{place.name}</title>
-                </circle>
-              </g>
-            );
-          })}
+        <g
+          className="stroke-brand opacity-70"
+          fill="none"
+          strokeDasharray="1.6 1.8"
+          strokeLinecap="round"
+          strokeWidth="0.6"
+        >
+          {arcs.map((path) => (
+            <path d={path} key={path} />
+          ))}
         </g>
+        <g className="fill-brand">
+          {points.map((point) => (
+            <g key={point.key}>
+              <circle cx={point.x} cy={point.y} opacity="0.22" r="4.2" />
+              <circle cx={point.x} cy={point.y} r="2">
+                <title>
+                  {point.countryCode
+                    ? (countryNames.get(point.countryCode) ?? point.countryCode)
+                    : point.name}
+                </title>
+              </circle>
+            </g>
+          ))}
+        </g>
+        {home ? (
+          <circle
+            className="fill-card stroke-accent-strong"
+            cx={home.x}
+            cy={home.y}
+            r="3"
+            strokeWidth="1.4"
+          />
+        ) : null}
       </svg>
-      <figcaption className="mt-2 flex items-center gap-2 px-1 text-[length:var(--text-metadata)] text-muted-foreground">
-        <span aria-hidden="true" className="size-2 rounded-full bg-brand" />
-        {t('visited')}
+      <figcaption className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[length:var(--text-metadata)] text-muted-foreground">
+        <span className="inline-flex items-center gap-2">
+          <span aria-hidden="true" className="size-2 rounded-full bg-brand" />
+          {t('visited')}
+        </span>
+        {home ? (
+          <span className="inline-flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              className="size-2.5 rounded-full border-[1.5px] border-accent-strong"
+            />
+            {t('home')}
+          </span>
+        ) : null}
       </figcaption>
     </figure>
   );
@@ -444,7 +510,10 @@ export function TravellerProfile() {
               <h2 className={SECTION_TITLE} id="profile-map">
                 {t('map.title')}
               </h2>
-              <TravelMap places={summary.places} />
+              <TravelMap
+                homeCountryCode={profile?.homeCountryCode ?? null}
+                places={summary.places}
+              />
               {summary.countries.length ? <CountryStamps stamps={summary.countries} /> : null}
             </section>
 

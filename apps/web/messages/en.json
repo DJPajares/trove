@@ -71,7 +71,8 @@
     "map": {
       "title": "Where you've been",
       "label": "World map with {count, plural, one {# place} other {# places}} you've visited",
-      "visited": "Places you've visited"
+      "visited": "Places you've visited",
+      "home": "Home"
     },
     "stamps": {
       "since": "{code} · {year}",

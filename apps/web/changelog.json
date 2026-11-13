@@ -1189,5 +1189,15 @@
         "Choose one of your Memory photos as your profile's cover."
       ]
     }
+  },
+  {
+    "id": "profile-map-routes",
+    "date": "2026-11-13",
+    "version": "1.25.1",
+    "summaries": {
+      "en": [
+        "Your profile map now draws a route from home to everywhere you've been, and lights every country you've visited, even on older trips."
+      ]
+    }
   }
 ]

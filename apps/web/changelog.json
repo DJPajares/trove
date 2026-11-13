@@ -1157,5 +1157,15 @@
         "Search has its own button on Home, Trips, Saved and Tools, and sits first in the quick-actions menu everywhere else."
       ]
     }
+  },
+  {
+    "id": "account-photo-no-border",
+    "date": "2026-11-13",
+    "version": "1.23.3",
+    "summaries": {
+      "en": [
+        "Your profile photo now fills the account button with no ring around it, and shows on the account button in the quick-actions menu too."
+      ]
+    }
   }
 ]

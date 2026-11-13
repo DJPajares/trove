@@ -1116,5 +1116,13 @@
         "Home's sheet keeps its rounded edge until it reaches the top of the screen."
       ]
     }
+  },
+  {
+    "id": "search-centred-card",
+    "date": "2026-11-13",
+    "version": "1.22.3",
+    "summaries": {
+      "en": ["Search opens as a card in the middle of the screen instead of filling it on phones."]
+    }
   }
 ]

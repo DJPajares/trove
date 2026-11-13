@@ -6,15 +6,30 @@ import {
   floatingActionDelay,
   floatingActionOrder,
   profileInitials,
+  searchStandsAlone,
 } from '@/lib/shell/floating-actions';
 
 describe('floating action stack order', () => {
-  it('leaves search out, as a button of its own beside the trigger', () => {
-    expect(floatingActionOrder).not.toContain('search');
+  it('leads with the one action that starts something', () => {
+    expect(floatingActionOrder[0]).toBe('search');
   });
 
-  it('holds notifications and appearance, then account at the bottom', () => {
-    expect(floatingActionOrder).toEqual(['notifications', 'appearance', 'account']);
+  it('follows with notifications and appearance, then account at the bottom', () => {
+    expect(floatingActionOrder).toEqual(['search', 'notifications', 'appearance', 'account']);
+  });
+});
+
+describe('searchStandsAlone', () => {
+  it('gives search its own button on the main destinations', () => {
+    for (const path of ['/', '/trips', '/saved', '/tools']) {
+      expect(searchStandsAlone(path), path).toBe(true);
+    }
+  });
+
+  it('folds search into the stack everywhere else', () => {
+    for (const path of ['/trips/abc', '/trips/abc/itinerary', '/tools/currency', '/profile']) {
+      expect(searchStandsAlone(path), path).toBe(false);
+    }
   });
 });
 
@@ -39,6 +54,11 @@ describe('floatingActionDelay', () => {
     expect(floatingActionDelay(0)).toBe(0);
     expect(floatingActionDelay(1)).toBeCloseTo(FLOATING_ACTION_STAGGER_S);
     expect(floatingActionDelay(2)).toBeCloseTo(FLOATING_ACTION_STAGGER_S * 2);
+  });
+
+  it('counts a shorter stack from its own length', () => {
+    expect(floatingActionDelay(0, true, 3)).toBeCloseTo(FLOATING_ACTION_STAGGER_S * 2);
+    expect(floatingActionDelay(2, true, 3)).toBe(0);
   });
 
   it('folds back towards the trigger on the way out', () => {

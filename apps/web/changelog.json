@@ -1146,5 +1146,16 @@
         "Warnings and delete actions use their own yellow and red, so they never look like a main button."
       ]
     }
+  },
+  {
+    "id": "search-top-and-placement",
+    "date": "2026-11-13",
+    "version": "1.23.2",
+    "summaries": {
+      "en": [
+        "On phones, search opens near the top so the keyboard never covers it.",
+        "Search has its own button on Home, Trips, Saved and Tools, and sits first in the quick-actions menu everywhere else."
+      ]
+    }
   }
 ]

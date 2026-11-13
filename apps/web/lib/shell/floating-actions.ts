@@ -1,15 +1,26 @@
+import { primaryNavigationDestinations } from '@/lib/navigation';
+
 /**
  * The signed-in quick-actions stack that unfolds from the floating account button.
  *
  * The order is the hierarchy the traveller reads top to bottom, nearest the
- * trigger first: notifications, then appearance, with the account/profile
- * control at the bottom. Search is not among them. It is the only one that
- * starts something, and it is reached again and again where these are reached
- * once, so it stands beside the trigger as a button of its own.
+ * trigger first. Search leads because it is the only one that starts something;
+ * notifications and appearance follow, with the account/profile control at
+ * the bottom. On the main destinations search leaves the stack and stands
+ * beside the trigger as a button of its own (`searchStandsAlone`).
  */
-export const floatingActionOrder = ['notifications', 'appearance', 'account'] as const;
+export const floatingActionOrder = ['search', 'notifications', 'appearance', 'account'] as const;
 
 export type FloatingAction = (typeof floatingActionOrder)[number];
+
+/**
+ * Search earns a button of its own on the main destinations - Home, Trips,
+ * Saved and Tools - where it is reached for most. Everywhere else the screen's
+ * own controls need the corner, so search folds back into the stack, first.
+ */
+export function searchStandsAlone(pathname: string) {
+  return primaryNavigationDestinations.some(({ href }) => pathname === href);
+}
 
 /**
  * What the trigger shows for a traveller whose name Trove knows: the first
@@ -40,11 +51,16 @@ export function profileInitials(name: string | null | undefined) {
 export const FLOATING_ACTION_STAGGER_S = 0.04;
 
 /**
- * How long the button at `index` waits before it appears. Reversed on the way
- * out, so the stack folds back towards the trigger it came from.
+ * How long the button at `index` of a stack of `count` waits before it
+ * appears. Reversed on the way out, so the stack folds back towards the
+ * trigger it came from.
  */
-export function floatingActionDelay(index: number, reverse = false) {
-  const step = reverse ? floatingActionOrder.length - 1 - index : index;
+export function floatingActionDelay(
+  index: number,
+  reverse = false,
+  count: number = floatingActionOrder.length,
+) {
+  const step = reverse ? count - 1 - index : index;
 
   return Math.max(0, step) * FLOATING_ACTION_STAGGER_S;
 }

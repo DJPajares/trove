@@ -1123,8 +1123,8 @@
     "version": "1.22.3",
     "summaries": {
       "en": [
-        "The bottom bar now softly blurs whatever scrolls behind it, around the create button too.",
-        "On phones, search opens as a card near the top instead of filling the whole screen."
+        "The bottom bar is now one smooth frosted strip, with the create button resting on top.",
+        "Search opens as a card in the middle of the screen instead of filling it on phones."
       ]
     }
   }

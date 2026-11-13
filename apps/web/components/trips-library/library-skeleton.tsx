@@ -24,16 +24,10 @@ export function LibrarySkeleton({ label }: Readonly<{ label: string }>) {
           <Skeleton className="h-3 w-24" />
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {[0, 1, 2].map((index) => (
-              <div
-                className="overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-card"
+              <Skeleton
+                className="aspect-[16/10] rounded-[var(--radius-2xl)] md:aspect-[4/5]"
                 key={index}
-              >
-                <Skeleton className="aspect-[2/1] rounded-none md:aspect-[4/3]" />
-                <div className="flex h-12 items-center justify-between px-4">
-                  <Skeleton className="h-3 w-24" />
-                  <Skeleton className="h-3 w-16" />
-                </div>
-              </div>
+              />
             ))}
           </div>
         </div>

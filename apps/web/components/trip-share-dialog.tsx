@@ -128,7 +128,7 @@ export function TripShareDialog({
                 ) : (
                   <>
                     {t('sharedNameMissing')}{' '}
-                    <Link className="font-medium text-foreground underline" href="/profile">
+                    <Link className="font-medium text-foreground underline" href="/settings">
                       {t('addName')}
                     </Link>
                   </>

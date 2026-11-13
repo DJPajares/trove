@@ -158,7 +158,7 @@ Example:
 
 ## Versioning
 
-- Web and API carry independent SemVer (`major.minor.patch`, no suffix) in `apps/web/package.json` and `apps/api/package.json`. Each is the deployed app's version: Profile shows both, and the API reports its own from `GET /health`.
+- Web and API carry independent SemVer (`major.minor.patch`, no suffix) in `apps/web/package.json` and `apps/api/package.json`. Each is the deployed app's version: Settings shows both, and the API reports its own from `GET /health`.
 - Every PR that changes what an app deploys bumps that app in the same PR: anything under its `apps/<app>/` except tests and Markdown, `packages/types` (both apps), or `packages/db` (API). Patch for fixes and changes travellers can't see; minor for new user-visible capability; major only on the user's call.
 - A changelog entry lives in `apps/web`, so adding one always bumps web.
 - After rebasing onto a newer `main`, re-check the bump is still above `main`'s version. `node scripts/check-versions.mjs --base main` runs the PR check locally.

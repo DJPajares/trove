@@ -5,8 +5,8 @@ import { PageHeader } from '@/components/page-header';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 
-/** Profile's heading is fixed text; only its settings panels wait. */
-export default async function ProfileLoading() {
+/** Settings' heading is fixed text; only its panels wait. */
+export default async function SettingsLoading() {
   const t = await getTranslations('profile');
 
   return (

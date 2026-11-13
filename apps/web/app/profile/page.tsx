@@ -1,35 +1,11 @@
-import { getLocale, getTranslations } from 'next-intl/server';
-
-import { AccountSettings, PrivacySecuritySettings } from '@/components/account-settings';
-import { AppVersion } from '@/components/app-version';
 import { journalSerif } from '@/components/memories/journal-font';
-import { PageHeader } from '@/components/page-header';
-import { NotificationSettings } from '@/components/notification-settings';
-import { OfflineStorageSettings } from '@/components/offline-storage-settings';
-import { ProfileSettingsForm } from '@/components/profile-settings-form';
+import { TravellerProfile } from '@/components/profile/traveller-profile';
 
-export default async function ProfilePage() {
-  const t = await getTranslations('profile');
-  const locale = await getLocale();
-
+/** The profile sets the traveller's name and their journeys in the journal's serif. */
+export default function ProfilePage() {
   return (
     <div className={journalSerif.variable}>
-      <section className="mx-auto w-full max-w-3xl space-y-7">
-        <PageHeader
-          description={t('description')}
-          eyebrow={t('eyebrow')}
-          title={t('title')}
-          titleFont="journal"
-        />
-        <div className="space-y-6">
-          <ProfileSettingsForm locale={locale} />
-          <NotificationSettings />
-          <OfflineStorageSettings />
-          <PrivacySecuritySettings />
-          <AccountSettings />
-          <AppVersion />
-        </div>
-      </section>
+      <TravellerProfile />
     </div>
   );
 }

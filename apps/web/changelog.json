@@ -1167,5 +1167,16 @@
         "Your profile photo now fills the account button with no ring around it, and shows on the account button in the quick-actions menu too."
       ]
     }
+  },
+  {
+    "id": "traveller-profile",
+    "date": "2026-11-13",
+    "version": "1.24.0",
+    "summaries": {
+      "en": [
+        "Your profile is now about your travels: the countries you've visited on a world map, your journeys and your favourite moments.",
+        "Your details and preferences moved to Settings, one tap away from Edit profile."
+      ]
+    }
   }
 ]

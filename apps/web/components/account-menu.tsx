@@ -1,7 +1,7 @@
 'use client';
 
 import type { User } from '@supabase/supabase-js';
-import { LogIn, LogOut, UserPlus, UserRound } from 'lucide-react';
+import { LogIn, LogOut, Settings, UserPlus, UserRound } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
@@ -182,6 +182,10 @@ export function AccountMenu({
               <DropdownMenuLinkItem render={<Link href="/profile" onClick={onNavigate} />}>
                 <UserRound aria-hidden="true" className="size-4" />
                 {t('profile')}
+              </DropdownMenuLinkItem>
+              <DropdownMenuLinkItem render={<Link href="/settings" onClick={onNavigate} />}>
+                <Settings aria-hidden="true" className="size-4" />
+                {t('settings')}
               </DropdownMenuLinkItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem

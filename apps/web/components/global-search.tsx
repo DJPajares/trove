@@ -356,7 +356,7 @@ export function GlobalSearch({
         </DialogTrigger>
       )}
       <DialogContent
-        className="grid grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:h-[min(40rem,76dvh)] sm:max-w-2xl sm:p-0 max-sm:h-[min(34rem,calc(100dvh-var(--safe-top)-var(--safe-bottom)-2rem))]"
+        className="grid grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:h-[min(40rem,76dvh)] sm:max-w-2xl sm:p-0 max-sm:top-[calc(var(--safe-top)+0.75rem)] max-sm:h-[min(34rem,calc(100dvh-var(--safe-top)-var(--safe-bottom)-1.5rem))] max-sm:max-h-none max-sm:translate-y-0"
         closeLabel={t('close')}
         finalFocus={finalFocus}
         initialFocus={inputRef}

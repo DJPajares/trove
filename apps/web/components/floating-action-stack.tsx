@@ -16,11 +16,14 @@ import { useNotifications } from '@/components/notifications-provider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useCollapsingHeader } from '@/hooks/use-collapsing-header';
+import { cn } from '@/lib/utils';
 import { navigationTransition } from '@/lib/motion';
 import {
   floatingActionDelay,
   floatingActionOrder,
+  floatingActionTriggerClass,
   profileInitials,
+  searchStandsAlone,
 } from '@/lib/shell/floating-actions';
 
 /**
@@ -42,10 +45,11 @@ const TRIGGER_CLASS =
 /**
  * The everyday controls, floating in the upper right of the signed-in shell.
  *
- * Search stands on its own beside the trigger. The trigger shows the
+ * On the main destinations search stands on its own beside the trigger;
+ * elsewhere it leads the stack. The trigger shows the
  * traveller's photo when they have uploaded one, their initials when only
  * their name is known, and a burger when neither is;
- * it unfolds notifications, appearance and account downwards and turns into
+ * it unfolds the stack downwards and turns into
  * an X in the same place, so the way out is where the way in was.
  */
 export function FloatingActionStack() {
@@ -131,7 +135,34 @@ export function FloatingActionStack() {
   const { collapsed, reveal } = useCollapsingHeader();
   const hidden = collapsed && !expanded;
 
+  // On the main destinations search stands beside the trigger; elsewhere it
+  // folds into the stack, so the screen's own controls keep the corner.
+  const searchAlone = searchStandsAlone(pathname);
+  const stackOrder = searchAlone
+    ? floatingActionOrder.filter((action) => action !== 'search')
+    : floatingActionOrder;
+  const openSearch = () => {
+    setSearchOpen(true);
+    setExpanded(false);
+  };
+
   const actions: Record<(typeof floatingActionOrder)[number], ReactNode> = {
+    // Search fills the screen, so the stack that opened it has nothing left to
+    // say and folds away. The dialog itself lives outside the stack for that
+    // reason: collapsing must not take its own dialog down with it.
+    search: (
+      <Button
+        aria-label={search('button')}
+        className={cn('text-foreground', floatingActionTriggerClass)}
+        data-translucent-surface
+        onClick={openSearch}
+        size="icon"
+        type="button"
+        variant="ghost"
+      >
+        <Search aria-hidden="true" className="size-5" />
+      </Button>
+    ),
     account: <AccountMenu onNavigate={collapse} triggerVariant="floating" />,
     appearance: <AppearanceToggle onToggle={collapseAndRestoreFocus} triggerVariant="floating" />,
     notifications: <NotificationCenter onNavigate={collapse} triggerVariant="floating" />,
@@ -160,24 +191,21 @@ export function FloatingActionStack() {
         }
       >
         <div className="flex items-center gap-2">
-          {/* Search is the one control that starts something, so it is always
-              one tap away rather than folded into the stack. */}
-          <Button
-            aria-label={search('button')}
-            className={TRIGGER_CLASS}
-            data-floating-trigger
-            data-translucent-surface
-            onClick={() => {
-              setSearchOpen(true);
-              setExpanded(false);
-            }}
-            ref={searchRef}
-            size="icon"
-            type="button"
-            variant="ghost"
-          >
-            <Search aria-hidden="true" className="size-5" />
-          </Button>
+          {searchAlone ? (
+            <Button
+              aria-label={search('button')}
+              className={TRIGGER_CLASS}
+              data-floating-trigger
+              data-translucent-surface
+              onClick={openSearch}
+              ref={searchRef}
+              size="icon"
+              type="button"
+              variant="ghost"
+            >
+              <Search aria-hidden="true" className="size-5" />
+            </Button>
+          ) : null}
           <Button
             aria-controls="floating-action-stack"
             aria-expanded={expanded}
@@ -258,7 +286,7 @@ export function FloatingActionStack() {
               key="floating-action-stack"
               role="group"
             >
-              {floatingActionOrder.map((action, index) => (
+              {stackOrder.map((action, index) => (
                 <motion.div
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{
@@ -267,7 +295,9 @@ export function FloatingActionStack() {
                     // Folds back towards the trigger it came from.
                     transition: {
                       ...navigationTransition,
-                      delay: reducedMotion ? 0 : floatingActionDelay(index, true),
+                      delay: reducedMotion
+                        ? 0
+                        : floatingActionDelay(index, true, stackOrder.length),
                     },
                     y: -8,
                   }}
@@ -275,7 +305,7 @@ export function FloatingActionStack() {
                   key={action}
                   transition={{
                     ...navigationTransition,
-                    delay: reducedMotion ? 0 : floatingActionDelay(index),
+                    delay: reducedMotion ? 0 : floatingActionDelay(index, false, stackOrder.length),
                   }}
                 >
                   {actions[action]}
@@ -291,7 +321,7 @@ export function FloatingActionStack() {
           controls inert along with the rest of the page. Focus comes back to
           the search button that opened it. */}
       <GlobalSearch
-        finalFocus={searchRef}
+        finalFocus={searchAlone ? searchRef : triggerRef}
         onNavigate={collapse}
         onOpenChange={setSearchOpen}
         open={searchOpen}

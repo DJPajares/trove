@@ -6,6 +6,7 @@ import { journalSerif } from '@/components/memories/journal-font';
 import { PageHeader } from '@/components/page-header';
 import { NotificationSettings } from '@/components/notification-settings';
 import { OfflineStorageSettings } from '@/components/offline-storage-settings';
+import { ProfileAboutSettings } from '@/components/profile-about-settings';
 import { ProfileSettingsForm } from '@/components/profile-settings-form';
 
 export default async function SettingsPage() {
@@ -23,6 +24,7 @@ export default async function SettingsPage() {
         />
         <div className="space-y-6">
           <ProfileSettingsForm locale={locale} />
+          <ProfileAboutSettings />
           <NotificationSettings />
           <OfflineStorageSettings />
           <PrivacySecuritySettings />

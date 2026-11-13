@@ -1178,5 +1178,16 @@
         "Your details and preferences moved to Settings, one tap away from Edit profile."
       ]
     }
+  },
+  {
+    "id": "profile-bio-style-cover",
+    "date": "2026-11-13",
+    "version": "1.25.0",
+    "summaries": {
+      "en": [
+        "Add a short bio and a few travel-style tags in Settings, and they appear on your profile.",
+        "Choose one of your Memory photos as your profile's cover."
+      ]
+    }
   }
 ]

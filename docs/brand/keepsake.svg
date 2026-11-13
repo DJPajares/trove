@@ -37,7 +37,7 @@
     </g>
   </svg>
   </g>
-  <rect x="612" y="156" width="540" height="250" rx="16" fill="#12130d" />
+  <rect x="612" y="156" width="540" height="250" rx="16" fill="#150f0b" />
   <g transform="translate(692 248)"><svg xmlns="http://www.w3.org/2000/svg" width="380" height="94.41667856632873" viewBox="0 0 210.09 52.2">
     <g transform="translate(-9.08 -10.21) scale(1.1348)">
       <path d="M26.5 23.5H37.5A1.5 1.5 0 0 1 39 25V55L32 48L25 55V25A1.5 1.5 0 0 1 26.5 23.5Z" fill="#c2603d" />
@@ -68,13 +68,13 @@
     <path d="M11 9H53A3 3 0 0 1 56 12V18A3 3 0 0 1 53 21H11A3 3 0 0 1 8 18V12A3 3 0 0 1 11 9Z" fill="#515723" />
   </svg>
   </g>
-  <rect x="372" y="440" width="116" height="112" rx="12" fill="#12130d" />
+  <rect x="372" y="440" width="116" height="112" rx="12" fill="#150f0b" />
   <g transform="translate(384 452)"><svg xmlns="http://www.w3.org/2000/svg" width="92" height="88.16666666666667" viewBox="8 9 48 46">
     <path d="M26.5 23.5H37.5A1.5 1.5 0 0 1 39 25V55L32 48L25 55V25A1.5 1.5 0 0 1 26.5 23.5Z" fill="#c2603d" />
     <path d="M11 9H53A3 3 0 0 1 56 12V18A3 3 0 0 1 53 21H11A3 3 0 0 1 8 18V12A3 3 0 0 1 11 9Z" fill="#fcf7ee" />
   </svg>
   </g>
-  <rect x="512" y="440" width="116" height="112" rx="12" fill="#12130d" />
+  <rect x="512" y="440" width="116" height="112" rx="12" fill="#150f0b" />
   <g transform="translate(524 452)"><svg xmlns="http://www.w3.org/2000/svg" width="92" height="88.16666666666667" viewBox="8 9 48 46">
     <path d="M26.5 23.5H37.5A1.5 1.5 0 0 1 39 25V55L32 48L25 55V25A1.5 1.5 0 0 1 26.5 23.5Z" fill="#fcf7ee" />
     <path d="M11 9H53A3 3 0 0 1 56 12V18A3 3 0 0 1 53 21H11A3 3 0 0 1 8 18V12A3 3 0 0 1 11 9Z" fill="#fcf7ee" />

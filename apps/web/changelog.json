@@ -1324,5 +1324,16 @@
         "Kit opens on a photo of your next trip with its countdown, and that trip's exchange rate and checklists a tap away."
       ]
     }
+  },
+  {
+    "id": "itinerary-simple-view",
+    "date": "2026-11-15",
+    "version": "1.29.0",
+    "summaries": {
+      "en": [
+        "Read a day at a glance with the itinerary's new Simple view: times, stops and travel in one plain list.",
+        "Switch between Simple and Detailed any time. Trove remembers your choice, and finished trips open in Simple."
+      ]
+    }
   }
 ]

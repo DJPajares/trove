@@ -1303,5 +1303,15 @@
         "On a tablet or computer, the bar that names the day you're reading now floats neatly in the middle instead of stretching across the page."
       ]
     }
+  },
+  {
+    "id": "memories-desktop-dock",
+    "date": "2026-11-15",
+    "version": "1.27.5",
+    "summaries": {
+      "en": [
+        "On a tablet or computer, Memories no longer stacks a second bar under the header. The day you're reading now shows in the bar at the bottom, and tapping it jumps to another day."
+      ]
+    }
   }
 ]

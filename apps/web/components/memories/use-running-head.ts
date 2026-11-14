@@ -17,7 +17,14 @@ import { type RefObject, useEffect, useState } from 'react';
  */
 function stuckHeadBottom(head: HTMLElement | null) {
   if (!head) return 0;
-  const top = Number.parseFloat(window.getComputedStyle(head).top);
+  const style = window.getComputedStyle(head);
+  // From `md` the journal's header scrolls away with the cover, so the line is
+  // drawn under the app header, which is what stays pinned there.
+  if (style.position !== 'sticky') {
+    const appHeader = document.querySelector('[data-slot="app-header"]');
+    return Math.round(Math.max(0, appHeader?.getBoundingClientRect().bottom ?? 0));
+  }
+  const top = Number.parseFloat(style.top);
   return Math.round((Number.isFinite(top) ? top : 0) + head.offsetHeight);
 }
 

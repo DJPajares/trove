@@ -61,10 +61,15 @@ const SCROLL_INTENT_PX = 8;
 /** On the cover, before the journal has begun, there is nothing to act on yet. */
 const NEAR_TOP_PX = 80;
 
+/** From here the dock carries the day being read, so it stays while reading. */
+const WIDE = '(min-width: 48rem)';
+
 /**
- * The dock follows the reader's direction: scrolling down brings it in,
- * scrolling up puts it away, so it is there while the journal is being read
- * on and out of the way when they go back. It stays away on the cover.
+ * On a phone the dock follows the reader's direction: scrolling down brings it
+ * in, scrolling up puts it away, so it is there while the journal is being
+ * read on and out of the way when they go back. From `md` it names the day
+ * being read, the way the phone's top bar does, so it stays once the cover has
+ * passed. Either way it stays away on the cover.
  */
 function useRevealOnScrollDown() {
   const [visible, setVisible] = useState(false);
@@ -74,6 +79,7 @@ function useRevealOnScrollDown() {
     const update = () => {
       const y = window.scrollY;
       if (y <= NEAR_TOP_PX) setVisible(false);
+      else if (window.matchMedia(WIDE).matches) setVisible(true);
       else if (y > lastY + SCROLL_INTENT_PX) setVisible(true);
       else if (y < lastY - SCROLL_INTENT_PX) setVisible(false);
       else return;
@@ -88,18 +94,28 @@ function useRevealOnScrollDown() {
 }
 
 /**
- * The dock: on a phone, where the global bar has stepped aside, the journal's
- * two actions float in the thumb's reach - the contents and adding a memory.
- * From `lg` the same actions, and the cover's options, live in the header.
+ * The dock: the journal's actions, floating at the foot of the screen - the
+ * contents and adding a memory, in the thumb's reach on a phone, where the
+ * global bar has stepped aside. From `md` the contents button reads as the
+ * running head, naming the day being read and opening the contents to move to
+ * another, and the story's options join it.
  *
  * Sticky at the end of the journal rather than fixed to the screen: it centres
  * on the journal's own column, so it can never be pushed off the page by a
  * viewport that reports a different width than the page is laid out at.
  */
 export function JournalDock({
+  hasCover,
   onAdd,
+  onChooseCover,
   onContents,
-}: Readonly<Pick<JournalActionsProps, 'onAdd' | 'onContents'>>) {
+  title,
+}: Readonly<
+  JournalActionsProps & {
+    /** The day being read, or null before the first day or over the contents. */
+    title: string | null;
+  }
+>) {
   const t = useTranslations('memories.journal');
   const readOnly = useTripReadOnly();
   const visible = useRevealOnScrollDown();
@@ -107,7 +123,7 @@ export function JournalDock({
   return (
     <div
       aria-hidden={!visible}
-      className="pointer-events-none sticky bottom-[calc(var(--safe-bottom)+1rem)] z-[var(--layer-sticky)] mt-6 mb-[calc(var(--safe-bottom)+1rem)] flex justify-center lg:hidden"
+      className="pointer-events-none sticky bottom-[calc(var(--safe-bottom)+1rem)] z-[var(--layer-sticky)] mt-6 mb-[calc(var(--safe-bottom)+1rem)] flex justify-center"
       data-slot="journal-dock"
     >
       <div
@@ -123,20 +139,29 @@ export function JournalDock({
       >
         {onContents ? (
           <Button
-            aria-label={t('contents')}
-            className="rounded-full"
+            aria-label={title ? t('contentsAt', { day: title }) : t('contents')}
+            className="max-w-[min(26rem,50vw)] min-w-0 rounded-full md:px-4"
             onClick={onContents}
-            size="icon"
+            size="default"
             type="button"
             variant="ghost"
           >
             <TableOfContents aria-hidden="true" />
+            {/* A phone names the day in its top bar; the dock stays compact. */}
+            <span className="hidden min-w-0 truncate font-journal text-[1.0625rem] font-normal italic md:inline">
+              {title ?? t('contents')}
+            </span>
           </Button>
         ) : null}
         <Button className="rounded-full px-5" disabled={readOnly} onClick={onAdd} type="button">
           <Plus aria-hidden="true" data-icon="inline-start" />
           {t('addMemory')}
         </Button>
+        <JournalStoryMenu
+          className="hidden rounded-full md:inline-flex"
+          hasCover={hasCover}
+          onChooseCover={onChooseCover}
+        />
       </div>
     </div>
   );

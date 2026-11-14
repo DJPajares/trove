@@ -3953,6 +3953,7 @@
       "offlineTitle": "This journal is not on this device yet",
       "offlineDescription": "Open it once while you are online, and it will be here the next time you are not.",
       "contents": "Contents",
+      "contentsAt": "Contents, reading {day}",
       "addMemory": "Add a memory",
       "addFirstMemory": "Add the first memory",
       "storyMenu": "Journal options",

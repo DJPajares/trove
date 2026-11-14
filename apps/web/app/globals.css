@@ -605,16 +605,19 @@ html:has([data-slot='memories-journal']) body,
   background-color: var(--paper);
 }
 
-[data-slot='app-shell']:has([data-slot='memories-journal']) {
+[data-slot='app-shell']:has([data-slot='memories-journal']),
+[data-slot='journal-sheet'] {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.2 0 0 0 0 0.15 0 0 0 0 0.1 0 0 0 0.07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
 }
 
-:where(.dark) [data-slot='app-shell']:has([data-slot='memories-journal']) {
+:where(.dark) [data-slot='app-shell']:has([data-slot='memories-journal']),
+:where(.dark) [data-slot='journal-sheet'] {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.95 0 0 0 0 0.85 0 0 0 0.045 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
 }
 
 @media (prefers-contrast: more) {
-  [data-slot='app-shell']:has([data-slot='memories-journal']) {
+  [data-slot='app-shell']:has([data-slot='memories-journal']),
+  [data-slot='journal-sheet'] {
     background-image: none;
   }
 }

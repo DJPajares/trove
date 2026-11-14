@@ -34,8 +34,15 @@ export const HOME_COVER_FRAME =
  * sheet reaches the top of the screen, as the trip's navigation sheet does
  * when it pins, and returns when they scroll back to the cover.
  */
-export const HOME_SHEET =
-  'relative z-10 mx-[calc(50%-50vw)] -mt-7 space-y-10 rounded-t-[1.75rem] bg-background px-[calc(50vw-50%)] pt-6 transition-[border-radius] duration-[var(--motion-slow)] ease-[var(--ease-standard)] data-flat:rounded-t-none motion-safe:animate-in motion-safe:duration-700 motion-safe:ease-[var(--ease-standard)] motion-safe:slide-in-from-bottom-6 motion-reduce:transition-none sm:space-y-12 md:-mt-10 md:rounded-t-[2.5rem] md:pt-10 md:data-flat:rounded-t-none';
+export const HOME_SHEET_FRAME =
+  'relative z-10 mx-[calc(50%-50vw)] -mt-7 space-y-10 rounded-t-[1.75rem] bg-background px-[calc(50vw-50%)] pt-6 transition-[border-radius] duration-[var(--motion-slow)] ease-[var(--ease-standard)] data-flat:rounded-t-none motion-reduce:transition-none sm:space-y-12 md:-mt-10 md:rounded-t-[2.5rem] md:pt-10 md:data-flat:rounded-t-none';
+
+/**
+ * The sheet rising into place. It belongs to the real sheet only: a skeleton
+ * wearing it would rise, be replaced by the sheet, and rise again.
+ */
+const HOME_SHEET_ENTER =
+  'motion-safe:animate-in motion-safe:duration-700 motion-safe:ease-[var(--ease-standard)] motion-safe:slide-in-from-bottom-6';
 
 /**
  * Whether the sheet's top has reached the bar at the top of the screen: the
@@ -63,13 +70,20 @@ function useReachedTop(element: HTMLElement | null) {
   return reached;
 }
 
-export function HomeSheet({ children }: Readonly<{ children: ReactNode }>) {
+export function HomeSheet({
+  children,
+  enter = true,
+}: Readonly<{
+  children: ReactNode;
+  /** False when the page is returned to, so the sheet does not rise a second time. */
+  enter?: boolean;
+}>) {
   const [element, setElement] = useState<HTMLDivElement | null>(null);
   const flat = useReachedTop(element);
 
   return (
     <div
-      className={HOME_SHEET}
+      className={cn(HOME_SHEET_FRAME, enter && HOME_SHEET_ENTER)}
       data-flat={flat || undefined}
       data-slot="home-sheet"
       ref={setElement}
@@ -179,7 +193,7 @@ export function HomeSkeleton({ label }: Readonly<{ label: string }>) {
     <div aria-busy="true" aria-live="polite" role="status">
       <span className="sr-only">{label}</span>
       <Skeleton aria-hidden="true" className={cn('rounded-none', HOME_COVER_FRAME)} />
-      <div aria-hidden="true" className={HOME_SHEET}>
+      <div aria-hidden="true" className={HOME_SHEET_FRAME}>
         <div className="flex gap-2">
           <Skeleton className="h-10 w-36 rounded-full" />
           <Skeleton className="h-10 w-28 rounded-full" />

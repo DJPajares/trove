@@ -1,4 +1,4 @@
-import { HOME_SHEET } from '@/components/home/home-front-door';
+import { HOME_SHEET_FRAME } from '@/components/home/home-front-door';
 import { LIBRARY_COVER_FRAME } from '@/components/trips-library/library-cover';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -14,7 +14,7 @@ export function LibrarySkeleton({ label }: Readonly<{ label: string }>) {
     <div aria-busy="true" aria-live="polite" role="status">
       <span className="sr-only">{label}</span>
       <Skeleton aria-hidden="true" className={cn('rounded-none', LIBRARY_COVER_FRAME)} />
-      <div aria-hidden="true" className={HOME_SHEET}>
+      <div aria-hidden="true" className={HOME_SHEET_FRAME}>
         <div className="flex gap-2">
           <Skeleton className="h-10 w-40 rounded-full" />
           <Skeleton className="h-10 w-32 rounded-full" />

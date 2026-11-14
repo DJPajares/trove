@@ -8,7 +8,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, type CSSProperties } from 'react';
 
 import { ExperienceRatingMark } from '@/components/experience-rating';
-import { HOME_COVER_FRAME, HOME_SHEET, HomeSheet } from '@/components/home/home-front-door';
+import { HOME_COVER_FRAME, HOME_SHEET_FRAME, HomeSheet } from '@/components/home/home-front-door';
 import { JourneyPrint, journeyPrints } from '@/components/journey-prints';
 import { MediaFrame } from '@/components/media-frame';
 import { PageState } from '@/components/page-state';
@@ -265,7 +265,7 @@ function ProfileSkeleton({ label }: Readonly<{ label: string }>) {
     <div aria-busy="true" aria-live="polite" role="status">
       <span className="sr-only">{label}</span>
       <Skeleton aria-hidden="true" className={cn('rounded-none', HOME_COVER_FRAME)} />
-      <div aria-hidden="true" className={HOME_SHEET}>
+      <div aria-hidden="true" className={HOME_SHEET_FRAME}>
         <Skeleton className="h-24 rounded-[var(--radius-2xl)]" />
         <Skeleton className="aspect-[12/5] rounded-[var(--radius-2xl)]" />
       </div>

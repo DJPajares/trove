@@ -200,7 +200,7 @@ export function TripsManager() {
         title={t('title')}
       />
 
-      <HomeSheet>
+      <HomeSheet enter={view.animateEntrance}>
         {/* The actions belong to the trip in view on the cover, so they change
           as it is swiped. A phone already carries Create at the centre of its
           bottom bar, so New trip is the desktop's. */}

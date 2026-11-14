@@ -5,13 +5,13 @@ import { motion, type Transition } from 'motion/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import type { ComponentType } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from 'react';
 
 import { NavActiveIndicator } from '@/components/nav-active-indicator';
 import { usePrimaryAction } from '@/components/primary-action-provider';
 import { useTripCreation } from '@/components/trip-creation-provider';
 import { Button } from '@/components/ui/button';
-import { motionEase, navigationTransition } from '@/lib/motion';
+import { motionEase } from '@/lib/motion';
 import {
   isImmersiveTripPath,
   isNavigationPathActive,
@@ -44,6 +44,85 @@ type PrimaryNavigationProps = {
   variant: 'desktop' | 'mobile';
 };
 
+/**
+ * The desktop rail, with one underline that slides to the current page.
+ *
+ * The underline is placed from the links' own offsets inside the rail rather
+ * than shared between them with `layoutId`: a layout animation measures against
+ * the page, so navigating while scrolled (the new page opens at the top, and the
+ * header slides back down) made the line travel up or down instead of along.
+ * Offsets within the rail do not know about either, so it only ever moves
+ * sideways.
+ */
+function DesktopNavigation({
+  items,
+  label,
+  pathname,
+}: Readonly<{ items: NavigationItem[]; label: string; pathname: string }>) {
+  const rail = useRef<HTMLElement | null>(null);
+  const links = useRef(new Map<string, HTMLAnchorElement>());
+  const [mark, setMark] = useState<{ left: number; width: number } | null>(null);
+  // The first mark is placed, not animated into place from nowhere.
+  const [placed, setPlaced] = useState(false);
+  const activeHref = items.find(({ href }) => isNavigationPathActive(pathname, href))?.href ?? null;
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const link = activeHref ? links.current.get(activeHref) : null;
+      setMark(link ? { left: link.offsetLeft, width: link.offsetWidth } : null);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    if (rail.current) observer.observe(rail.current);
+    for (const link of links.current.values()) observer.observe(link);
+    return () => observer.disconnect();
+  }, [activeHref]);
+
+  useEffect(() => {
+    if (mark) setPlaced(true);
+  }, [mark]);
+
+  return (
+    <nav aria-label={label} className="relative hidden items-center gap-1 md:flex" ref={rail}>
+      {items.map(({ href, label: text }) => {
+        const active = href === activeHref;
+
+        return (
+          <Link
+            aria-current={active ? 'page' : undefined}
+            className={cn(
+              'relative isolate rounded-[var(--radius-md)] px-3 py-2 text-sm font-medium transition-colors duration-[var(--motion-standard)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+              active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+            )}
+            href={href}
+            key={href}
+            ref={(element) => {
+              if (element) links.current.set(href, element);
+              else links.current.delete(href);
+            }}
+            scroll={href === '/trips' ? false : undefined}
+          >
+            <span className="relative">{text}</span>
+          </Link>
+        );
+      })}
+      <span
+        aria-hidden="true"
+        className={cn(
+          'pointer-events-none absolute bottom-[-1px] left-0 h-0.5 rounded-full bg-brand',
+          placed &&
+            'transition-[transform,width,opacity] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none',
+        )}
+        style={{
+          opacity: mark ? 1 : 0,
+          transform: `translateX(${mark ? mark.left + 12 : 0}px)`,
+          width: mark ? Math.max(0, mark.width - 24) : 0,
+        }}
+      />
+    </nav>
+  );
+}
+
 export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>) {
   const pathname = usePathname();
   const t = useTranslations('navigation');
@@ -63,36 +142,7 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
   if (variant === 'mobile' && isImmersiveTripPath(pathname)) return null;
 
   if (variant === 'desktop') {
-    return (
-      <nav aria-label={t('primary')} className="hidden items-center gap-1 md:flex">
-        {items.map(({ href, label }) => {
-          const active = isNavigationPathActive(pathname, href);
-
-          return (
-            <Link
-              aria-current={active ? 'page' : undefined}
-              className={cn(
-                'relative isolate rounded-[var(--radius-md)] px-3 py-2 text-sm font-medium transition-colors duration-[var(--motion-standard)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-                active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
-              )}
-              href={href}
-              scroll={href === '/trips' ? false : undefined}
-              key={href}
-            >
-              {active ? (
-                <motion.span
-                  aria-hidden="true"
-                  className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-brand"
-                  layoutId="primary-navigation-desktop"
-                  transition={navigationTransition}
-                />
-              ) : null}
-              <span className="relative">{label}</span>
-            </Link>
-          );
-        })}
-      </nav>
-    );
+    return <DesktopNavigation items={items} label={t('primary')} pathname={pathname} />;
   }
 
   return (

@@ -1218,5 +1218,16 @@
         "Each rating has its own word, from Rough to Unforgettable, so no two levels sound alike."
       ]
     }
+  },
+  {
+    "id": "overview-ways-into-trip",
+    "date": "2026-11-14",
+    "version": "1.26.0",
+    "summaries": {
+      "en": [
+        "Your trip's overview now shows every way into it: plan it, live it with Trip Mode, and remember it with Memories.",
+        "In the week before you leave, preview day 1 to see exactly what Trip Mode will show you there."
+      ]
+    }
   }
 ]

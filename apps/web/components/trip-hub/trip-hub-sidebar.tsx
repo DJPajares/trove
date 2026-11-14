@@ -18,24 +18,40 @@ const sectionTitle =
 const kicker = 'text-[0.6875rem] font-semibold tracking-[0.12em] text-muted-foreground uppercase';
 
 /**
- * Plan Score and the one insight worth knowing. While travelling the day's
- * insight already sits in the chapter, so only the score stays here; once the
- * trip is over, neither is the point any more.
+ * Plan Score and the one insight worth knowing: the trip's while planning, the
+ * day's while travelling. Once the trip is over, neither is the point any more.
  */
 export function TripHubGoodToKnow({
+  overview,
   planScoreEnabled,
   stage,
   trip,
-}: Readonly<{ planScoreEnabled: boolean; stage: TripHubStage; trip: Trip }>) {
+}: Readonly<{
+  overview: TripOverviewData | undefined;
+  planScoreEnabled: boolean;
+  stage: TripHubStage;
+  trip: Trip;
+}>) {
   const t = useTranslations('trips.hub');
-  if (stage === 'remember' || (!planScoreEnabled && stage === 'live')) return null;
+  const liveDayId = stage === 'live' ? (overview?.day?.id ?? null) : null;
+  if (stage === 'remember' || (stage === 'live' && !planScoreEnabled && !liveDayId)) return null;
   return (
     <section aria-labelledby="trip-good-to-know-heading" className="space-y-3">
       <h2 className={sectionTitle} id="trip-good-to-know-heading">
         {t('goodToKnow')}
       </h2>
       {planScoreEnabled ? <TripHubScore tripId={trip.id} /> : null}
-      {stage === 'live' ? null : (
+      {stage === 'live' ? (
+        liveDayId ? (
+          <TripInsights
+            dayId={liveDayId}
+            headingLevel={3}
+            initialItemLimit={1}
+            surface="inset"
+            tripId={trip.id}
+          />
+        ) : null
+      ) : (
         <TripInsights headingLevel={3} initialItemLimit={1} surface="inset" tripId={trip.id} />
       )}
     </section>

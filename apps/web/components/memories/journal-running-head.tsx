@@ -49,7 +49,7 @@ export function JournalRunningHead({
         'sticky top-[var(--header-offset)] z-[var(--layer-sticky)] -ms-[var(--gutter-inline-start)] -me-[var(--gutter-inline-end)] grid h-[var(--journal-head-height)] grid-cols-[5rem_minmax(0,1fr)_5rem] items-center border-b px-[max(var(--gutter-inline-start),var(--gutter-inline-end))] pt-[var(--safe-top)] transition-[background-color,border-color,box-shadow] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none',
         // From `md`: a row on the cover that scrolls away with it, just under
         // the app header, the main area's top padding taken back.
-        'md:relative md:top-auto md:mx-0 md:-mt-12 md:flex md:justify-between md:border-transparent md:bg-transparent md:px-0 md:pt-0 md:backdrop-blur-none',
+        'md:relative md:top-auto md:mx-0 md:-mt-12 md:flex md:justify-end md:border-transparent md:bg-transparent md:px-0 md:pt-0 md:backdrop-blur-none',
         overCover
           ? 'border-transparent bg-transparent'
           : 'border-border-subtle/80 bg-paper/92 backdrop-blur supports-[backdrop-filter]:bg-paper/80',
@@ -64,7 +64,8 @@ export function JournalRunningHead({
         // `md` it only ever sits on the cover.
         className={cn(
           'inline-flex min-h-11 items-center justify-self-start gap-1.5 rounded-full border px-3 text-sm font-medium outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none',
-          'md:border-media-fallback-foreground/18 md:bg-neutral-950/45 md:text-media-fallback-foreground md:backdrop-blur-sm md:hover:bg-neutral-950/65 md:hover:text-media-fallback-foreground',
+          // From `md` the app header above the cover is the way back.
+          'md:hidden',
           overCover
             ? 'border-media-fallback-foreground/18 bg-neutral-950/45 text-media-fallback-foreground backdrop-blur-sm hover:bg-neutral-950/65'
             : 'border-transparent text-muted-foreground hover:text-foreground',

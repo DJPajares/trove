@@ -199,8 +199,9 @@ export function TripHubCover({
         aria-label={t('backToTrips')}
         className={cn(
           'absolute top-[max(1rem,var(--safe-top))] left-[max(1rem,var(--safe-left))] z-10 grid size-11 place-items-center rounded-full border border-white/18 bg-neutral-950/50 text-white backdrop-blur-md outline-none transition-colors duration-[var(--motion-standard)] hover:bg-neutral-950/75 focus-visible:ring-3 focus-visible:ring-white/60 motion-reduce:transition-none',
-          // Beneath the header from `md`, so it waits below it.
-          'md:top-[calc(var(--safe-top)+var(--header-height)+1.5rem)]',
+          // From `md` the app header's own Trips is the way back, one click
+          // away above the cover, so the cover keeps only its photograph.
+          'md:hidden',
         )}
         href="/trips"
       >

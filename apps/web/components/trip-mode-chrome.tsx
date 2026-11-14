@@ -161,9 +161,11 @@ export function TripModeTopBar({
       data-translucent-surface={filled ? '' : undefined}
     >
       {/* A visible way out, drawn as a control rather than a quiet link:
-          outdoors and one-handed, the edge of a word is not a target. */}
+          outdoors and one-handed, the edge of a word is not a target. From
+          `md` the app header stays above Trip Mode with its own way back, so
+          the bar keeps only the trip's name; its empty rail still centres it. */}
       <Link
-        className="inline-flex min-h-11 items-center justify-self-start gap-1 rounded-full border border-border bg-card ps-2.5 pe-4 text-sm font-semibold text-foreground shadow-[var(--shadow-control)] outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none"
+        className="inline-flex min-h-11 items-center justify-self-start gap-1 rounded-full border border-border bg-card ps-2.5 pe-4 text-sm font-semibold text-foreground shadow-[var(--shadow-control)] outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none md:invisible"
         // Back to the trip this mode belongs to, not to the whole library. A
         // traveller who opened Trip Mode from their trip could not previously
         // get back to it in one tap.

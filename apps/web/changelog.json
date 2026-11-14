@@ -1229,5 +1229,16 @@
         "In the week before you leave, preview day 1 to see exactly what Trip Mode will show you there."
       ]
     }
+  },
+  {
+    "id": "trip-page-entrances",
+    "date": "2026-11-14",
+    "version": "1.26.2",
+    "summaries": {
+      "en": [
+        "Opening a trip now has the same gentle entrance as Home and Trips, and Trips plays it every time you visit.",
+        "Coming up cards on Home now show in full, without being cut off."
+      ]
+    }
   }
 ]

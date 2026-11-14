@@ -16,6 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
 import { forgetCachedMediaUrls } from '@/lib/media/storage-cache-key';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
+import { pageEntrance } from '@/lib/page-entrance';
 import { shouldRefreshSignedMedia } from '@/lib/memories/signed-media';
 import type { Trip } from '@/lib/trips/api';
 import { formatTripDate, formatTripDateRange } from '@/lib/trips/format';
@@ -129,6 +130,7 @@ function CoverSignature({
  */
 export function TripHubCover({
   editorial,
+  enter = false,
   layout = 'hub',
   onCoverExpired,
   overview,
@@ -136,6 +138,8 @@ export function TripHubCover({
   trip,
 }: Readonly<{
   editorial: EditorialImageReference | null;
+  /** Settle and rise into place, as the first screen of a visit to the trip. */
+  enter?: boolean;
   layout?: 'hub' | 'section';
   /** The signed cover link expired; the trip must be re-read for a fresh one. */
   onCoverExpired: () => void;
@@ -162,7 +166,7 @@ export function TripHubCover({
     >
       <TripMedia
         alt={editorial ? media('alt.tripEditorial', { name: destinations ?? trip.name }) : ''}
-        className="absolute inset-0 h-full w-full rounded-none"
+        className={cn('absolute inset-0 h-full w-full rounded-none', enter && pageEntrance.media)}
         fallbackSources={editorial ? [{ kind: 'editorial', reference: editorial }] : []}
         onUnreachable={() => {
           const now = Date.now();
@@ -204,6 +208,7 @@ export function TripHubCover({
         className={cn(
           'relative flex flex-col items-start gap-2 px-[var(--gutter-inline-start)] pt-24 pb-14 text-white lg:px-9',
           layout === 'hub' ? 'lg:pb-9' : 'lg:pb-14',
+          enter && pageEntrance.rise,
         )}
       >
         <div className="flex flex-wrap items-center gap-1.5">

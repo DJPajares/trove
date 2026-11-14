@@ -32,7 +32,7 @@ export function HomeComingUp({
   return (
     <section
       aria-labelledby="home-coming-up-heading"
-      className="space-y-4"
+      className="flex flex-col gap-4"
       data-slot="home-coming-up"
     >
       <div className="flex items-baseline justify-between gap-4">
@@ -54,7 +54,11 @@ export function HomeComingUp({
         </Link>
       </div>
 
-      <ul className="-ms-[var(--gutter-inline-start)] -me-[var(--gutter-inline-end)] flex snap-x gap-3 overflow-x-auto ps-[var(--gutter-inline-start)] pe-[var(--gutter-inline-end)] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0 [&::-webkit-scrollbar]:hidden">
+      {/* A sideways scroller clips both axes, so it carries room above and
+          below for the cards' shadow, their hover lift and their rise into
+          place, and gives that room back with negative margins. Nothing
+          scrolls vertically. */}
+      <ul className="-ms-[var(--gutter-inline-start)] -me-[var(--gutter-inline-end)] -mt-2 -mb-10 flex snap-x gap-3 overflow-x-auto overflow-y-hidden ps-[var(--gutter-inline-start)] pe-[var(--gutter-inline-end)] pt-2 pb-10 [scrollbar-width:none] md:mx-0 md:my-0 md:grid md:grid-cols-3 md:overflow-visible md:p-0 [&::-webkit-scrollbar]:hidden">
         {trips.map((trip, index) => {
           const editorial = editorialFor(trip);
           const countdown = resolveCountdown(daysUntilTripStart(trip));

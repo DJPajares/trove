@@ -12,11 +12,13 @@ import { TripHubBar } from '@/components/trip-hub/trip-hub-bar';
 import { TripHubCover, TripHubCoverSkeleton } from '@/components/trip-hub/trip-hub-cover';
 import { TripNavigationSheet } from '@/components/trip-hub/trip-navigation-sheet';
 import { TripTabs } from '@/components/trip-tabs';
-import { useTripContext } from '@/components/trip-provider';
+import { useTripContext, useTripEntrance } from '@/components/trip-provider';
 import { Button } from '@/components/ui/button';
 import * as Icons from '@/lib/icons';
+import { pageEntrance } from '@/lib/page-entrance';
 import { overviewLifecycle, tripHubStage } from '@/lib/trips/overview';
 import { useTripOverview } from '@/lib/trips/use-trip-overview';
+import { cn } from '@/lib/utils';
 
 type TripChromeSlots = {
   /** The section toolbar's leading edge: a screen's view control, or its guidance. */
@@ -38,6 +40,7 @@ export function TripChrome({
 }: Readonly<{ children: ReactNode; tripId: string }>) {
   const t = useTranslations('trips');
   const context = useTripContext();
+  const enter = useTripEntrance();
   const loadedTrip = context?.trip ?? null;
   const trip = loadedTrip
     ? { ...loadedTrip, lifecycle: overviewLifecycle(loadedTrip, new Date()) }
@@ -85,6 +88,7 @@ export function TripChrome({
           {trip ? (
             <TripHubCover
               editorial={context?.editorial ?? null}
+              enter={enter}
               layout="section"
               onCoverExpired={() => context?.refresh()}
               overview={overviewQuery.data}
@@ -95,7 +99,10 @@ export function TripChrome({
             <TripHubCoverSkeleton label={t('titleLoading')} layout="section" />
           )}
         </div>
-        <TripNavigationSheet className="lg:mx-0 lg:mt-4 lg:rounded-none lg:px-0 lg:pt-0">
+        <TripNavigationSheet
+          className="lg:mx-0 lg:mt-4 lg:rounded-none lg:px-0 lg:pt-0"
+          enter={enter}
+        >
           {trip ? (
             <TripHubBar overview={overviewQuery.data} trip={trip} />
           ) : (
@@ -122,7 +129,7 @@ export function TripChrome({
       </header>
       {trip?.archivedAt ? <TripArchivedNote trip={trip} /> : null}
       {trip ? <TripActionFeedback /> : null}
-      <div className="mt-5 md:mt-7">{children}</div>
+      <div className={cn('mt-5 md:mt-7', enter && pageEntrance.sheet)}>{children}</div>
     </div>
   );
 

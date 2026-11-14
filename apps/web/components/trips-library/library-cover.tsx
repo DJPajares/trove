@@ -139,12 +139,10 @@ const ENTER =
 export type LibraryCoverSlide = { editorial: EditorialImageReference | null; trip: Trip };
 
 function CoverSlide({
-  animateEntrance,
   first,
   nextUp,
   slide: { editorial, trip },
 }: Readonly<{
-  animateEntrance: boolean;
   first: boolean;
   nextUp: TripNextUp | null;
   slide: LibraryCoverSlide;
@@ -169,7 +167,6 @@ function CoverSlide({
         className={cn(
           'absolute inset-0 -z-20 h-full w-full rounded-none',
           first &&
-            animateEntrance &&
             'motion-safe:animate-in motion-safe:duration-[1400ms] motion-safe:ease-out motion-safe:zoom-in-105',
         )}
         preload={first}
@@ -185,7 +182,7 @@ function CoverSlide({
         <div
           className={cn(
             'mx-auto w-full max-w-5xl space-y-5 pt-[calc(var(--safe-top)+5rem)] pb-24 md:pt-[calc(var(--safe-top)+var(--header-height)+3rem)] md:pb-28',
-            first && animateEntrance && ENTER,
+            first && ENTER,
           )}
         >
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -234,8 +231,6 @@ function CoverSlide({
 }
 
 export type LibraryCoverProps = {
-  /** False when the library is returned to, so the entrance is not replayed. */
-  animateEntrance: boolean;
   /** Said on the artwork when there is no trip to lead with. */
   description: string;
   /** The slide in view; the page's actions follow it. */
@@ -260,7 +255,6 @@ export type LibraryCoverProps = {
  * lead with it is Trove's bundled artwork and the page's own name.
  */
 export function LibraryCover({
-  animateEntrance,
   description,
   index,
   nextUp,
@@ -346,7 +340,6 @@ export function LibraryCover({
       >
         {slides.map((slide, position) => (
           <CoverSlide
-            animateEntrance={animateEntrance}
             first={position === 0}
             key={slide.trip.id}
             nextUp={position === 0 ? nextUp : null}

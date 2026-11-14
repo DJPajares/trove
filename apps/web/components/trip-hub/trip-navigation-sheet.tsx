@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 
+import { pageEntrance } from '@/lib/page-entrance';
 import { cn } from '@/lib/utils';
 
 /**
@@ -41,7 +42,13 @@ function useStuck(element: HTMLElement | null) {
 export function TripNavigationSheet({
   children,
   className,
-}: Readonly<{ children: ReactNode; className?: string }>) {
+  enter = false,
+}: Readonly<{
+  children: ReactNode;
+  className?: string;
+  /** Rise into place, as the first screen of a visit to the trip. */
+  enter?: boolean;
+}>) {
   const [element, setElement] = useState<HTMLDivElement | null>(null);
   const stuck = useStuck(element);
 
@@ -50,6 +57,7 @@ export function TripNavigationSheet({
       className={cn(
         'sticky top-[calc(var(--safe-top)+var(--header-offset))] z-[var(--layer-sticky)] -mx-[var(--gutter-inline-start)] -mt-8 rounded-t-[var(--trip-sheet-radius)] bg-background px-[var(--gutter-inline-start)] pt-2 transition-[border-radius] duration-[var(--motion-standard)] motion-reduce:transition-none md:relative md:top-auto md:z-auto',
         stuck && 'rounded-t-none',
+        enter && pageEntrance.sheet,
         className,
       )}
       data-slot="trip-navigation-sheet"

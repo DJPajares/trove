@@ -15,12 +15,13 @@ import { TripHubCover } from '@/components/trip-hub/trip-hub-cover';
 import { TripHubJourney } from '@/components/trip-hub/trip-hub-journey';
 import { TripHubWays } from '@/components/trip-hub/trip-hub-ways';
 import { TripHubCloseAtHand, TripHubGoodToKnow } from '@/components/trip-hub/trip-hub-sidebar';
-import { useTripContext } from '@/components/trip-provider';
+import { useTripContext, useTripEntrance } from '@/components/trip-provider';
 import { Button } from '@/components/ui/button';
 import { selectNextSteps } from '@/lib/home/next-steps';
 import * as Icons from '@/lib/icons';
 import { overviewLifecycle, tripHubStage } from '@/lib/trips/overview';
 import { useTripOverview } from '@/lib/trips/use-trip-overview';
+import { pageEntrance } from '@/lib/page-entrance';
 import { cn } from '@/lib/utils';
 
 /**
@@ -36,6 +37,7 @@ export function TripDetail({ planScoreEnabled }: Readonly<{ planScoreEnabled: bo
   // inside the trip is showing, and fetching it here as well is what used to
   // make the cover arrive twice.
   const tripContext = useTripContext();
+  const enter = useTripEntrance();
   const tripId = tripContext?.tripId ?? '';
   const loadedTrip = tripContext?.trip ?? null;
   const trip = loadedTrip
@@ -130,13 +132,17 @@ export function TripDetail({ planScoreEnabled }: Readonly<{ planScoreEnabled: bo
           <div className="-mx-[var(--gutter-inline-start)] -mt-8 lg:mx-0 lg:mt-0 lg:[grid-area:cover]">
             <TripHubCover
               editorial={editorial}
+              enter={enter}
               onCoverExpired={() => tripContext?.refresh()}
               overview={overview}
               stage={stage}
               trip={trip}
             />
           </div>
-          <TripNavigationSheet className="lg:mx-0 lg:mt-0 lg:rounded-none lg:bg-transparent lg:px-0 lg:pt-0 lg:[grid-area:bar]">
+          <TripNavigationSheet
+            className="lg:mx-0 lg:mt-0 lg:rounded-none lg:bg-transparent lg:px-0 lg:pt-0 lg:[grid-area:bar]"
+            enter={enter}
+          >
             <TripHubBar overview={overview} trip={trip} />
           </TripNavigationSheet>
           {trip.archivedAt ? (
@@ -146,7 +152,12 @@ export function TripDetail({ planScoreEnabled }: Readonly<{ planScoreEnabled: bo
               <TripArchivedNote trip={trip} />
             </div>
           ) : null}
-          <div className="lg:flex lg:flex-col lg:[grid-area:chapter]">
+          <div
+            className={cn(
+              'lg:flex lg:flex-col lg:[grid-area:chapter]',
+              enter && pageEntrance.sheet,
+            )}
+          >
             <TripHubChapter
               failed={!overview && Boolean(overviewQuery.error)}
               loading={overviewQuery.isPending}
@@ -159,7 +170,7 @@ export function TripDetail({ planScoreEnabled }: Readonly<{ planScoreEnabled: bo
           </div>
           {/* After the chapter on a phone; a full-width row of three on desktop. */}
           <TripHubWays
-            className="mt-8 lg:mt-2 lg:[grid-area:ways]"
+            className={cn('mt-8 lg:mt-2 lg:[grid-area:ways]', enter && pageEntrance.sheet)}
             overview={overview}
             stage={stage}
             trip={trip}
@@ -173,6 +184,7 @@ export function TripDetail({ planScoreEnabled }: Readonly<{ planScoreEnabled: bo
         <div
           className={cn(
             'mt-10 grid gap-10 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] md:gap-x-14',
+            enter && pageEntrance.sheet,
             stage !== 'remember' && 'border-t border-border-subtle pt-10 lg:border-t-0 lg:pt-0',
           )}
         >

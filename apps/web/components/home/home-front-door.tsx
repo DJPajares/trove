@@ -8,6 +8,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import * as Icons from '@/lib/icons';
+import { pageEntrance } from '@/lib/page-entrance';
 import { cn } from '@/lib/utils';
 
 const TENSES = [
@@ -38,13 +39,6 @@ export const HOME_SHEET_FRAME =
   'relative z-10 mx-[calc(50%-50vw)] -mt-7 space-y-10 rounded-t-[1.75rem] bg-background px-[calc(50vw-50%)] pt-6 transition-[border-radius] duration-[var(--motion-slow)] ease-[var(--ease-standard)] data-flat:rounded-t-none motion-reduce:transition-none sm:space-y-12 md:-mt-10 md:rounded-t-[2.5rem] md:pt-10 md:data-flat:rounded-t-none';
 
 /**
- * The sheet rising into place. It belongs to the real sheet only: a skeleton
- * wearing it would rise, be replaced by the sheet, and rise again.
- */
-const HOME_SHEET_ENTER =
-  'motion-safe:animate-in motion-safe:duration-700 motion-safe:ease-[var(--ease-standard)] motion-safe:slide-in-from-bottom-6';
-
-/**
  * Whether the sheet's top has reached the bar at the top of the screen: the
  * header's lower edge from `md` while it is showing, the top of the screen on
  * a phone or once the header has slid away. Read on scroll directly: one rect
@@ -70,20 +64,13 @@ function useReachedTop(element: HTMLElement | null) {
   return reached;
 }
 
-export function HomeSheet({
-  children,
-  enter = true,
-}: Readonly<{
-  children: ReactNode;
-  /** False when the page is returned to, so the sheet does not rise a second time. */
-  enter?: boolean;
-}>) {
+export function HomeSheet({ children }: Readonly<{ children: ReactNode }>) {
   const [element, setElement] = useState<HTMLDivElement | null>(null);
   const flat = useReachedTop(element);
 
   return (
     <div
-      className={cn(HOME_SHEET_FRAME, enter && HOME_SHEET_ENTER)}
+      className={cn(HOME_SHEET_FRAME, pageEntrance.sheet)}
       data-flat={flat || undefined}
       data-slot="home-sheet"
       ref={setElement}

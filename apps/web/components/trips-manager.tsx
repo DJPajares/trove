@@ -191,7 +191,6 @@ export function TripsManager() {
     <section className="mx-auto w-full max-w-5xl">
       {intents}
       <LibraryCover
-        animateEntrance={view.animateEntrance}
         description={libraryT('description')}
         index={coverIndex}
         nextUp={resolveTripNextUp(tripModeContextQuery.data ?? null)}
@@ -200,7 +199,7 @@ export function TripsManager() {
         title={t('title')}
       />
 
-      <HomeSheet enter={view.animateEntrance}>
+      <HomeSheet>
         {/* The actions belong to the trip in view on the cover, so they change
           as it is swiped. A phone already carries Create at the centre of its
           bottom bar, so New trip is the desktop's. */}

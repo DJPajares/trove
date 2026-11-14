@@ -1272,5 +1272,15 @@
         "Collections in Finds now open on a full photo of their newest place, with the towns they cover and a quick way to add more."
       ]
     }
+  },
+  {
+    "id": "trip-section-full-cover",
+    "date": "2026-11-14",
+    "version": "1.27.2",
+    "summaries": {
+      "en": [
+        "On a computer or tablet, a trip's itinerary and tools now open on a full-width photo of the trip, like Home and Trips."
+      ]
+    }
   }
 ]

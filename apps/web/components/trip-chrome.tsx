@@ -84,7 +84,9 @@ export function TripChrome({
           whole section, rather than just the photograph. Every section keeps
           its navigation in reach, not only the itinerary. */}
       <header className="contents md:block" data-slot="trip-chrome">
-        <div className="-mx-[var(--gutter-inline-start)] -mt-8 lg:mx-0 lg:mt-0">
+        {/* From `md` the cover runs edge to edge beneath the header, as Home,
+            Trips and Finds do; on a phone it already fills the width. */}
+        <div className="-mx-[var(--gutter-inline-start)] -mt-8 md:mx-[calc(50%-50vw)] md:-mt-[calc(var(--safe-top)+var(--header-height)+3rem+1px)]">
           {trip ? (
             <TripHubCover
               editorial={context?.editorial ?? null}
@@ -100,7 +102,9 @@ export function TripChrome({
           )}
         </div>
         <TripNavigationSheet
-          className="lg:mx-0 lg:mt-4 lg:rounded-none lg:px-0 lg:pt-0"
+          // From `md` the row sits on a sheet that rises over the cover, edge
+          // to edge with the row itself back on the page's measure.
+          className="md:mx-[calc(50%-50vw)] md:-mt-10 md:rounded-t-[2.5rem] md:px-[calc(50vw-50%)] md:pt-6"
           enter={enter}
         >
           {trip ? (

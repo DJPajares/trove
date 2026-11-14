@@ -20,14 +20,14 @@ import { cn } from '@/lib/utils';
  * as the Home and Trips covers do: under the status area and the floating
  * controls on a phone, under the header from `md`.
  */
-const COVER_BLEED =
+export const COVER_BLEED =
   'mx-[calc(50%-50vw)] -mt-[calc(var(--safe-top)+2rem)] md:-mt-[calc(var(--safe-top)+var(--header-height)+3rem+1px)]';
-const COVER_HEIGHT = 'min-h-[clamp(28rem,62svh,36rem)] md:min-h-[34rem] lg:min-h-[36rem]';
+export const COVER_HEIGHT = 'min-h-[clamp(28rem,62svh,36rem)] md:min-h-[34rem] lg:min-h-[36rem]';
 /** The cover's place and size, for the skeleton that holds it while finds load. */
 export const FINDS_COVER_FRAME = `${COVER_BLEED} ${COVER_HEIGHT}`;
-const MEASURE =
+export const MEASURE =
   'mx-auto w-full max-w-[var(--layout-app)] ps-[var(--gutter-inline-start)] pe-[var(--gutter-inline-end)]';
-const SCRIM =
+export const SCRIM =
   'absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgba(8,18,13,0.62)_0%,rgba(8,18,13,0.14)_26%,rgba(8,18,13,0.22)_44%,rgba(8,18,13,0.78)_70%,rgba(8,18,13,0.9)_100%)]';
 
 export type FindsCoverTown = {

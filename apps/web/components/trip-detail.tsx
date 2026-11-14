@@ -13,6 +13,7 @@ import { TripNavigationSheet } from '@/components/trip-hub/trip-navigation-sheet
 import { TripHubChapter } from '@/components/trip-hub/trip-hub-chapter';
 import { TripHubCover } from '@/components/trip-hub/trip-hub-cover';
 import { TripHubJourney } from '@/components/trip-hub/trip-hub-journey';
+import { TripHubWays } from '@/components/trip-hub/trip-hub-ways';
 import { TripHubCloseAtHand, TripHubGoodToKnow } from '@/components/trip-hub/trip-hub-sidebar';
 import { useTripContext } from '@/components/trip-provider';
 import { Button } from '@/components/ui/button';
@@ -118,7 +119,14 @@ export function TripDetail({ planScoreEnabled }: Readonly<{ planScoreEnabled: bo
         The days themselves live in the planner; this page is the trip. */}
         {/* Flattened on a phone so the navigation stays pinned for the whole
             page, not only while the cover is in view. */}
-        <div className="contents lg:grid lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-x-5 lg:gap-y-4 lg:[grid-template-areas:'cover_chapter'_'bar_bar']">
+        <div
+          className={cn(
+            'contents lg:grid lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-x-5 lg:gap-y-4',
+            trip.archivedAt
+              ? "lg:[grid-template-areas:'cover_chapter'_'bar_bar'_'note_note'_'ways_ways']"
+              : "lg:[grid-template-areas:'cover_chapter'_'bar_bar'_'ways_ways']",
+          )}
+        >
           <div className="-mx-[var(--gutter-inline-start)] -mt-8 lg:mx-0 lg:mt-0 lg:[grid-area:cover]">
             <TripHubCover
               editorial={editorial}
@@ -134,7 +142,7 @@ export function TripDetail({ planScoreEnabled }: Readonly<{ planScoreEnabled: bo
           {trip.archivedAt ? (
             // Right under the trip's navigation, so it is the first thing read
             // after the cover and never the first thing on the screen.
-            <div className="lg:col-span-2">
+            <div className="lg:[grid-area:note]">
               <TripArchivedNote trip={trip} />
             </div>
           ) : null}
@@ -149,6 +157,13 @@ export function TripDetail({ planScoreEnabled }: Readonly<{ planScoreEnabled: bo
               trip={trip}
             />
           </div>
+          {/* After the chapter on a phone; a full-width row of three on desktop. */}
+          <TripHubWays
+            className="mt-8 lg:mt-2 lg:[grid-area:ways]"
+            overview={overview}
+            stage={stage}
+            trip={trip}
+          />
         </div>
 
         <TripActionFeedback />
@@ -163,7 +178,12 @@ export function TripDetail({ planScoreEnabled }: Readonly<{ planScoreEnabled: bo
         >
           <TripHubJourney overview={overview} stage={stage} trip={trip} />
           <div className="space-y-12 border-t border-border-subtle pt-10 empty:hidden md:border-t-0 md:pt-0">
-            <TripHubGoodToKnow planScoreEnabled={planScoreEnabled} stage={stage} trip={trip} />
+            <TripHubGoodToKnow
+              overview={overview}
+              planScoreEnabled={planScoreEnabled}
+              stage={stage}
+              trip={trip}
+            />
             <TripHubCloseAtHand overview={overview} stage={stage} trip={trip} />
           </div>
         </div>

@@ -1,16 +1,14 @@
 'use client';
 
 import type { TripOverviewData, TripOverviewStop } from '@trove/types';
-import { ArrowRight, ArrowUpRight, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { useRef, type ComponentType } from 'react';
+import { useRef } from 'react';
 
 import { MediaFrame } from '@/components/media-frame';
 import { TodayPostcard } from '@/components/trip-hub/trip-hub-postcard';
-import { TripInsights } from '@/components/trip-insights';
 import { TripReadinessPrompt } from '@/components/trip-readiness-prompt';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import * as Icons from '@/lib/icons';
 import { forgetCachedMediaUrls } from '@/lib/media/storage-cache-key';
@@ -21,8 +19,7 @@ import {
 } from '@/lib/memories/signed-media';
 import type { Trip } from '@/lib/trips/api';
 import { calendarDayDistance } from '@/lib/trips/lifecycle';
-import { tripOverviewDestinations, type TripSection } from '@/lib/trips/navigation';
-import { overviewPlannerHref, type TripHubStage } from '@/lib/trips/overview';
+import type { TripHubStage } from '@/lib/trips/overview';
 import { cn } from '@/lib/utils';
 
 const pad = (value: number) => String(value).padStart(2, '0');
@@ -118,63 +115,6 @@ function FocusDay({
   );
 }
 
-const doorIcons: Record<TripSection, ComponentType<{ className?: string }>> = {
-  expenses: Icons.Expenses,
-  info: Icons.TripInfo,
-  itinerary: Icons.Itinerary,
-  memories: Icons.Memories,
-  mode: Icons.TripMode,
-  reservations: Icons.Reservations,
-  tasks: Icons.Tasks,
-};
-
-/** The two experiences the chapter does not lead with, each with a line on what it is for. */
-function ExperienceDoors({ trip }: Readonly<{ trip: Trip }>) {
-  const t = useTranslations('trips');
-  const destinations = tripOverviewDestinations(trip.id, trip.lifecycle, trip.startDate);
-  return (
-    <nav aria-label={t('tripExperiences')} className="grid grid-cols-2 gap-x-4">
-      {destinations.secondary
-        .filter((destination) => !trip.archivedAt || destination.section !== 'mode')
-        .map((destination) => {
-          const Icon =
-            destination.displayLabelKey === 'preview' ||
-            destination.descriptionKey === 'previewCompleted'
-              ? Icons.Preview
-              : doorIcons[destination.section];
-          return (
-            <Link
-              className="group -mx-2 flex min-h-11 min-w-0 items-start gap-2.5 rounded-[var(--radius-lg)] px-2 py-2 outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none"
-              data-slot="trip-overview-secondary-action"
-              href={destination.href}
-              key={destination.section}
-            >
-              <Icon
-                aria-hidden="true"
-                className={cn(
-                  'mt-0.5 size-[1.125rem] shrink-0',
-                  destination.section === 'memories' ? 'text-accent-strong' : 'text-brand',
-                )}
-              />
-              <span className="min-w-0">
-                <span className="flex items-center gap-0.5 text-[0.9375rem] font-semibold">
-                  {t(destination.displayLabelKey)}
-                  <ChevronRight
-                    aria-hidden="true"
-                    className="size-3.5 text-text-subtle transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
-                  />
-                </span>
-                <span className="mt-0.5 block text-[0.8125rem] leading-snug text-muted-foreground">
-                  {t(`experienceDescription.${destination.descriptionKey}`)}
-                </span>
-              </span>
-            </Link>
-          );
-        })}
-    </nav>
-  );
-}
-
 /** Up to three of the traveller's own photographs, set down like prints. */
 function MemoryPrints({
   onExpired,
@@ -252,9 +192,9 @@ function EmptyPrints() {
 }
 
 /**
- * One current chapter, not a second itinerary: what matters for this trip now,
- * one way in, and the two other experiences a step away. Detail opens in its
- * own experience.
+ * One current chapter, not a second itinerary: what matters for this trip now.
+ * The ways into the trip follow it in their own block; detail opens in its own
+ * experience.
  */
 export function TripHubChapter({
   failed,
@@ -274,12 +214,10 @@ export function TripHubChapter({
   trip: Trip;
 }>) {
   const t = useTranslations('trips.hub');
-  const archiveT = useTranslations('trips.archive');
   const locale = useLocale();
   const day = overview?.day ?? null;
   const days = overview?.days ?? [];
   const totalDays = calendarDayDistance(trip.startDate, trip.endDate) + 1;
-  const destinations = tripOverviewDestinations(trip.id, trip.lifecycle, trip.startDate);
   const photos = (overview?.memories.photos ?? []).filter(
     (photo) => canDecodeHeic() || !isHeicContentType(photo.contentType),
   );
@@ -288,22 +226,6 @@ export function TripHubChapter({
     trip.memoryCount || trip.hasStoryContent || overview?.memories.note || photos.length,
   );
   const remember = stage === 'remember';
-  const href = trip.archivedAt
-    ? `/trips/${trip.id}/itinerary`
-    : stage === 'plan' || stage === 'soon'
-      ? overviewPlannerHref(trip.id, day?.id ?? null)
-      : destinations.primary.href;
-  const action = trip.archivedAt
-    ? archiveT('browse')
-    : stage === 'remember'
-      ? t(hasStory ? 'openMemories' : 'addMemories')
-      : stage === 'live'
-        ? t('continueTrip')
-        : stage === 'soon'
-          ? t('reviewItinerary')
-          : day?.state === 'empty'
-            ? t('planDay', { number: day.number })
-            : t('continuePlanning');
 
   return (
     <section
@@ -442,33 +364,6 @@ export function TripHubChapter({
             {t('retry')}
           </Button>
         </div>
-      ) : null}
-
-      <Link
-        className={cn(
-          buttonVariants({ size: 'lg' }),
-          'h-auto min-h-12 w-full rounded-[var(--radius-xl)] py-3 text-[0.9375rem] whitespace-normal lg:mt-auto',
-        )}
-        data-slot="trip-overview-primary-action"
-        href={href}
-      >
-        <span className="min-w-0">{action}</span>
-        {stage === 'plan' || stage === 'soon' ? (
-          <ArrowRight aria-hidden="true" className="size-4" />
-        ) : (
-          <ArrowUpRight aria-hidden="true" className="size-4" />
-        )}
-      </Link>
-      <ExperienceDoors trip={trip} />
-      {/* The day's one insight follows the way in: Trip Mode holds the rest. */}
-      {stage === 'live' && day ? (
-        <TripInsights
-          dayId={day.id}
-          headingLevel={3}
-          initialItemLimit={1}
-          surface="inset"
-          tripId={trip.id}
-        />
       ) : null}
     </section>
   );

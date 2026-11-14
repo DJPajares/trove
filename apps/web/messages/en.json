@@ -224,14 +224,6 @@
       "error": "We couldn't move this trip. Try again."
     },
     "tripActions": "Trip actions",
-    "tripExperiences": "Trip experiences",
-    "experienceDescription": {
-      "itinerary": "Every day, start to finish.",
-      "memories": "Keep the moments you’ll want back.",
-      "preview": "Preview the trip before departure.",
-      "previewCompleted": "Rehearse your itinerary with a chosen day and time.",
-      "tripMode": "Navigate and explore your trip."
-    },
     "planningReadiness": "Planning readiness",
     "readinessState": {
       "in_progress": "In progress",
@@ -968,6 +960,39 @@
       "moreTasks": "{count, plural, one {# more open task} other {# more open tasks}}",
       "pinned": "Pinned",
       "taskError": "That task couldn’t be updated. Try again.",
+      "ways": {
+        "title": "Ways into this trip",
+        "lead": {
+          "plan": "Shape each day at your own pace. Places, times and routes all live here.",
+          "preview": "Walk through day {number} as if you were there: what’s on now, what’s next, and how to get there.",
+          "previewTrip": "Walk through your trip as if you were there: what’s on now, what’s next, and how to get there.",
+          "live": "Trip Mode shows what’s on now, what’s next, and how to get there."
+        },
+        "previewDay": "Preview day {number}",
+        "previewTrip": "Preview your trip",
+        "openTripMode": "Open Trip Mode",
+        "previewTag": "Trip Mode preview",
+        "itinerary": {
+          "soonTitle": "Review itinerary",
+          "soonBody": "Every day, start to finish.",
+          "liveTitle": "Adjust today",
+          "liveBody": "Move, add or skip a stop.",
+          "rememberTitle": "Revisit the plan",
+          "rememberBody": "Where you went, day by day."
+        },
+        "mode": {
+          "planTitle": "Try your trip early",
+          "planBody": "Pick a day and a time to see what Trip Mode will show you there.",
+          "rememberTitle": "Relive a day",
+          "rememberBody": "Replay any day of the trip, stop by stop."
+        },
+        "memories": {
+          "title": "Memories",
+          "body": "Keep photos and a few words as you go. They’ll be waiting here after.",
+          "liveTitle": "Keep a moment",
+          "liveBody": "Save a photo or a line to this trip."
+        }
+      },
       "toolsDescription": "Everything that supports this trip, a tap away.",
       "toolSummary": {
         "tasks": "{count} open · next: {next}",

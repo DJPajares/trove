@@ -1313,5 +1313,16 @@
         "On a tablet or computer, Memories no longer stacks a second bar under the header. The day you're reading now shows in the bar at the bottom, and tapping it jumps to another day."
       ]
     }
+  },
+  {
+    "id": "kit-page",
+    "date": "2026-11-15",
+    "version": "1.28.0",
+    "summaries": {
+      "en": [
+        "Tools is now Kit: your travel kit of currency and checklists.",
+        "Kit opens on a photo of your next trip with its countdown, and that trip's exchange rate and checklists a tap away."
+      ]
+    }
   }
 ]

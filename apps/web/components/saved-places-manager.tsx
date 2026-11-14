@@ -14,7 +14,14 @@ import {
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 
 import { BackLink } from '@/components/back-link';
 import { PageHeader } from '@/components/page-header';
@@ -84,6 +91,7 @@ import {
   providerResults,
 } from '@/lib/places/local-search';
 import {
+  editorialCoverImage,
   editorialSubjectKey,
   MAX_EDITORIAL_IMAGE_SUBJECTS,
   primaryEditorialImage,
@@ -102,6 +110,12 @@ import {
 } from '@/lib/saved/collection-view';
 import { matchesPlaceQuery } from '@/lib/trip-places/list-view';
 import * as Icons from '@/lib/icons';
+import { HomeSheet } from '@/components/home/home-front-door';
+import { FindsCover, FINDS_COVER_FRAME, type FindsCoverTown } from '@/components/saved/finds-cover';
+import { useTripCreation } from '@/components/trip-creation-provider';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useEntrance, type EntranceClock } from '@/lib/page-entrance';
+import { coverFindsCities, findsCityAnchor, groupFindsByCity } from '@/lib/saved/finds-cities';
 import { cn } from '@/lib/utils';
 import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
@@ -135,6 +149,21 @@ const subscribeNothing = () => () => {};
  * that collection as its own page: its heading, its places, and its options,
  * with every place action and sheet shared with Saved itself.
  */
+/**
+ * The Finds entrance, kept for the tab's life: the route's loading boundary
+ * renders this page too, so in production it mounts twice, and both mounts
+ * share one entrance. A later visit plays it again.
+ */
+const findsEntrance: EntranceClock = { startedAt: null };
+
+/**
+ * Below the cover, Finds rises on Home's sheet. A collection keeps its own
+ * header and sits on the page as before.
+ */
+function PageBody({ children, sheet }: Readonly<{ children: ReactNode; sheet: boolean }>) {
+  return sheet ? <HomeSheet>{children}</HomeSheet> : <div className="space-y-8">{children}</div>;
+}
+
 export function SavedPlacesManager({
   collectionId = null,
 }: Readonly<{ collectionId?: string | null }> = {}) {
@@ -346,6 +375,28 @@ export function SavedPlacesManager({
     () => new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }),
     [locale],
   );
+
+  // The cover's towns, and their photographs in one decorative request of
+  // their own: a town is never a billable Place lookup.
+  const coverCities = useMemo(
+    () => coverFindsCities(groupFindsByCity(savedPlaces).cities),
+    [savedPlaces],
+  );
+  const townImages = useEditorialImages(
+    collectionMode ? [] : coverCities.map((city) => ({ category: 'destination', name: city.name })),
+  );
+  const coverTowns: FindsCoverTown[] = coverCities.map((city) => ({
+    anchor: findsCityAnchor(city.name),
+    count: city.places.length,
+    editorial: editorialCoverImage(
+      townImages.get(editorialSubjectKey({ category: 'destination', name: city.name })),
+      city.name,
+    ),
+    name: city.name,
+    since: monthFormatter.format(new Date(city.since)),
+  }));
+  const entrance = useEntrance(findsEntrance, { ready: status !== 'loading', replay: true });
+  const { openCreateTrip } = useTripCreation();
 
   const dateFormatter = useMemo(
     () =>
@@ -756,6 +807,8 @@ export function SavedPlacesManager({
     : savedPlaces;
   const small = scopePlaces.length <= SMALL_COLLECTION;
   const filtering = Boolean(query.trim()) || categoryFilter !== 'all';
+  const grouped =
+    collectionMode || filtering || small ? null : groupFindsByCity(visibleSavedPlaces);
   // Only categories something here belongs to; a chip that empties the grid helps no one.
   const presentCategoryFilters = categoryFilters.filter(
     (filter) =>
@@ -890,7 +943,11 @@ export function SavedPlacesManager({
   }
 
   return (
-    <section className="mx-auto w-full max-w-6xl space-y-8">
+    <section
+      // Finds' sheet overlaps its cover, so only a collection spaces its blocks here.
+      className={cn('mx-auto w-full max-w-6xl', collectionMode && 'space-y-8')}
+      style={collectionMode ? undefined : entrance.style}
+    >
       {collectionMode ? (
         <div>
           <BackLink href="/saved" label={t('backToSaved')} />
@@ -950,322 +1007,386 @@ export function SavedPlacesManager({
             titleFont="journal"
           />
         </div>
+      ) : status === 'loading' ? (
+        <Skeleton aria-hidden="true" className={cn('rounded-none', FINDS_COVER_FRAME)} />
       ) : (
-        <PageHeader
-          actions={
-            // A phone already adds a place from the + at the centre of its bottom bar.
-            <Button className="max-md:hidden" onClick={() => setAddOpen(true)}>
-              <Plus aria-hidden="true" data-icon="inline-start" />
-              {t('addPlace')}
-            </Button>
-          }
+        <FindsCover
           description={t('description')}
-          eyebrow={t('eyebrow')}
+          enter={entrance.enter}
+          onPlanTrip={openCreateTrip}
           title={t('title')}
-          titleFont="journal"
+          total={savedPlaces.length}
+          towns={coverTowns}
         />
       )}
 
-      {error ? (
-        <Alert role="alert" variant="destructive">
-          <CircleAlert aria-hidden="true" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      ) : null}
+      <PageBody sheet={!collectionMode}>
+        {error ? (
+          <Alert role="alert" variant="destructive">
+            <CircleAlert aria-hidden="true" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
 
-      {status === 'loading' ? (
-        <PageState headingLevel={2} kind="loading" loadingShape="list" title={t('loading')} />
-      ) : status === 'error' ? (
-        <PageState
-          actions={<Button onClick={() => void refresh()}>{t('tryAgain')}</Button>}
-          description={t('loadErrorDescription')}
-          headingLevel={2}
-          icon={<CircleAlert aria-hidden="true" />}
-          kind="error"
-          title={t('loadError')}
-        />
-      ) : collectionMode && !activeCollection ? (
-        <PageState
-          actions={
-            <Button nativeButton={false} render={<Link href="/saved" />} variant="outline">
-              {t('backToSavedAction')}
-            </Button>
-          }
-          description={t('collectionNotFoundDescription')}
-          headingLevel={2}
-          icon={<Icons.Saved aria-hidden="true" />}
-          kind="empty"
-          title={t('collectionNotFoundTitle')}
-        />
-      ) : collectionMode && activeCollection && scopePlaces.length === 0 ? (
-        <PageState
-          actions={
-            <>
-              <Button aria-haspopup="dialog" onClick={() => openPlacesSheet()}>
-                <Plus aria-hidden="true" data-icon="inline-start" />
-                {t('addPlacesAction')}
-              </Button>
+        {status === 'loading' ? (
+          <PageState headingLevel={2} kind="loading" loadingShape="list" title={t('loading')} />
+        ) : status === 'error' ? (
+          <PageState
+            actions={<Button onClick={() => void refresh()}>{t('tryAgain')}</Button>}
+            description={t('loadErrorDescription')}
+            headingLevel={2}
+            icon={<CircleAlert aria-hidden="true" />}
+            kind="error"
+            title={t('loadError')}
+          />
+        ) : collectionMode && !activeCollection ? (
+          <PageState
+            actions={
               <Button nativeButton={false} render={<Link href="/saved" />} variant="outline">
                 {t('backToSavedAction')}
               </Button>
-            </>
-          }
-          description={t('collectionEmptyAddDescription')}
-          headingLevel={2}
-          icon={<FolderPlus aria-hidden="true" />}
-          kind="empty"
-          title={t('collectionEmptyTitle', { name: activeCollection.name })}
-        />
-      ) : savedPlaces.length === 0 ? (
-        // Collections and category filters are inert with nothing to filter yet,
-        // so the first screen offers exactly one thing to do: save a place.
-        <PageState
-          actions={
-            <Button onClick={() => setAddOpen(true)}>
-              <Plus aria-hidden="true" data-icon="inline-start" />
-              {t('addFirstPlace')}
-            </Button>
-          }
-          description={t('emptyDescription')}
-          headingLevel={2}
-          icon={<Icons.Saved aria-hidden="true" />}
-          kind="empty"
-          title={t('emptyTitle')}
-        />
-      ) : (
-        <>
-          {small ? null : (
-            <SearchField
-              label={t('findLabel')}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t('findPlaceholder')}
-              value={query}
-              wrapperClassName="max-w-xl"
-            />
-          )}
-
-          {collectionMode ? null : (
-            <section aria-labelledby="saved-collections" className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <h2
-                  className="flex items-baseline gap-2 text-lg font-semibold"
-                  id="saved-collections"
-                >
-                  {t('collectionsTitle')}
-                  {collections.length ? (
-                    <span className="text-sm font-normal text-muted-foreground tabular-nums">
-                      {collections.length}
-                    </span>
-                  ) : null}
-                </h2>
-                {collections.length ? (
-                  <Button
-                    className="rounded-full"
-                    onClick={() => openCollectionEditor('create')}
-                    size="sm"
-                    variant="outline"
-                  >
-                    <FolderPlus aria-hidden="true" data-icon="inline-start" />
-                    {t('newCollection')}
+            }
+            description={t('collectionNotFoundDescription')}
+            headingLevel={2}
+            icon={<Icons.Saved aria-hidden="true" />}
+            kind="empty"
+            title={t('collectionNotFoundTitle')}
+          />
+        ) : collectionMode && activeCollection && scopePlaces.length === 0 ? (
+          <PageState
+            actions={
+              <>
+                <Button aria-haspopup="dialog" onClick={() => openPlacesSheet()}>
+                  <Plus aria-hidden="true" data-icon="inline-start" />
+                  {t('addPlacesAction')}
+                </Button>
+                <Button nativeButton={false} render={<Link href="/saved" />} variant="outline">
+                  {t('backToSavedAction')}
+                </Button>
+              </>
+            }
+            description={t('collectionEmptyAddDescription')}
+            headingLevel={2}
+            icon={<FolderPlus aria-hidden="true" />}
+            kind="empty"
+            title={t('collectionEmptyTitle', { name: activeCollection.name })}
+          />
+        ) : savedPlaces.length === 0 ? (
+          // Collections and category filters are inert with nothing to filter yet,
+          // so the first screen offers exactly one thing to do: save a place.
+          <PageState
+            actions={
+              <Button onClick={() => setAddOpen(true)}>
+                <Plus aria-hidden="true" data-icon="inline-start" />
+                {t('addFirstPlace')}
+              </Button>
+            }
+            description={t('emptyDescription')}
+            headingLevel={2}
+            icon={<Icons.Saved aria-hidden="true" />}
+            kind="empty"
+            title={t('emptyTitle')}
+          />
+        ) : (
+          <>
+            {/* With too few finds to search, a phone has nothing to show here. */}
+            {collectionMode && small ? null : (
+              <div className={cn('flex items-center gap-3', small && 'max-md:hidden')}>
+                {small ? null : (
+                  <SearchField
+                    label={t('findLabel')}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder={t('findPlaceholder')}
+                    value={query}
+                    wrapperClassName="max-w-xl flex-1"
+                  />
+                )}
+                {/* A phone already adds a place from the + at the centre of its bottom bar. */}
+                {collectionMode ? null : (
+                  <Button className="ms-auto max-md:hidden" onClick={() => setAddOpen(true)}>
+                    <Plus aria-hidden="true" data-icon="inline-start" />
+                    {t('addPlace')}
                   </Button>
-                ) : null}
+                )}
               </div>
-              {collections.length ? (
-                <ScrollShadow
-                  orientation="horizontal"
-                  className="-mx-[var(--gutter-inline-start)] flex snap-x scroll-px-[var(--gutter-inline-start)] gap-3 px-[var(--gutter-inline-start)] pb-1 [scrollbar-width:none]"
-                >
-                  {collections.map((collection) => {
-                    const tiles = coverTiles.get(collection.id) ?? [];
-                    return (
-                      // A collection opens as its own page rather than filtering
-                      // the grid below: it is a place to return to, with an
-                      // address. Focus draws inside the cover so the scroller
-                      // never clips it.
-                      <Link
-                        className="group/collection flex w-40 shrink-0 snap-start flex-col gap-2 text-left outline-none"
-                        href={`/saved/collections/${collection.id}`}
-                        key={collection.id}
-                      >
-                        {/* The layout follows how many places can show a photo,
+            )}
+
+            {collectionMode ? null : (
+              <section aria-labelledby="saved-collections" className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h2
+                    className="flex items-baseline gap-2 text-lg font-semibold"
+                    id="saved-collections"
+                  >
+                    {t('collectionsTitle')}
+                    {collections.length ? (
+                      <span className="text-sm font-normal text-muted-foreground tabular-nums">
+                        {collections.length}
+                      </span>
+                    ) : null}
+                  </h2>
+                  {collections.length ? (
+                    <Button
+                      className="rounded-full"
+                      onClick={() => openCollectionEditor('create')}
+                      size="sm"
+                      variant="outline"
+                    >
+                      <FolderPlus aria-hidden="true" data-icon="inline-start" />
+                      {t('newCollection')}
+                    </Button>
+                  ) : null}
+                </div>
+                {collections.length ? (
+                  <ScrollShadow
+                    orientation="horizontal"
+                    className="-mx-[var(--gutter-inline-start)] flex snap-x scroll-px-[var(--gutter-inline-start)] gap-3 px-[var(--gutter-inline-start)] pb-1 [scrollbar-width:none]"
+                  >
+                    {collections.map((collection) => {
+                      const tiles = coverTiles.get(collection.id) ?? [];
+                      return (
+                        // A collection opens as its own page rather than filtering
+                        // the grid below: it is a place to return to, with an
+                        // address. Focus draws inside the cover so the scroller
+                        // never clips it.
+                        <Link
+                          className="group/collection flex w-40 shrink-0 snap-start flex-col gap-2 text-left outline-none"
+                          href={`/saved/collections/${collection.id}`}
+                          key={collection.id}
+                        >
+                          {/* The layout follows how many places can show a photo,
                           which is known before any photo loads, so the cover
                           never rearranges itself as they arrive. */}
-                        <span
-                          className={cn(
-                            'relative grid aspect-[4/5] w-full gap-0.5 overflow-hidden rounded-[var(--radius-xl)] after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:transition-shadow after:duration-[var(--motion-standard)] group-hover/collection:after:shadow-[inset_0_0_0_2px_var(--color-border-strong)] group-focus-visible/collection:after:shadow-[inset_0_0_0_3px_var(--color-ring)]',
-                            tiles.length > 1 && 'grid-cols-2 grid-rows-[2fr_1fr]',
-                          )}
-                        >
-                          {tiles.length ? (
-                            tiles.map((tile, index) => (
-                              <span
-                                className={cn(
-                                  'relative min-h-0',
-                                  tiles.length > 1 &&
-                                    (index === 0 || tiles.length === 2) &&
-                                    'col-span-2',
-                                )}
-                                key={tile.id}
-                              >
-                                {coverTile(tile, index === 0 ? '160px' : '80px')}
-                              </span>
-                            ))
-                          ) : (
-                            <BrandedFallback alt="" />
-                          )}
-                        </span>
-                        <span>
-                          <span className="block font-journal text-[1.375rem] leading-[1.05] font-normal">
-                            {collection.name}
+                          <span
+                            className={cn(
+                              'relative grid aspect-[4/5] w-full gap-0.5 overflow-hidden rounded-[var(--radius-xl)] after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:transition-shadow after:duration-[var(--motion-standard)] group-hover/collection:after:shadow-[inset_0_0_0_2px_var(--color-border-strong)] group-focus-visible/collection:after:shadow-[inset_0_0_0_3px_var(--color-ring)]',
+                              tiles.length > 1 && 'grid-cols-2 grid-rows-[2fr_1fr]',
+                            )}
+                          >
+                            {tiles.length ? (
+                              tiles.map((tile, index) => (
+                                <span
+                                  className={cn(
+                                    'relative min-h-0',
+                                    tiles.length > 1 &&
+                                      (index === 0 || tiles.length === 2) &&
+                                      'col-span-2',
+                                  )}
+                                  key={tile.id}
+                                >
+                                  {coverTile(tile, index === 0 ? '160px' : '80px')}
+                                </span>
+                              ))
+                            ) : (
+                              <BrandedFallback alt="" />
+                            )}
                           </span>
-                          <span className="text-sm text-muted-foreground">
-                            {t('placeCount', { count: collection.placeCount })}
+                          <span>
+                            <span className="block font-journal text-[1.375rem] leading-[1.05] font-normal">
+                              {collection.name}
+                            </span>
+                            <span className="text-sm text-muted-foreground">
+                              {t('placeCount', { count: collection.placeCount })}
+                            </span>
                           </span>
-                        </span>
-                      </Link>
-                    );
-                  })}
-                </ScrollShadow>
-              ) : (
-                // Before the first collection, the section explains itself once
-                // and offers the one thing to do, rather than an empty row.
-                <div className="flex flex-wrap items-center gap-4 rounded-[var(--radius-xl)] border border-border-subtle bg-card p-5 sm:flex-nowrap">
-                  <span
-                    aria-hidden="true"
-                    className="grid size-12 shrink-0 place-items-center rounded-[var(--radius-lg)] bg-surface-tint text-brand"
-                  >
-                    <FolderPlus className="size-6" />
-                  </span>
-                  <div className="min-w-0 flex-1 basis-56">
-                    <p className="font-journal text-[1.375rem] leading-[1.15] font-normal">
-                      {t('collectionsIntroTitle')}
-                    </p>
-                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                      {t('collectionsIntroDescription')}
-                    </p>
+                        </Link>
+                      );
+                    })}
+                  </ScrollShadow>
+                ) : (
+                  // Before the first collection, the section explains itself once
+                  // and offers the one thing to do, rather than an empty row.
+                  <div className="flex flex-wrap items-center gap-4 rounded-[var(--radius-xl)] border border-border-subtle bg-card p-5 sm:flex-nowrap">
+                    <span
+                      aria-hidden="true"
+                      className="grid size-12 shrink-0 place-items-center rounded-[var(--radius-lg)] bg-surface-tint text-brand"
+                    >
+                      <FolderPlus className="size-6" />
+                    </span>
+                    <div className="min-w-0 flex-1 basis-56">
+                      <p className="font-journal text-[1.375rem] leading-[1.15] font-normal">
+                        {t('collectionsIntroTitle')}
+                      </p>
+                      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                        {t('collectionsIntroDescription')}
+                      </p>
+                    </div>
+                    <Button className="rounded-full" onClick={() => openCollectionEditor('create')}>
+                      <FolderPlus aria-hidden="true" data-icon="inline-start" />
+                      {t('createFirstCollection')}
+                    </Button>
                   </div>
-                  <Button className="rounded-full" onClick={() => openCollectionEditor('create')}>
-                    <FolderPlus aria-hidden="true" data-icon="inline-start" />
-                    {t('createFirstCollection')}
-                  </Button>
+                )}
+              </section>
+            )}
+
+            {collectionMode ? null : (
+              <SavedReadyForTrip nameOf={getPlaceName} saved={savedPlaces} />
+            )}
+
+            <section
+              aria-label={collectionMode ? activeCollection?.name : undefined}
+              aria-labelledby={collectionMode ? undefined : 'saved-everything'}
+              className="space-y-4"
+            >
+              {collectionMode ? null : (
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <h2
+                    className="font-journal text-[2rem] leading-[1] font-normal"
+                    id="saved-everything"
+                  >
+                    {t('everything')}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    {t('placeCount', { count: visibleSavedPlaces.length })}
+                  </p>
+                </div>
+              )}
+              {small ? null : (
+                <ChipGroup
+                  render={<ScrollShadow orientation="horizontal" />}
+                  className="-mx-1 flex-nowrap px-1 pb-1"
+                  multiple={false}
+                  onValueChange={([value]) => setCategoryFilter((value ?? 'all') as CategoryFilter)}
+                  value={[categoryFilter]}
+                >
+                  {presentCategoryFilters.map((filter) => (
+                    <Chip key={filter} value={filter}>
+                      {t(`categories.${filter}`)}
+                    </Chip>
+                  ))}
+                </ChipGroup>
+              )}
+
+              {visibleSavedPlaces.length === 0 ? (
+                <PageState
+                  description={
+                    activeCollection
+                      ? t('collectionEmptyDescription', { name: activeCollection.name })
+                      : t('filterEmptyDescription')
+                  }
+                  headingLevel={2}
+                  icon={<Search aria-hidden="true" />}
+                  kind="empty"
+                  title={t('filterEmptyTitle')}
+                />
+              ) : grouped ? (
+                // Everything, unfiltered, reads by town: a town's finds together
+                // look like the start of a trip.
+                <div className="space-y-8">
+                  {[
+                    ...grouped.cities.map((city) => ({
+                      anchor: findsCityAnchor(city.name),
+                      name: city.name,
+                      places: city.places,
+                    })),
+                    ...(grouped.elsewhere.length
+                      ? [
+                          {
+                            anchor: 'finds-elsewhere',
+                            name: t('elsewhere'),
+                            places: grouped.elsewhere,
+                          },
+                        ]
+                      : []),
+                  ].map((group) => (
+                    <section
+                      aria-labelledby={`${group.anchor}-heading`}
+                      className="scroll-mt-[calc(var(--safe-top)+var(--header-offset)+1rem)] space-y-3"
+                      id={group.anchor}
+                      key={group.anchor}
+                    >
+                      <div className="flex items-baseline justify-between gap-3">
+                        <h3
+                          className="text-lg font-semibold tracking-[-0.015em]"
+                          id={`${group.anchor}-heading`}
+                        >
+                          {group.name}
+                        </h3>
+                        <span className="text-sm text-muted-foreground tabular-nums">
+                          {t('placeCount', { count: group.places.length })}
+                        </span>
+                      </div>
+                      <div
+                        aria-label={group.name}
+                        className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 lg:grid-cols-4"
+                        role="list"
+                      >
+                        {group.places.map((savedPlace) => (
+                          <div className="min-w-0" key={savedPlace.id} role="listitem">
+                            {card(savedPlace)}
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              ) : (
+                <div
+                  aria-label={t('listLabel')}
+                  className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 lg:grid-cols-4"
+                  role="list"
+                >
+                  {visibleSavedPlaces.map((savedPlace, index) => (
+                    <div
+                      className={cn('min-w-0', small && !filtering && index === 0 && 'col-span-2')}
+                      key={savedPlace.id}
+                      role="listitem"
+                    >
+                      {card(savedPlace, small && !filtering && index === 0)}
+                    </div>
+                  ))}
                 </div>
               )}
             </section>
-          )}
 
-          {collectionMode ? null : <SavedReadyForTrip nameOf={getPlaceName} saved={savedPlaces} />}
-
-          <section
-            aria-label={collectionMode ? activeCollection?.name : undefined}
-            aria-labelledby={collectionMode ? undefined : 'saved-everything'}
-            className="space-y-4"
-          >
-            {collectionMode ? null : (
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <h2
-                  className="font-journal text-[2rem] leading-[1] font-normal"
-                  id="saved-everything"
-                >
-                  {t('everything')}
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  {t('placeCount', { count: visibleSavedPlaces.length })}
+            {small && !collectionMode ? (
+              <section className="space-y-2 rounded-[var(--radius-xl)] border border-status-warning/25 bg-surface-tint p-5">
+                <h2 className="font-semibold">{t('growTitle')}</h2>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {t('growDescription')}
                 </p>
-              </div>
-            )}
-            {small ? null : (
-              <ChipGroup
-                render={<ScrollShadow orientation="horizontal" />}
-                className="-mx-1 flex-nowrap px-1 pb-1"
-                multiple={false}
-                onValueChange={([value]) => setCategoryFilter((value ?? 'all') as CategoryFilter)}
-                value={[categoryFilter]}
-              >
-                {presentCategoryFilters.map((filter) => (
-                  <Chip key={filter} value={filter}>
-                    {t(`categories.${filter}`)}
-                  </Chip>
-                ))}
-              </ChipGroup>
-            )}
+              </section>
+            ) : null}
 
-            {visibleSavedPlaces.length === 0 ? (
-              <PageState
-                description={
-                  activeCollection
-                    ? t('collectionEmptyDescription', { name: activeCollection.name })
-                    : t('filterEmptyDescription')
-                }
-                headingLevel={2}
-                icon={<Search aria-hidden="true" />}
-                kind="empty"
-                title={t('filterEmptyTitle')}
-              />
-            ) : (
-              <div
-                aria-label={t('listLabel')}
-                className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 lg:grid-cols-4"
-                role="list"
+            {rediscover && !collectionMode ? (
+              <section
+                aria-labelledby="saved-rediscover"
+                className="flex flex-wrap items-center gap-4 rounded-[var(--radius-xl)] border border-status-warning/25 bg-surface-tint p-5"
               >
-                {visibleSavedPlaces.map((savedPlace, index) => (
-                  <div
-                    className={cn('min-w-0', small && !filtering && index === 0 && 'col-span-2')}
-                    key={savedPlace.id}
-                    role="listitem"
+                <div className="min-w-0 flex-1 basis-64 space-y-1">
+                  <h2
+                    className="font-journal text-[1.5rem] leading-[1.1] font-normal"
+                    id="saved-rediscover"
                   >
-                    {card(savedPlace, small && !filtering && index === 0)}
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {small && !collectionMode ? (
-            <section className="space-y-2 rounded-[var(--radius-xl)] border border-status-warning/25 bg-surface-tint p-5">
-              <h2 className="font-semibold">{t('growTitle')}</h2>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                {t('growDescription')}
-              </p>
-            </section>
-          ) : null}
-
-          {rediscover && !collectionMode ? (
-            <section
-              aria-labelledby="saved-rediscover"
-              className="flex flex-wrap items-center gap-4 rounded-[var(--radius-xl)] border border-status-warning/25 bg-surface-tint p-5"
-            >
-              <div className="min-w-0 flex-1 basis-64 space-y-1">
-                <h2
-                  className="font-journal text-[1.5rem] leading-[1.1] font-normal"
-                  id="saved-rediscover"
-                >
-                  {t('rediscover.title', { name: getPlaceName(rediscover) })}
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  {t('rediscover.description', {
-                    date: monthFormatter.format(new Date(rediscover.createdAt)),
-                  })}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  className="rounded-full"
-                  onClick={() => {
-                    setUnsaveError(null);
-                    setSavedPlaceToUnsave(rediscover);
-                  }}
-                  variant="outline"
-                >
-                  {t('rediscover.letGo')}
-                </Button>
-                <Button className="rounded-full" onClick={() => keepRediscovered(rediscover.id)}>
-                  {t('rediscover.keep')}
-                </Button>
-              </div>
-            </section>
-          ) : null}
-        </>
-      )}
+                    {t('rediscover.title', { name: getPlaceName(rediscover) })}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    {t('rediscover.description', {
+                      date: monthFormatter.format(new Date(rediscover.createdAt)),
+                    })}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    className="rounded-full"
+                    onClick={() => {
+                      setUnsaveError(null);
+                      setSavedPlaceToUnsave(rediscover);
+                    }}
+                    variant="outline"
+                  >
+                    {t('rediscover.letGo')}
+                  </Button>
+                  <Button className="rounded-full" onClick={() => keepRediscovered(rediscover.id)}>
+                    {t('rediscover.keep')}
+                  </Button>
+                </div>
+              </section>
+            ) : null}
+          </>
+        )}
+      </PageBody>
 
       <AddSavedToTripSheet
         name={tripTarget ? getPlaceName(tripTarget) : ''}

@@ -3055,6 +3055,10 @@
       "next": "Next town"
     },
     "elsewhere": "Elsewhere",
+    "collectionCover": {
+      "kicker": "{count, plural, =0 {Collection} one {Collection · # place} other {Collection · # places}}",
+      "townsAndMore": "{towns} and {count} more"
+    },
     "description": "Places you've found and want to get to, ready for any trip.",
     "findLabel": "Search your finds",
     "findPlaceholder": "Search places, notes and collections",

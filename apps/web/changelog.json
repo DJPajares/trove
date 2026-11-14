@@ -1262,5 +1262,15 @@
         "With enough finds, they're grouped by town, so it's easy to see where your next trip could be."
       ]
     }
+  },
+  {
+    "id": "collection-cover",
+    "date": "2026-11-14",
+    "version": "1.27.1",
+    "summaries": {
+      "en": [
+        "Collections in Finds now open on a full photo of their newest place, with the towns they cover and a quick way to add more."
+      ]
+    }
   }
 ]

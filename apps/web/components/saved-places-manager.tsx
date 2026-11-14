@@ -111,6 +111,7 @@ import {
 import { matchesPlaceQuery } from '@/lib/trip-places/list-view';
 import * as Icons from '@/lib/icons';
 import { HomeSheet } from '@/components/home/home-front-door';
+import { CollectionCover } from '@/components/saved/collection-cover';
 import { FindsCover, FINDS_COVER_FRAME, type FindsCoverTown } from '@/components/saved/finds-cover';
 import { useTripCreation } from '@/components/trip-creation-provider';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -155,6 +156,8 @@ const subscribeNothing = () => () => {};
  * share one entrance. A later visit plays it again.
  */
 const findsEntrance: EntranceClock = { startedAt: null };
+/** A collection's own entrance; it replays on every visit, as Finds does. */
+const collectionEntrance: EntranceClock = { startedAt: null };
 
 /**
  * Below the cover, Finds rises on Home's sheet. A collection keeps its own
@@ -395,7 +398,10 @@ export function SavedPlacesManager({
     name: city.name,
     since: monthFormatter.format(new Date(city.since)),
   }));
-  const entrance = useEntrance(findsEntrance, { ready: status !== 'loading', replay: true });
+  const entrance = useEntrance(collectionMode ? collectionEntrance : findsEntrance, {
+    ready: status !== 'loading',
+    replay: true,
+  });
   const { openCreateTrip } = useTripCreation();
 
   const dateFormatter = useMemo(
@@ -474,6 +480,22 @@ export function SavedPlacesManager({
   }
 
   const getEditorialImage = (savedPlace: SavedPlace) => getEditorialImages(savedPlace)[0] ?? null;
+
+  // A collection's cover is its newest place with a photograph, asked for on
+  // its own so a search or a filter on the grid never changes the cover.
+  const collectionLead = activeCollection
+    ? (collectionCoverTiles(activeCollection.id, savedPlaces).find(
+        (savedPlace) => savedPlace.place.kind === 'provider',
+      ) ?? null)
+    : null;
+  const collectionLeadImages = useEditorialImages(
+    collectionLead ? [editorialSubject(collectionLead)] : [],
+  );
+  const collectionLeadImage = collectionLead
+    ? primaryEditorialImage(
+        collectionLeadImages.get(editorialSubjectKey(editorialSubject(collectionLead))),
+      )
+    : null;
 
   /** What the details sheet cannot know: how this place sits in the library. */
   function getDetailsMeta(savedPlace: SavedPlace): PlaceDetailsRow[] {
@@ -809,6 +831,24 @@ export function SavedPlacesManager({
   const filtering = Boolean(query.trim()) || categoryFilter !== 'all';
   const grouped =
     collectionMode || filtering || small ? null : groupFindsByCity(visibleSavedPlaces);
+  // Finds and an existing collection open on a cover with the page on a sheet;
+  // a collection that is not there keeps the plain page.
+  const immersive = !collectionMode || status === 'loading' || Boolean(activeCollection);
+  // Where a collection's places are, by the same safe town reading as Finds.
+  const collectionTownNames = collectionMode
+    ? groupFindsByCity(scopePlaces).cities.map((city) => city.name)
+    : [];
+  const listedTowns = new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' }).format(
+    collectionTownNames.slice(0, collectionTownNames.length > 3 ? 2 : 3),
+  );
+  const collectionTowns = !collectionTownNames.length
+    ? null
+    : collectionTownNames.length > 3
+      ? t('collectionCover.townsAndMore', {
+          count: collectionTownNames.length - 2,
+          towns: listedTowns,
+        })
+      : listedTowns;
   // Only categories something here belongs to; a chip that empties the grid helps no one.
   const presentCategoryFilters = categoryFilters.filter(
     (filter) =>
@@ -945,65 +985,74 @@ export function SavedPlacesManager({
   return (
     <section
       // Finds' sheet overlaps its cover, so only a collection spaces its blocks here.
-      className={cn('mx-auto w-full max-w-6xl', collectionMode && 'space-y-8')}
-      style={collectionMode ? undefined : entrance.style}
+      className={cn('mx-auto w-full max-w-6xl', !immersive && 'space-y-8')}
+      style={immersive ? entrance.style : undefined}
     >
-      {collectionMode ? (
+      {collectionMode && status === 'loading' ? (
+        <Skeleton aria-hidden="true" className={cn('rounded-none', FINDS_COVER_FRAME)} />
+      ) : collectionMode && activeCollection ? (
+        <CollectionCover
+          actions={
+            <>
+              <Button
+                aria-haspopup="dialog"
+                className="rounded-full bg-white text-neutral-900 hover:bg-white/90"
+                onClick={() => openPlacesSheet()}
+                size="lg"
+                type="button"
+              >
+                <Plus aria-hidden="true" data-icon="inline-start" />
+                {t('addPlacesAction')}
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      className="rounded-full border-white/25 bg-black/25 text-white backdrop-blur-md hover:bg-black/40 hover:text-white focus-visible:ring-white/70"
+                      size="lg"
+                      type="button"
+                      variant="outline"
+                    />
+                  }
+                >
+                  <Pencil aria-hidden="true" data-icon="inline-start" />
+                  {t('editCollectionAction')}
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-52">
+                  <DropdownMenuItem
+                    onClick={() => openCollectionEditor('rename', activeCollection)}
+                  >
+                    <Pencil aria-hidden="true" />
+                    {t('renameCollectionTitle')}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => setCollectionToDelete(activeCollection)}
+                    variant="destructive"
+                  >
+                    <Trash2 aria-hidden="true" />
+                    {t('deleteCollection')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          }
+          backHref="/saved"
+          backLabel={t('backToSavedAction')}
+          editorial={collectionLeadImage}
+          enter={entrance.enter}
+          kicker={t('collectionCover.kicker', { count: scopePlaces.length })}
+          name={activeCollection.name}
+          towns={collectionTowns}
+        />
+      ) : collectionMode ? (
+        // A collection that is not there keeps the plain header: there is no
+        // photograph or name to set on a cover.
         <div>
           <BackLink href="/saved" label={t('backToSaved')} />
           <PageHeader
-            actions={
-              activeCollection ? (
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    aria-haspopup="dialog"
-                    className="rounded-full"
-                    onClick={() => openPlacesSheet()}
-                    size="sm"
-                    type="button"
-                  >
-                    <Plus aria-hidden="true" data-icon="inline-start" />
-                    {t('addPlacesAction')}
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <Button
-                          className="rounded-full"
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                        />
-                      }
-                    >
-                      <Pencil aria-hidden="true" data-icon="inline-start" />
-                      {t('editCollectionAction')}
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-52">
-                      <DropdownMenuItem
-                        onClick={() => openCollectionEditor('rename', activeCollection)}
-                      >
-                        <Pencil aria-hidden="true" />
-                        {t('renameCollectionTitle')}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => setCollectionToDelete(activeCollection)}
-                        variant="destructive"
-                      >
-                        <Trash2 aria-hidden="true" />
-                        {t('deleteCollection')}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              ) : undefined
-            }
-            description={
-              activeCollection ? t('placeCount', { count: scopePlaces.length }) : undefined
-            }
             eyebrow={t('collectionEyebrow')}
-            title={activeCollection?.name ?? t('collectionEyebrow')}
+            title={t('collectionEyebrow')}
             titleFont="journal"
           />
         </div>
@@ -1020,7 +1069,7 @@ export function SavedPlacesManager({
         />
       )}
 
-      <PageBody sheet={!collectionMode}>
+      <PageBody sheet={immersive}>
         {error ? (
           <Alert role="alert" variant="destructive">
             <CircleAlert aria-hidden="true" />

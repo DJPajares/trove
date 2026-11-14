@@ -40,11 +40,11 @@ export function TripChrome({
 }: Readonly<{ children: ReactNode; tripId: string }>) {
   const t = useTranslations('trips');
   const context = useTripContext();
-  const enter = useTripEntrance();
   const loadedTrip = context?.trip ?? null;
   const trip = loadedTrip
     ? { ...loadedTrip, lifecycle: overviewLifecycle(loadedTrip, new Date()) }
     : null;
+  const { enter, style: entranceStyle } = useTripEntrance(Boolean(trip));
   const overviewQuery = useTripOverview(tripId, Boolean(trip));
   const [leadingSlot, setLeadingSlot] = useState<HTMLElement | null>(null);
   const [actionsSlot, setActionsSlot] = useState<HTMLElement | null>(null);
@@ -79,7 +79,7 @@ export function TripChrome({
   }
 
   const content = (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="mx-auto w-full max-w-5xl" style={entranceStyle}>
       {/* Flatten the mobile header so the sticky navigation is bounded by the
           whole section, rather than just the photograph. Every section keeps
           its navigation in reach, not only the itinerary. */}

@@ -22,6 +22,7 @@ import { tripDayProgress } from '@/lib/trips/library';
 import { daysUntilTripStart, resolveCountdown } from '@/lib/trips/lifecycle';
 import type { TripNextUp } from '@/lib/trips/next-up';
 import { tripDestinationSummary } from '@/lib/trips/summary';
+import { pageEntrance } from '@/lib/page-entrance';
 import { cn } from '@/lib/utils';
 
 const KICKER =
@@ -133,9 +134,6 @@ const MEASURE =
 const SCRIM =
   'absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgba(8,18,13,0.62)_0%,rgba(8,18,13,0.14)_26%,rgba(8,18,13,0.22)_44%,rgba(8,18,13,0.78)_70%,rgba(8,18,13,0.9)_100%)]';
 
-const ENTER =
-  'motion-safe:animate-in motion-safe:fill-mode-both motion-safe:duration-700 motion-safe:ease-[var(--ease-standard)] motion-safe:fade-in motion-safe:slide-in-from-bottom-4';
-
 export type LibraryCoverSlide = { editorial: EditorialImageReference | null; trip: Trip };
 
 function CoverSlide({
@@ -166,8 +164,7 @@ function CoverSlide({
         alt={editorial ? mediaT('alt.tripEditorial', { name: subject }) : ''}
         className={cn(
           'absolute inset-0 -z-20 h-full w-full rounded-none',
-          first &&
-            'motion-safe:animate-in motion-safe:duration-[1400ms] motion-safe:ease-out motion-safe:zoom-in-105',
+          first && pageEntrance.media,
         )}
         preload={first}
         sizes="100vw"
@@ -182,7 +179,7 @@ function CoverSlide({
         <div
           className={cn(
             'mx-auto w-full max-w-5xl space-y-5 pt-[calc(var(--safe-top)+5rem)] pb-24 md:pt-[calc(var(--safe-top)+var(--header-height)+3rem)] md:pb-28',
-            first && ENTER,
+            first && pageEntrance.rise,
           )}
         >
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">

@@ -1,20 +1,13 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react';
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 
 import { useEditorialImageResolution } from '@/hooks/use-editorial-images';
 import { tripSecondaryImages } from '@/lib/media/day-header-photos';
 import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
+import { useEntrance, type EntranceClock } from '@/lib/page-entrance';
 import { apiErrorStatus } from '@/lib/query/client';
 import { queryKeys } from '@/lib/query/keys';
 import { fetchTrip, type Trip } from '@/lib/trips/api';
@@ -41,8 +34,8 @@ type TripContextValue = {
 
 const TripContext = createContext<TripContextValue | null>(null);
 
-/** Whether this visit to the trip has already made its entrance. */
-const TripEntranceContext = createContext<{ played: boolean } | null>(null);
+/** When this visit to the trip made its entrance. */
+const TripEntranceContext = createContext<EntranceClock | null>(null);
 
 /**
  * The trip, fetched once for everything inside `/trips/[tripId]`.
@@ -64,7 +57,7 @@ export function TripProvider({
   const queryClient = useQueryClient();
   // One per visit: the provider lives for as long as the traveller is inside
   // this trip, and leaving it unmounts the provider.
-  const [entrance] = useState(() => ({ played: false }));
+  const [entrance] = useState<EntranceClock>(() => ({ startedAt: null }));
   const { data, error, isPending } = useQuery({
     // Opening a trip rechecks reversible archive state changed on another device.
     refetchOnMount: 'always',
@@ -171,20 +164,15 @@ export function useTripContext() {
 }
 
 /**
- * Whether the screen mounting now should make the trip's entrance. True only
- * for the first screen of a visit: the Overview and the sections are separate
- * layouts, so moving between them remounts the cover, and replaying the
- * entrance on every tab would turn arrival into noise. Read once, at mount, so
- * a screen that shows a skeleton first still makes its entrance when the trip
+ * The trip's entrance for the screen mounting now. It is made once per visit:
+ * the Overview and the sections are separate layouts, so moving between them
+ * remounts the cover, and replaying the entrance on every tab would turn
+ * arrival into noise. `ready` is whether the screen is showing the trip yet,
+ * so a screen that begins on a skeleton still makes its entrance when the trip
  * arrives.
  */
-export function useTripEntrance() {
-  const entrance = useContext(TripEntranceContext);
-  const [enter] = useState(() => Boolean(entrance && !entrance.played));
-  useEffect(() => {
-    if (entrance) entrance.played = true;
-  }, [entrance]);
-  return enter;
+export function useTripEntrance(ready: boolean) {
+  return useEntrance(useContext(TripEntranceContext), { ready, replay: false });
 }
 
 export function useTripReadOnly() {

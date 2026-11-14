@@ -37,13 +37,13 @@ export function TripDetail({ planScoreEnabled }: Readonly<{ planScoreEnabled: bo
   // inside the trip is showing, and fetching it here as well is what used to
   // make the cover arrive twice.
   const tripContext = useTripContext();
-  const enter = useTripEntrance();
   const tripId = tripContext?.tripId ?? '';
   const loadedTrip = tripContext?.trip ?? null;
   const trip = loadedTrip
     ? { ...loadedTrip, lifecycle: overviewLifecycle(loadedTrip, new Date()) }
     : null;
   const status = tripContext?.status ?? 'loading';
+  const { enter, style: entranceStyle } = useTripEntrance(Boolean(trip));
   const editorial = tripContext?.editorial ?? null;
   const overviewQuery = useTripOverview(tripId, Boolean(trip));
   const overview = overviewQuery.data;
@@ -114,7 +114,7 @@ export function TripDetail({ planScoreEnabled }: Readonly<{ planScoreEnabled: bo
     .slice(0, 2);
   return (
     <TripActionsProvider trip={trip}>
-      <article className="mx-auto w-full max-w-5xl" data-slot="trip-hub">
+      <article className="mx-auto w-full max-w-5xl" data-slot="trip-hub" style={entranceStyle}>
         {/* Phone: the cover, then a sheet that rises over it carrying the trip's
         row and its chapter. Desktop: the photograph and the chapter side by
         side, with the row beneath both. One order in the document either way.

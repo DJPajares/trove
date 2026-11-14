@@ -191,20 +191,12 @@ export function TripHubWays({
       >
         {ways('title')}
       </h2>
-      <ul
-        className={cn(
-          'mt-3 grid gap-2.5 lg:gap-3',
-          sections.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2',
-        )}
-      >
+      <ul className="mt-3 grid gap-2.5">
         {sections.map((section) => {
           const way = bySection[section];
           const kicker = t(kickerKey[section]);
           return (
-            <li
-              className={cn('flex min-w-0', section === lead && 'order-first lg:order-none')}
-              key={section}
-            >
+            <li className={cn('flex min-w-0', section === lead && 'order-first')} key={section}>
               {section === lead ? (
                 <LeadWay kicker={kicker} way={way} />
               ) : (
@@ -264,7 +256,7 @@ function LeadWay({ kicker, way }: Readonly<{ kicker: string; way: Way }>) {
 function RowWay({ kicker, way }: Readonly<{ kicker: string; way: Way }>) {
   return (
     <Link
-      className="group flex min-h-16 w-full min-w-0 items-center gap-3.5 rounded-[var(--radius-xl)] border border-border-subtle bg-card px-3.5 py-3 outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none lg:items-start lg:p-4"
+      className="group flex min-h-16 w-full min-w-0 items-center gap-3.5 rounded-[var(--radius-xl)] border border-border-subtle bg-card px-3.5 py-3 outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none"
       data-slot="trip-overview-secondary-action"
       href={way.href}
     >
@@ -294,7 +286,7 @@ function RowWay({ kicker, way }: Readonly<{ kicker: string; way: Way }>) {
       </span>
       <ChevronRight
         aria-hidden="true"
-        className="size-4 shrink-0 text-text-subtle transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none lg:mt-1"
+        className="size-4 shrink-0 text-text-subtle transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
       />
     </Link>
   );

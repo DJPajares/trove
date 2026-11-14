@@ -1282,5 +1282,15 @@
         "On a computer or tablet, a trip's itinerary and tools now open on a full-width photo of the trip, like Home and Trips."
       ]
     }
+  },
+  {
+    "id": "overview-full-cover",
+    "date": "2026-11-14",
+    "version": "1.27.3",
+    "summaries": {
+      "en": [
+        "On a computer or tablet, a trip's overview now opens on the same full-width photo as its itinerary, with the ways into your trip beside its summary."
+      ]
+    }
   }
 ]

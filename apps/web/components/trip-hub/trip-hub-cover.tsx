@@ -132,7 +132,6 @@ function CoverSignature({
 export function TripHubCover({
   editorial,
   enter = false,
-  layout = 'hub',
   onCoverExpired,
   overview,
   stage,
@@ -141,7 +140,6 @@ export function TripHubCover({
   editorial: EditorialImageReference | null;
   /** Settle and rise into place, as the first screen of a visit to the trip. */
   enter?: boolean;
-  layout?: 'hub' | 'section';
   /** The signed cover link expired; the trip must be re-read for a fresh one. */
   onCoverExpired: () => void;
   overview: TripOverviewData | undefined;
@@ -155,19 +153,16 @@ export function TripHubCover({
   const lastCoverRefreshAt = useRef<number | null>(null);
   const destinations = tripDestinationSummary(trip);
   const totalDays = calendarDayDistance(trip.startDate, trip.endDate) + 1;
-  // A section's cover runs beneath the header, which takes its ink meanwhile.
-  useCoverUnderHeader(layout === 'section');
+  // The cover runs beneath the header, which takes its ink meanwhile.
+  useCoverUnderHeader();
 
   return (
     <section
       aria-labelledby="trip-detail-heading"
       className={cn(
-        'relative isolate flex min-h-[var(--trip-cover-height)] flex-col justify-end overflow-hidden bg-surface-media [--trip-cover-height:clamp(27rem,118vw,34rem)] lg:min-h-[33rem]',
-        // The Overview sets the cover beside its chapter as a card; a section
-        // runs it edge to edge beneath the header from `md`.
-        layout === 'hub'
-          ? 'lg:h-full lg:rounded-[var(--radius-2xl)]'
-          : 'md:min-h-[34rem] lg:min-h-[36rem]',
+        // Edge to edge at every size, beneath the header from `md`, as Home,
+        // Trips and Finds are.
+        'relative isolate flex min-h-[var(--trip-cover-height)] flex-col justify-end overflow-hidden bg-surface-media [--trip-cover-height:clamp(27rem,118vw,34rem)] md:min-h-[34rem] lg:min-h-[36rem]',
       )}
       data-slot="trip-hub-cover"
     >
@@ -192,11 +187,7 @@ export function TripHubCover({
           }
         }}
         preload
-        sizes={
-          layout === 'hub'
-            ? '(max-width: 1023px) 100vw, 720px'
-            : '(max-width: 1023px) 100vw, 1024px'
-        }
+        sizes="100vw"
         source={resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial })}
         variant="cover"
       />
@@ -209,7 +200,7 @@ export function TripHubCover({
         className={cn(
           'absolute top-[max(1rem,var(--safe-top))] left-[max(1rem,var(--safe-left))] z-10 grid size-11 place-items-center rounded-full border border-white/18 bg-neutral-950/50 text-white backdrop-blur-md outline-none transition-colors duration-[var(--motion-standard)] hover:bg-neutral-950/75 focus-visible:ring-3 focus-visible:ring-white/60 motion-reduce:transition-none',
           // Beneath the header from `md`, so it waits below it.
-          layout === 'section' && 'md:top-[calc(var(--safe-top)+var(--header-height)+1.5rem)]',
+          'md:top-[calc(var(--safe-top)+var(--header-height)+1.5rem)]',
         )}
         href="/trips"
       >
@@ -217,11 +208,8 @@ export function TripHubCover({
       </Link>
       <div
         className={cn(
-          'relative flex flex-col items-start gap-2 px-[var(--gutter-inline-start)] pt-24 pb-14 text-white',
-          layout === 'hub'
-            ? 'lg:px-9 lg:pb-9'
-            : // Edge to edge, the words stay on the page's measure.
-              'w-full md:mx-auto md:max-w-[calc(64rem+var(--gutter-inline-start)+var(--gutter-inline-end))] md:pt-[calc(var(--safe-top)+var(--header-height)+5rem)] md:pb-20',
+          // Edge to edge, the words stay on the page's measure.
+          'relative flex w-full flex-col items-start gap-2 px-[var(--gutter-inline-start)] pt-24 pb-14 text-white md:mx-auto md:max-w-[calc(64rem+var(--gutter-inline-start)+var(--gutter-inline-end))] md:pt-[calc(var(--safe-top)+var(--header-height)+5rem)] md:pb-20',
           enter && pageEntrance.rise,
         )}
       >
@@ -273,29 +261,14 @@ export function TripHubCover({
 }
 
 /** Reserve the photograph and identity before the shared trip data arrives. */
-export function TripHubCoverSkeleton({
-  label,
-  layout = 'hub',
-}: Readonly<{ label: string; layout?: 'hub' | 'section' }>) {
+export function TripHubCoverSkeleton({ label }: Readonly<{ label: string }>) {
   return (
     <div aria-busy="true" aria-live="polite" className="relative" role="status">
       <span className="sr-only">{label}</span>
-      <Skeleton
-        className={cn(
-          'h-[clamp(27rem,118vw,34rem)] rounded-none lg:min-h-[33rem]',
-          layout === 'hub'
-            ? 'lg:h-full lg:rounded-[var(--radius-2xl)]'
-            : 'md:h-[34rem] lg:h-[36rem]',
-        )}
-      />
+      <Skeleton className="h-[clamp(27rem,118vw,34rem)] rounded-none md:h-[34rem] lg:h-[36rem]" />
       <div
         aria-hidden="true"
-        className={cn(
-          'absolute inset-x-0 bottom-0 space-y-3 px-[var(--gutter-inline-start)] pb-14',
-          layout === 'hub'
-            ? 'lg:px-9'
-            : 'md:mx-auto md:max-w-[calc(64rem+var(--gutter-inline-start)+var(--gutter-inline-end))] md:pb-20',
-        )}
+        className="absolute inset-x-0 bottom-0 space-y-3 px-[var(--gutter-inline-start)] pb-14 md:mx-auto md:max-w-[calc(64rem+var(--gutter-inline-start)+var(--gutter-inline-end))] md:pb-20"
       >
         <Skeleton className="h-6 w-28 rounded-full bg-white/20" />
         <Skeleton className="h-9 w-4/5 bg-white/20" />

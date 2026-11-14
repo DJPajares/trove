@@ -3,6 +3,7 @@ import { useTripReadOnly } from '@/components/trip-provider';
 
 import { ChevronRight, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import type { ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import * as Icons from '@/lib/icons';
@@ -33,10 +34,13 @@ export function PlannerContextBar({
   onOpenPlaces,
   onOpenStay,
   stay,
+  viewToggle,
 }: Readonly<{
   onOpenPlaces: () => void;
   onOpenStay: () => void;
   stay: PlannerStaySummary;
+  /** How the day's stops are shown, while a day is open. */
+  viewToggle?: ReactNode;
 }>) {
   const t = useTranslations('itinerary.planner.context');
   const readOnly = useTripReadOnly();
@@ -106,6 +110,7 @@ export function PlannerContextBar({
         </span>
         {unset ? null : <ChevronRight aria-hidden="true" className="-mr-1 text-muted-foreground" />}
       </Button>
+      {viewToggle ? <div className="ms-auto shrink-0">{viewToggle}</div> : null}
     </div>
   );
 }

@@ -33,6 +33,9 @@ import type { BandedEntry } from '@/lib/itinerary/day-bands';
 import { formatSuggestedClock } from '@/lib/itinerary/day-time-suggestions';
 import { dropPosition } from '@/lib/itinerary/optimistic';
 
+import type { ItineraryView } from '@/hooks/use-itinerary-view';
+
+import { DaySimpleList } from './day-simple-list';
 import { InsertButton, InsertGap } from './insert-gap';
 import { LegConnector } from './leg-connector';
 import {
@@ -95,6 +98,7 @@ export function DayTimeline({
   resolveBase,
   resolveItem,
   savingRouteOwner,
+  view = 'detailed',
 }: Readonly<{
   /** What is worth a look about a stop, set under it. */
   attentionFor: (item: ItineraryItem) => ReactNode;
@@ -123,6 +127,8 @@ export function DayTimeline({
   ) => { located: boolean; name: string; selected: boolean } | null;
   resolveItem: (item: ItineraryItem) => StopView;
   savingRouteOwner: string | null;
+  /** Simple reads the day as a plain list; Detailed is the cards it is built with. */
+  view?: ItineraryView;
 }>) {
   const t = useTranslations('itinerary');
   const insertT = useTranslations('itinerary.planner.insert');
@@ -343,6 +349,26 @@ export function DayTimeline({
     : activeItem?.dayPart
       ? t(`schedule.${activeItem.dayPart}`)
       : null;
+
+  if (view === 'simple') {
+    return (
+      <DaySimpleList
+        entries={entries}
+        hasAttention={(item) => Boolean(attentionFor(item)) || Boolean(partialFor?.(item))}
+        label={label}
+        onAddStop={insertAtEnd.onInsert}
+        onOpenBase={onViewBaseDetails}
+        // A stop with no Place has no details to open, so it opens for editing.
+        onOpenItem={(item, stop) =>
+          stop.detailed ? onViewItemDetails(item) : menuActions.onEditItem(item)
+        }
+        onSelectBase={onSelectBase}
+        onSelectItem={onSelectItem}
+        resolveBase={resolveBase}
+        resolveItem={resolveItem}
+      />
+    );
+  }
 
   return (
     <DndContext

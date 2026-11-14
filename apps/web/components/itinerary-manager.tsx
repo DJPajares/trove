@@ -51,6 +51,7 @@ import {
   PlannerContextBar,
   type PlannerStaySummary,
 } from '@/components/planner/planner-context-bar';
+import { ItineraryViewToggle } from '@/components/planner/itinerary-view-toggle';
 import { PlannerRibbon } from '@/components/planner/planner-ribbon';
 import { StaySheet } from '@/components/planner/stay-sheet';
 import { TimingSheet } from '@/components/planner/timing-sheet';
@@ -107,6 +108,8 @@ import {
 import { useOnlineStatus } from '@/components/trip-sync-status';
 import { useTripContext, useTripReadOnly } from '@/components/trip-provider';
 import { useCompactItinerary } from '@/hooks/use-compact-itinerary';
+import { overviewLifecycle } from '@/lib/trips/overview';
+import { useItineraryView } from '@/hooks/use-itinerary-view';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { useDayHeaderPhotos } from '@/hooks/use-day-header-photos';
 import { useVisibleKeys } from '@/hooks/use-visible-keys';
@@ -306,6 +309,11 @@ export function ItineraryManager({
   const [dayTimesOpen, setDayTimesOpen] = useState(false);
   const [betterOrderDay, setBetterOrderDay] = useState<ItineraryDay | null>(null);
   const { compact, setCompactItinerary } = useCompactItinerary();
+  // A finished trip is read rather than built, so it opens as the plain list.
+  const viewedTrip = useTripContext()?.trip ?? null;
+  const { setView: setStopsView, view: stopsView } = useItineraryView(
+    viewedTrip ? overviewLifecycle(viewedTrip, new Date()) === 'completed' : false,
+  );
   const [dayMoveSourceId, setDayMoveSourceId] = useState<string | null>(null);
   const [dayMoveTargetId, setDayMoveTargetId] = useState('');
   const [dayMoveStrategy, setDayMoveStrategy] = useState<'append' | 'swap'>('append');
@@ -1506,6 +1514,11 @@ export function ItineraryManager({
           setStayOpen(true);
         }}
         stay={staySummary}
+        viewToggle={
+          activeView === 'day' ? (
+            <ItineraryViewToggle onChange={setStopsView} view={stopsView} />
+          ) : undefined
+        }
       />
 
       {error ? (
@@ -1850,6 +1863,7 @@ export function ItineraryManager({
                   };
                 }}
                 partialFor={stopPartial}
+                view={stopsView}
                 savingRouteOwner={savingRouteOwner}
               />
             ) : (

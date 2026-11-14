@@ -2063,6 +2063,16 @@
         "tripPast": "No forecast was saved for some past days.",
         "tripMissing": "Some days don’t have a place to forecast yet."
       },
+      "view": {
+        "label": "How stops are shown",
+        "simple": "Simple",
+        "detailed": "Detailed",
+        "leg": "{duration} · {mode}",
+        "startsAt": "Start · {name}",
+        "endsAt": "End · {name}",
+        "needsLook": "Needs a look. Switch to Detailed for more.",
+        "addStop": "Add a stop"
+      },
       "masthead": {
         "kicker": "Day",
         "today": "Today",

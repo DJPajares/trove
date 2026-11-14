@@ -36,6 +36,7 @@ import {
 import { groupTripsForLibrary } from '@/lib/trips/lifecycle';
 import { primaryTripDestinations, withLiveTripModeFirst } from '@/lib/trips/navigation';
 import { resolveTripNextUp } from '@/lib/trips/next-up';
+import { useEntrance, type EntranceClock } from '@/lib/page-entrance';
 import { libraryEditorialSubjects, tripEditorialSubject } from '@/lib/trips/summary';
 import { useLibraryView } from '@/lib/trips/use-library-view';
 import { ScrollShadow } from '@/components/ui/scroll-shadow';
@@ -72,6 +73,13 @@ function TripCreationIntent() {
  * The library creates trips; editing, sharing and deleting a trip belong to
  * the trip's own screens, where the traveller can see what they are changing.
  */
+/**
+ * The library's entrance, kept for the tab's life: the prefetched loading
+ * boundary and the page that replaces it are two mounts of this screen, and
+ * they share one entrance. A later visit plays it again.
+ */
+const libraryEntrance: EntranceClock = { startedAt: null };
+
 export function TripsManager() {
   const t = useTranslations('trips');
   const libraryT = useTranslations('trips.library');
@@ -86,6 +94,7 @@ export function TripsManager() {
   // A failed background refresh must not replace a usable library with an error.
   const status = tripsQuery.data ? 'idle' : tripsQuery.isPending ? 'loading' : 'error';
   const view = useLibraryView(tripsQuery.data !== undefined);
+  const entrance = useEntrance(libraryEntrance, { ready: status === 'idle', replay: true });
 
   const library = useMemo(() => groupTripsForLibrary(trips), [trips]);
   const lead = library.featured;
@@ -188,7 +197,7 @@ export function TripsManager() {
   }
 
   return (
-    <section className="mx-auto w-full max-w-5xl">
+    <section className="mx-auto w-full max-w-5xl" style={entrance.style}>
       {intents}
       <LibraryCover
         description={libraryT('description')}

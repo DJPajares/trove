@@ -231,10 +231,10 @@ export function TripHubChapter({
     <section
       aria-labelledby="trip-chapter-heading"
       className={cn(
-        'flex min-w-0 flex-col gap-5 lg:flex-1',
+        'flex min-w-0 flex-col gap-5',
         remember
           ? '-mx-[var(--gutter-inline-start)] bg-paper px-[var(--gutter-inline-start)] py-8 lg:mx-0 lg:rounded-[var(--radius-2xl)] lg:px-8'
-          : 'pt-6 lg:rounded-[var(--radius-2xl)] lg:border lg:border-border-subtle lg:bg-card lg:p-7',
+          : 'pt-6 lg:pt-0',
       )}
       data-slot="trip-hub-chapter"
     >

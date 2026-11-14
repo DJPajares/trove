@@ -115,49 +115,39 @@ export function TripDetail({ planScoreEnabled }: Readonly<{ planScoreEnabled: bo
   return (
     <TripActionsProvider trip={trip}>
       <article className="mx-auto w-full max-w-5xl" data-slot="trip-hub" style={entranceStyle}>
-        {/* Phone: the cover, then a sheet that rises over it carrying the trip's
-        row and its chapter. Desktop: the photograph and the chapter side by
-        side, with the row beneath both. One order in the document either way.
-        The days themselves live in the planner; this page is the trip. */}
-        {/* Flattened on a phone so the navigation stays pinned for the whole
-            page, not only while the cover is in view. */}
-        <div
-          className={cn(
-            'contents lg:grid lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-x-5 lg:gap-y-4',
-            trip.archivedAt
-              ? "lg:[grid-template-areas:'cover_chapter'_'bar_bar'_'note_note'_'ways_ways']"
-              : "lg:[grid-template-areas:'cover_chapter'_'bar_bar'_'ways_ways']",
-          )}
-        >
-          <div className="-mx-[var(--gutter-inline-start)] -mt-8 lg:mx-0 lg:mt-0 lg:[grid-area:cover]">
-            <TripHubCover
-              editorial={editorial}
-              enter={enter}
-              onCoverExpired={() => tripContext?.refresh()}
-              overview={overview}
-              stage={stage}
-              trip={trip}
-            />
-          </div>
-          <TripNavigationSheet
-            className="lg:mx-0 lg:mt-0 lg:rounded-none lg:bg-transparent lg:px-0 lg:pt-0 lg:[grid-area:bar]"
+        {/* The cover runs edge to edge, beneath the header from `md`, and the
+            trip's row rises over it on a sheet, as on the trip's sections and
+            on Home. They sit directly in the article so the row stays pinned
+            for the whole page on a phone. The days themselves live in the
+            planner; this page is the trip. */}
+        <div className="-mx-[var(--gutter-inline-start)] -mt-8 md:mx-[calc(50%-50vw)] md:-mt-[calc(var(--safe-top)+var(--header-height)+3rem+1px)]">
+          <TripHubCover
+            editorial={editorial}
             enter={enter}
-          >
-            <TripHubBar overview={overview} trip={trip} />
-          </TripNavigationSheet>
-          {trip.archivedAt ? (
-            // Right under the trip's navigation, so it is the first thing read
-            // after the cover and never the first thing on the screen.
-            <div className="lg:[grid-area:note]">
-              <TripArchivedNote trip={trip} />
-            </div>
-          ) : null}
-          <div
-            className={cn(
-              'lg:flex lg:flex-col lg:[grid-area:chapter]',
-              enter && pageEntrance.sheet,
-            )}
-          >
+            onCoverExpired={() => tripContext?.refresh()}
+            overview={overview}
+            stage={stage}
+            trip={trip}
+          />
+        </div>
+        <TripNavigationSheet
+          className="md:mx-[calc(50%-50vw)] md:-mt-10 md:rounded-t-[2.5rem] md:px-[calc(50vw-50%)] md:pt-6"
+          enter={enter}
+        >
+          <TripHubBar overview={overview} trip={trip} />
+        </TripNavigationSheet>
+        {trip.archivedAt ? (
+          // Right under the trip's navigation, so it is the first thing read
+          // after the cover and never the first thing on the screen.
+          <div className="mt-4">
+            <TripArchivedNote trip={trip} />
+          </div>
+        ) : null}
+
+        {/* On a phone the chapter, then the ways in. From `lg` they sit side by
+            side, in the same proportions as the journey beneath them. */}
+        <div className="lg:mt-8 lg:grid lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:items-start lg:gap-x-14">
+          <div className={cn(enter && pageEntrance.sheet)}>
             <TripHubChapter
               failed={!overview && Boolean(overviewQuery.error)}
               loading={overviewQuery.isPending}
@@ -168,9 +158,8 @@ export function TripDetail({ planScoreEnabled }: Readonly<{ planScoreEnabled: bo
               trip={trip}
             />
           </div>
-          {/* After the chapter on a phone; a full-width row of three on desktop. */}
           <TripHubWays
-            className={cn('mt-8 lg:mt-2 lg:[grid-area:ways]', enter && pageEntrance.sheet)}
+            className={cn('mt-8 lg:mt-0', enter && pageEntrance.sheet)}
             overview={overview}
             stage={stage}
             trip={trip}
@@ -179,13 +168,12 @@ export function TripDetail({ planScoreEnabled }: Readonly<{ planScoreEnabled: bo
 
         <TripActionFeedback />
 
-        {/* On a phone the chapter runs straight into the journey, so a rule marks
-            where one ends; on desktop the tab row already sits between them. */}
+        {/* A rule marks where the chapter ends and the journey begins. */}
         <div
           className={cn(
             'mt-10 grid gap-10 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] md:gap-x-14',
             enter && pageEntrance.sheet,
-            stage !== 'remember' && 'border-t border-border-subtle pt-10 lg:border-t-0 lg:pt-0',
+            stage !== 'remember' && 'border-t border-border-subtle pt-10',
           )}
         >
           <TripHubJourney overview={overview} stage={stage} trip={trip} />

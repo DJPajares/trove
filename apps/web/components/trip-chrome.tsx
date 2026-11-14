@@ -91,14 +91,13 @@ export function TripChrome({
             <TripHubCover
               editorial={context?.editorial ?? null}
               enter={enter}
-              layout="section"
               onCoverExpired={() => context?.refresh()}
               overview={overviewQuery.data}
               stage={tripHubStage(trip, new Date())}
               trip={trip}
             />
           ) : (
-            <TripHubCoverSkeleton label={t('titleLoading')} layout="section" />
+            <TripHubCoverSkeleton label={t('titleLoading')} />
           )}
         </div>
         <TripNavigationSheet

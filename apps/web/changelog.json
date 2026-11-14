@@ -1240,5 +1240,15 @@
         "Coming up cards on Home now show in full, without being cut off."
       ]
     }
+  },
+  {
+    "id": "home-weather-keeps-city",
+    "date": "2026-11-14",
+    "version": "1.26.4",
+    "summaries": {
+      "en": [
+        "Home's weather now shows your city straight away when you open the app, and only changes it when you've actually moved."
+      ]
+    }
   }
 ]

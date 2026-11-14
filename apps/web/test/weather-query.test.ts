@@ -4,7 +4,12 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   now: new Date('2026-10-03T03:00:00Z'),
 }));
-vi.mock('react', () => ({ useEffect: vi.fn() }));
+vi.mock('react', () => ({
+  useEffect: vi.fn(),
+  useState: (initial: unknown) => [typeof initial === 'function' ? initial() : initial, vi.fn()],
+  // Server snapshot: no remembered place, as on a first visit.
+  useSyncExternalStore: (_subscribe: unknown, _read: unknown, server: () => unknown) => server(),
+}));
 vi.mock('@tanstack/react-query', () => ({ useQuery: mocks.query, useQueryClient: () => ({}) }));
 vi.mock('@/components/preferences-provider', () => ({
   usePreferences: () => ({ preferences: { temperatureUnit: 'celsius' } }),

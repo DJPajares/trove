@@ -3,6 +3,11 @@
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
+import {
+  JOURNAL_COVER_FRAME,
+  JOURNAL_COVER_HEIGHT,
+  JOURNAL_SHEET,
+} from '@/components/memories/journal-cover';
 import { JournalRunningHead } from '@/components/memories/journal-running-head';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -26,10 +31,10 @@ export function JournalSkeleton() {
         {t('loading')}
       </span>
       <JournalRunningHead overCover title={null} tripId={params.tripId} />
-      <div className="-ms-[var(--gutter-inline-start)] -me-[var(--gutter-inline-end)] -mt-[var(--journal-head-height)] md:mx-0">
-        <Skeleton className="h-[min(88svh,56rem)] w-full rounded-none md:h-[clamp(28rem,74svh,46rem)] md:rounded-[var(--radius-2xl)]" />
+      <div className={JOURNAL_COVER_FRAME}>
+        <Skeleton className={`w-full rounded-none ${JOURNAL_COVER_HEIGHT}`} />
       </div>
-      <div className="mt-12 space-y-4">
+      <div className={`${JOURNAL_SHEET} space-y-4 pt-12`} data-slot="journal-sheet">
         <Skeleton className="h-7 w-32" />
         <div className="flex gap-3">
           {Array.from({ length: 5 }, (_, index) => (

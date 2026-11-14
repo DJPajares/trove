@@ -11,7 +11,7 @@ import { MemoryEditorSheet } from '@/components/memory-editor-sheet';
 import { ExperienceRatingSheet } from '@/components/memories/experience-rating-sheet';
 import { JournalChapter, JournalQuietDays, longDate } from '@/components/memories/journal-chapter';
 import { JournalContents, type JournalLensChip } from '@/components/memories/journal-contents';
-import { JournalCover } from '@/components/memories/journal-cover';
+import { JOURNAL_SHEET, JournalCover } from '@/components/memories/journal-cover';
 import { JournalDock, JournalHeadActions } from '@/components/memories/journal-dock';
 import { JournalEmpty } from '@/components/memories/journal-empty';
 import { JournalEpilogue } from '@/components/memories/journal-epilogue';
@@ -38,6 +38,7 @@ import {
 import { placeName } from '@/lib/memories/story';
 import { queryKeys } from '@/lib/query/keys';
 import { updateTripExperienceRating } from '@/lib/trips/api';
+import { cn } from '@/lib/utils';
 
 type EditorState =
   | { memory: null; mode: 'closed' }
@@ -356,7 +357,10 @@ export function MemoriesJournal({ tripId }: Readonly<{ tripId: string }>) {
         trip={trip}
       />
 
-      <div className="mt-12 space-y-20 pb-4 md:mt-16 lg:space-y-24 lg:pb-20">
+      <div
+        className={cn(JOURNAL_SHEET, 'space-y-20 pt-12 pb-4 md:pt-16 lg:space-y-24 lg:pb-20')}
+        data-slot="journal-sheet"
+      >
         {isEmpty ? (
           <JournalEmpty lifecycle={trip.lifecycle} onAdd={openCreate} />
         ) : (

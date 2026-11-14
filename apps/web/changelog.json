@@ -1292,5 +1292,16 @@
         "On a computer or tablet, a trip's overview now opens on the same full-width photo as its itinerary, with the ways into your trip beside its summary."
       ]
     }
+  },
+  {
+    "id": "memories-full-cover",
+    "date": "2026-11-15",
+    "version": "1.27.4",
+    "summaries": {
+      "en": [
+        "Your trip's Memories now open on a full-width photo, with your story rising over it on paper.",
+        "On a tablet or computer, the bar that names the day you're reading now floats neatly in the middle instead of stretching across the page."
+      ]
+    }
   }
 ]

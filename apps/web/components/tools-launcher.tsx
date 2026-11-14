@@ -6,9 +6,13 @@ import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import { PageHeader } from '@/components/page-header';
+import { HomeSheet } from '@/components/home/home-front-door';
+import { FINDS_COVER_FRAME } from '@/components/saved/finds-cover';
+import { KitCover, type KitShortcut } from '@/components/tools/kit-cover';
 import { usePreferences } from '@/components/preferences-provider';
 import { localToday } from '@/components/saved/saved-ready-for-trip';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { useRateBoard } from '@/hooks/use-rate-board';
 import { deriveRateFromBoard, isSavedRateStale } from '@/lib/currency/api';
 import {
@@ -16,21 +20,30 @@ import {
   readRecentCurrencyPairs,
   type CurrencyPair,
 } from '@/lib/currency/recent-pairs';
+import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
+import { resolveTripMediaSource } from '@/lib/media/trip-media';
+import { useEntrance, type EntranceClock } from '@/lib/page-entrance';
 import { queryKeys } from '@/lib/query/keys';
 import { fetchTaskTemplates } from '@/lib/tasks/api';
 import { nextTripForTools, tripLocalCurrency } from '@/lib/tools/shelf';
 import { fetchTrips } from '@/lib/trips/api';
+import { tripDestinationSummary, tripEditorialSubject } from '@/lib/trips/summary';
 import * as Icons from '@/lib/icons';
 import { cn } from '@/lib/utils';
 import { ScrollShadow } from '@/components/ui/scroll-shadow';
+
+/** Kit's entrance, kept for the tab's life and replayed on each visit. */
+const kitEntrance: EntranceClock = { startedAt: null };
 
 /** The converter's own default when the traveller has no home currency set. */
 const FALLBACK_SOURCE = 'USD';
 
 /**
- * Tools as a compact utility shelf: one row per tool, grouped by when it is
- * reached for, each saying in one line what it holds right now. When a trip is
- * ahead, a strip above offers that trip's currency and a checklist, a tap each.
+ * Kit, the traveller's travel kit: a compact shelf of tools, one row per tool,
+ * grouped by when it is reached for, each saying in one line what it holds
+ * right now. It opens on the cover Home, Trips and Finds share: with a trip
+ * ahead, that trip's photograph and countdown, with its currency and a
+ * checklist set on it, a tap each.
  * It glances at a tool's state but never embeds a tool (PRD 4.5): every row
  * and shortcut opens the tool on its own page.
  */
@@ -80,113 +93,122 @@ export function ToolsLauncher() {
       )
     : 0;
 
+  // The next trip's photograph: its own cover, else the editorial photograph
+  // the Trips library shows for it, from the same one request.
+  const tripSubject = trip ? tripEditorialSubject(trip) : null;
+  const tripImages = useEditorialImages(tripSubject ? [tripSubject] : []);
+  const tripEditorial =
+    trip && tripSubject
+      ? editorialCoverImage(tripImages.get(editorialSubjectKey(tripSubject)), trip.id)
+      : null;
+  const entrance = useEntrance(kitEntrance, { ready: !trips.isPending, replay: true });
+
+  const shortcuts: KitShortcut[] = [
+    ...(trip && tripPair
+      ? [
+          {
+            detail: tripRate?.detail ?? t('openToConvert'),
+            detailWarning: tripRate?.saved,
+            href: currencyPairHref(tripPair),
+            icon: <Icons.Currency aria-hidden="true" className="size-5" />,
+            title: tripRate?.text ?? t('tripCurrency', { currency: tripPair.target }),
+          },
+        ]
+      : []),
+    ...(trip && templateList.length
+      ? [
+          {
+            detail: t('templatesReady', { count: templateList.length }),
+            href: `/tools/task-templates?${new URLSearchParams({ trip: trip.id })}`,
+            icon: <Icons.TaskTemplates aria-hidden="true" className="size-5" />,
+            title: t('addChecklist'),
+          },
+        ]
+      : []),
+  ];
+
   return (
-    <section className="mx-auto w-full max-w-3xl space-y-7">
-      <PageHeader
-        description={t('description')}
-        eyebrow={t('eyebrow')}
-        title={t('title')}
-        titleFont="journal"
-      />
+    <section className="mx-auto w-full max-w-3xl" style={entrance.style}>
+      {trips.isPending ? (
+        <Skeleton aria-hidden="true" className={cn('rounded-none', FINDS_COVER_FRAME)} />
+      ) : (
+        <KitCover
+          description={t('description')}
+          destination={trip ? (tripDestinationSummary(trip) ?? trip.name) : null}
+          enter={entrance.enter}
+          lead={
+            trip ? (days > 0 ? t('cover.daysUntil', { count: days }) : t('cover.underway')) : null
+          }
+          media={
+            trip
+              ? resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial: tripEditorial })
+              : null
+          }
+          shortcuts={shortcuts}
+          title={t('title')}
+        />
+      )}
 
-      {trip && (tripPair || templateList.length) ? (
-        <section
-          aria-labelledby="tools-next-trip"
-          className="rounded-[var(--radius-2xl)] bg-score-media-background px-4 pt-4 pb-2 text-score-media-foreground sm:px-5"
-        >
-          <h2
-            className="px-0.5 pb-2 text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-score-media-brand uppercase"
-            id="tools-next-trip"
-          >
-            {trip.name} ·{' '}
-            {days > 0
-              ? new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(days, 'day')
-              : t('underway')}
-          </h2>
-          <ul className="divide-y divide-score-media-foreground/12 sm:grid sm:grid-cols-2 sm:gap-x-4 sm:divide-y-0">
-            {tripPair ? (
-              <li>
-                <ShortcutRow
-                  detail={tripRate?.detail ?? t('openToConvert')}
-                  detailWarning={tripRate?.saved}
-                  href={currencyPairHref(tripPair)}
-                  icon={<Icons.Currency aria-hidden="true" className="size-5" />}
-                  title={tripRate?.text ?? t('tripCurrency', { currency: tripPair.target })}
-                />
-              </li>
-            ) : null}
-            {templateList.length ? (
-              <li>
-                <ShortcutRow
-                  detail={t('templatesReady', { count: templateList.length })}
-                  href={`/tools/task-templates?${new URLSearchParams({ trip: trip.id })}`}
-                  icon={<Icons.TaskTemplates aria-hidden="true" className="size-5" />}
-                  title={t('addChecklist')}
-                />
-              </li>
-            ) : null}
-          </ul>
-        </section>
-      ) : null}
+      <HomeSheet>
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 sm:grid-cols-2">
+          <ShelfGroup label={t('groups.road')}>
+            <ToolRow
+              glance={
+                lastPair
+                  ? lastRate
+                    ? t('lastPairWithRate', {
+                        pair: `${lastPair.source} → ${lastPair.target}`,
+                        rate: lastRate.text,
+                      })
+                    : t('lastPair', { pair: `${lastPair.source} → ${lastPair.target}` })
+                  : t('currencyGlance')
+              }
+              href={lastPair ? currencyPairHref(lastPair) : '/tools/currency'}
+              icon={<Icons.Currency aria-hidden="true" className="size-5" />}
+              label={currencyT('title')}
+              tone="olive"
+            >
+              {recentPairs.length > 1 ? (
+                <ScrollShadow
+                  orientation="horizontal"
+                  className="flex gap-2 pr-4 pb-3 pl-[4.5rem] [scrollbar-width:none]"
+                >
+                  {recentPairs.slice(1).map((pair) => (
+                    <Link
+                      className="inline-flex h-9 shrink-0 items-center rounded-full border border-border bg-background px-3 text-[0.8125rem] font-semibold outline-none hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40"
+                      href={currencyPairHref(pair)}
+                      key={`${pair.source}-${pair.target}`}
+                    >
+                      {pair.source} → {pair.target}
+                    </Link>
+                  ))}
+                </ScrollShadow>
+              ) : null}
+            </ToolRow>
+          </ShelfGroup>
 
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 sm:grid-cols-2">
-        <ShelfGroup label={t('groups.road')}>
-          <ToolRow
-            glance={
-              lastPair
-                ? lastRate
-                  ? t('lastPairWithRate', {
-                      pair: `${lastPair.source} → ${lastPair.target}`,
-                      rate: lastRate.text,
+          <ShelfGroup label={t('groups.before')}>
+            <ToolRow
+              glance={
+                templateList.length
+                  ? t('templatesGlance', {
+                      count: templateList.length,
+                      names: new Intl.ListFormat(locale, { style: 'narrow', type: 'unit' }).format(
+                        templateList.slice(0, 3).map((template) => template.name),
+                      ),
                     })
-                  : t('lastPair', { pair: `${lastPair.source} → ${lastPair.target}` })
-                : t('currencyGlance')
-            }
-            href={lastPair ? currencyPairHref(lastPair) : '/tools/currency'}
-            icon={<Icons.Currency aria-hidden="true" className="size-5" />}
-            label={currencyT('title')}
-            tone="olive"
-          >
-            {recentPairs.length > 1 ? (
-              <ScrollShadow
-                orientation="horizontal"
-                className="flex gap-2 pr-4 pb-3 pl-[4.5rem] [scrollbar-width:none]"
-              >
-                {recentPairs.slice(1).map((pair) => (
-                  <Link
-                    className="inline-flex h-9 shrink-0 items-center rounded-full border border-border bg-background px-3 text-[0.8125rem] font-semibold outline-none hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40"
-                    href={currencyPairHref(pair)}
-                    key={`${pair.source}-${pair.target}`}
-                  >
-                    {pair.source} → {pair.target}
-                  </Link>
-                ))}
-              </ScrollShadow>
-            ) : null}
-          </ToolRow>
-        </ShelfGroup>
+                  : t('templatesEmptyGlance')
+              }
+              href="/tools/task-templates"
+              icon={<Icons.TaskTemplates aria-hidden="true" className="size-5" />}
+              label={templatesT('title')}
+              tone="terracotta"
+            />
+          </ShelfGroup>
+        </div>
 
-        <ShelfGroup label={t('groups.before')}>
-          <ToolRow
-            glance={
-              templateList.length
-                ? t('templatesGlance', {
-                    count: templateList.length,
-                    names: new Intl.ListFormat(locale, { style: 'narrow', type: 'unit' }).format(
-                      templateList.slice(0, 3).map((template) => template.name),
-                    ),
-                  })
-                : t('templatesEmptyGlance')
-            }
-            href="/tools/task-templates"
-            icon={<Icons.TaskTemplates aria-hidden="true" className="size-5" />}
-            label={templatesT('title')}
-            tone="terracotta"
-          />
-        </ShelfGroup>
-      </div>
-
-      <p className="text-sm text-muted-foreground">{t('wayfinding')}</p>
+        <p className="text-sm text-muted-foreground">{t('wayfinding')}</p>
+      </HomeSheet>
     </section>
   );
 }
@@ -247,43 +269,5 @@ function ToolRow({
       </Link>
       {children}
     </>
-  );
-}
-
-/** A trip shortcut on the dark strip: one tap into a tool, already pointed at the trip. */
-function ShortcutRow({
-  detail,
-  detailWarning = false,
-  href,
-  icon,
-  title,
-}: Readonly<{
-  detail: string;
-  detailWarning?: boolean;
-  href: string;
-  icon: ReactNode;
-  title: string;
-}>) {
-  return (
-    <Link
-      className="flex min-h-14 items-center gap-3 rounded-[var(--radius-md)] outline-none focus-visible:ring-3 focus-visible:ring-score-media-foreground/50"
-      href={href}
-    >
-      <span className="grid size-10 shrink-0 place-items-center rounded-[var(--radius-md)] bg-score-media-foreground/10 text-score-media-brand">
-        {icon}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate font-semibold">{title}</span>
-        <span
-          className={cn(
-            'block truncate text-sm',
-            detailWarning ? 'text-score-media-warning' : 'text-score-media-muted',
-          )}
-        >
-          {detail}
-        </span>
-      </span>
-      <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-score-media-muted" />
-    </Link>
   );
 }

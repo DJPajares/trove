@@ -13,7 +13,7 @@
     "home": "Home",
     "trips": "Trips",
     "saved": "Finds",
-    "tools": "Tools",
+    "tools": "Kit",
     "quickActions": "Quick actions",
     "openQuickActions": "Open quick actions",
     "openQuickActionsWithNotifications": "Open quick actions, {count, plural, one {# new notification} other {# new notifications}}",
@@ -1875,9 +1875,13 @@
     "viewRecord": "View {title}"
   },
   "tools": {
-    "eyebrow": "Utilities",
-    "title": "Tools",
-    "description": "Currency and reusable checklists, for planning and on the road.",
+    "title": "Kit",
+    "description": "Your travel kit: currency and checklists, for planning and on the road.",
+    "cover": {
+      "kicker": "Kit · for your next trip",
+      "daysUntil": "{count, plural, one {# day until} other {# days until}}",
+      "underway": "Under way in"
+    },
     "underway": "underway",
     "groups": {
       "road": "On the road",
@@ -1899,7 +1903,7 @@
     "eyebrow": "On the road",
     "title": "Currency",
     "description": "Convert prices at today's reference rate.",
-    "back": "Tools",
+    "back": "Kit",
     "amountIn": "Amount in {currency}",
     "clearAmount": "Clear amount",
     "amountPlaceholder": "100",
@@ -2771,7 +2775,7 @@
     "eyebrow": "Before you go",
     "title": "Task templates",
     "description": "Checklists you write once and copy into any trip.",
-    "back": "Tools",
+    "back": "Kit",
     "newTemplate": "New template",
     "loading": "Loading your templates…",
     "loadError": "We couldn't load your templates",
@@ -3627,7 +3631,7 @@
       "description": "Your finds will appear here."
     },
     "tools": {
-      "title": "Tools",
+      "title": "Kit",
       "description": "Your travel tools will appear here."
     },
     "profile": {

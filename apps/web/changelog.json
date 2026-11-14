@@ -1250,5 +1250,17 @@
         "Home's weather now shows your city straight away when you open the app, and only changes it when you've actually moved."
       ]
     }
+  },
+  {
+    "id": "finds-page",
+    "date": "2026-11-14",
+    "version": "1.27.0",
+    "summaries": {
+      "en": [
+        "Saved is now Finds: the places you've found and want to get to.",
+        "Finds opens on a photo of a town you've been keeping places in, with a quick way to plan a trip there.",
+        "With enough finds, they're grouped by town, so it's easy to see where your next trip could be."
+      ]
+    }
   }
 ]

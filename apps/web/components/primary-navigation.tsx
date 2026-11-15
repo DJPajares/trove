@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { motionEase } from '@/lib/motion';
 import {
   isImmersiveTripPath,
-  isNavigationPathActive,
+  isPrimaryDestinationActive,
   primaryNavigationDestinations,
 } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
@@ -64,7 +64,8 @@ function DesktopNavigation({
   const [mark, setMark] = useState<{ left: number; width: number } | null>(null);
   // The first mark is placed, not animated into place from nowhere.
   const [placed, setPlaced] = useState(false);
-  const activeHref = items.find(({ href }) => isNavigationPathActive(pathname, href))?.href ?? null;
+  const activeHref =
+    items.find(({ href }) => isPrimaryDestinationActive(pathname, href))?.href ?? null;
 
   useLayoutEffect(() => {
     const measure = () => {
@@ -168,7 +169,7 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
         <nav aria-label={t('mobile')} className="h-full">
           <ul className="grid grid-cols-5 gap-1">
             {items.map(({ column, href, icon: Icon, label }) => {
-              const active = isNavigationPathActive(pathname, href);
+              const active = isPrimaryDestinationActive(pathname, href);
 
               return (
                 <li className={column} key={href}>

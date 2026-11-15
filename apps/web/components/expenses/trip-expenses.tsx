@@ -8,6 +8,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { ExpenseEditorSheet } from '@/components/expenses/expense-editor-sheet';
 import { PageState } from '@/components/page-state';
 import { usePreferences } from '@/components/preferences-provider';
+import { useRegisterPrimaryAction } from '@/components/primary-action-provider';
 import { TripSectionHeader } from '@/components/trip-section-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -41,10 +42,23 @@ import { queryKeys } from '@/lib/query/keys';
 import { useTripResource } from '@/lib/query/use-trip-resource';
 import * as Icons from '@/lib/icons';
 
-export function ExpensesManager({
+/**
+ * Where the expenses are shown. `trip` sits inside the trip's sections, whose
+ * chrome holds the header; `standalone` is the top-level Expenses page, which
+ * has no trip chrome and so carries its guidance and create action itself.
+ */
+export type TripExpensesPlacement = 'standalone' | 'trip';
+
+/**
+ * One trip's expenses: its spend against budget, the breakdowns, the ledger,
+ * and the sheet that edits them. Needs a `TripProvider` for `tripId` above it.
+ */
+export function TripExpenses({
+  placement = 'trip',
   quickAdd,
   tripId,
 }: Readonly<{
+  placement?: TripExpensesPlacement;
   quickAdd?: { itineraryItemId?: string; localDate?: string };
   tripId: string;
 }>) {
@@ -71,6 +85,13 @@ export function ExpensesManager({
   // are always expressed in the same currency; react-query serves both from one
   // board request.
   const { board, reference } = useSpendReference(data?.actualSpend ?? [], data?.budget ?? null);
+  // In a trip the section header claims the bottom bar's plus button; on its
+  // own the page claims it here, once the expenses it adds to have loaded.
+  useRegisterPrimaryAction({
+    enabled: placement === 'standalone' && Boolean(data),
+    label: t('addExpense'),
+    onTrigger: () => openCreate(),
+  });
 
   useEffect(() => {
     if (!quickAdd) {
@@ -268,10 +289,24 @@ export function ExpensesManager({
 
   return (
     <section className="space-y-7">
-      <TripSectionHeader
-        description={t('description')}
-        primaryAction={{ label: t('addExpense'), onSelect: openCreate }}
-      />
+      {placement === 'trip' ? (
+        <TripSectionHeader
+          description={t('description')}
+          primaryAction={{ label: t('addExpense'), onSelect: openCreate }}
+        />
+      ) : (
+        <div className="flex items-center justify-between gap-4">
+          <p className="max-w-(--layout-reading) text-sm leading-[1.5] text-pretty text-muted-foreground">
+            {t('description')}
+          </p>
+          {readOnly ? null : (
+            <Button className="hidden shrink-0 md:inline-flex" onClick={openCreate} type="button">
+              <Plus aria-hidden="true" data-icon="inline-start" />
+              {t('addExpense')}
+            </Button>
+          )}
+        </div>
+      )}
 
       {error ? (
         <Alert role="alert" variant="destructive">

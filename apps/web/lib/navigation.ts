@@ -8,6 +8,9 @@ export const primaryNavigationDestinations = [
 export const toolNavigationDestinations = [
   { href: '/tools/currency', key: 'currency' },
   { href: '/tools/task-templates', key: 'taskTemplates' },
+  // Expenses gather every trip's spending, so they sit at the top level rather
+  // than beneath one trip, and still belong to Kit.
+  { href: '/expenses', key: 'expenses' },
 ] as const;
 
 export function isNavigationPathActive(pathname: string, href: string) {
@@ -29,5 +32,13 @@ export function isImmersiveTripPath(pathname: string) {
 }
 
 export function isToolsPath(pathname: string) {
-  return isNavigationPathActive(pathname, '/tools');
+  return (
+    isNavigationPathActive(pathname, '/tools') ||
+    toolNavigationDestinations.some(({ href }) => isNavigationPathActive(pathname, href))
+  );
+}
+
+/** Whether a primary destination owns the page, counting Kit's tools as Kit. */
+export function isPrimaryDestinationActive(pathname: string, href: string) {
+  return href === '/tools' ? isToolsPath(pathname) : isNavigationPathActive(pathname, href);
 }

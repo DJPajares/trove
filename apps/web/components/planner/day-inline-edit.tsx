@@ -114,9 +114,13 @@ export function DayTitle({
   return (
     <div className="relative mt-1.5 flex items-start gap-2">
       <h2
-        className="min-w-0 text-[length:var(--text-section-title)] leading-tight font-semibold tracking-[-0.015em] text-balance break-words outline-none"
+        // One line, cut short with an ellipsis, so every day's photo keeps the
+        // same height; the full title is a hover away and read in full by
+        // assistive tech.
+        className="min-w-0 truncate text-[length:var(--text-section-title)] leading-tight font-semibold tracking-[-0.015em] outline-none"
         id={headingId}
         tabIndex={-1}
+        title={display}
       >
         <span className="sr-only">{numberLabel}: </span>
         {display}

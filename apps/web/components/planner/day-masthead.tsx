@@ -8,8 +8,10 @@ import type { ReactNode } from 'react';
 import { DayHeaderMedia } from '@/components/day-header-media';
 import type { DayFacts, dayHeading } from '@/lib/itinerary/day-facts';
 import type { DayHeaderPhotoResolution } from '@/lib/media/day-header-photos';
+import { cn } from '@/lib/utils';
 
 import { DayNote, DayTitle } from './day-inline-edit';
+import { SKETCH_TILE } from './day-route-sketch';
 import { DaySummary } from './day-summary';
 import { paddedDayNumber } from './planner-ribbon';
 
@@ -187,7 +189,7 @@ export function DayMasthead({
             onClick={onOpenMap}
             type="button"
           >
-            <span className="relative block min-h-[4.5rem] flex-1 overflow-hidden rounded-[var(--radius-md)] bg-surface-tint/60 bg-[radial-gradient(circle,var(--color-border)_0.75px,transparent_1px)] bg-[length:9px_9px]">
+            <span className={cn('relative block min-h-[4.5rem] flex-1', SKETCH_TILE)}>
               <span className="absolute inset-0 p-0.5">{sketch}</span>
               {unmapped ? (
                 <span className="absolute bottom-1 left-1 rounded-full bg-card/90 px-1.5 py-0.5 text-[0.625rem] leading-none font-medium text-muted-foreground">

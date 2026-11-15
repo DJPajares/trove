@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useRef } from 'react';
 
 import { MediaFrame } from '@/components/media-frame';
+import { panelSurfaceClass } from '@/components/panel-surface';
 import { TodayPostcard } from '@/components/trip-hub/trip-hub-postcard';
 import { TripReadinessPrompt } from '@/components/trip-readiness-prompt';
 import { Button } from '@/components/ui/button';
@@ -311,7 +312,13 @@ export function TripHubChapter({
             <ChapterSkeleton label={t('loading')} />
           ) : day ? (
             day.current || day.next ? (
-              <ul className="divide-y divide-border-subtle border-y border-border-subtle">
+              <ul
+                className={cn(
+                  'divide-y divide-border-subtle',
+                  panelSurfaceClass('card'),
+                  'py-0 sm:py-0',
+                )}
+              >
                 {day.current ? (
                   <li className="py-3.5">
                     <StopLine clockTimeZone={overview!.clockTimeZone} stop={day.current} />
@@ -353,7 +360,9 @@ export function TripHubChapter({
               {t('planBody')}
             </p>
           )}
-          {showReadiness && !trip.archivedAt ? <TripReadinessPrompt trip={trip} /> : null}
+          {showReadiness && !trip.archivedAt ? (
+            <TripReadinessPrompt className={panelSurfaceClass('card')} trip={trip} />
+          ) : null}
         </>
       )}
 

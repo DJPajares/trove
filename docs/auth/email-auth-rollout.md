@@ -55,6 +55,16 @@ not an environment selector. See [Redirect URLs](https://supabase.com/docs/guide
    keep the `wndrhive.com` domain; most mail apps show only the name. A Trove-owned
    sending domain (for example `auth.trove.wndrhive.com`) is a later option and needs
    its own Resend domain and DNS records.
+
+   The sender name is one setting for the whole Auth project, so `Trove` is right
+   while Trove is the only app sending real email from it. When a second app
+   needs its own name, move sending to Supabase's
+   [Send Email hook](https://supabase.com/docs/guides/auth/auth-hooks/send-email-hook):
+   a small service that picks the app from `email_data.redirect_to` and sends
+   through Resend with that app's sender name, subject and body. It takes over
+   every auth email in the project, so it must handle all apps and fail safely
+   before it is switched on.
+
 4. Create a sending-only Resend API key restricted to `auth.wndrhive.com`. Enter
    it directly into **Supabase Authentication → Email → SMTP Settings**:
 

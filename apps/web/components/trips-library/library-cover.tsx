@@ -11,6 +11,7 @@ import { TripDaySegments } from '@/components/trip-day-segments';
 import { MediaFrame } from '@/components/media-frame';
 import { TripMedia } from '@/components/trip-media';
 import { TripReadinessBadge } from '@/components/trip-readiness-badge';
+import { COVER_HEIGHT } from '@/components/saved/finds-cover';
 import { Button } from '@/components/ui/button';
 import { useCoverUnderHeader } from '@/hooks/use-cover-under-header';
 import { dayHeaderFallback } from '@/lib/media/day-header-fallback';
@@ -123,11 +124,6 @@ function StatusLine({ nextUp, trip }: Readonly<{ nextUp: TripNextUp | null; trip
  */
 const COVER_BLEED =
   'mx-[calc(50%-50vw)] -mt-[calc(var(--safe-top)+2rem)] md:-mt-[calc(var(--safe-top)+var(--header-height)+3rem+1px)]';
-/**
- * Each slide holds the height, so a long name grows the cover rather than
- * clipping. The same as Finds and Kit, so the covers match from page to page.
- */
-export const COVER_HEIGHT = 'min-h-[clamp(28rem,62svh,36rem)] md:min-h-[34rem] lg:min-h-[36rem]';
 export const LIBRARY_COVER_FRAME = `${COVER_BLEED} ${COVER_HEIGHT}`;
 
 /** The page's own measure inside the full-width photograph. */

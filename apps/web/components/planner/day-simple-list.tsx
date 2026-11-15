@@ -181,7 +181,10 @@ export function DaySimpleList({
                 )}
               </span>
               <button
-                className="min-h-11 min-w-0 rounded-[var(--radius-sm)] text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+                // A button centres its content once `min-h` makes it taller than the
+                // text, which dropped the title below its time and mark; it
+                // starts at the top, level with both.
+                className="flex min-h-11 min-w-0 flex-col justify-start rounded-[var(--radius-sm)] pt-1 text-left outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
                 onClick={() => onOpenItem(item, view)}
                 type="button"
               >

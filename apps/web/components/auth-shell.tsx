@@ -5,8 +5,9 @@ import type { ReactNode } from 'react';
 
 import { MediaFrame } from '@/components/media-frame';
 import { SCRIM } from '@/components/saved/finds-cover';
+import { CoverArtworkCredit } from '@/components/cover-artwork-credit';
 import { useCoverUnderHeader } from '@/hooks/use-cover-under-header';
-import { landingHeroImage } from '@/lib/media/landing-images';
+import { dayHeaderFallback } from '@/lib/media/day-header-fallback';
 import { pageEntrance } from '@/lib/page-entrance';
 import { cn } from '@/lib/utils';
 
@@ -78,13 +79,17 @@ export function AuthShell({
           alt={t('heroImageAlt')}
           className={cn('absolute inset-0 -z-20 h-full w-full rounded-none', pageEntrance.media)}
           dataSlot="auth-media"
+          photographicPlaceholder={dayHeaderFallback.preview}
           preload
           sizes="100vw"
-          source={{ kind: 'editorial', reference: landingHeroImage }}
+          source={{ kind: 'local', src: dayHeaderFallback.src }}
           variant="cover"
         />
         <div aria-hidden="true" className={SCRIM} />
       </div>
+      {/* Above the greeting, so its links stay reachable: at the foot of the
+          strip on a phone, just clear of the sheet, and in the corner from md. */}
+      <CoverArtworkCredit className="top-[calc(clamp(16rem,38svh,21rem)-2.5rem)] bottom-auto md:top-auto md:bottom-4" />
 
       <div
         className={cn(

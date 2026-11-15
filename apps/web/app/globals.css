@@ -680,3 +680,10 @@ html:has([data-slot='memories-journal']) body,
     animation-iteration-count: 1 !important;
   }
 }
+
+/* Trove's cover artwork puts its traveller a little below the middle. On a wide
+   cover the crop is chosen vertically, so lifting the window keeps them clear of
+   the words set at the cover's foot. */
+[data-slot] img[src*='cover-artwork'] {
+  object-position: 50% 64%;
+}

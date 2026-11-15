@@ -1,13 +1,23 @@
-/** Fixed application artwork under https://www.pexels.com/license/, separate from live hotlinked collections. */
+/**
+ * Trove's own cover artwork: the photograph a screen shows when it has no trip
+ * of its own to show - the signed-out pages, the welcome tour, and the covers
+ * of Home, Trips, Finds, Kit and a day with no photo yet.
+ *
+ * Bundled with the app rather than hotlinked, so it costs no provider request
+ * and is there offline. Used under https://www.pexels.com/license/, which asks
+ * for no credit; Trove credits it anyway, in small type on the photograph
+ * (`CoverArtworkCredit`).
+ */
 export const dayHeaderFallback = {
   attribution: {
-    photographerName: 'ArtHouse Studio',
-    photographerUrl: 'https://www.pexels.com/@arthousestudio',
+    photographerName: 'Sanket Barik',
+    photographerUrl: 'https://www.pexels.com/@sanket-barik-2808574',
     providerName: 'pexels',
-    providerPageUrl: 'https://www.pexels.com/photo/cars-on-road-near-body-of-water-8146248/',
+    providerPageUrl:
+      'https://www.pexels.com/photo/snow-covered-mountain-peak-under-white-clouds-7846481/',
   },
-  externalPhotoId: '8146248',
+  externalPhotoId: '7846481',
   preview:
-    'data:image/webp;base64,UklGRl4CAABXRUJQVlA4IFICAACwDQCdASpQAC0APr1QoEunJSMhtVZuYOAXiUAYoY2RDQl+nWvzJEIS/+24aUGuiOhubKA4hCbrjFd41zFxcdzQXa2DnpU/mgyc3c/wFnxnYF97T53znuYDqdYzI1oRK/V00WcP4KBU1UMFoIkSjlOnW2fAmYIAAP77NnoNfSwpOmrQiHp1g/r+diYoXX3nZe78DHW5EkRQLP9+wZMM44pGjzSKLX3/qfoR6brC5paBeBRjKZXmLkLszXfd7Ritass2MhbjeLXtezt7bP4NLFTf0KRpm5GMdAJTBaZ0fCqez1KbyA+N1izNhsasBkSmafirEAEkZvt+mJHKmeVOAa2tTGd96DsULSLhYnE7WSRSH7IYAyikAs069GECI97NLoCHN/sHE4OYHeRQtXmoCQbQzDPxmlR7U3mzWsDFRH2QgtYNqEu7AxTuFo3/uYyF+W9b7zysflSp2EoHdekZ0KWY21THLkQFrT61ReZL+hHTstHMxfynKaW7smQCL9+V4yP+gBCFpmrOpkBYrMpr8w0GtAmwGqda+a2hslRhYOufNA7f6REtb7QkEg2upsLtENm4THoYhSXh4FZnZXClEQxNpLEyHfLF/W2Yxfvc64bg0GumdWKXgyQclWh7FyByPI8V3jk96zSwU2oeTuS/RK3DZSUEMvFfHZF0Rq7WtWMLNDASjFV5GdyM1iaVWUwjWJsIvsch3LT1UB2Pa7Qs/uQdfqb+mmuSBHgWceFRkiOMfxpyvVSOlEF4uPwMySa7RJEyC9svRjplK1M291M3LkGEIAA=',
-  src: { src: '/media/day-header-fallback.webp', width: 1280, height: 720 },
+    'data:image/webp;base64,UklGRr4BAABXRUJQVlA4ILIBAADwDACdASooADwAPu1qrVGppaQiqrQLATAdiWYArz/d9xPj8fT+Lv6Z9rn20q2iYKB3H5gefo2a0tNWG2SwgJiBgdGzS38clNzRh/oFOZwptLZRm80rim4SeUMX85OZAuENP0is2scMECRCQSAl/SAAAP61qtglqhv8Ao3GmOXjF5kIY4d5/LZ4+BsDaZnXcwkKR4tYTP2l9kriPZFCIjgy6ZqN2uIGtaS06Z2OVefV6JFHeyAErljiPJRMniW03EA0weGvY6MtHkHp0Gx1uZMYpyH8Gc8kKai5naRLN1HTsp1gDtp6/J4IDPjegSDucqgTfv5We3rt5v6rAYgcB0LFFcG28fJRmnWFgiaYYzsdWVpMXmbjiYnsPi9SjYCt8vxAuFxrhibgcXgO+pZ3z/xbE+p+rxwbJ57+mSQPvBEHzgRxyOV1xVoaC0vRe8R9KDK+LfgD7MrJLqRIVds5sweCUYFpiTdlRpCDeQwz6K29swimKdXSupRxPYAXIht7pHluXkCKw7rglGUlrPBCkw78yfEbP5pPm3rOwhMLL5V9T9iKiNGg4GP3XQuX6H4XBiQAAA==',
+  src: { src: '/media/cover-artwork.webp', width: 2000, height: 3000 },
 };

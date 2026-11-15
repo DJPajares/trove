@@ -1,7 +1,8 @@
 'use client';
 
 import type { User } from '@supabase/supabase-js';
-import { LogIn, LogOut, Settings, UserPlus, UserRound } from 'lucide-react';
+import { LogIn, LogOut, Settings, Signpost, UserPlus, UserRound } from 'lucide-react';
+import { usePathname } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
@@ -61,6 +62,7 @@ export function AccountMenu({
   triggerVariant = 'icon',
 }: Readonly<AccountMenuProps> = {}) {
   const t = useTranslations('account');
+  const pathname = usePathname();
   const { profile } = usePreferences();
   const floating = triggerVariant === 'floating';
   const avatarUrl = profile?.avatarUrl ?? null;
@@ -186,6 +188,19 @@ export function AccountMenu({
               <DropdownMenuLinkItem render={<Link href="/settings" onClick={onNavigate} />}>
                 <Settings aria-hidden="true" className="size-4" />
                 {t('settings')}
+              </DropdownMenuLinkItem>
+              {/* The welcome tour, one tap from any screen, where a traveller
+                  looks for help; it returns them to the page they left. */}
+              <DropdownMenuLinkItem
+                render={
+                  <Link
+                    href={`/onboarding?replay=1&next=${encodeURIComponent(pathname)}`}
+                    onClick={onNavigate}
+                  />
+                }
+              >
+                <Signpost aria-hidden="true" className="size-4" />
+                {t('welcomeTour')}
               </DropdownMenuLinkItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem

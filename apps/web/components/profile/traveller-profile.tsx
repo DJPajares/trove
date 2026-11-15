@@ -16,6 +16,7 @@ import { usePreferences } from '@/components/preferences-provider';
 import { TripMedia } from '@/components/trip-media';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { CoverArtworkCredit } from '@/components/cover-artwork-credit';
 import { useCoverUnderHeader } from '@/hooks/use-cover-under-header';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { dayHeaderFallback } from '@/lib/media/day-header-fallback';
@@ -392,6 +393,7 @@ export function TravellerProfile() {
           aria-hidden="true"
           className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgba(8,18,13,0.62)_0%,rgba(8,18,13,0.12)_28%,rgba(8,18,13,0.45)_56%,rgba(8,18,13,0.9)_100%)]"
         />
+        {profile?.coverPhoto || coverPrint ? null : <CoverArtworkCredit />}
 
         <div className="mx-auto w-full max-w-[var(--layout-app)] ps-[var(--gutter-inline-start)] pe-[var(--gutter-inline-end)]">
           <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 pt-28 pb-14 motion-safe:animate-in motion-safe:fill-mode-both motion-safe:duration-700 motion-safe:ease-[var(--ease-standard)] motion-safe:fade-in motion-safe:slide-in-from-bottom-4 md:flex-row md:items-end md:gap-6 md:pb-20">

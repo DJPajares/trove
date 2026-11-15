@@ -13,6 +13,7 @@ import { TripMedia } from '@/components/trip-media';
 import { TripReadinessBadge } from '@/components/trip-readiness-badge';
 import { COVER_HEIGHT } from '@/components/saved/finds-cover';
 import { Button } from '@/components/ui/button';
+import { CoverArtworkCredit } from '@/components/cover-artwork-credit';
 import { useCoverUnderHeader } from '@/hooks/use-cover-under-header';
 import { dayHeaderFallback } from '@/lib/media/day-header-fallback';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
@@ -296,6 +297,7 @@ export function LibraryCover({
           variant="card"
         />
         <div aria-hidden="true" className={SCRIM} />
+        <CoverArtworkCredit />
         <div className={MEASURE}>
           <div className="mx-auto w-full max-w-5xl space-y-3 pt-[calc(var(--safe-top)+5rem)] pb-16 md:pb-24">
             <h1

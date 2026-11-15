@@ -63,6 +63,8 @@ export type TripCreate = {
   referenceTimeZone?: string | null;
   startDate: string;
   startingLocation?: string | null;
+  /** Who can read the trip: private, or public through its read-only link (PRD 8.2). */
+  visibility?: 'private' | 'public';
 };
 
 export type TripUpdate = Partial<TripCreate> & {
@@ -656,6 +658,8 @@ export async function createTrip(userId: string, accessToken: string, input: Tri
         referenceTimeZoneSourcePlaceId: timeZone.sourcePlaceId,
         startDate: start,
         startingPlaceId: startingPlace?.id ?? null,
+        // Private unless the traveller chose otherwise when creating it.
+        visibility: input.visibility === 'public' ? 'PUBLIC' : 'PRIVATE',
       },
     });
 
@@ -999,6 +1003,10 @@ export async function updateTrip(
             ...(input.partySize !== undefined ? { partySize: input.partySize } : {}),
             ...(input.planningReadiness !== undefined
               ? { planningReadiness: input.planningReadiness === 'ready' ? 'READY' : 'IN_PROGRESS' }
+              : {}),
+            // Saved with the rest of the edit, so a refused save publishes nothing.
+            ...(input.visibility !== undefined
+              ? { visibility: input.visibility === 'public' ? 'PUBLIC' : 'PRIVATE' }
               : {}),
             ...(shouldResolveTimeZone
               ? {

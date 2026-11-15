@@ -624,6 +624,8 @@ Future-ready concepts may include:
 
 Future-ready fields do not authorize additional collaboration, discovery, or sharing workflows beyond Sections 8.1 and 8.2.
 
+**Trip visibility.** Every trip is either **Private** or **Public**, and new trips start Private. Public currently means exactly one thing: the trip's read-only itinerary link is on (Section 8.2). The owner chooses visibility in three places, all writing the same stored setting: while creating the trip, while editing it, and through Share in the trip actions menu. The trip form and Share show the same disclosure of what a public trip reveals before it is saved, and choosing Public in the form is saved together with the rest of the trip, so a refused save leaves it Private. Public is the setting future public discovery will build on, but discovery itself, public profiles and listing trips anywhere beyond the link remain deferred; turning that on later requires its own product decision and must not silently widen what an existing Public trip exposes.
+
 ## 8.1 Saving a Copy of a Shared Trip
 
 A signed-in traveller reading a shared link (Section 8.2) may **Save a copy** to their own trips. User-facing language is "Save a copy", "your copy" and "Based on {name}'s trip"; avoid fork, clone, duplicate, source trip and attribution.
@@ -640,7 +642,7 @@ Following another traveller's trip read-only, Shared With Me, collaborators, own
 
 ## 8.2 Read-Only Itinerary Links
 
-An owner may explicitly enable a link so companions can read the plan without an account. Anyone who receives the link can read its limited contents and pass it on; it is not an invitation restricted to named people. Sharing stays off by default, is not enabled by copying a URL, and grants no editing rights.
+An owner may explicitly enable a link so companions can read the plan without an account, by setting the trip to Public (Section 8) from the trip form or from Share. Anyone who receives the link can read its limited contents and pass it on; it is not an invitation restricted to named people. Sharing stays off by default, is not enabled by copying a URL, and grants no editing rights.
 
 The public projection contains only:
 

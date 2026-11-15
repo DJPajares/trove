@@ -122,6 +122,8 @@ export type TripInput = {
   referenceTimeZone?: string | null;
   startDate: string;
   startingLocation?: string | null;
+  /** Saved with the rest of the trip, so a refused save publishes nothing. */
+  visibility?: 'private' | 'public';
 };
 
 export class TripApiError extends Error {

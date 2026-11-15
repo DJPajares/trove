@@ -2,10 +2,6 @@ import type { Profile } from '@/lib/profile/api';
 
 type OnboardingProfile = Pick<Profile, 'displayName' | 'homeCountryCode' | 'homeCurrencyCode'>;
 
-export type OnboardingStep = 'currency' | 'location' | 'name';
-
-export const ONBOARDING_STEPS: OnboardingStep[] = ['name', 'location', 'currency'];
-
 export function isProfileOnboarded(profile: OnboardingProfile | null) {
   if (!profile) return false;
   return Boolean(
@@ -13,11 +9,4 @@ export function isProfileOnboarded(profile: OnboardingProfile | null) {
     profile.homeCountryCode?.trim() &&
     profile.homeCurrencyCode?.trim(),
   );
-}
-
-/** Resumes onboarding at the first step whose value is not already saved. */
-export function firstIncompleteStep(profile: OnboardingProfile | null): OnboardingStep {
-  if (!profile?.displayName?.trim()) return 'name';
-  if (!profile.homeCountryCode?.trim()) return 'location';
-  return 'currency';
 }

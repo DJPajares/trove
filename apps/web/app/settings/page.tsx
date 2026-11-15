@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 
 import { AccountSettings, PrivacySecuritySettings } from '@/components/account-settings';
@@ -29,6 +30,14 @@ export default async function SettingsPage() {
           <OfflineStorageSettings />
           <PrivacySecuritySettings />
           <AccountSettings />
+          <p>
+            <Link
+              className="inline-flex min-h-11 items-center text-sm font-semibold text-brand underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+              href="/onboarding?replay=1&next=%2Fsettings"
+            >
+              {t('replayTour')}
+            </Link>
+          </p>
           <AppVersion />
         </div>
       </section>

@@ -120,6 +120,7 @@
     "title": "Settings",
     "description": "Set these once, and every new trip starts pointed the right way.",
     "appVersion": "Web {web} · API {api}",
+    "replayTour": "Replay the welcome tour",
     "versionUnknown": "—",
     "profileSection": "Your details",
     "profileSectionDescription": "Your name and photo, plus the home defaults Trove starts each trip with.",
@@ -3556,31 +3557,179 @@
   "onboarding": {
     "loading": "Loading your Trove profile...",
     "loadError": "Trove couldn't load your profile. Check your connection and try again.",
-    "stepLabel": "Step {current} of {total}",
-    "welcome": "Plan it. Live it. Remember it. Just a few details to get you started.",
     "saving": "Saving...",
     "saveError": "That didn't save. Try again.",
-    "back": "Back",
-    "continue": "Continue",
-    "finish": "Get started",
     "name": {
       "title": "What should we call you?",
-      "description": "This name appears across your trips.",
       "label": "Your name"
     },
     "location": {
       "title": "Where do you call home?",
-      "description": "Trove uses this to tell you what time it is back home while you travel.",
       "label": "Home country",
       "placeholder": "Choose a country",
       "hint": "Your country is enough."
     },
     "currency": {
       "title": "What's your home currency?",
-      "description": "Trove uses this to show expenses and budgets in a currency you know.",
       "label": "Home currency",
       "placeholder": "Search currencies",
-      "hint": "You can change this later in Settings."
+      "hint": "Picked from your country. Change it if you spend in another."
+    },
+    "tour": {
+      "back": "Back",
+      "skip": "Skip",
+      "progress": "Step {current} of {total}",
+      "welcome": {
+        "title": "Plan it. Live it. <em>Remember it.</em>",
+        "description": "One travel companion for your whole trip, so the plan, the day itself and the memories live in the same place.",
+        "before": "Before you go",
+        "during": "While you’re there",
+        "after": "Once you’re home",
+        "action": "Show me around"
+      },
+      "how": {
+        "eyebrow": "How it works",
+        "title": "Three parts, <em>one trip.</em>",
+        "tabsLabel": "Parts of a trip",
+        "example": "Example trip",
+        "tabs": {
+          "plan": "Plan",
+          "live": "Live",
+          "remember": "Remember"
+        },
+        "next": {
+          "plan": "Next: on the trip",
+          "live": "Next: after the trip",
+          "remember": "Got it"
+        },
+        "plan": {
+          "intro": "Build each day by adding the places you want to see.",
+          "try": "Try it: add a stop.",
+          "day": "Day 1 · Lisbon",
+          "add": "Add {name}",
+          "hintIdle": "Tap a place to add it to the day.",
+          "hintAdded": "Added. Trove works out the travel between stops.",
+          "hintFull": "A full day, planned in three taps.",
+          "stops": {
+            "cafe": { "name": "Café A Brasileira", "place": "Chiado", "leg": "10 min walk" },
+            "monastery": {
+              "name": "Jerónimos Monastery",
+              "place": "Belém",
+              "leg": "25 min by tram"
+            },
+            "market": {
+              "name": "Time Out Market",
+              "place": "Cais do Sodré",
+              "leg": "18 min by tram"
+            },
+            "tram": { "name": "Tram 28 ride", "place": "Alfama", "leg": "9 min walk" },
+            "view": { "name": "Miradouro da Graça", "place": "Graça", "leg": "12 min walk" }
+          }
+        },
+        "live": {
+          "intro": "On the trip, Trip Mode tells you where to be and what’s next.",
+          "try": "Try it: move the time.",
+          "timeLabel": "Time of day",
+          "now": "Now",
+          "next": "Next",
+          "until": "until {time}",
+          "free": "Free time",
+          "freeDetail": "Nothing scheduled right now",
+          "nextDetail": "{time} · in {minutes} min · {leg}",
+          "done": "That’s the day",
+          "doneDetail": "Head back whenever you like",
+          "directions": "Directions",
+          "hint": "It works without signal once you’ve prepared the trip."
+        },
+        "remember": {
+          "intro": "Keep photos and notes with the day they happened.",
+          "try": "Try it: tap the moments to keep.",
+          "page": "Day 1 · Lisbon",
+          "keep": "Keep: {caption}",
+          "quote": "“{caption}.”",
+          "empty": "Your journal page fills in as you keep moments.",
+          "kept": "{count, plural, one {# memory kept on Day 1.} other {# memories kept on Day 1.}}",
+          "hint": "Your trip becomes a journal you can read day by day.",
+          "shots": {
+            "one": "A quiet lane in Alfama",
+            "two": "The coast at golden hour",
+            "three": "Walking the old town",
+            "four": "The road down to the sea"
+          }
+        }
+      },
+      "highlights": {
+        "eyebrow": "Good to know",
+        "title": "The parts travellers <em>love.</em>",
+        "label": "Highlights",
+        "example": "Example amounts",
+        "action": "Make it mine",
+        "actionReplay": "Finish the tour",
+        "ai": {
+          "title": "Plan with AI",
+          "description": "Describe the trip in your own words. Trove drafts the days, and you review and change anything before it becomes your plan.",
+          "prompt": "Five slow days in Lisbon. Good coffee, old trams, one day trip.",
+          "action": "Draft my trip",
+          "days": {
+            "one": { "label": "Day 1", "name": "Chiado and Alfama", "count": "4 stops" },
+            "two": { "label": "Day 2", "name": "Belém", "count": "3 stops" },
+            "three": { "label": "Day 3", "name": "Day trip to Sintra", "count": "3 stops" }
+          },
+          "more": "+ 2 more days to review"
+        },
+        "finds": {
+          "title": "Save places anywhere",
+          "description": "Heard about a café from a friend? Save it to Finds, even with no trip planned. Trove sorts your places by city, ready for the trip that takes you there.",
+          "towns": {
+            "one": { "name": "Kyoto", "count": "6 places" },
+            "two": { "name": "Lisbon", "count": "4 places" },
+            "three": { "name": "Hội An", "count": "3 places" }
+          }
+        },
+        "offline": {
+          "title": "Works without signal",
+          "description": "Prepare a trip before you fly. On the plane, in the metro or far from a tower, your plan is still there.",
+          "switch": "Airplane mode",
+          "off": "Turn it on to see what happens to your plan.",
+          "on": "No connection. Your Lisbon plan is still here."
+        },
+        "money": {
+          "title": "Spending in your currency",
+          "description": "Log what you spend in the local currency and see the total in yours, across the whole trip.",
+          "rows": {
+            "one": { "name": "Coffee and pastries", "amount": "€8.50" },
+            "two": { "name": "Monastery tickets", "amount": "€24.00" },
+            "three": { "name": "Lunch at the market", "amount": "€31.00" }
+          },
+          "total": "Day 1 total",
+          "totalValue": "€63.50"
+        }
+      },
+      "setup": {
+        "eyebrow": "Make it yours",
+        "title": "Three quick <em>things.</em>",
+        "description": "You can change all of these later in Settings.",
+        "preview": "Nice to meet you.",
+        "previewNamed": "Nice to meet you, {name}.",
+        "previewDetail": "While you travel, Trove shows the time back home and your spending in your own currency.",
+        "previewCurrency": "While you travel, Trove shows the time back home and your spending in {currency}.",
+        "action": "Finish setup"
+      },
+      "ready": {
+        "eyebrow": "You’re set",
+        "title": "Ready when you are, <em>{name}.</em>",
+        "titleUnnamed": "Ready when <em>you are.</em>",
+        "description": "Start with one trip. A name and dates are enough, and everything else can come later.",
+        "points": {
+          "one": "Add the places you can’t miss, or describe the trip and let Trove draft it.",
+          "two": "Preview a day in Trip Mode before you leave.",
+          "three": "Come back to this tour any time from Settings."
+        },
+        "action": "Plan my first trip",
+        "later": "Look around first",
+        "replay": "Replay the tour",
+        "done": "Back to Trove"
+      }
     }
   },
   "offlineStorage": {

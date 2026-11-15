@@ -1,16 +1,13 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { weatherDayLocations, type WeatherLocations, type WeatherLocation } from '@trove/types';
-import {
-  readTripSnapshot,
-  readTripWeatherHistory,
-  writeTripWeatherHistory,
-} from '@/lib/offline/trip-store';
+import { readTripSnapshot } from '@/lib/offline/trip-store';
 import type { Itinerary, ItineraryTripPlace } from '@/lib/itinerary/api';
 import type { Trip } from '@/lib/trips/api';
 import { fetchTripContext } from '@/lib/insights/api';
 import { refreshScoresAfterWeatherAcquisition } from '@/lib/plan-score/lifecycle';
 import {
   getLocationWeather,
+  fetchTripWeather,
   getTripWeatherLocations,
   resolveWeatherPoints,
   type TripWeather,
@@ -97,13 +94,7 @@ export function bindWeatherAccount(client: QueryClient, userId: string) {
       resolve: resolveWeatherPoints,
       location: getLocationWeather,
       context: (tripId, languageCode, signal) => fetchTripContext(tripId, { languageCode, signal }),
-    },
-    history: {
-      read: (tripId) => readTripWeatherHistory(userId, tripId),
-      write: (tripId, days) =>
-        controller.signal.aborted
-          ? Promise.resolve()
-          : writeTripWeatherHistory(userId, tripId, days, () => !controller.signal.aborted),
+      trip: fetchTripWeather,
     },
     onEvidence: (tripIds) => refreshScoresAfterWeatherAcquisition(client, tripIds),
   });

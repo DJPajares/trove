@@ -282,6 +282,10 @@ async function weatherRequest<T>(path: string, signal?: AbortSignal, body?: unkn
   }
   return response.json() as Promise<T>;
 }
+/** A trip's weather as the server keeps it, in celsius; units are applied on display. */
+export function fetchTripWeather(tripId: string, signal?: AbortSignal) {
+  return weatherRequest<TripWeather>(`/trips/${tripId}/weather?temperatureUnit=celsius`, signal);
+}
 export function getTripWeatherLocations(tripId: string, signal?: AbortSignal) {
   return weatherRequest<WeatherLocations>(`/trips/${tripId}/weather/locations`, signal);
 }

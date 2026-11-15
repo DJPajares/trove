@@ -22,14 +22,14 @@ test('forecast descriptions keep the applicable date and zone without retrieval 
     }),
   ).toBe('Forecast for Oct 3, 2026 (Asia/Tokyo)');
 });
-test('archived predictions retain their forecast identity without unknown-age metadata', () => {
+test('a day already gone is described like any other day', () => {
   expect(
     useWeatherEvidenceDescription()({
-      kind: 'archived',
+      kind: 'forecast',
       date: '2026-10-02',
       timeZone: 'Asia/Tokyo',
     }),
-  ).toBe('Archived forecast for Oct 2, 2026 (Asia/Tokyo)');
+  ).toBe('Forecast for Oct 2, 2026 (Asia/Tokyo)');
 });
 test('current descriptions keep the timezone without exposing observation timestamps', () => {
   expect(

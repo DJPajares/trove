@@ -24,6 +24,21 @@ import {
   type WeatherPoint,
 } from './weather.js';
 import { isWithinForecastWindow, resolveForecastWindow } from './weather-window.js';
+import {
+  lockStoredDayWeather,
+  readStoredDayWeather,
+  samePlace,
+  WEATHER_PAST_REACH_DAYS,
+  writeStoredDayWeather,
+  type StoredDayWeather,
+} from './trip-day-weather-store.js';
+
+/** A date-only string moved by whole days, without touching a time zone. */
+function shiftDate(date: string, days: number) {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
 
 /**
  * A trip crossing more cities than this is asking one request to carry an
@@ -221,36 +236,108 @@ export class TripWeatherService {
     const located = mapping.days.flatMap((day) =>
       day.location ? [{ date: day.date, day: { id: day.id }, location: day.location }] : [],
     );
-    const tripLocation = mapping.fallback;
-
     const window = resolveForecastWindow(
       [...new Set(located.map((entry) => entry.location.timeZone))],
       now,
     );
 
-    // Only days the provider could actually answer put a coordinate on the
-    // request. A trip three months out reaches this line and leaves with an
-    // empty point list, which is what makes it cost nothing.
-    const reachable = located.filter((entry) => isWithinForecastWindow(entry.date, window));
-    const points = new Map<string, WeatherPoint>();
+    // What each day already has kept against the trip decides whether the
+    // provider is asked at all. A day is asked once while it is ahead, and
+    // once more when it arrives, after which it is locked and never asked
+    // again; a day whose stay or stops moved is asked again for its new place
+    // until it is locked.
+    const stored = await readStoredDayWeather(tripId);
+    const kept = new Map<string, StoredDayWeather>();
+    const ahead: typeof located = [];
+    const past: typeof located = [];
+    const finalise: string[] = [];
 
-    // The trip's own location is claimed first so it is always available as the
-    // fallback for a day the cap turned away.
-    if (reachable.length && tripLocation) {
-      points.set(weatherPointKey(tripLocation), {
-        latitude: tripLocation.latitude,
-        longitude: tripLocation.longitude,
-        timeZone: tripLocation.timeZone,
-      });
-    }
-    for (const entry of reachable) {
-      const key = weatherPointKey(entry.location);
-      if (points.has(key) || points.size >= MAX_WEATHER_LOCATIONS) continue;
-      points.set(key, { ...entry.location });
+    for (const entry of located) {
+      const today = getLocalDate(now, entry.location.timeZone);
+      const row = stored.get(entry.day.id);
+      const sameDate = row?.date === entry.date;
+      const here = row && sameDate && samePlace(row.location, entry.location) ? row : null;
+
+      if (row && sameDate && row.lockedAt) {
+        kept.set(entry.day.id, row);
+        continue;
+      }
+      if (here) kept.set(entry.day.id, here);
+      if (entry.date > today) {
+        if (!here && isWithinForecastWindow(entry.date, window)) ahead.push(entry);
+      } else if (entry.date === today && isWithinForecastWindow(entry.date, window)) {
+        ahead.push(entry);
+      } else if (entry.date >= shiftDate(today, -WEATHER_PAST_REACH_DAYS)) {
+        past.push(entry);
+      } else if (here) {
+        finalise.push(entry.day.id);
+      }
     }
 
-    const today = reachable.find(
-      (entry) => entry.date === getLocalDate(now, entry.location.timeZone),
+    const tripLocation = mapping.fallback;
+    const fallbackKey = tripLocation ? weatherPointKey(tripLocation) : null;
+    const pointsFor = (entries: typeof located) => {
+      const points = new Map<string, WeatherPoint>();
+      // The trip's own location is claimed first so it is always available as
+      // the fallback for a day the cap turned away.
+      if (entries.length && tripLocation) {
+        points.set(weatherPointKey(tripLocation), { ...tripLocation });
+      }
+      for (const entry of entries) {
+        const key = weatherPointKey(entry.location);
+        if (points.has(key) || points.size >= MAX_WEATHER_LOCATIONS) continue;
+        points.set(key, { ...entry.location });
+      }
+      return [...points.values()];
+    };
+    const written: StoredDayWeather[] = [];
+    const take = (entries: typeof located, answers: Map<string, CachedPointForecast>) => {
+      for (const entry of entries) {
+        const forecast =
+          answers.get(weatherPointKey(entry.location)) ??
+          (fallbackKey ? answers.get(fallbackKey) : undefined);
+        const match = forecast?.days.find((candidate) => candidate.date === entry.date);
+        if (!forecast || !match) continue;
+        const row: StoredDayWeather = {
+          date: entry.date,
+          fetchedAt: forecast.fetchedAt,
+          forecast: match,
+          itineraryDayId: entry.day.id,
+          location: forecast.location,
+          lockedAt: entry.date <= getLocalDate(now, entry.location.timeZone) ? now : null,
+        };
+        kept.set(entry.day.id, row);
+        written.push(row);
+      }
+    };
+
+    if (ahead.length) {
+      try {
+        take(ahead, await this.forecasts.getForecasts(pointsFor(ahead), window));
+      } catch {
+        /* Whatever is kept still answers; the next read asks again. */
+      }
+    }
+    if (past.length) {
+      const dates = past.map((entry) => entry.date).toSorted();
+      try {
+        take(
+          past,
+          await this.forecasts.getPastDays(pointsFor(past), {
+            endDate: dates.at(-1)!,
+            startDate: dates[0]!,
+          }),
+        );
+      } catch {
+        /* As above: kept weather stands, and a later read tries once more. */
+      }
+    }
+    await writeStoredDayWeather(tripId, written);
+    await lockStoredDayWeather(finalise, now);
+
+    const today = located.find(
+      (entry) =>
+        entry.date === getLocalDate(now, entry.location.timeZone) && kept.has(entry.day.id),
     );
     let prefetched: Awaited<ReturnType<WeatherService['getWeather']>> | null = null;
     if (today) {
@@ -260,37 +347,25 @@ export class TripWeatherService {
           temperatureUnit: options.temperatureUnit,
         });
       } catch {
-        /* Daily evidence can still answer independently. */
+        /* Daily weather can still answer independently. */
       }
     }
-    const answers: Map<string, CachedPointForecast> = points.size
-      ? await this.forecasts.getForecasts([...points.values()], window)
-      : new Map();
-    const fallbackKey = tripLocation ? weatherPointKey(tripLocation) : null;
 
     const days: TripWeatherDay[] = [];
     let oldestFetchedAt: Date | null = null;
-
-    for (const entry of reachable) {
-      const forecast =
-        answers.get(weatherPointKey(entry.location)) ??
-        (fallbackKey ? answers.get(fallbackKey) : undefined);
-      const match = forecast?.days.find((candidate) => candidate.date === entry.date);
-      if (!forecast || !match) continue;
-
-      if (!oldestFetchedAt || forecast.fetchedAt < oldestFetchedAt) {
-        oldestFetchedAt = forecast.fetchedAt;
-      }
-
+    for (const entry of located) {
+      const row = kept.get(entry.day.id);
+      if (!row) continue;
+      if (!oldestFetchedAt || row.fetchedAt < oldestFetchedAt) oldestFetchedAt = row.fetchedAt;
       days.push({
-        fetchedAt: forecast.fetchedAt.toISOString(),
+        fetchedAt: row.fetchedAt.toISOString(),
         date: entry.date,
         itineraryDayId: entry.day.id,
-        location: forecast.location,
-        precipitationProbability: match.precipitationProbability,
-        temperatureMax: toPreferredUnit(match.temperatureMax, options.temperatureUnit),
-        temperatureMin: toPreferredUnit(match.temperatureMin, options.temperatureUnit),
-        weatherCode: match.weatherCode,
+        location: row.location,
+        precipitationProbability: row.forecast.precipitationProbability,
+        temperatureMax: toPreferredUnit(row.forecast.temperatureMax, options.temperatureUnit),
+        temperatureMin: toPreferredUnit(row.forecast.temperatureMin, options.temperatureUnit),
+        weatherCode: row.forecast.weatherCode,
       });
     }
 

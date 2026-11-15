@@ -1,11 +1,10 @@
 'use client';
 
-import { CloudSun, RefreshCw } from 'lucide-react';
+import { CloudSun } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { paddedDayNumber } from '@/components/trip-day-card';
 import { usePreferences } from '@/components/preferences-provider';
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import type { TripWeather } from '@/lib/weather/api';
@@ -28,12 +27,10 @@ const frameClassName = 'rounded-[var(--radius-xl)] bg-card px-4 py-3.5';
  */
 export function TripForecastCard({
   days,
-  onRetry,
   status,
   weather,
 }: Readonly<{
   days: readonly { date: string; id: string; number: number }[];
-  onRetry: () => void;
   status: 'error' | 'loading' | 'ready';
   weather: TripWeather | null;
 }>) {
@@ -58,45 +55,25 @@ export function TripForecastCard({
     );
   }
 
-  if (!weather) {
-    return (
-      <section aria-live="polite" className={cn(frameClassName, 'flex items-center gap-3')}>
-        <CloudSun aria-hidden="true" className="size-5 shrink-0 text-muted-foreground" />
-        <p className="min-w-0 flex-1 text-sm text-muted-foreground">{t('unavailableTitle')}</p>
-        <Button
-          aria-label={t('tryAgain')}
-          className="rounded-full"
-          onClick={onRetry}
-          size="icon-sm"
-          variant="ghost"
-        >
-          <RefreshCw aria-hidden="true" />
-        </Button>
-      </section>
-    );
-  }
+  // Weather that could not be read takes no room; the trip reads fine without it.
+  if (!weather) return null;
 
   const columns = days.map((day) => ({ day, forecast: dayForecast(weather, day.date) }));
   const shown = columns.filter((column) => column.forecast?.forecast);
   const gap = forecastGap(
     columns.flatMap((column) => (column.forecast ? [column.forecast.state] : [])),
   );
-  const gapText =
-    gap === 'later'
-      ? planner('tripLater')
-      : gap === 'past'
-        ? planner('tripPast')
-        : gap === 'missing'
-          ? planner('tripMissing')
-          : null;
+  // Only "it is coming" is worth a line; a day that will have no weather is
+  // simply left out rather than apologised for.
+  const gapText = gap === 'later' ? planner('tripLater') : null;
 
   if (!shown.length) {
-    return (
+    return gapText ? (
       <p className="flex items-center gap-2.5 px-1 text-sm text-muted-foreground">
         <CloudSun aria-hidden="true" className="size-4 shrink-0" />
-        {gapText ?? planner('tripMissing')}
+        {gapText}
       </p>
-    );
+    ) : null;
   }
 
   return (
@@ -125,34 +102,7 @@ export function TripForecastCard({
           const dayLabel = `${paddedDayNumber(day.number)} ${weekday.format(
             new Date(`${day.date}T00:00:00.000Z`),
           )}`;
-          if (!forecast) {
-            return (
-              <li
-                className="flex w-14 shrink-0 flex-col items-center gap-1.5 rounded-[var(--radius-lg)] border border-dashed border-border-subtle px-1 py-2 text-center text-muted-foreground"
-                key={day.id}
-              >
-                <span
-                  aria-hidden="true"
-                  className="text-[0.625rem] font-semibold tracking-[0.06em] uppercase"
-                >
-                  {dayLabel}
-                </span>
-                <span aria-hidden="true" className="grid h-5 place-items-center">
-                  —
-                </span>
-                <span className="sr-only">
-                  {`${dayLabel}. ${
-                    entry?.state === 'later'
-                      ? t('forecastLater')
-                      : entry?.state === 'past'
-                        ? t('pastForecastUnavailable')
-                        : t('noForecast')
-                  }`}
-                </span>
-              </li>
-            );
-          }
-          const archived = entry?.state === 'archived';
+          if (!forecast) return null;
           const Icon = weatherConditionIcon(forecast.weatherCode);
           const condition = t(`condition.${weatherConditionKey(forecast.weatherCode)}`);
           const high = `${Math.round(forecast.temperatureMax)}${unit}`;
@@ -162,14 +112,13 @@ export function TripForecastCard({
           const evidence = evidenceDescription({
             date: forecast.date,
             fetchedAt: forecast.fetchedAt,
-            kind: archived ? 'archived' : 'forecast',
+            kind: 'forecast',
             timeZone: forecast.location.timeZone,
           });
           return (
             <li
               className={cn(
                 'flex w-14 shrink-0 flex-col items-center gap-1.5 rounded-[var(--radius-lg)] bg-surface-tint px-1 py-2 text-center',
-                archived && 'bg-transparent opacity-80 ring-1 ring-border-subtle ring-inset',
               )}
               key={day.id}
               title={evidence}
@@ -204,9 +153,6 @@ export function TripForecastCard({
       </ScrollShadow>
       <div className="mt-2 space-y-1 text-xs text-muted-foreground empty:hidden">
         {gapText && shown.length < columns.length ? <p>{gapText}</p> : null}
-        {shown.some(({ forecast: entry }) => entry?.state === 'archived') ? (
-          <p>{planner('archivedNote')}</p>
-        ) : null}
       </div>
     </a>
   );

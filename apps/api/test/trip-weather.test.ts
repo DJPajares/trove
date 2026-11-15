@@ -45,13 +45,83 @@ function createTrip(days: ReturnType<typeof day>[], destination: WeatherPoint | 
   };
 }
 
-function stubPrisma(trip: unknown) {
+type StoredRow = {
+  date: Date;
+  fetchedAt: Date;
+  itineraryDayId: string;
+  latitude: number;
+  lockedAt: Date | null;
+  longitude: number;
+  precipitationProbability: number | null;
+  temperatureMaxCelsius: number;
+  temperatureMinCelsius: number;
+  timeZone: string;
+  tripId: string;
+  weatherCode: number;
+};
+
+/** The trip, and the weather kept against it, in memory. */
+function stubPrisma(trip: unknown, kept: StoredRow[] = []) {
+  const rows = new Map(kept.map((row) => [row.itineraryDayId, { ...row }]));
   (globalThis as { trovePrismaClient?: unknown }).trovePrismaClient = {
     trip: {
       async findFirst() {
         return trip;
       },
     },
+    tripDayWeather: {
+      async findMany() {
+        return [...rows.values()];
+      },
+      async upsert({
+        create,
+        update,
+        where,
+      }: {
+        create: StoredRow;
+        update: Omit<StoredRow, 'itineraryDayId'>;
+        where: { itineraryDayId: string };
+      }) {
+        const existing = rows.get(where.itineraryDayId);
+        rows.set(where.itineraryDayId, existing ? { ...existing, ...update } : create);
+      },
+      async updateMany({
+        data,
+        where,
+      }: {
+        data: { lockedAt: Date };
+        where: { itineraryDayId: { in: string[] } };
+      }) {
+        for (const id of where.itineraryDayId.in) {
+          const row = rows.get(id);
+          if (row && !row.lockedAt) row.lockedAt = data.lockedAt;
+        }
+      },
+    },
+  };
+  return rows;
+}
+
+function keptRow(
+  itineraryDayId: string,
+  date: string,
+  point: WeatherPoint,
+  extra: Partial<StoredRow> = {},
+): StoredRow {
+  return {
+    date: new Date(`${date}T00:00:00.000Z`),
+    fetchedAt: new Date('2026-08-30T00:00:00.000Z'),
+    itineraryDayId,
+    latitude: point.latitude,
+    lockedAt: null,
+    longitude: point.longitude,
+    precipitationProbability: 10,
+    temperatureMaxCelsius: 25,
+    temperatureMinCelsius: 18,
+    timeZone: 'Asia/Tokyo',
+    tripId: 'trip',
+    weatherCode: 1,
+    ...extra,
   };
 }
 
@@ -501,4 +571,97 @@ test('the day the hours describe is named, so another day cannot borrow them', a
   // would show tomorrow this evening's rain. The date cannot be mistaken.
   expect(weather.hoursDate).toBe('2026-09-03');
   expect(weather.days.map((entry) => entry.date)).toEqual(['2026-09-03', '2026-09-04']);
+});
+
+test('a day ahead with weather kept for its place is not asked for again', async () => {
+  const rows = stubPrisma(createTrip([day('d2', '2026-09-04', { base: TOKYO })]), [
+    keptRow('d2', '2026-09-04', TOKYO),
+  ]);
+  const { batches, service } = await createService();
+
+  const weather = await service.getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
+
+  expect(batches, 'no provider call').toHaveLength(0);
+  expect(weather.days[0]?.temperatureMax).toBe(25);
+  expect(rows.get('d2')?.lockedAt).toBeNull();
+});
+
+test('the day that arrives is read once more and locked', async () => {
+  const rows = stubPrisma(createTrip([day('d1', '2026-09-03', { base: TOKYO })]), [
+    keptRow('d1', '2026-09-03', TOKYO),
+  ]);
+  const { batches, service } = await createService();
+
+  const weather = await service.getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
+
+  expect(batches).toHaveLength(1);
+  expect(weather.days[0]?.temperatureMax, 'the fresh reading replaces the kept one').toBe(30);
+  expect(rows.get('d1')?.lockedAt).toEqual(NOW);
+});
+
+test('a locked day is never asked for again, even if its place moved', async () => {
+  stubPrisma(createTrip([day('d1', '2026-09-03', { base: SAPPORO })]), [
+    keptRow('d1', '2026-09-03', TOKYO, { lockedAt: new Date('2026-09-03T01:00:00.000Z') }),
+  ]);
+  const { batches, service } = await createService();
+
+  const weather = await service.getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
+
+  expect(batches).toHaveLength(0);
+  expect(weather.days[0]?.temperatureMax).toBe(25);
+});
+
+test('a day ahead whose place moved is asked for its new place', async () => {
+  const rows = stubPrisma(createTrip([day('d2', '2026-09-04', { base: SAPPORO })]), [
+    keptRow('d2', '2026-09-04', TOKYO),
+  ]);
+  const { batches, service } = await createService();
+
+  const weather = await service.getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
+
+  expect(batches).toHaveLength(1);
+  expect(weather.days[0]?.temperatureMax).toBe(20);
+  expect(Number(rows.get('d2')?.latitude)).toBeCloseTo(SAPPORO.latitude);
+});
+
+test('a past day nobody opened is read once from the past and locked', async () => {
+  const pastBatches: { endDate: string; startDate: string }[] = [];
+  const stub = createForecasts();
+  const forecasts = {
+    ...stub.forecasts,
+    async getPastDays(
+      points: readonly WeatherPoint[],
+      window: { endDate: string; startDate: string },
+    ) {
+      pastBatches.push(window);
+      const { weatherPointKey } = await import('../src/services/cached-weather.js');
+      return new Map(
+        points.map((point) => [
+          weatherPointKey(point),
+          {
+            days: [
+              {
+                date: '2026-08-30',
+                precipitationProbability: 0,
+                temperatureMax: 28,
+                temperatureMin: 21,
+                weatherCode: 0,
+              },
+            ],
+            fetchedAt: NOW,
+            location: { ...point, timeZone: 'Asia/Tokyo' },
+            point,
+          },
+        ]),
+      );
+    },
+  };
+  const rows = stubPrisma(createTrip([day('d0', '2026-08-30', { base: TOKYO })]));
+  const { service } = await createService({ forecasts });
+
+  const weather = await service.getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
+
+  expect(pastBatches).toEqual([{ endDate: '2026-08-30', startDate: '2026-08-30' }]);
+  expect(weather.days[0]?.temperatureMax).toBe(28);
+  expect(rows.get('d0')?.lockedAt).toEqual(NOW);
 });

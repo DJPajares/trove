@@ -5,7 +5,6 @@ import { useTranslations } from 'next-intl';
 
 import { usePreferences } from '@/components/preferences-provider';
 import { cn } from '@/lib/utils';
-import { isArchivedForecast } from '@/lib/weather/freshness';
 import { useWeatherEvidenceDescription } from '@/lib/weather/use-evidence-description';
 import {
   NOTABLE_PRECIPITATION,
@@ -55,9 +54,8 @@ export function TripDayWeather({
   const probability = forecast.precipitationProbability;
   const showPrecipitation = probability !== null && probability >= NOTABLE_PRECIPITATION;
   const detailed = variant === 'detailed';
-  const archived = isArchivedForecast(forecast);
   const evidence = evidenceDescription({
-    kind: archived ? 'archived' : 'forecast',
+    kind: 'forecast',
     date: forecast.date,
     timeZone: forecast.location.timeZone,
     fetchedAt: forecast.fetchedAt,
@@ -79,7 +77,6 @@ export function TripDayWeather({
       title={evidence}
     >
       <span aria-hidden="true" className="inline-flex items-center gap-1.5 text-muted-foreground">
-        {detailed && archived ? <span>{t('archivedForecast')}</span> : null}
         <Icon className={cn('size-3.5 shrink-0', detailed && 'size-4')} />
         {detailed ? <span className="font-medium text-foreground">{condition}</span> : null}
       </span>

@@ -22,8 +22,10 @@ export const tripModeViews = [
  * The bar a traveller navigates Trip Mode with, in the thumb's reach.
  *
  * Trip Mode is used one-handed, outdoors, while walking, and its four views are
- * the only places it can go - so they belong at the bottom of the phone rather
- * than as a segmented control above the fold. The global bar steps aside for
+ * the only places it can go - so on a phone they belong at the bottom rather
+ * than as a segmented control above the fold. From `md`, where the app's own
+ * header runs across the top, they are a compact segmented control under the
+ * trip's name instead, so the screen carries one bar and not two. The global bar steps aside for
  * this one inside `/mode` (see `primary-navigation`), which is what stops the
  * screen carrying two navigations stacked on each other.
  *
@@ -45,13 +47,13 @@ export function TripModeTabBar({
   return (
     <nav
       aria-label={t('navigation')}
-      className="fixed inset-x-0 bottom-0 z-[var(--layer-sticky)] border-t border-border-subtle bg-background/95 pb-[var(--safe-bottom)] backdrop-blur supports-[backdrop-filter]:bg-background/88 lg:sticky lg:top-[calc(var(--safe-top)+var(--header-offset)+3.25rem)] lg:mx-auto lg:w-full lg:max-w-6xl lg:rounded-[var(--radius-lg)] lg:border lg:bg-background/95 lg:pb-0"
+      className="fixed inset-x-0 bottom-0 z-[var(--layer-sticky)] border-t border-border-subtle bg-background/95 pb-[var(--safe-bottom)] backdrop-blur supports-[backdrop-filter]:bg-background/88 md:sticky md:top-[calc(var(--safe-top)+var(--header-offset)+3.25rem)] md:mx-auto md:w-fit md:max-w-full md:rounded-[var(--radius-lg)] md:border md:bg-background/95 md:pb-0"
       data-slot="trip-mode-tabs"
       data-translucent-surface
     >
       {/* `pt-2` is load-bearing: the active mark hangs from the bar's top edge
           by cancelling exactly this padding. */}
-      <ul className="mx-auto grid w-full max-w-6xl grid-cols-4 px-[var(--gutter-inline-start)] lg:gap-1 lg:p-1">
+      <ul className="mx-auto grid w-full max-w-6xl grid-cols-4 px-[var(--gutter-inline-start)] md:w-fit md:grid-cols-[repeat(4,auto)] md:gap-1 md:p-1 md:px-1">
         {tripModeViews.map(({ icon: Icon, key, path }) => {
           const href = `${basePath}${path}`;
           // Now owns the bare path, so prefix matching would light it up on
@@ -64,26 +66,26 @@ export function TripModeTabBar({
               <Link
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'relative isolate flex min-h-[3.25rem] flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] px-2 pt-1.5 pb-2 text-[length:var(--text-metadata)] font-medium outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none lg:min-h-11 lg:flex-row lg:gap-1.5 lg:py-1.5',
+                  'relative isolate flex min-h-[3.25rem] flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] px-2 pt-1.5 pb-2 text-[length:var(--text-metadata)] font-medium outline-none transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none md:min-h-11 md:flex-row md:gap-1.5 md:px-5 md:py-1.5',
                   active
-                    ? 'font-semibold text-secondary-foreground [--icon-stroke:var(--icon-stroke-emphasis)] lg:bg-secondary lg:font-medium'
-                    : 'text-muted-foreground hover:text-foreground lg:hover:bg-surface-hover',
+                    ? 'font-semibold text-secondary-foreground [--icon-stroke:var(--icon-stroke-emphasis)] md:bg-secondary md:font-medium'
+                    : 'text-muted-foreground hover:text-foreground md:hover:bg-surface-hover',
                 )}
                 href={withPreviewHref(href)}
               >
                 {/* Colour alone cannot carry this: the selected tab would
                     dissolve into its neighbours in greyscale. The filled pill
                     behind the icon is the second channel WCAG 1.4.1 asks for.
-                    At `lg:` the whole tab is the pill, so the icon's own steps
+                    At `md:` the whole tab is the pill, so the icon's own steps
                     down. */}
                 <span
                   aria-hidden="true"
                   className={cn(
-                    'flex h-8 w-14 items-center justify-center rounded-full transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none lg:h-auto lg:w-auto lg:bg-transparent',
+                    'flex h-8 w-14 items-center justify-center rounded-full transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none md:h-auto md:w-auto md:bg-transparent',
                     active && 'bg-secondary',
                   )}
                 >
-                  <Icon className="size-5 lg:size-4" />
+                  <Icon className="size-5 md:size-4" />
                 </span>
                 <span>{t(`views.${key}.label`)}</span>
               </Link>

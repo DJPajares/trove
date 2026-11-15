@@ -423,7 +423,7 @@ export function TripModeMapView({
           {/* Carried over the map on a phone rather than stacked above it: how
               far and how long, which marker is which, and the device's own
               position. At `lg:` the rail beside the map has room for all of it. */}
-          <div className="pointer-events-none absolute inset-x-3 top-[calc(var(--safe-top)+var(--header-offset)+5rem+var(--trip-mode-preview-offset,0px))] z-[1] flex flex-col items-start gap-2 md:top-[calc(var(--safe-top)+var(--header-offset)+4rem+var(--trip-mode-preview-offset,0px))] lg:hidden">
+          <div className="pointer-events-none absolute inset-x-3 top-[calc(var(--safe-top)+var(--header-offset)+5rem+var(--trip-mode-preview-offset,0px))] z-[1] flex flex-col items-start gap-2 md:top-[calc(var(--safe-top)+var(--header-offset)+7.5rem+var(--trip-mode-preview-offset,0px))] lg:hidden">
             <div
               className="pointer-events-auto w-full overflow-hidden rounded-[var(--radius-xl)] bg-background/95 shadow-[var(--shadow-overlay)] backdrop-blur supports-[backdrop-filter]:bg-background/88"
               data-translucent-surface

@@ -9,6 +9,7 @@ import { TripCountries } from '@/components/trip-countries';
 import { TripDaySegments } from '@/components/trip-day-segments';
 import { TripMedia } from '@/components/trip-media';
 import { TripReadinessBadge } from '@/components/trip-readiness-badge';
+import { CoverArtworkCredit } from '@/components/cover-artwork-credit';
 import { useCoverUnderHeader } from '@/hooks/use-cover-under-header';
 import { dayHeaderFallback } from '@/lib/media/day-header-fallback';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
@@ -87,6 +88,7 @@ export function HomeCover({
         aria-hidden="true"
         className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgba(8,18,13,0.62)_0%,rgba(8,18,13,0.14)_28%,rgba(8,18,13,0.4)_56%,rgba(8,18,13,0.9)_100%)]"
       />
+      {trip ? null : <CoverArtworkCredit />}
 
       {/* The page's own measure inside the full-width photograph: the weather
           cue at the top, clear of the status area or the header, and the

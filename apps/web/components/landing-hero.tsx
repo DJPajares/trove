@@ -6,8 +6,9 @@ import { useTranslations } from 'next-intl';
 import { MediaFrame } from '@/components/media-frame';
 import { MEASURE, SCRIM } from '@/components/saved/finds-cover';
 import { Button } from '@/components/ui/button';
+import { CoverArtworkCredit } from '@/components/cover-artwork-credit';
 import { useCoverUnderHeader } from '@/hooks/use-cover-under-header';
-import { landingHeroImage } from '@/lib/media/landing-images';
+import { dayHeaderFallback } from '@/lib/media/day-header-fallback';
 import { pageEntrance } from '@/lib/page-entrance';
 import { cn } from '@/lib/utils';
 
@@ -52,10 +53,12 @@ export function LandingHero() {
         dataSlot="landing-hero-media"
         preload
         sizes="100vw"
-        source={{ kind: 'editorial', reference: landingHeroImage }}
+        photographicPlaceholder={dayHeaderFallback.preview}
+        source={{ kind: 'local', src: dayHeaderFallback.src }}
         variant="cover"
       />
       <div aria-hidden="true" className={SCRIM} />
+      <CoverArtworkCredit />
 
       <div className={MEASURE}>
         <div

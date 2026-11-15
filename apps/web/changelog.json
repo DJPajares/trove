@@ -1378,5 +1378,16 @@
         "You can replay the tour any time from Settings."
       ]
     }
+  },
+  {
+    "id": "new-cover-photo",
+    "date": "2026-11-15",
+    "version": "1.31.1",
+    "summaries": {
+      "en": [
+        "Trove has a new cover photo: a traveller above misty mountain ranges at dawn.",
+        "Replay the welcome tour any time from your account menu."
+      ]
+    }
   }
 ]

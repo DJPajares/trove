@@ -8,6 +8,7 @@ import { useRef, useState } from 'react';
 import { MediaFrame } from '@/components/media-frame';
 import { TripMedia } from '@/components/trip-media';
 import { Button } from '@/components/ui/button';
+import { CoverArtworkCredit } from '@/components/cover-artwork-credit';
 import { useCoverUnderHeader } from '@/hooks/use-cover-under-header';
 import { dayHeaderFallback } from '@/lib/media/day-header-fallback';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
@@ -97,6 +98,7 @@ export function FindsCover({
           variant="card"
         />
         <div aria-hidden="true" className={SCRIM} />
+        <CoverArtworkCredit />
         <div className={MEASURE}>
           <div
             className={cn(

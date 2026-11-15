@@ -40,6 +40,7 @@
     "signedOut": "Not signed in",
     "profile": "Profile",
     "settings": "Settings",
+    "welcomeTour": "Welcome tour",
     "signIn": "Sign in",
     "signUp": "Create account",
     "signOut": "Sign out",
@@ -120,7 +121,6 @@
     "title": "Settings",
     "description": "Set these once, and every new trip starts pointed the right way.",
     "appVersion": "Web {web} · API {api}",
-    "replayTour": "Replay the welcome tour",
     "versionUnknown": "—",
     "profileSection": "Your details",
     "profileSectionDescription": "Your name and photo, plus the home defaults Trove starts each trip with.",
@@ -3222,7 +3222,7 @@
     "heroDescription": "Plan your itinerary, follow it day by day while you travel, and keep a journal of the trip, all in one app.",
     "heroPrimary": "Create your account",
     "heroSecondary": "I already have one",
-    "heroImageAlt": "A coastal cliff road above the ocean at sunset.",
+    "heroImageAlt": "A traveller on a rocky ridge above layers of misty blue mountains at dawn.",
     "chaptersKicker": "What Trove does",
     "chaptersTitle": "One app for before, during and after your trip.",
     "chapters": {
@@ -3723,7 +3723,7 @@
         "points": {
           "one": "Add the places you can’t miss, or describe the trip and let Trove draft it.",
           "two": "Preview a day in Trip Mode before you leave.",
-          "three": "Come back to this tour any time from Settings."
+          "three": "Come back to this tour any time from your account menu."
         },
         "action": "Plan my first trip",
         "later": "Look around first",

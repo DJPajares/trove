@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 
 import { MediaFrame } from '@/components/media-frame';
 import { COVER_BLEED, COVER_HEIGHT, MEASURE, SCRIM } from '@/components/saved/finds-cover';
+import { CoverArtworkCredit } from '@/components/cover-artwork-credit';
 import { useCoverUnderHeader } from '@/hooks/use-cover-under-header';
 import { dayHeaderFallback } from '@/lib/media/day-header-fallback';
 import type { EditorialImageReference } from '@/lib/media/editorial-images';
@@ -69,6 +70,7 @@ export function CollectionCover({
         variant="card"
       />
       <div aria-hidden="true" className={SCRIM} />
+      {editorial ? null : <CoverArtworkCredit />}
 
       {/* Where the trip cover keeps its way back: top left, on the photograph. */}
       <Link

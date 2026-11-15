@@ -21,10 +21,11 @@ import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsIndicator, TabsList, TabsPanel, TabsTab } from '@/components/ui/tabs';
+import { CoverArtworkCredit } from '@/components/cover-artwork-credit';
 import { getSafeRedirectPath } from '@/lib/auth/redirect';
 import { currencyForCountry } from '@/lib/currency/country-currency';
 import * as Icons from '@/lib/icons';
-import { landingHeroImage } from '@/lib/media/landing-images';
+import { dayHeaderFallback } from '@/lib/media/day-header-fallback';
 import { pageEntrance } from '@/lib/page-entrance';
 import { isProfileOnboarded } from '@/lib/profile/onboarding';
 import { cn } from '@/lib/utils';
@@ -193,11 +194,19 @@ export function OnboardingFlow({
         <div aria-hidden="true" className="fixed inset-0 isolate bg-surface-media">
           <MediaFrame
             alt=""
-            className={cn('absolute inset-0 -z-20 h-full w-full rounded-none', pageEntrance.media)}
+            className={cn(
+              'absolute inset-0 -z-20 h-full w-full rounded-none',
+              // On a phone the photograph fills the screen top to bottom, so no
+              // crop can lift its traveller above the words; it zooms in from
+              // the foot instead, which brings them up into the open sky.
+              'max-md:[&_img]:origin-bottom max-md:[&_img]:scale-150',
+              pageEntrance.media,
+            )}
             dataSlot="onboarding-cover"
+            photographicPlaceholder={dayHeaderFallback.preview}
             preload
             sizes="100vw"
-            source={{ kind: 'editorial', reference: landingHeroImage }}
+            source={{ kind: 'local', src: dayHeaderFallback.src }}
             variant="cover"
           />
           <div className={SCRIM} />
@@ -295,6 +304,7 @@ export function OnboardingFlow({
                   </li>
                 ))}
               </ul>
+              <CoverArtworkCredit className="static self-end pt-1" />
             </>
           ) : null}
 

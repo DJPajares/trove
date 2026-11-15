@@ -80,13 +80,13 @@ test('the private trip dialog discloses the complete public projection before en
     'Scheduled days’ dates, names, and notes',
     'Scheduled stops’ names, addresses or custom locations, dayparts, local start and end times, durations, and notes',
     'Custom Places and label-only items',
-    'forward the link to others',
+    'discovery, search and on your profile',
     'Reservations and documents',
     'Memories, ratings, media, and account details',
   ]) {
     expect(text).toContain(category);
   }
-  expect(markup.indexOf('What the link shares')).toBeLessThan(markup.indexOf('role="switch"'));
+  expect(markup.indexOf('What a public trip shows')).toBeLessThan(markup.indexOf('role="switch"'));
   expect(markup).toContain('aria-checked="false"');
   expect(text).not.toContain('Copy link');
 });
@@ -98,6 +98,6 @@ test('the sharing control describes its disclosure and keeps it available after 
   expect(markup).toContain(`id="${descriptionId}"`);
   expect(markup).toMatch(/<button[^>]*role="switch"/);
   expect(markup).toContain('aria-checked="true"');
-  expect(markup).toContain('What the link shares');
+  expect(markup).toContain('What a public trip shows');
   expect(markup).toContain('Copy link');
 });

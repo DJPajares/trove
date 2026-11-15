@@ -601,7 +601,7 @@ Existing and manually created itinerary durations are `USER_OWNED`. Editing an `
 
 # 8. Trip Ownership & Sharing
 
-Trips are **private by default and edited only by their owner**. Read-only itinerary links in Section 8.2 are the sole approved public exception; they do not expose the whole Trip. A signed-in traveller who opens such a link may save their own copy of it (Section 8.1); the copy is a new private Trip they own, not access to the original.
+Trips are **private by default and edited only by their owner**. Public trips (below) are the sole approved public exception, reached today only through their read-only itinerary links (Section 8.2); they do not expose the whole Trip. A signed-in traveller who opens such a link may save their own copy of it (Section 8.1); the copy is a new private Trip they own, not access to the original.
 
 The data model may remain future-ready for:
 
@@ -622,9 +622,9 @@ Future-ready concepts may include:
 - attribution,
 - user-to-trip relationship.
 
-Future-ready fields do not authorize additional collaboration, discovery, or sharing workflows beyond Sections 8.1 and 8.2.
+Future-ready fields do not authorize additional collaboration or sharing workflows beyond Sections 8.1 and 8.2, or a discovery surface without its own specification.
 
-**Trip visibility.** Every trip is either **Private** or **Public**, and new trips start Private. Public currently means exactly one thing: the trip's read-only itinerary link is on (Section 8.2). The owner chooses visibility in three places, all writing the same stored setting: while creating the trip, while editing it, and through Share in the trip actions menu. The trip form and Share show the same disclosure of what a public trip reveals before it is saved, and choosing Public in the form is saved together with the rest of the trip, so a refused save leaves it Private. Public is the setting future public discovery will build on, but discovery itself, public profiles and listing trips anywhere beyond the link remain deferred; turning that on later requires its own product decision and must not silently widen what an existing Public trip exposes.
+**Trip visibility.** Every trip is either **Private** or **Public**, and new trips start Private. Public means the trip is open to anyone: its read-only itinerary link is on (Section 8.2), and it may appear around Trove, such as in Home discovery, search and the owner's profile, where other travellers can find it, read it and save it. Each of those surfaces still needs its own specification, and until one ships the link is the only way in; the disclosure describes all of them now so that choosing Public is informed consent to them. The owner chooses visibility in three places, all writing the same stored setting: while creating the trip, while editing it, and through Share in the trip actions menu. The trip form and Share show the same disclosure of what a public trip reveals before it is saved, and choosing Public in the form is saved together with the rest of the trip, so a refused save leaves it Private. Trips made Public before this disclosure agreed only to the link: a discovery surface must not list one until its owner has confirmed Public again under the current disclosure. Whatever surface lists a Public trip shows only what the link shows.
 
 ## 8.1 Saving a Copy of a Shared Trip
 

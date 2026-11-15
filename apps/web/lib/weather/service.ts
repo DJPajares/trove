@@ -1,6 +1,5 @@
 import {
   WEATHER_CACHE_POLICY,
-  WEATHER_MAX_LOCATIONS,
   weatherCoordinate,
   weatherDailyTtl,
   weatherEvidenceFresh,
@@ -16,11 +15,6 @@ import {
   type WeatherResolvePoint,
 } from '@trove/types';
 import type { LocationWeather, LocationWeatherRequest, TripWeather } from './api';
-import {
-  mergeArchivedTripWeather,
-  restoreArchivedTripWeather,
-  type ArchivedTripWeatherDay,
-} from './history';
 import type { WeatherStorage } from './storage';
 
 type PointRecord = WeatherPointEvidence & {
@@ -41,6 +35,8 @@ export interface WeatherTransport {
   ): Promise<WeatherPointEvidence[]>;
   location(input: LocationWeatherRequest): Promise<LocationWeather>;
   context(tripId: string, language: string, signal: AbortSignal): Promise<TripContext>;
+  /** The trip's weather as the server keeps it, in celsius. */
+  trip(tripId: string, signal: AbortSignal): Promise<TripWeather>;
 }
 export type WeatherServiceOptions = {
   userId: string;
@@ -48,10 +44,6 @@ export type WeatherServiceOptions = {
   transport: WeatherTransport;
   lock<T>(keys: readonly string[], signal: AbortSignal, work: () => Promise<T>): Promise<T>;
   mapping?: (tripId: string) => Promise<WeatherLocations | null>;
-  history?: {
-    read(tripId: string): Promise<ArchivedTripWeatherDay[]>;
-    write(tripId: string, days: ArchivedTripWeatherDay[]): Promise<void>;
-  };
   now?: () => number;
   online?: () => boolean;
   onEvidence?: (tripIds: readonly string[]) => void;
@@ -98,10 +90,14 @@ export function climateCacheKey(climate: TripContextClimate) {
   return `climate:open_meteo:${climate.area.latitude},${climate.area.longitude}:${climate.month}:${climate.years.from}:${climate.years.to}`;
 }
 
+/** A trip's weather as last read from the server, and when to ask again. */
+type TripRecord = { refreshAfter: number; weather: TripWeather };
+
 /** The device's weather authority. Facade queries contain presentation, never a second disk cache. */
 export class LocalWeatherService {
   private readonly memory = new Map<string, unknown>();
   private readonly pending = new Map<string, Promise<void>>();
+  private readonly pendingTrips = new Map<string, Promise<TripRecord>>();
   private readonly pendingRequests = new Map<string, WeatherResolvePoint>();
   private readonly listeners = new Set<(key: string) => void>();
   private readonly dependencies = new Map<string, Set<string>>();
@@ -231,6 +227,7 @@ export class LocalWeatherService {
     const key = `mapping:${tripId}`;
     this.memory.delete(key);
     await this.options.storage.remove(key);
+    await this.forgetTrip(tripId);
     await this.invalidateContext(tripId);
     this.emit(key);
   }
@@ -239,8 +236,16 @@ export class LocalWeatherService {
     const previous = await this.read<WeatherLocations>(key);
     if (JSON.stringify(previous) === JSON.stringify(mapping)) return;
     await this.write(key, mapping);
-    if (previous !== null) await this.invalidateContext(tripId);
+    if (previous !== null) {
+      await this.invalidateContext(tripId);
+      await this.forgetTrip(tripId);
+    }
     this.emit(key);
+  }
+  private async forgetTrip(tripId: string) {
+    const key = `trip:${tripId}`;
+    this.memory.delete(key);
+    await this.options.storage.remove(key);
   }
   private async mapping(tripId: string) {
     const derived = await this.options.mapping?.(tripId);
@@ -472,92 +477,90 @@ export class LocalWeatherService {
     const deadline = Math.min(...deadlines, nextCalendarCheck(request.timeZone, now));
     return this.pending.has(pointKey(request)) ? Math.max(deadline, now + 30_000) : deadline;
   }
+  /**
+   * A trip's weather, as the server keeps it against the trip.
+   *
+   * The server holds each day's weather in the database: fetched once while the
+   * day is ahead, read once more when it arrives, then locked. So this asks it
+   * only when something can have changed - a day arriving, a later day coming
+   * into forecast range, the live reading for today going stale, or the trip's
+   * places moving - and otherwise answers from the copy kept on this device,
+   * which is also what a traveller offline sees.
+   */
   async trip(tripId: string): Promise<TripWeather> {
-    const mapping = await this.mapping(tripId),
-      now = new Date(this.now());
-    const window = weatherForecastWindow(
-      mapping.days.flatMap((day) => (day.location ? [day.location.timeZone] : [])),
-      now,
-    );
-    const groups = new Map<string, WeatherResolvePoint>();
-    const located = mapping.days.filter(
-      (day) => day.location && day.date >= window.startDate && day.date <= window.endDate,
-    );
-    if (located.length && mapping.fallback)
-      groups.set(weatherLocationKey(mapping.fallback), {
-        ...canonical(mapping.fallback),
-        dates: [],
-        current: false,
-      });
-    const selected = located.map((day) => {
-      let location = canonical(day.location!);
-      const key = weatherLocationKey(location);
-      if (!groups.has(key) && groups.size >= WEATHER_MAX_LOCATIONS && mapping.fallback)
-        location = canonical(mapping.fallback);
-      const groupKey = weatherLocationKey(location);
-      const group = groups.get(groupKey) ?? { ...location, dates: [], current: false };
-      if (!group.dates.includes(day.date)) group.dates.push(day.date);
-      if (day.date === weatherLocalDate(now, location.timeZone)) group.current = true;
-      groups.set(groupKey, group);
-      return { ...day, location };
-    });
-    const requests = [...groups.values()].filter((point) => point.dates.length);
+    const mapping = await this.mapping(tripId);
+    const key = `trip:${tripId}`;
     this.dependencies.set(
       tripId,
       new Set([
-        ...[...(this.dependencies.get(tripId) ?? [])].filter((key) => key.startsWith('context:')),
-        ...requests.map(pointKey),
+        ...[...(this.dependencies.get(tripId) ?? [])].filter((value) =>
+          value.startsWith('context:'),
+        ),
+        key,
       ]),
     );
-    const records = await this.points(requests);
-    const days = selected.flatMap((day) => {
-      const record = records.find(
-        (value) => weatherLocationKey(value.location) === weatherLocationKey(day.location),
-      );
-      const forecast = record?.days.find((value) => value.date === day.date);
-      return forecast ? [{ ...forecast, itineraryDayId: day.id, location: day.location }] : [];
-    });
-    const live = selected.find((day) => day.date === weatherLocalDate(now, day.location.timeZone));
-    const reading = live
-      ? records.find(
-          (value) => weatherLocationKey(value.location) === weatherLocationKey(live.location),
-        )
-      : undefined;
-    let history: ArchivedTripWeatherDay[] = [];
-    if (this.options.history) {
-      try {
-        history = await this.options.history.read(tripId);
-        const merged = mergeArchivedTripWeather(history, days, 'celsius');
-        if (this.active && JSON.stringify(merged) !== JSON.stringify(history))
-          await this.options.history.write(tripId, merged);
-        history = merged;
-      } catch {
-        /* A history failure must not hide current evidence. */
-      }
+    const stored = await this.read<TripRecord>(key);
+    if (stored && (stored.refreshAfter > this.now() || !this.canRefresh()))
+      return this.tripAnswer(stored);
+    if (!this.canRefresh()) throw new Error('weather_unavailable');
+    const refresh = this.refreshTrip(tripId, mapping, stored);
+    // A kept copy answers at once while the server is asked; the update
+    // arrives through the same key a moment later.
+    if (stored) {
+      void refresh.catch(() => undefined);
+      return this.tripAnswer(stored);
     }
-    const archived = restoreArchivedTripWeather(history, 'celsius')
-      .filter((day) => day.date < window.startDate)
-      .map((day) => ({ ...day, archived: true }));
-    const deadlines = records.map((record, index) => this.deadline(record, requests[index]!));
+    return this.tripAnswer(await refresh);
+  }
+  private refreshTrip(tripId: string, mapping: WeatherLocations, stored: TripRecord | null) {
+    const key = `trip:${tripId}`;
+    const existing = this.pendingTrips.get(key);
+    if (existing) return existing;
+    const work = this.options
+      .lock([key], this.controller.signal, async () => {
+        const restored = await this.read<TripRecord>(key, true);
+        if (restored && restored.refreshAfter > this.now()) return restored;
+        try {
+          const weather = await this.options.transport.trip(tripId, this.controller.signal);
+          const record = { refreshAfter: this.tripRefreshAfter(weather, mapping), weather };
+          await this.write(key, record);
+          this.emit(key, true);
+          return record;
+        } catch (error) {
+          // What was kept still answers; try again after the usual pause.
+          const fallback = restored ?? stored;
+          if (!fallback) throw error;
+          const record = { ...fallback, refreshAfter: this.now() + WEATHER_CACHE_POLICY.retryMs };
+          await this.write(key, record);
+          return record;
+        }
+      })
+      .finally(() => this.pendingTrips.delete(key));
+    this.pendingTrips.set(key, work);
+    return work;
+  }
+  /**
+   * A kept trip. Today's hours are a forecast for the whole day, so they stay
+   * good all day; "this hour" is picked from them as the clock moves.
+   */
+  private tripAnswer(record: TripRecord): TripWeather {
+    return { ...record.weather, refreshAfter: record.refreshAfter };
+  }
+  /** When a trip's weather can next have changed. */
+  private tripRefreshAfter(weather: TripWeather, mapping: WeatherLocations) {
+    const now = this.now();
+    const zones = new Set(
+      mapping.days.flatMap((day) => (day.location ? [day.location.timeZone] : [])),
+    );
+    // A day arriving is when its weather is read the last time.
+    const deadlines = [...zones].map((zone) => nextCalendarCheck(zone, now));
+    // A day further out is first asked for once the provider can answer it.
     for (const day of mapping.days)
-      if (day.location && day.date > window.endDate)
-        deadlines.push(forecastEligibility(day.date, day.location.timeZone, this.now()));
-    const currentFresh =
-      reading?.currentFetchedAt &&
-      weatherEvidenceFresh(reading.currentFetchedAt, WEATHER_CACHE_POLICY.currentMs, this.now());
-    return {
-      attribution,
-      current: currentFresh ? reading.current : null,
-      hours: currentFresh ? reading.hours : [],
-      hoursDate: currentFresh ? (live?.date ?? null) : null,
-      currentFetchedAt: reading?.currentFetchedAt ?? null,
-      days: [...archived, ...days],
-      fetchedAt: days.map((day) => day.fetchedAt).sort()[0] ?? reading?.currentFetchedAt ?? '',
-      horizon: window,
-      provider: 'open_meteo',
-      temperatureUnit: 'celsius',
-      refreshAfter: deadlines.length ? Math.min(...deadlines) : Number.POSITIVE_INFINITY,
-    };
+      if (day.location && day.date > weather.horizon.endDate)
+        deadlines.push(forecastEligibility(day.date, day.location.timeZone, now));
+    return deadlines.length
+      ? Math.max(now + 30_000, Math.min(...deadlines))
+      : Number.POSITIVE_INFINITY;
   }
   async location(input: LocationWeatherRequest): Promise<LocationWeather> {
     const aliasKey = `here:${input.latitude === undefined ? input.timeZone : `${weatherCoordinate(input.latitude)},${weatherCoordinate(input.longitude!)}`}:${input.timeZone}`;

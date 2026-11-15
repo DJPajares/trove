@@ -1288,9 +1288,9 @@
       "weather": {
         "loading": "Loading weather",
         "now": "Weather now",
+        "thisHour": "Weather this hour",
         "forecast": "Weather forecast",
         "forecastCue": "Forecast",
-        "archivedForecast": "Archived forecast",
         "forecastEvidence": "{kind} for {date} ({timeZone})",
         "today": "Today",
         "forDate": "Forecast for {date}",
@@ -1306,12 +1306,10 @@
         "hourlyLabel": "Hour by hour",
         "stripLabel": "Hour by hour forecast. {source}",
         "nowCell": "Now",
+        "thisHourCell": "This hour",
         "tomorrowCell": "{time} tomorrow",
         "hourCell": "{time}, {condition}, {temperature}",
         "hourCellWithPrecipitation": "{time}, {condition}, {temperature}, {probability}% chance of precipitation",
-        "forecastLater": "Weather for this day will be available closer to your trip.",
-        "pastForecastUnavailable": "No forecast was kept for this day.",
-        "noForecast": "A forecast is not available for this day.",
         "unavailableTitle": "Weather is unavailable right now",
         "unavailableDescription": "Your trip details are still available. Try again when you have a connection.",
         "tryAgain": "Try weather again",
@@ -2059,10 +2057,7 @@
       "weather": {
         "tripTitle": "Weather across the trip",
         "rainChance": "{probability}% rain",
-        "archivedNote": "Outlined days show the forecast they were given, not the weather that happened.",
-        "tripLater": "Days further out get their forecast as your trip comes closer.",
-        "tripPast": "No forecast was saved for some past days.",
-        "tripMissing": "Some days don’t have a place to forecast yet."
+        "tripLater": "Days further out get their forecast as your trip comes closer."
       },
       "view": {
         "label": "How stops are shown",

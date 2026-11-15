@@ -91,13 +91,28 @@ test('fresh observations survive older daily forecast retrieval times', () => {
   expect(result.forecast?.fetchedAt).toBe(weather.fetchedAt);
 });
 
-test('a newer observation restores current conditions without changing forecast age', () => {
+test('a stale reading gives way to this hour of the kept forecast', () => {
   const weather = tripWeather();
   weather.current!.observedAt = '2026-10-03T08:00';
-  expect(selectTripWeather(weather, '2026-10-03', false, NOW).current).toBeNull();
+  const stale = selectTripWeather(weather, '2026-10-03', false, NOW);
+  expect(stale.thisHour).toBe(true);
+  expect(stale.current).toMatchObject({ observedAt: '2026-10-03T12:00', temperature: 24 });
   weather.current!.observedAt = '2026-10-03T11:45';
-  expect(selectTripWeather(weather, '2026-10-03', false, NOW).current).toBe(weather.current);
+  const live = selectTripWeather(weather, '2026-10-03', false, NOW);
+  expect(live.current).toBe(weather.current);
+  expect(live.thisHour).toBe(false);
   expect(weather.fetchedAt).toBe('2026-10-02T20:00:00Z');
+});
+
+test('with no live reading, this hour follows the clock through the kept hours', () => {
+  const weather = tripWeather();
+  weather.current = null;
+  const noon = selectTripWeather(weather, '2026-10-03', false, NOW);
+  expect(noon.current?.observedAt).toBe('2026-10-03T12:00');
+  expect(noon.readings.length).toBeGreaterThan(0);
+  // In preview, or on another day, there is no "this hour" to show.
+  expect(selectTripWeather(weather, '2026-10-03', true, NOW).current).toBeNull();
+  expect(selectTripWeather(weather, '2026-10-04', false, NOW).current).toBeNull();
 });
 
 test.each([
@@ -182,8 +197,6 @@ test('archived predictions stay forecasts and legacy archives keep unknown retri
   expect(isArchivedForecast(past, NOW)).toBe(true);
   expect(forecastForDate(weather, past.date)?.fetchedAt).toBeUndefined();
   expect(selectTripWeather(weather, past.date, false, NOW).current).toBeNull();
-  weather.days[0]!.archived = true;
-  expect(selectTripWeather(weather, '2026-10-03', false, NOW).current).toBeNull();
 });
 
 test('Home chooses fresh current conditions, then today’s local forecast, then date-only', () => {

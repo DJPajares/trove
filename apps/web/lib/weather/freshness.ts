@@ -113,19 +113,36 @@ export function selectTripWeather(
   } catch {
     /* Unknown zones cannot support a current claim. */
   }
-  const current =
-    !isPreview &&
-    isToday &&
-    !observationDay?.archived &&
-    weather.hoursDate === selectedDate &&
-    !isCurrentReadingStale(weather.current?.observedAt, timeZone, now)
+  const living = !isPreview && isToday && weather.hoursDate === selectedDate;
+  const live =
+    living && !isCurrentReadingStale(weather.current?.observedAt, timeZone, now)
       ? weather.current
+      : null;
+  // With no live reading, "this hour" is the hour of today's kept forecast the
+  // traveller is standing in. It moves with the clock, so it never freezes at
+  // the morning's numbers, and it is labelled as the hour's forecast.
+  const slot =
+    living && !live && timeZone
+      ? weather.hours.find(
+          (hour) => hour.time.slice(0, 13) === localMinute(now, timeZone).slice(0, 13),
+        )
+      : undefined;
+  const current = live
+    ? live
+    : slot
+      ? {
+          apparentTemperature: slot.temperature,
+          isDay: slot.isDay ?? true,
+          observedAt: slot.time,
+          temperature: slot.temperature,
+          weatherCode: slot.weatherCode,
+        }
       : null;
   const readings =
     current && timeZone
       ? selectHourlyReadings(weather.hours, { date: selectedDate, timeZone, now })
       : [];
-  return { current, forecast, readings };
+  return { current, forecast, readings, thisHour: Boolean(slot) };
 }
 
 export function selectLocationWeather(weather: LocationWeather, now = new Date()) {

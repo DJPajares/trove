@@ -45,13 +45,84 @@ function createTrip(days: ReturnType<typeof day>[], destination: WeatherPoint | 
   };
 }
 
-function stubPrisma(trip: unknown) {
+type StoredRow = {
+  date: Date;
+  fetchedAt: Date;
+  itineraryDayId: string;
+  latitude: number;
+  lockedAt: Date | null;
+  longitude: number;
+  precipitationProbability: number | null;
+  temperatureMaxCelsius: number;
+  temperatureMinCelsius: number;
+  timeZone: string;
+  tripId: string;
+  weatherCode: number;
+  hours?: unknown;
+};
+
+/** The trip, and the weather kept against it, in memory. */
+function stubPrisma(trip: unknown, kept: StoredRow[] = []) {
+  const rows = new Map(kept.map((row) => [row.itineraryDayId, { ...row }]));
   (globalThis as { trovePrismaClient?: unknown }).trovePrismaClient = {
     trip: {
       async findFirst() {
         return trip;
       },
     },
+    tripDayWeather: {
+      async findMany() {
+        return [...rows.values()];
+      },
+      async upsert({
+        create,
+        update,
+        where,
+      }: {
+        create: StoredRow;
+        update: Omit<StoredRow, 'itineraryDayId'>;
+        where: { itineraryDayId: string };
+      }) {
+        const existing = rows.get(where.itineraryDayId);
+        rows.set(where.itineraryDayId, existing ? { ...existing, ...update } : create);
+      },
+      async updateMany({
+        data,
+        where,
+      }: {
+        data: { lockedAt: Date };
+        where: { itineraryDayId: { in: string[] } };
+      }) {
+        for (const id of where.itineraryDayId.in) {
+          const row = rows.get(id);
+          if (row && !row.lockedAt) row.lockedAt = data.lockedAt;
+        }
+      },
+    },
+  };
+  return rows;
+}
+
+function keptRow(
+  itineraryDayId: string,
+  date: string,
+  point: WeatherPoint,
+  extra: Partial<StoredRow> = {},
+): StoredRow {
+  return {
+    date: new Date(`${date}T00:00:00.000Z`),
+    fetchedAt: new Date('2026-08-30T00:00:00.000Z'),
+    itineraryDayId,
+    latitude: point.latitude,
+    lockedAt: null,
+    longitude: point.longitude,
+    precipitationProbability: 10,
+    temperatureMaxCelsius: 25,
+    temperatureMinCelsius: 18,
+    timeZone: 'Asia/Tokyo',
+    tripId: 'trip',
+    weatherCode: 1,
+    ...extra,
   };
 }
 
@@ -92,9 +163,40 @@ function createForecasts() {
   };
 }
 
+/**
+ * The one read a day gets when it arrives: its daily weather and its hours,
+ * shaped like the forecast stub so a mixed trip still reads as mixed.
+ */
+const arrivals: WeatherPoint[] = [];
 const currentConditions = {
-  async getWeather() {
-    throw new Error('current conditions were not requested');
+  async getWeather(request: WeatherPoint & { timeZone: string }) {
+    arrivals.push(request);
+    const cold = request.latitude > 40;
+    return {
+      current: null,
+      fetchedAt: NOW.toISOString(),
+      forecast: ['2026-09-03', '2026-09-04', '2026-09-05'].map<WeatherDailyForecast>((date) => ({
+        date,
+        precipitationProbability: 40,
+        temperatureMax: cold ? 20 : 30,
+        temperatureMin: cold ? 12 : 22,
+        weatherCode: 3,
+      })),
+      hours: [
+        {
+          precipitationProbability: 40,
+          temperature: 21,
+          time: '2026-09-03T18:00',
+          weatherCode: 61,
+        },
+        { precipitationProbability: 10, temperature: 19, time: '2026-09-04T09:00', weatherCode: 1 },
+      ],
+      location: {
+        latitude: request.latitude,
+        longitude: request.longitude,
+        timeZone: 'Asia/Tokyo',
+      },
+    };
   },
 };
 
@@ -112,6 +214,7 @@ async function createService(overrides: { forecasts?: unknown } = {}) {
 }
 
 beforeEach(() => {
+  arrivals.length = 0;
   delete (globalThis as { trovePrismaClient?: unknown }).trovePrismaClient;
 });
 
@@ -267,7 +370,7 @@ test('locating one place is enough to give a silent trip its weather back', asyn
 test('a trip with more cities than the cap still answers every day', async () => {
   const { MAX_WEATHER_LOCATIONS } = await import('../src/services/trip-weather.js');
   const days = Array.from({ length: MAX_WEATHER_LOCATIONS + 4 }, (_, index) =>
-    day(`d${index}`, '2026-09-03', {
+    day(`d${index}`, '2026-09-04', {
       base: { latitude: 35 + index * 0.5, longitude: 139 + index * 0.5 },
     }),
   );
@@ -277,7 +380,7 @@ test('a trip with more cities than the cap still answers every day', async () =>
   const weather = await service.getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
 
   expect(batches[0]!.length).toBe(MAX_WEATHER_LOCATIONS);
-  // Every day still gets a reading: the ones past the cap borrow the trip's own.
+  // Every day still gets its weather: the ones past the cap borrow the trip's own.
   expect(weather.days).toHaveLength(days.length);
 });
 
@@ -292,15 +395,19 @@ test('fahrenheit converts on read rather than in the cache', async () => {
   expect(weather.days[0]!.temperatureMin).toBeCloseTo(71.6);
 });
 
-test('current conditions are never taken from the daily snapshot', async () => {
+test('a read asks for nothing live; today has no current reading, only its kept hours', async () => {
   stubPrisma(createTrip([day('d1', '2026-09-03', { base: TOKYO })]));
   const { service } = await createService();
 
-  // The stubbed current-conditions tier throws, which is the stale-weather case.
   const weather = await service.getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
 
-  expect(weather.current, 'a failed reading must not fall back to a forecast').toBeNull();
+  expect(weather.current).toBeNull();
   expect(weather.days).toHaveLength(1);
+  expect(
+    weather.hours.map((hour) => hour.time),
+    "only the day's own hours",
+  ).toEqual(['2026-09-03T18:00']);
+  expect(weather.hoursDate).toBe('2026-09-03');
 });
 
 test('a trip that is not happening today asks for no current conditions', async () => {
@@ -335,42 +442,17 @@ test('a trip that belongs to someone else is not found', async () => {
   ).rejects.toMatchObject({ message: 'trip_not_found' });
 });
 
-test('the hours of today ride along on the current reading', async () => {
-  const { TripWeatherService } = await import('../src/services/trip-weather.js');
-  const stub = createForecasts();
-  // 09:00Z is already the evening of the 3rd in Tokyo, so this day is today.
-  stubPrisma(createTrip([day('d1', '2026-09-03', { base: TOKYO })]));
+test('the day that arrives keeps its hours, and the next read asks nothing', async () => {
+  const rows = stubPrisma(createTrip([day('d1', '2026-09-03', { base: TOKYO })]));
+  const { service } = await createService();
 
-  const weather = await new TripWeatherService(
-    stub.forecasts as never,
-    {
-      async getWeather() {
-        return {
-          current: {
-            apparentTemperature: 20,
-            isDay: true,
-            observedAt: '2026-09-03T18:00',
-            temperature: 21,
-            weatherCode: 1,
-          },
-          hours: [
-            {
-              precipitationProbability: 40,
-              temperature: 21,
-              time: '2026-09-03T18:00',
-              weatherCode: 61,
-            },
-          ],
-        };
-      },
-    } as never,
-    () => NOW,
-  ).getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
+  const first = await service.getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
+  const second = await service.getTripWeather('owner', 'trip', { temperatureUnit: 'fahrenheit' });
 
-  expect(weather.current?.temperature).toBe(21);
-  expect(weather.hours).toStrictEqual([
-    { precipitationProbability: 40, temperature: 21, time: '2026-09-03T18:00', weatherCode: 61 },
-  ]);
+  expect(arrivals, 'one read when the day arrives').toHaveLength(1);
+  expect(first.hours[0]?.temperature).toBe(21);
+  expect(second.hours[0]?.temperature, 'kept in celsius, converted on read').toBeCloseTo(69.8);
+  expect(rows.get('d1')?.lockedAt).toEqual(NOW);
 });
 
 test('a day the traveller has not reached has no hours either', async () => {
@@ -442,14 +524,26 @@ test('today is the day it is where the traveller is standing, not at the destina
       async getWeather(request: { latitude: number; timeZone: string }) {
         asked.push({ latitude: request.latitude, timeZone: request.timeZone });
         return {
-          current: {
-            apparentTemperature: 11,
-            isDay: false,
-            observedAt: '2026-09-04T01:00',
-            temperature: 13,
-            weatherCode: 3,
-          },
-          hours: [],
+          current: null,
+          fetchedAt: '2026-09-03T13:00:00.000Z',
+          forecast: [
+            {
+              date: '2026-09-04',
+              precipitationProbability: 40,
+              temperatureMax: 16,
+              temperatureMin: 12,
+              weatherCode: 3,
+            },
+          ],
+          hours: [
+            {
+              precipitationProbability: 10,
+              temperature: 13,
+              time: '2026-09-04T01:00',
+              weatherCode: 3,
+            },
+          ],
+          location: { ...auckland, timeZone: 'Pacific/Auckland' },
         };
       },
     } as never,
@@ -462,43 +556,129 @@ test('today is the day it is where the traveller is standing, not at the destina
 });
 
 test('the day the hours describe is named, so another day cannot borrow them', async () => {
-  const { TripWeatherService } = await import('../src/services/trip-weather.js');
-  const stub = createForecasts();
   stubPrisma(
     createTrip([
       day('d1', '2026-09-03', { base: TOKYO }),
       day('d2', '2026-09-04', { base: TOKYO }),
     ]),
   );
+  const { service } = await createService();
 
-  const weather = await new TripWeatherService(
-    stub.forecasts as never,
-    {
-      async getWeather() {
-        return {
-          current: {
-            apparentTemperature: 20,
-            isDay: true,
-            observedAt: '2026-09-03T18:00',
-            temperature: 21,
-            weatherCode: 1,
-          },
-          hours: [
-            {
-              precipitationProbability: 40,
-              temperature: 21,
-              time: '2026-09-03T18:00',
-              weatherCode: 61,
-            },
-          ],
-        };
-      },
-    } as never,
-    () => NOW,
-  ).getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
+  const weather = await service.getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
 
   // Both days sit at the same coordinate, so a surface comparing locations
   // would show tomorrow this evening's rain. The date cannot be mistaken.
   expect(weather.hoursDate).toBe('2026-09-03');
   expect(weather.days.map((entry) => entry.date)).toEqual(['2026-09-03', '2026-09-04']);
+});
+
+test('a day ahead with weather kept for its place is not asked for again', async () => {
+  const rows = stubPrisma(createTrip([day('d2', '2026-09-04', { base: TOKYO })]), [
+    keptRow('d2', '2026-09-04', TOKYO),
+  ]);
+  const { batches, service } = await createService();
+
+  const weather = await service.getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
+
+  expect(batches, 'no provider call').toHaveLength(0);
+  expect(weather.days[0]?.temperatureMax).toBe(25);
+  expect(rows.get('d2')?.lockedAt).toBeNull();
+});
+
+test('the day that arrives is read once more and locked', async () => {
+  const rows = stubPrisma(createTrip([day('d1', '2026-09-03', { base: TOKYO })]), [
+    keptRow('d1', '2026-09-03', TOKYO),
+  ]);
+  const { batches, service } = await createService();
+
+  const weather = await service.getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
+
+  expect(batches, 'the arrival read, not the daily cache').toHaveLength(0);
+  expect(arrivals).toHaveLength(1);
+  expect(weather.days[0]?.temperatureMax, 'the fresh reading replaces the kept one').toBe(30);
+  expect(rows.get('d1')?.lockedAt).toEqual(NOW);
+  expect(rows.get('d1')?.hours).toHaveLength(1);
+});
+
+test('a locked day is never asked for again, even if its place moved', async () => {
+  stubPrisma(createTrip([day('d1', '2026-09-03', { base: SAPPORO })]), [
+    keptRow('d1', '2026-09-03', TOKYO, { lockedAt: new Date('2026-09-03T01:00:00.000Z') }),
+  ]);
+  const { batches, service } = await createService();
+
+  const weather = await service.getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
+
+  expect(batches).toHaveLength(0);
+  expect(weather.days[0]?.temperatureMax).toBe(25);
+});
+
+test('a day ahead whose place moved is asked for its new place', async () => {
+  const rows = stubPrisma(createTrip([day('d2', '2026-09-04', { base: SAPPORO })]), [
+    keptRow('d2', '2026-09-04', TOKYO),
+  ]);
+  const { batches, service } = await createService();
+
+  const weather = await service.getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
+
+  expect(batches).toHaveLength(1);
+  expect(weather.days[0]?.temperatureMax).toBe(20);
+  expect(Number(rows.get('d2')?.latitude)).toBeCloseTo(SAPPORO.latitude);
+});
+
+test('a past day nobody opened is read once from the past and locked', async () => {
+  const pastBatches: { endDate: string; startDate: string }[] = [];
+  const stub = createForecasts();
+  const forecasts = {
+    ...stub.forecasts,
+    async getPastDays(
+      points: readonly WeatherPoint[],
+      window: { endDate: string; startDate: string },
+    ) {
+      pastBatches.push(window);
+      const { weatherPointKey } = await import('../src/services/cached-weather.js');
+      return new Map(
+        points.map((point) => [
+          weatherPointKey(point),
+          {
+            days: [
+              {
+                date: '2026-08-30',
+                precipitationProbability: 0,
+                temperatureMax: 28,
+                temperatureMin: 21,
+                weatherCode: 0,
+              },
+            ],
+            fetchedAt: NOW,
+            location: { ...point, timeZone: 'Asia/Tokyo' },
+            point,
+          },
+        ]),
+      );
+    },
+  };
+  const rows = stubPrisma(createTrip([day('d0', '2026-08-30', { base: TOKYO })]));
+  const { service } = await createService({ forecasts });
+
+  const weather = await service.getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
+
+  expect(pastBatches).toEqual([{ endDate: '2026-08-30', startDate: '2026-08-30' }]);
+  expect(weather.days[0]?.temperatureMax).toBe(28);
+  expect(rows.get('d0')?.lockedAt).toEqual(NOW);
+});
+
+test('a day arriving in more cities than the cap is read in at most the cap', async () => {
+  const { MAX_WEATHER_LOCATIONS } = await import('../src/services/trip-weather.js');
+  const days = Array.from({ length: MAX_WEATHER_LOCATIONS + 4 }, (_, index) =>
+    day(`d${index}`, '2026-09-03', {
+      base: { latitude: 35 + index * 0.5, longitude: 139 + index * 0.5 },
+    }),
+  );
+  stubPrisma(createTrip(days));
+  const { service } = await createService();
+
+  const weather = await service.getTripWeather('owner', 'trip', { temperatureUnit: 'celsius' });
+
+  expect(arrivals.length).toBeLessThanOrEqual(MAX_WEATHER_LOCATIONS);
+  expect(weather.days).toHaveLength(days.length);
 });

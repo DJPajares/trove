@@ -1,30 +1,25 @@
 import type { TripWeather, TripWeatherDay } from './api';
-import { forecastForDate, isArchivedForecast } from './freshness';
+import { forecastForDate } from './freshness';
 import { dateIsBeforeForecastWindow } from './history';
 
 /**
  * What can honestly be said about one day's weather.
  *
- * - `forecast`: a dated forecast for an upcoming day or today.
- * - `archived`: the forecast a past day was given, kept as it was - never an
- *   observation of what happened.
+ * - `forecast`: the day's weather, whether it is still ahead or already kept.
+ *   A past day is not set apart: the trip keeps its weather on the server and
+ *   it reads the same as any other day.
  * - `later`: beyond the provider's reach; it arrives as the day comes closer.
  * - `past`: before the forecast window with nothing archived for it.
  * - `missing`: inside the window, but with nowhere located to have weather.
  */
 export type DayForecast =
-  | { forecast: TripWeatherDay; state: 'archived' | 'forecast' }
+  | { forecast: TripWeatherDay; state: 'forecast' }
   | { forecast: null; state: 'later' | 'missing' | 'past' };
 
-export function dayForecast(
-  weather: TripWeather | null,
-  date: string,
-  now = new Date(),
-): DayForecast | null {
+export function dayForecast(weather: TripWeather | null, date: string): DayForecast | null {
   if (!weather) return null;
   const forecast = forecastForDate(weather, date);
-  if (forecast)
-    return { forecast, state: isArchivedForecast(forecast, now) ? 'archived' : 'forecast' };
+  if (forecast) return { forecast, state: 'forecast' };
   if (dateIsBeforeForecastWindow(weather.horizon, date)) return { forecast: null, state: 'past' };
   if (date > weather.horizon.endDate) return { forecast: null, state: 'later' };
   return { forecast: null, state: 'missing' };

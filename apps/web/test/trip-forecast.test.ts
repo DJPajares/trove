@@ -3,8 +3,6 @@ import { expect, test } from 'vitest';
 import type { TripWeather, TripWeatherDay } from '@/lib/weather/api';
 import { dayForecast, forecastGap } from '@/lib/weather/trip-forecast';
 
-const NOW = new Date('2026-10-15T03:00:00Z'); // Midday in Malé.
-
 function day(date: string, overrides: Partial<TripWeatherDay> = {}): TripWeatherDay {
   return {
     date,
@@ -33,24 +31,24 @@ function weather(days: TripWeatherDay[]): TripWeather {
   };
 }
 
-test('a day is forecast, archived, later, past or missing - and nothing else', () => {
+test('a day is forecast, later, past or missing - and nothing else', () => {
   const trip = weather([day('2026-10-12', { archived: true }), day('2026-10-16')]);
-  expect(dayForecast(trip, '2026-10-16', NOW)?.state).toBe('forecast');
-  expect(dayForecast(trip, '2026-10-12', NOW)?.state).toBe('archived');
-  expect(dayForecast(trip, '2026-11-12', NOW)).toEqual({ forecast: null, state: 'later' });
-  expect(dayForecast(trip, '2026-10-10', NOW)).toEqual({ forecast: null, state: 'past' });
-  expect(dayForecast(trip, '2026-10-20', NOW)).toEqual({ forecast: null, state: 'missing' });
-  expect(dayForecast(null, '2026-10-16', NOW)).toBeNull();
+  expect(dayForecast(trip, '2026-10-16')?.state).toBe('forecast');
+  expect(dayForecast(trip, '2026-11-12')).toEqual({ forecast: null, state: 'later' });
+  expect(dayForecast(trip, '2026-10-10')).toEqual({ forecast: null, state: 'past' });
+  expect(dayForecast(trip, '2026-10-20')).toEqual({ forecast: null, state: 'missing' });
+  expect(dayForecast(null, '2026-10-16')).toBeNull();
 });
 
-test('a forecast whose day has passed where it was made reads as archived, not current', () => {
-  const trip = weather([day('2026-10-14')]);
-  expect(dayForecast(trip, '2026-10-14', NOW)?.state).toBe('archived');
+test('a day already gone reads the same as a day ahead', () => {
+  const trip = weather([day('2026-10-12', { archived: true }), day('2026-10-14')]);
+  expect(dayForecast(trip, '2026-10-12')?.state).toBe('forecast');
+  expect(dayForecast(trip, '2026-10-14')?.state).toBe('forecast');
 });
 
 test('a trip-wide forecast explains its gaps once, furthest-out reason first', () => {
   expect(forecastGap(['forecast', 'later', 'past'])).toBe('later');
   expect(forecastGap(['forecast', 'missing', 'past'])).toBe('missing');
-  expect(forecastGap(['archived', 'past'])).toBe('past');
-  expect(forecastGap(['forecast', 'archived'])).toBeNull();
+  expect(forecastGap(['forecast', 'past'])).toBe('past');
+  expect(forecastGap(['forecast', 'forecast'])).toBeNull();
 });

@@ -1,10 +1,9 @@
 'use client';
 
-import { CloudSun, Droplets, RefreshCw } from 'lucide-react';
+import { Droplets } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { usePreferences } from '@/components/preferences-provider';
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import type { TripWeather } from '@/lib/weather/api';
@@ -19,7 +18,6 @@ import { useWeatherEvidenceDescription } from '@/lib/weather/use-evidence-descri
 /** A forecast is something to open, so it keeps a shape; an absence is only a line. */
 const frameClassName =
   '-mx-2 flex min-h-14 items-center gap-3 rounded-[var(--radius-lg)] px-2 py-1.5';
-const quietClassName = 'flex items-center gap-2.5 px-1 text-sm text-muted-foreground';
 
 /**
  * One day's weather, under the day it belongs to: the condition, the high it
@@ -33,12 +31,10 @@ const quietClassName = 'flex items-center gap-2.5 px-1 text-sm text-muted-foregr
  */
 export function DayWeatherCard({
   date,
-  onRetry,
   status,
   weather,
 }: Readonly<{
   date: string;
-  onRetry: () => void;
   status: 'error' | 'loading' | 'ready';
   weather: TripWeather | null;
 }>) {
@@ -61,39 +57,11 @@ export function DayWeatherCard({
 
   const day = dayForecast(weather, date);
 
-  if (!weather || !day) {
-    return (
-      <div aria-live="polite" className={quietClassName}>
-        <CloudSun aria-hidden="true" className="size-4 shrink-0" />
-        <p className="min-w-0 flex-1">{t('unavailableTitle')}</p>
-        <Button
-          aria-label={t('tryAgain')}
-          className="rounded-full"
-          onClick={onRetry}
-          size="icon-sm"
-          variant="ghost"
-        >
-          <RefreshCw aria-hidden="true" />
-        </Button>
-      </div>
-    );
-  }
-
-  if (!day.forecast) {
-    return (
-      <p className={quietClassName}>
-        <CloudSun aria-hidden="true" className="size-4 shrink-0" />
-        {day.state === 'later'
-          ? t('forecastLater')
-          : day.state === 'past'
-            ? t('pastForecastUnavailable')
-            : t('noForecast')}
-      </p>
-    );
-  }
+  // Weather that is not there yet, or could not be read, takes no room: the
+  // day reads fine without it, and a sentence saying so was noise.
+  if (!weather || !day?.forecast) return null;
 
   const forecast = day.forecast;
-  const archived = day.state === 'archived';
   const Icon = weatherConditionIcon(forecast.weatherCode);
   const unit = t(`unit.${preferences.temperatureUnit}`);
   const high = `${Math.round(forecast.temperatureMax)}${unit}`;
@@ -104,7 +72,7 @@ export function DayWeatherCard({
   const evidence = evidenceDescription({
     date: forecast.date,
     fetchedAt: forecast.fetchedAt,
-    kind: archived ? 'archived' : 'forecast',
+    kind: 'forecast',
     timeZone: forecast.location.timeZone,
   });
 
@@ -135,7 +103,7 @@ export function DayWeatherCard({
           {condition}
         </span>
         <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-          <span>{archived ? t('archivedForecast') : t('forecastCue')}</span>
+          <span>{t('forecastCue')}</span>
           {rain ? (
             <span className="inline-flex items-center gap-1">
               <Droplets className="size-3 shrink-0" />

@@ -1,6 +1,5 @@
 'use client';
 
-import { CloudSun, RefreshCw } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { usePreferences } from '@/components/preferences-provider';
@@ -11,13 +10,11 @@ import {
 } from '@/components/trip-hourly-weather';
 import { tripModeCardClass } from '@/components/trip-mode-ui';
 import { useNowTick } from '@/hooks/use-now-tick';
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { weatherConditionKey } from '@/lib/weather/conditions';
-import { isArchivedForecast, selectTripWeather } from '@/lib/weather/freshness';
-import { dateIsBeforeForecastWindow } from '@/lib/weather/history';
+import { selectTripWeather } from '@/lib/weather/freshness';
 import { cn } from '@/lib/utils';
-import { isDateForecastable, useTripWeather } from '@/lib/weather/use-trip-weather';
+import { useTripWeather } from '@/lib/weather/use-trip-weather';
 import { useWeatherEvidenceDescription } from '@/lib/weather/use-evidence-description';
 
 /**
@@ -45,7 +42,7 @@ export function TripWeatherContext({
   const frameClassName = cn(tripModeCardClass, 'p-4');
 
   const { preferences } = usePreferences();
-  const { data, refetch, status } = useTripWeather(tripId);
+  const { data, status } = useTripWeather(tripId);
   const now = useNowTick(true, true);
   const evidenceDescription = useWeatherEvidenceDescription();
   const selected = data ? selectTripWeather(data, selectedDate, isPreview, now) : null;
@@ -66,46 +63,26 @@ export function TripWeatherContext({
     );
   }
 
-  if (!data || (status === 'error' && !selected?.current && !selected?.forecast)) {
-    return (
-      <section aria-live="polite" className={cn('flex items-start gap-3', frameClassName)}>
-        <CloudSun aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-foreground">{t('unavailableTitle')}</h3>
-          <p className="mt-0.5 text-sm leading-6 text-muted-foreground">
-            {t('unavailableDescription')}
-          </p>
-        </div>
-        <Button
-          aria-label={t('tryAgain')}
-          className="rounded-full"
-          onClick={refetch}
-          size="icon-sm"
-          variant="ghost"
-        >
-          <RefreshCw aria-hidden="true" />
-        </Button>
-      </section>
-    );
-  }
+  // Weather that could not be read takes no room in Trip Mode either.
+  if (!data || (status === 'error' && !selected?.current && !selected?.forecast)) return null;
 
-  const { current, forecast: selectedForecast, readings: hourReadings } = selected!;
+  const { current, forecast: selectedForecast, readings: hourReadings, thisHour } = selected!;
   const condition = current ?? selectedForecast;
-  const archived = Boolean(selectedForecast && isArchivedForecast(selectedForecast, now));
-  const evidence = current
-    ? evidenceDescription({
-        kind: 'current',
-        observedAt: current.observedAt,
-        timeZone: selectedForecast!.location.timeZone,
-      })
-    : selectedForecast
+  const evidence =
+    current && !thisHour
       ? evidenceDescription({
-          kind: archived ? 'archived' : 'forecast',
-          date: selectedForecast.date,
-          timeZone: selectedForecast.location.timeZone,
-          fetchedAt: selectedForecast.fetchedAt,
+          kind: 'current',
+          observedAt: current.observedAt,
+          timeZone: selectedForecast!.location.timeZone,
         })
-      : '';
+      : selectedForecast
+        ? evidenceDescription({
+            kind: 'forecast',
+            date: selectedForecast.date,
+            timeZone: selectedForecast.location.timeZone,
+            fetchedAt: selectedForecast.fetchedAt,
+          })
+        : '';
   const unit = t(`unit.${preferences.temperatureUnit}`);
   const formatTemperature = (value: number) => `${Math.round(value)}${unit}`;
   // A live reading says it is one; anything else says it is a forecast, and an
@@ -114,7 +91,7 @@ export function TripWeatherContext({
     condition && selectedForecast
       ? {
           condition: t(`condition.${weatherConditionKey(condition.weatherCode)}`),
-          tag: current ? t('nowCell') : archived ? t('archivedForecast') : t('forecastCue'),
+          tag: thisHour ? t('thisHourCell') : current ? t('nowCell') : t('forecastCue'),
           temperature: formatTemperature(current?.temperature ?? selectedForecast.temperatureMax),
           weatherCode: condition.weatherCode,
           isDay: current?.isDay,
@@ -130,7 +107,7 @@ export function TripWeatherContext({
   return (
     <section aria-labelledby="trip-weather-heading" className={frameClassName}>
       <h3 className="sr-only" id="trip-weather-heading">
-        {current ? t('now') : archived ? t('archivedForecast') : t('forecast')}
+        {thisHour ? t('thisHour') : current ? t('now') : t('forecast')}
       </h3>
 
       {hourReadings.length ? (
@@ -160,18 +137,7 @@ export function TripWeatherContext({
         >
           <TripWeatherHeadline lead={lead} range={range} />
         </a>
-      ) : (
-        <p className="flex items-start gap-3 text-sm leading-6 text-muted-foreground">
-          <CloudSun aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
-          {/* A past day cannot receive a new forecast; a day inside the window
-              without one has nowhere located to have weather about. */}
-          {dateIsBeforeForecastWindow(data.horizon, selectedDate)
-            ? t('pastForecastUnavailable')
-            : isDateForecastable(data, selectedDate)
-              ? t('noForecast')
-              : t('forecastLater')}
-        </p>
-      )}
+      ) : null}
     </section>
   );
 }

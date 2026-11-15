@@ -8,7 +8,10 @@ import {
   type WeatherPointEvidence,
   type WeatherResolvePoint,
   type TripContext,
+  weatherForecastWindow,
+  weatherLocalDate,
 } from '@trove/types';
+import type { TripWeather } from '../lib/weather/api.ts';
 import { LocalWeatherService, type WeatherTransport } from '../lib/weather/service.ts';
 import {
   createWeatherStorage,
@@ -97,6 +100,47 @@ beforeEach(async () => {
     location: vi.fn(async () => {
       throw new Error('unexpected Home request');
     }),
+    trip: vi.fn(async (id: string): Promise<TripWeather> => {
+      const trip = mappings.get(id)!;
+      const at = new Date(now);
+      const window = weatherForecastWindow(
+        trip.days.flatMap((day) => (day.location ? [day.location.timeZone] : [])),
+        at,
+      );
+      const days = trip.days.flatMap((day) =>
+        day.location && day.date >= window.startDate && day.date <= window.endDate
+          ? [
+              {
+                ...forecast(day.date, at.toISOString()),
+                itineraryDayId: day.id,
+                location: day.location,
+              },
+            ]
+          : [],
+      );
+      const today = days.find((day) => day.date === weatherLocalDate(at, day.location.timeZone));
+      return {
+        attribution: { label: 'Open-Meteo', url: 'https://open-meteo.com/' },
+        current: null,
+        currentFetchedAt: today ? at.toISOString() : null,
+        days,
+        fetchedAt: at.toISOString(),
+        horizon: window,
+        hours: today
+          ? [
+              {
+                time: `${today.date}T12:00`,
+                temperature: 21,
+                weatherCode: 1,
+                precipitationProbability: 10,
+              },
+            ]
+          : [],
+        hoursDate: today?.date ?? null,
+        provider: 'open_meteo',
+        temperatureUnit: 'celsius',
+      };
+    }),
     context: vi.fn(async (): Promise<TripContext> => ({
       version: 2,
       days: [],
@@ -121,63 +165,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-test('fresh memory and a new QueryClient after reload reuse IndexedDB with zero weather HTTP calls', async () => {
-  const first = service(),
-    client = new QueryClient();
-  await client.fetchQuery({
-    queryKey: ['trip-weather', 'trip'],
-    queryFn: () => first.trip('trip'),
-  });
-  await first.trip('trip');
-  first.dispose();
-  client.clear();
-  const reloaded = service(),
-    newClient = new QueryClient();
-  const data = await newClient.fetchQuery({
-    queryKey: ['trip-weather', 'trip'],
-    queryFn: () => reloaded.trip('trip'),
-  });
-  expect(data.days[0]?.fetchedAt).toBe(new Date(NOW).toISOString());
-  expect(transport.resolve).toHaveBeenCalledTimes(1);
-  expect(transport.locations).not.toHaveBeenCalled();
-  newClient.clear();
-});
-
-test('Home, overlapping trips and unit conversion reuse one canonical point', async () => {
-  const cache = service();
-  const trip = await cache.trip('trip');
-  expect(tripWeatherUnit(trip, 'fahrenheit').days[0]?.temperatureMax).toBe(77);
-  await cache.trip('other');
-  await cache.location({ ...TOKYO, temperatureUnit: 'fahrenheit' });
-  expect(transport.resolve).toHaveBeenCalledTimes(1);
-  expect(transport.location).not.toHaveBeenCalled();
-  expect(trip.days[0]?.temperatureMax).toBe(25);
-});
-
-test('simultaneous consumers and two lease-fallback tabs acquire once', async () => {
-  const a = service(),
-    b = service();
-  await Promise.all([a.trip('trip'), a.trip('other'), b.trip('trip')]);
-  expect(transport.resolve).toHaveBeenCalledTimes(1);
-});
-
-test('Web Locks serialize overlapping requests and reread persisted evidence', async () => {
-  const queues = new Map<string, Promise<unknown>>();
-  const request = vi.fn(async (key: string, _options: unknown, work: () => Promise<unknown>) => {
-    const previous = queues.get(key) ?? Promise.resolve();
-    const next = previous.then(work);
-    queues.set(
-      key,
-      next.catch(() => undefined),
-    );
-    return next;
-  });
-  vi.stubGlobal('navigator', { onLine: true, locks: { request } });
-  await Promise.all([service().trip('trip'), service().trip('other')]);
-  expect(transport.resolve).toHaveBeenCalledTimes(1);
-  expect(request).toHaveBeenCalled();
-});
-
 test('a closed-tab lease expires and another owner cannot release it', async () => {
   const key = weatherStorageKey('traveller', 'lease:point');
   expect(await claimWeatherLease(key, 'closed', Date.now() + 45_000)).toBe(true);
@@ -185,106 +172,6 @@ test('a closed-tab lease expires and another owner cannot release it', async () 
   expect(await claimWeatherLease(key, 'other', Date.now() + 45_000)).toBe(false);
   await writeQueryCacheEntry(key, JSON.stringify({ owner: 'closed', expiresAt: Date.now() - 1 }));
   expect(await claimWeatherLease(key, 'other', Date.now() + 45_000)).toBe(true);
-});
-
-test('current expires at one hour while dated forecasts remain immediate during refresh', async () => {
-  const cache = service();
-  await cache.trip('trip');
-  now += WEATHER_CACHE_POLICY.currentMs;
-  let release!: (value: WeatherPointEvidence[]) => void;
-  vi.mocked(transport.resolve).mockImplementationOnce(
-    () =>
-      new Promise((resolve) => {
-        release = resolve;
-      }),
-  );
-  const stale = await cache.trip('trip');
-  await settled();
-  expect(stale.current).toBeNull();
-  expect(stale.days[0]?.fetchedAt).toBe(new Date(NOW).toISOString());
-  release([evidence({ ...TOKYO, dates: ['2026-10-03'], current: true })]);
-  await settled();
-  expect((await cache.trip('trip')).current).not.toBeNull();
-  expect(transport.resolve).toHaveBeenCalledTimes(2);
-});
-
-test('upcoming forecast stays fresh until exactly six hours', async () => {
-  mappings.set('trip', mapping(TOKYO, '2026-10-04'));
-  const cache = service();
-  await cache.trip('trip');
-  now += WEATHER_CACHE_POLICY.forecastMs - 1;
-  await cache.trip('trip');
-  expect(transport.resolve).toHaveBeenCalledTimes(1);
-  now++;
-  await cache.trip('trip');
-  await settled();
-  expect(transport.resolve).toHaveBeenCalledTimes(2);
-});
-
-test('hidden and offline reads retain forecasts and suspend automatic acquisitions', async () => {
-  const cache = service('traveller', true, () => online);
-  let online = true;
-  await cache.trip('trip');
-  now += WEATHER_CACHE_POLICY.currentMs;
-  vi.stubGlobal('document', { hidden: true });
-  await cache.trip('trip');
-  vi.stubGlobal('document', { hidden: false });
-  online = false;
-  await cache.trip('trip');
-  expect(transport.resolve).toHaveBeenCalledTimes(1);
-  online = true;
-  await cache.trip('trip');
-  await settled();
-  expect(transport.resolve).toHaveBeenCalledTimes(2);
-});
-
-test('outside-horizon dates make no point request until eligibility', async () => {
-  mappings.set('trip', mapping(TOKYO, '2026-11-03'));
-  const cache = service();
-  const unavailable = await cache.trip('trip');
-  await cache.trip('trip');
-  expect(transport.resolve).not.toHaveBeenCalled();
-  expect(unavailable.refreshAfter).toBeGreaterThan(now);
-  now = Date.parse('2026-10-19T00:00:00Z');
-  await cache.trip('trip');
-  expect(transport.resolve).toHaveBeenCalledTimes(1);
-});
-
-test('weather-relevant mappings change while fresh point evidence and unrelated edits survive', async () => {
-  const cache = service();
-  await cache.trip('trip');
-  await cache.trip('other');
-  await cache.syncMapping('trip', mapping(TOKYO, '2026-10-04'));
-  mappings.set('trip', mapping(TOKYO, '2026-10-04'));
-  expect((await cache.trip('trip')).days[0]?.date).toBe('2026-10-04');
-  expect(transport.resolve).toHaveBeenCalledTimes(1);
-  mappings.set('trip', mapping(OSAKA));
-  await cache.trip('trip');
-  expect(transport.resolve).toHaveBeenCalledTimes(2);
-});
-
-test('metadata mappings persist and are fetched independently only when missing', async () => {
-  await service('traveller', false).trip('trip');
-  await service('traveller', false).trip('trip');
-  expect(transport.locations).toHaveBeenCalledTimes(1);
-  expect(transport.resolve).toHaveBeenCalledTimes(1);
-});
-
-test('failures share a five-minute cooldown and preserve original age', async () => {
-  const cache = service();
-  await cache.trip('trip');
-  now += WEATHER_CACHE_POLICY.currentMs;
-  vi.mocked(transport.resolve).mockRejectedValue(new Error('provider unavailable'));
-  await cache.trip('trip');
-  await settled();
-  const stale = await service().trip('trip');
-  expect(stale.days[0]?.fetchedAt).toBe(new Date(NOW).toISOString());
-  expect(stale.current).toBeNull();
-  expect(transport.resolve).toHaveBeenCalledTimes(2);
-  now += WEATHER_CACHE_POLICY.retryMs;
-  await cache.trip('trip');
-  await settled();
-  expect(transport.resolve).toHaveBeenCalledTimes(3);
 });
 
 test('seasonal context survives reload beyond 24 hours and retains source age for 30 days', async () => {
@@ -314,31 +201,6 @@ test('negative seasonal context retries after cooldown instead of becoming a 30-
   await cache.context('trip', 'en');
   await settled();
   expect(transport.context).toHaveBeenCalledTimes(2);
-});
-
-test('disabled persistence falls back to memory and sign-out prevents pending writes', async () => {
-  vi.stubGlobal('indexedDB', undefined);
-  const cache = service();
-  await cache.trip('trip');
-  await cache.trip('trip');
-  expect(transport.resolve).toHaveBeenCalledTimes(1);
-  vi.stubGlobal('indexedDB', new FakeIndexedDbFactory());
-  let release!: (value: WeatherPointEvidence[]) => void;
-  vi.mocked(transport.resolve).mockImplementationOnce(
-    () =>
-      new Promise((resolve) => {
-        release = resolve;
-      }),
-  );
-  const pending = service('old');
-  const read = pending.trip('trip');
-  await settled();
-  pending.dispose();
-  release([evidence({ ...TOKYO, dates: ['2026-10-03'], current: true })]);
-  await read;
-  expect(await createWeatherStorage('old').read(`point:${weatherLocationKey(TOKYO)}`)).toBeNull();
-  await service('new').trip('trip');
-  expect(transport.resolve).toHaveBeenCalledTimes(3);
 });
 
 test('legacy migration converts units and keeps compatible source timestamps without inventing provenance', async () => {
@@ -378,99 +240,6 @@ test('legacy migration converts units and keeps compatible source timestamps wit
   expect(
     await readQueryCacheEntry(weatherStorageKey('another', `point:${weatherLocationKey(TOKYO)}`)),
   ).toBeNull();
-});
-
-test('overlapping batches share their common point while acquiring only new locations', async () => {
-  mappings.set('trip', {
-    days: [
-      { id: 'a', date: '2026-10-04', location: TOKYO },
-      { id: 'b', date: '2026-10-05', location: OSAKA },
-    ],
-    fallback: TOKYO,
-  });
-  const sapporo = { ...TOKYO, latitude: 43.06, longitude: 141.35 };
-  mappings.set('other', {
-    days: [
-      { id: 'c', date: '2026-10-04', location: TOKYO },
-      { id: 'd', date: '2026-10-05', location: sapporo },
-    ],
-    fallback: TOKYO,
-  });
-  const a = service(),
-    b = service();
-  await Promise.all([a.trip('trip'), b.trip('other')]);
-  const requested = vi.mocked(transport.resolve).mock.calls.flatMap(([points]) => points);
-  expect(
-    requested.filter((point) => weatherLocationKey(point) === weatherLocationKey(TOKYO)),
-  ).toHaveLength(1);
-  expect(requested).toHaveLength(3);
-});
-
-test('partial coverage is retained and missing dates are negatively cached', async () => {
-  mappings.set('trip', mapping(TOKYO, '2026-10-05'));
-  vi.mocked(transport.resolve).mockImplementation(async (points) =>
-    points.map((point) => ({ ...evidence(point), days: [forecast('2026-10-04')] })),
-  );
-  const cache = service();
-  expect((await cache.trip('trip')).days).toEqual([]);
-  await cache.trip('trip');
-  await service().trip('trip');
-  expect(transport.resolve).toHaveBeenCalledTimes(1);
-  now += WEATHER_CACHE_POLICY.forecastMs;
-  await cache.trip('trip');
-  await settled();
-  expect(transport.resolve).toHaveBeenCalledTimes(2);
-});
-
-test('a forecast becomes active at local midnight and uses its shorter TTL', async () => {
-  now = Date.parse('2026-10-03T14:59:00Z');
-  mappings.set('trip', mapping(TOKYO, '2026-10-04'));
-  const cache = service();
-  await cache.trip('trip');
-  const before = await cache.trip('trip');
-  expect(before.refreshAfter).toBeLessThanOrEqual(Date.parse('2026-10-03T15:00:01Z'));
-  now = Date.parse('2026-10-03T15:00:00Z');
-  await cache.trip('trip');
-  await settled();
-  expect(vi.mocked(transport.resolve).mock.calls.at(-1)?.[0][0]?.current).toBe(true);
-});
-
-test('new source timestamps notify existing assessments, while local reuse and unit conversion do not', async () => {
-  const acquired = vi.fn();
-  const cache = new LocalWeatherService({
-    userId: 'traveller',
-    storage: createWeatherStorage('traveller'),
-    transport,
-    mapping: async (id) => mappings.get(id) ?? null,
-    now: () => now,
-    lock: (_keys, _signal, work) => work(),
-    onEvidence: acquired,
-  });
-  services.push(cache);
-  const first = await cache.trip('trip');
-  expect(acquired).toHaveBeenCalledTimes(1);
-  await cache.trip('trip');
-  tripWeatherUnit(first, 'fahrenheit');
-  await cache.context('trip', 'en');
-  expect(acquired).toHaveBeenCalledTimes(2);
-  await cache.context('trip', 'en');
-  expect(acquired).toHaveBeenCalledTimes(2);
-});
-
-test('completed acquisitions broadcast updates to another tab without a duplicate request', async () => {
-  const first = service(),
-    second = service(),
-    changed: string[] = [];
-  second.subscribe((key) => changed.push(key));
-  first.subscribe(() => undefined);
-  await first.trip('trip');
-  await second.trip('trip');
-  changed.length = 0;
-  now += WEATHER_CACHE_POLICY.currentMs;
-  await first.trip('trip');
-  await vi.waitFor(() => expect(changed).toContain(`point:${weatherLocationKey(TOKYO)}`));
-  await second.trip('trip');
-  expect(transport.resolve).toHaveBeenCalledTimes(2);
 });
 
 test('sign-out forgets the account so an old QueryClient cannot recreate a weather service', async () => {
@@ -518,4 +287,186 @@ test('active lease owners renew while waiting; completion releases the lease', a
     controller.abort();
     vi.useRealTimers();
   }
+});
+
+test('a trip read after a reload uses the kept copy, with no request', async () => {
+  const first = service(),
+    client = new QueryClient();
+  await client.fetchQuery({
+    queryKey: ['trip-weather', 'trip'],
+    queryFn: () => first.trip('trip'),
+  });
+  first.dispose();
+  client.clear();
+  const reloaded = service(),
+    newClient = new QueryClient();
+  const data = await newClient.fetchQuery({
+    queryKey: ['trip-weather', 'trip'],
+    queryFn: () => reloaded.trip('trip'),
+  });
+  expect(data.days[0]?.fetchedAt).toBe(new Date(NOW).toISOString());
+  expect(transport.trip).toHaveBeenCalledTimes(1);
+  expect(transport.locations).not.toHaveBeenCalled();
+  newClient.clear();
+});
+
+test('a trip converts units on display and asks the server once', async () => {
+  const cache = service();
+  const trip = await cache.trip('trip');
+  expect(tripWeatherUnit(trip, 'fahrenheit').days[0]?.temperatureMax).toBe(77);
+  expect(trip.days[0]?.temperatureMax).toBe(25);
+  expect(transport.trip).toHaveBeenCalledTimes(1);
+  expect(transport.resolve, 'a trip no longer resolves points itself').not.toHaveBeenCalled();
+});
+
+test('simultaneous readers and two tabs ask the server once', async () => {
+  const a = service(),
+    b = service();
+  await Promise.all([a.trip('trip'), a.trip('trip'), b.trip('trip')]);
+  expect(transport.trip).toHaveBeenCalledTimes(1);
+});
+
+test('Web Locks serialize tabs and the second rereads what the first kept', async () => {
+  const queues = new Map<string, Promise<unknown>>();
+  const request = vi.fn(async (key: string, _options: unknown, work: () => Promise<unknown>) => {
+    const next = (queues.get(key) ?? Promise.resolve()).then(work);
+    queues.set(
+      key,
+      next.catch(() => undefined),
+    );
+    return next;
+  });
+  vi.stubGlobal('navigator', { onLine: true, locks: { request } });
+  await Promise.all([service().trip('trip'), service().trip('trip')]);
+  expect(transport.trip).toHaveBeenCalledTimes(1);
+  expect(request).toHaveBeenCalled();
+});
+
+test("today's hours are kept all day, with no request on the hour", async () => {
+  const cache = service();
+  await cache.trip('trip');
+  now += WEATHER_CACHE_POLICY.currentMs * 3;
+  const later = await cache.trip('trip');
+  await settled();
+  expect(later.hours).toHaveLength(1);
+  expect(later.hoursDate).toBe('2026-10-03');
+  expect(transport.trip).toHaveBeenCalledTimes(1);
+});
+
+test('days ahead are not asked for again until a day arrives', async () => {
+  mappings.set('trip', mapping(TOKYO, '2026-10-04'));
+  const cache = service();
+  await cache.trip('trip');
+  now += WEATHER_CACHE_POLICY.forecastMs;
+  await cache.trip('trip');
+  expect(transport.trip, 'no timer refresh for a day ahead').toHaveBeenCalledTimes(1);
+  now = Date.parse('2026-10-03T15:00:05Z'); // Just past midnight in Tokyo: the day arrives.
+  await cache.trip('trip');
+  await settled();
+  expect(transport.trip).toHaveBeenCalledTimes(2);
+});
+
+test('hidden and offline reads answer from the kept copy and ask nothing', async () => {
+  let online = true;
+  const cache = service('traveller', true, () => online);
+  await cache.trip('trip');
+  now = Date.parse('2026-10-03T15:00:05Z'); // The next day arrives in Tokyo.
+  vi.stubGlobal('document', { hidden: true });
+  await cache.trip('trip');
+  vi.stubGlobal('document', { hidden: false });
+  online = false;
+  expect((await cache.trip('trip')).days).toHaveLength(1);
+  expect(transport.trip).toHaveBeenCalledTimes(1);
+  online = true;
+  await cache.trip('trip');
+  await settled();
+  expect(transport.trip).toHaveBeenCalledTimes(2);
+});
+
+test('a day beyond the horizon is asked for again once it can be forecast', async () => {
+  mappings.set('trip', mapping(TOKYO, '2026-11-03'));
+  const cache = service();
+  const unavailable = await cache.trip('trip');
+  await cache.trip('trip');
+  expect(unavailable.days).toEqual([]);
+  expect(transport.trip).toHaveBeenCalledTimes(1);
+  expect(unavailable.refreshAfter).toBeGreaterThan(now);
+  now = Date.parse('2026-10-19T00:00:00Z');
+  await cache.trip('trip');
+  await settled();
+  expect(transport.trip).toHaveBeenCalledTimes(2);
+});
+
+test('a trip whose places move is asked for again', async () => {
+  const cache = service();
+  await cache.trip('trip');
+  mappings.set('trip', mapping(OSAKA));
+  expect((await cache.trip('trip')).days[0]?.location.latitude).toBe(OSAKA.latitude);
+  expect(transport.trip).toHaveBeenCalledTimes(2);
+});
+
+test('metadata mappings persist and are fetched only when missing', async () => {
+  await service('traveller', false).trip('trip');
+  await service('traveller', false).trip('trip');
+  expect(transport.locations).toHaveBeenCalledTimes(1);
+  expect(transport.trip).toHaveBeenCalledTimes(1);
+});
+
+test('a failed read keeps the kept copy and tries again after the pause', async () => {
+  const cache = service();
+  await cache.trip('trip');
+  now = Date.parse('2026-10-03T15:00:05Z'); // The next day arrives in Tokyo.
+  vi.mocked(transport.trip).mockRejectedValue(new Error('server unavailable'));
+  await cache.trip('trip');
+  await settled();
+  const kept = await service().trip('trip');
+  expect(kept.days[0]?.fetchedAt).toBe(new Date(NOW).toISOString());
+  expect(transport.trip).toHaveBeenCalledTimes(2);
+  now += WEATHER_CACHE_POLICY.retryMs;
+  await cache.trip('trip');
+  await settled();
+  expect(transport.trip).toHaveBeenCalledTimes(3);
+});
+
+test('without device storage a trip is still kept in memory', async () => {
+  vi.stubGlobal('indexedDB', undefined);
+  const cache = service();
+  await cache.trip('trip');
+  await cache.trip('trip');
+  expect(transport.trip).toHaveBeenCalledTimes(1);
+});
+
+test('a new reading notifies assessments once; reuse and unit conversion do not', async () => {
+  const acquired = vi.fn();
+  const cache = new LocalWeatherService({
+    userId: 'traveller',
+    storage: createWeatherStorage('traveller'),
+    transport,
+    mapping: async (id) => mappings.get(id) ?? null,
+    now: () => now,
+    lock: (_keys, _signal, work) => work(),
+    onEvidence: acquired,
+  });
+  services.push(cache);
+  const first = await cache.trip('trip');
+  expect(acquired).toHaveBeenCalledTimes(1);
+  await cache.trip('trip');
+  tripWeatherUnit(first, 'fahrenheit');
+  expect(acquired).toHaveBeenCalledTimes(1);
+});
+
+test('a new reading is broadcast to another tab without a second request', async () => {
+  const first = service(),
+    second = service(),
+    changed: string[] = [];
+  second.subscribe((key) => changed.push(key));
+  first.subscribe(() => undefined);
+  await first.trip('trip');
+  await second.trip('trip');
+  changed.length = 0;
+  now = Date.parse('2026-10-03T15:00:05Z'); // The next day arrives in Tokyo.
+  await first.trip('trip');
+  await vi.waitFor(() => expect(changed).toContain('trip:trip'));
+  await second.trip('trip');
+  expect(transport.trip).toHaveBeenCalledTimes(2);
 });

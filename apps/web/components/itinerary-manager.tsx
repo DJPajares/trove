@@ -261,7 +261,7 @@ export function ItineraryManager({
   // One answer for the whole trip. Each day's card and the whole trip's
   // forecast read a day out of it rather than asking per day - that fan-out is
   // the thing this endpoint exists to avoid.
-  const { data: weather, refetch: refetchWeather, status: weatherStatus } = useTripWeather(tripId);
+  const { data: weather, status: weatherStatus } = useTripWeather(tripId);
   const itineraryView = useMemo(
     () =>
       resolveItineraryView(
@@ -1559,12 +1559,7 @@ export function ItineraryManager({
             days={itinerary.days}
             display={overviewDisplay}
             forecast={
-              <TripForecastCard
-                days={ribbonDays}
-                onRetry={refetchWeather}
-                status={weatherStatus}
-                weather={weather}
-              />
+              <TripForecastCard days={ribbonDays} status={weatherStatus} weather={weather} />
             }
             itemName={itemName}
             mapPanel={
@@ -1728,12 +1723,7 @@ export function ItineraryManager({
               sketch={<DayRouteSketch drawing={daySketch} places={sketchPlaces} />}
               unmapped={selectedDay.items.filter((item) => !item.tripPlace?.place.location).length}
               weather={
-                <DayWeatherCard
-                  date={selectedDay.date}
-                  onRetry={refetchWeather}
-                  status={weatherStatus}
-                  weather={weather}
-                />
+                <DayWeatherCard date={selectedDay.date} status={weatherStatus} weather={weather} />
               }
             />
 

@@ -7,7 +7,7 @@ export function useWeatherEvidenceDescription() {
   const locale = useLocale();
   const t = useTranslations('tripMode.views.weather');
   return (evidence: {
-    kind: 'current' | 'forecast' | 'archived';
+    kind: 'current' | 'forecast';
     date?: string;
     timeZone: string;
     fetchedAt?: string | null;
@@ -22,7 +22,7 @@ export function useWeatherEvidenceDescription() {
         )
       : '';
     return t('forecastEvidence', {
-      kind: t(evidence.kind === 'archived' ? 'archivedForecast' : 'forecastCue'),
+      kind: t('forecastCue'),
       date,
       timeZone: evidence.timeZone,
     });

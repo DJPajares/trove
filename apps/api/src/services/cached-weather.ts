@@ -105,6 +105,33 @@ export class CachedWeatherService {
     );
   }
 
+  /**
+   * Days already gone, read once so a trip day that arrived while nobody was
+   * looking can still be locked in. One request for every point, across one
+   * date range; the provider answers about ninety days back
+   * (`WEATHER_PAST_REACH_DAYS`). Not cached here: the caller stores the answer
+   * against the trip and never asks again.
+   */
+  async getPastDays(
+    points: readonly WeatherPoint[],
+    window: ForecastWindow,
+  ): Promise<Map<string, CachedPointForecast>> {
+    const unique = [...new Map(points.map((point) => [weatherPointKey(point), point])).values()];
+    if (!unique.length) return new Map();
+    recordProviderCall({
+      endpoint: '/v1/forecast',
+      expectedSku: 'weather-forecast-free',
+      operation: 'getForecast',
+      provider: 'open_meteo',
+      source: this.source,
+    });
+    const acquired = await this.provider.getDailyForecasts({ points: unique, ...window });
+    const fetchedAt = this.now();
+    return new Map(
+      acquired.map((forecast) => [weatherPointKey(forecast.point), { ...forecast, fetchedAt }]),
+    );
+  }
+
   private async acquire(
     points: readonly WeatherPoint[],
     window: ForecastWindow,

@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { CircleAlert } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useMemo } from 'react';
 
 import { TripExpenses } from '@/components/expenses/trip-expenses';
@@ -24,7 +24,12 @@ import {
 import { queryKeys } from '@/lib/query/keys';
 import { defaultExpensesTrip } from '@/lib/expenses/default-trip';
 import { fetchTrips } from '@/lib/trips/api';
+import { namedCountries } from '@/lib/trips/countries';
+import { formatTripDateRange } from '@/lib/trips/format';
 import * as Icons from '@/lib/icons';
+
+/** How many flags a switcher row shows before the rest become "+N". */
+const MAX_FLAGS = 2;
 
 /**
  * Expenses outside any one trip: the same view a trip's Expenses section
@@ -34,6 +39,7 @@ import * as Icons from '@/lib/icons';
  */
 export function ExpensesPage() {
   const t = useTranslations('expensesPage');
+  const locale = useLocale();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -72,13 +78,21 @@ export function ExpensesPage() {
                 aria-label={t('chooseTrip')}
                 className="w-full max-w-full sm:w-auto sm:max-w-80"
               >
-                <Icons.Trips aria-hidden="true" className="size-4 text-muted-foreground" />
-                <SelectValue className="truncate">{selected.name}</SelectValue>
+                <SelectValue className="gap-2">
+                  <TripFlags countries={selected.countries} />
+                  <span className="min-w-0 truncate">{selected.name}</span>
+                </SelectValue>
               </SelectTrigger>
               <SelectContent align="end" alignItemWithTrigger={false}>
                 {list.map((trip) => (
-                  <SelectItem key={trip.id} value={trip.id}>
-                    {trip.name}
+                  <SelectItem key={trip.id} label={trip.name} value={trip.id}>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <TripFlags countries={trip.countries} />
+                      <span className="min-w-0 truncate font-medium">{trip.name}</span>
+                    </span>
+                    <span className="block text-xs whitespace-nowrap text-muted-foreground">
+                      {formatTripDateRange(trip.startDate, trip.endDate, locale)}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -139,5 +153,38 @@ export function ExpensesPage() {
         />
       )}
     </section>
+  );
+}
+
+/**
+ * Where a trip goes, as up to two flags and a count of the rest. Each flag is
+ * named for its country, since some systems draw flag emoji as plain letters;
+ * the trip name beside it stays the cue a traveller reads. Nothing at all for
+ * a trip with no countries, so the name sits flush.
+ */
+function TripFlags({ countries }: Readonly<{ countries?: readonly string[] }>) {
+  const t = useTranslations('expensesPage');
+  const locale = useLocale();
+  const named = namedCountries(countries, locale);
+  if (!named.length) return null;
+  const more = named.length - MAX_FLAGS;
+
+  return (
+    <span className="flex shrink-0 items-center gap-0.5">
+      {named.slice(0, MAX_FLAGS).map((country) => (
+        <span aria-label={country.name} key={country.code} role="img">
+          {country.flag}
+        </span>
+      ))}
+      {more > 0 ? (
+        <span
+          aria-label={t('moreCountries', { count: more })}
+          className="ml-0.5 text-xs text-muted-foreground"
+          role="img"
+        >
+          {t('moreCountriesShort', { count: more })}
+        </span>
+      ) : null}
+    </span>
   );
 }

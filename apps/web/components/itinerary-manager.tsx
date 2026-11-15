@@ -1935,6 +1935,9 @@ export function ItineraryManager({
         organizingItemId={organizingItemId}
         resolveItem={(item) => ({
           category: item.tripPlace?.place.snapshot?.category,
+          locality: localityFromAddress(
+            item.tripPlace?.place.snapshot?.address ?? item.tripPlace?.place.providerAddress,
+          ),
           name: itemName(item),
         })}
       />

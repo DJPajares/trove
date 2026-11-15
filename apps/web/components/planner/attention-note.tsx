@@ -1,6 +1,5 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 
 import { SuggestedAction } from '@/components/plan-score-panel';
@@ -8,6 +7,7 @@ import type { PlanScoreExplanation } from '@/lib/plan-score/api';
 import type { ScoreAction } from '@/lib/plan-score/presentation';
 import { cn } from '@/lib/utils';
 import * as Icons from '@/lib/icons';
+import { useScoreMessage } from '@/lib/plan-score/use-score-message';
 
 /**
  * A quiet line that something here is worth a look, set where it happens. It
@@ -46,14 +46,14 @@ export function ScoreProblemNote({
   problem: PlanScoreExplanation;
   resolveAction?: (explanation: PlanScoreExplanation) => ScoreAction | null;
 }>) {
-  const t = useTranslations('planScore');
+  const scoreMessage = useScoreMessage();
 
   return (
     <AttentionNote
       action={<SuggestedAction explanation={problem} resolveAction={resolveAction} />}
       className={className}
     >
-      {t(problem.messageKey, problem.values)}
+      {scoreMessage(problem.messageKey, problem.values)}
     </AttentionNote>
   );
 }

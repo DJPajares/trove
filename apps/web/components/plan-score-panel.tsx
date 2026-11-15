@@ -34,6 +34,7 @@ import {
 } from '@/lib/plan-score/presentation';
 import { cn } from '@/lib/utils';
 import * as Icons from '@/lib/icons';
+import { useScoreMessage } from '@/lib/plan-score/use-score-message';
 
 type Props = Readonly<{
   assessment?: TripPlanScore | null;
@@ -255,14 +256,14 @@ function Reasons({
   reasons,
   resolveAction,
 }: Pick<Props, 'resolveAction'> & { reasons: PlanScoreExplanation[] }) {
-  const t = useTranslations('planScore');
+  const scoreMessage = useScoreMessage();
   if (!reasons.length) return null;
   return (
     <ul className="space-y-3">
       {reasons.map((reason, index) => (
         <li className="text-sm leading-relaxed" key={`${reason.code}-${index}`}>
           <p className={cn(['HARD', 'MATERIAL'].includes(reason.severity) && 'font-medium')}>
-            {t(reason.messageKey, reason.values)}
+            {scoreMessage(reason.messageKey, reason.values)}
           </p>
           <SuggestedAction explanation={reason} resolveAction={resolveAction} />
         </li>
@@ -389,6 +390,7 @@ export function PlanScorePanel({
   density = 'default',
 }: Props) {
   const t = useTranslations('planScore');
+  const scoreMessage = useScoreMessage();
   const [detailsOpen, setDetailsOpen] = useState(defaultDetailsOpen);
   const [clock, setClock] = useState(() => Date.now());
   useEffect(() => {
@@ -501,7 +503,7 @@ export function PlanScorePanel({
                 {unavailable
                   ? t(`availability.${reasonStatus}`)
                   : specificGap
-                    ? t(specificGap.messageKey, specificGap.values)
+                    ? scoreMessage(specificGap.messageKey, specificGap.values)
                     : t(`notEnoughInformation.${scope}`)}
               </p>
             )}
@@ -577,7 +579,7 @@ export function PlanScorePanel({
                     {highlights.map((reason, index) => (
                       <li className="flex gap-1.5" key={`${reason.code}-${index}`}>
                         <Check aria-hidden="true" className="mt-0.5 size-3 shrink-0" />
-                        <span>{t(reason.messageKey, reason.values)}</span>
+                        <span>{scoreMessage(reason.messageKey, reason.values)}</span>
                       </li>
                     ))}
                   </ul>

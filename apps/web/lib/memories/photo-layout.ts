@@ -8,6 +8,7 @@
 export type PhotoLayoutTemplate =
   | { aspect: string; id: string; kind: 'single' }
   | { aspect: string; id: string; kind: 'pair' }
+  | { id: string; kind: 'trio'; lead: 'end' | 'start'; leadAspect: string; sideAspect: string }
   | { id: string; kind: 'spread'; leadAspect: string; stripAspect: string };
 
 const ONE: PhotoLayoutTemplate[] = [
@@ -18,6 +19,25 @@ const ONE: PhotoLayoutTemplate[] = [
 const TWO: PhotoLayoutTemplate[] = [
   { aspect: 'aspect-[4/5]', id: 'pair-tall', kind: 'pair' },
   { aspect: 'aspect-square', id: 'pair-square', kind: 'pair' },
+];
+
+// Three prints fit the page whole: a tall lead beside two smaller prints
+// stacked against it, the lead on either side so neighbouring moments differ.
+const THREE: PhotoLayoutTemplate[] = [
+  {
+    id: 'trio-lead-start',
+    kind: 'trio',
+    lead: 'start',
+    leadAspect: 'aspect-[4/5]',
+    sideAspect: 'aspect-[5/4]',
+  },
+  {
+    id: 'trio-lead-end',
+    kind: 'trio',
+    lead: 'end',
+    leadAspect: 'aspect-[4/5]',
+    sideAspect: 'aspect-[5/4]',
+  },
 ];
 
 const SPREAD: PhotoLayoutTemplate[] = [
@@ -47,17 +67,18 @@ function stableHash(seed: string): number {
  * Same Memory, same photo count, same template — every time, on every device.
  * Different Memories land on different templates within their bucket because
  * their ids hash differently, so a story reads as varied without ever looking
- * arbitrary between one load and the next. Three or more photos share one
- * "spread" shape (a lead photo over a filled strip); only the aspect ratios
- * vary, since how the strip fills its row is already decided by how many
- * photos are left over.
+ * arbitrary between one load and the next. Three photos are laid out whole as
+ * a "trio" (a tall lead beside two stacked prints), so none hides off the edge
+ * of a strip. Four or more share one "spread" shape (a lead photo over a
+ * strip that scrolls); only the aspect ratios vary.
  */
 export function selectPhotoLayout(
   memoryId: string,
   photoCount: number,
 ): PhotoLayoutTemplate | null {
   if (photoCount <= 0) return null;
-  const bucket = photoCount === 1 ? ONE : photoCount === 2 ? TWO : SPREAD;
+  const bucket =
+    photoCount === 1 ? ONE : photoCount === 2 ? TWO : photoCount === 3 ? THREE : SPREAD;
   const template = bucket[stableHash(memoryId) % bucket.length];
   return template ?? bucket[0] ?? null;
 }

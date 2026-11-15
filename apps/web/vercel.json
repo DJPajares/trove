@@ -1,4 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": { "main": true, "**": false }
+  },
   "buildCommand": "pnpm --filter @trove/types build && pnpm --filter @trove/web build"
 }

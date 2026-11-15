@@ -1,5 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": { "main": true, "**": false }
+  },
   "buildCommand": "pnpm --filter @trove/types build && pnpm --filter @trove/db build && pnpm --filter @trove/api build",
   "crons": [
     { "path": "/maintenance/provider-evidence-retention", "schedule": "20 3 * * *" },

@@ -2178,7 +2178,7 @@
         "unscheduledHint": "Keep it without a day for now"
       },
       "unscheduled": {
-        "title": "{count, plural, one {# idea without a day} other {# ideas without a day}}",
+        "title": "{count, plural, one {# stop not on a day yet} other {# stops not on a day yet}}",
         "schedule": "Add to day"
       },
       "dayMenu": {
@@ -2270,7 +2270,7 @@
     "itemListLabel": "Items for this day",
     "addItem": "Add stop",
     "unscheduled": "Unscheduled",
-    "unscheduledDescription": "Kept here, details and all, until you add them to a day.",
+    "unscheduledDescription": "Places you’ve kept for this trip. Add each one to a day once you know where it fits.",
     "dailyBase": "Stay",
     "dailyBaseHelp": "Where this day starts and ends, usually where you're staying. Leave it unset to use an accommodation booked for this day.",
     "dailyBaseArrival": "Start the day at",
@@ -3899,6 +3899,10 @@
     "done": "Done"
   },
   "planScore": {
+    "duration": {
+      "minutes": "{count, plural, one {# minute} other {# minutes}}",
+      "hours": "{count, plural, one {# hour} other {# hours}}"
+    },
     "title": "Plan Score",
     "dayTitle": "Plan Score for this day",
     "basis": {
@@ -3987,33 +3991,33 @@
       "outsideAvailability": "This activity extends beyond your available time."
     },
     "travelEffort": {
-      "light": "Getting around stays light, about {minutes} minutes.",
-      "heavy": "You are getting around for about {minutes} minutes on this day.",
+      "light": "Getting around stays light, about {minutes}.",
+      "heavy": "You are getting around for about {minutes} on this day.",
       "unknown": "We do not know every route for this day yet.",
       "stale": "{count, plural, one {One route estimate we used may be out of date.} other {# route estimates we used may be out of date.}}"
     },
     "pace": {
       "comfortable": "The planned activity and transport load fits your selected pace.",
-      "tight": "The day is packed, with only about {bufferMinutes} minutes spare between stops.",
-      "overlapping": "The day is overbooked, with stops running into each other by about {overlapMinutes} minutes.",
+      "tight": "The day is packed, with only about {bufferMinutes} spare between stops.",
+      "overlapping": "The day is overbooked, with stops running into each other by about {overlapMinutes}.",
       "unknown": "We cannot judge the pace yet.",
       "stale": "{count, plural, one {One duration estimate we used may be out of date.} other {# duration estimates we used may be out of date.}}",
-      "load": "Planned activity and transport effort adds up to about {minutes} weighted minutes. Consider a lighter day.",
+      "load": "Planned activity and travel add up to about {minutes} of effort. Consider a lighter day.",
       "accumulated": "Demanding earlier days add to this day’s load. Consider a lighter day or more recovery time.",
       "naturalDowntime": "The known schedule leaves a natural interval for downtime.",
       "continuous": "There is a long continuous activity block. Consider leaving room to recover.",
       "walking": "A known walking leg is lengthy. Check that it suits your comfort level.",
-      "lowerBoundLoad": "Known activities and travel already add up to at least {minutes} minutes of active load. Review this before adding more."
+      "lowerBoundLoad": "Known activities and travel already add up to at least {minutes} of activity. Review this before adding more."
     },
     "routeEfficiency": {
       "direct": "The order of your stops keeps travel direct.",
-      "backtracking": "Reordering the stops could cut travel from about {plannedMinutes} to {bestMinutes} minutes.",
+      "backtracking": "Reordering the stops could cut travel from about {plannedMinutes} to {bestMinutes}.",
       "unknown": "Local travel or comparable alternatives are not sufficiently known yet.",
       "stale": "{count, plural, one {One route estimate we used may be out of date.} other {# route estimates we used may be out of date.}}",
-      "light": "Known local travel stays light, about {minutes} minutes.",
-      "lightEstimated": "Local travel looks light, an estimated {minutes} minutes from the distances between stops.",
-      "heavy": "Local travel takes about {minutes} minutes. Consider grouping the stops more closely.",
-      "heavyEstimated": "Local travel is estimated at about {minutes} minutes from the distances between stops. Consider grouping the stops more closely."
+      "light": "Known local travel stays light, about {minutes}.",
+      "lightEstimated": "Local travel looks light, an estimated {minutes} from the distances between stops.",
+      "heavy": "Local travel takes about {minutes}. Consider grouping the stops more closely.",
+      "heavyEstimated": "Local travel is estimated at about {minutes} from the distances between stops. Consider grouping the stops more closely."
     },
     "mustGo": {
       "allScheduled": "Every Must Go place has a spot on the plan.",

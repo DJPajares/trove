@@ -1412,5 +1412,16 @@
         "In Trip Mode, This hour now follows the day's saved hourly forecast."
       ]
     }
+  },
+  {
+    "id": "clearer-times-and-unplaced-stops",
+    "date": "2026-11-15",
+    "version": "1.32.1",
+    "summaries": {
+      "en": [
+        "Plan Score now says longer times in hours, like about 5.5 hours instead of 333 minutes.",
+        "Stops not on a day yet are easier to place, showing what each one is and the town it's in."
+      ]
+    }
   }
 ]

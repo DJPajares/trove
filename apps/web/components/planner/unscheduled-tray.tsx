@@ -43,11 +43,17 @@ export function UnscheduledTray({
   onSchedule: (item: ItineraryItem) => void;
   onViewDetails: (item: ItineraryItem) => void;
   organizingItemId: string | null;
-  resolveItem: (item: ItineraryItem) => { category: TrovePlaceCategory | undefined; name: string };
+  resolveItem: (item: ItineraryItem) => {
+    category: TrovePlaceCategory | undefined;
+    /** The town it is in, so a traveller can tell which day it belongs on. */
+    locality: string | null;
+    name: string;
+  };
 }>) {
   const t = useTranslations('itinerary');
   const readOnly = useTripReadOnly();
   const trayT = useTranslations('itinerary.planner.unscheduled');
+  const categoryT = useTranslations('saved.categories');
   if (!items.length) return null;
 
   return (
@@ -83,16 +89,25 @@ export function UnscheduledTray({
                 {item.tripPlace ? (
                   <button
                     aria-label={t('viewDetailsFor', { name: view.name })}
-                    className="max-w-full truncate rounded-[var(--radius-sm)] text-left text-sm font-semibold outline-none after:absolute after:inset-0 hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+                    className="line-clamp-2 max-w-full rounded-[var(--radius-sm)] text-left text-sm leading-snug font-semibold outline-none after:absolute after:inset-0 hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
                     onClick={() => onViewDetails(item)}
                     type="button"
                   >
                     {view.name}
                   </button>
                 ) : (
-                  <span className="block truncate text-sm font-semibold">{view.name}</span>
+                  <span className="line-clamp-2 text-sm leading-snug font-semibold">
+                    {view.name}
+                  </span>
                 )}
-                {item.notes ? (
+                {item.tripPlace && (view.category || view.locality) ? (
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {[view.category ? categoryT(view.category) : null, view.locality]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                ) : item.notes ? (
+                  // A place's note is in its details; a custom stop has only its note.
                   <ExpandableDescription
                     className="text-xs text-muted-foreground"
                     name={view.name}

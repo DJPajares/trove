@@ -27,6 +27,7 @@ test('each travel tool has its own address beneath the tools launcher', () => {
   expect(toolNavigationDestinations.map(({ href }) => href)).toEqual([
     '/tools/currency',
     '/tools/task-templates',
+    '/expenses',
   ]);
 });
 
@@ -41,6 +42,8 @@ test('the tools destination owns its launcher and child routes without claiming 
   expect(isToolsPath('/tools')).toBe(true);
   expect(isToolsPath('/tools/currency')).toBe(true);
   expect(isToolsPath('/tools/task-templates')).toBe(true);
+  expect(isToolsPath('/expenses')).toBe(true);
+  expect(isToolsPath('/expenses-old')).toBe(false);
   expect(isToolsPath('/toolsmith')).toBe(false);
   expect(isToolsPath('/profile')).toBe(false);
   expect(isToolsPath('/trips')).toBe(false);

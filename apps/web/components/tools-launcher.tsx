@@ -20,6 +20,7 @@ import {
   readRecentCurrencyPairs,
   type CurrencyPair,
 } from '@/lib/currency/recent-pairs';
+import { defaultExpensesTrip } from '@/lib/expenses/default-trip';
 import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import { useEntrance, type EntranceClock } from '@/lib/page-entrance';
@@ -51,6 +52,7 @@ export function ToolsLauncher() {
   const t = useTranslations('tools');
   const currencyT = useTranslations('currency');
   const templatesT = useTranslations('taskTemplates');
+  const expensesT = useTranslations('expensesPage');
   const locale = useLocale();
   const { preferredCurrency } = usePreferences();
   const home = preferredCurrency ?? FALLBACK_SOURCE;
@@ -62,6 +64,10 @@ export function ToolsLauncher() {
 
   const trip = useMemo(() => nextTripForTools(trips.data?.trips ?? [], localToday()), [trips.data]);
   const tripCurrency = trip ? tripLocalCurrency(trip, home) : null;
+  const expensesTrip = useMemo(
+    () => defaultExpensesTrip(trips.data?.trips ?? [], localToday()),
+    [trips.data],
+  );
   const templateList = templates.data?.templates ?? [];
 
   /** A reference conversion, with a warning only when rates may have changed. */
@@ -185,6 +191,21 @@ export function ToolsLauncher() {
                 </ScrollShadow>
               ) : null}
             </ToolRow>
+            <ToolRow
+              glance={
+                expensesTrip
+                  ? t('expensesGlance', { trip: expensesTrip.name })
+                  : t('expensesEmptyGlance')
+              }
+              href={
+                expensesTrip
+                  ? `/expenses?${new URLSearchParams({ trip: expensesTrip.id })}`
+                  : '/expenses'
+              }
+              icon={<Icons.Expenses aria-hidden="true" className="size-5" />}
+              label={expensesT('title')}
+              tone="olive"
+            />
           </ShelfGroup>
 
           <ShelfGroup label={t('groups.before')}>
@@ -219,7 +240,7 @@ function ShelfGroup({ children, label }: Readonly<{ children: ReactNode; label: 
       <h2 className="px-1 text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase">
         {label}
       </h2>
-      <div className="overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-card shadow-[var(--shadow-surface)]">
+      <div className="divide-y divide-border-subtle overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-card shadow-[var(--shadow-surface)]">
         {children}
       </div>
     </section>
@@ -243,7 +264,7 @@ function ToolRow({
   tone: 'olive' | 'terracotta';
 }>) {
   return (
-    <>
+    <div>
       <Link
         className="group flex min-h-[4.25rem] items-center gap-3.5 px-4 outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:ring-inset"
         href={href}
@@ -268,6 +289,6 @@ function ToolRow({
         />
       </Link>
       {children}
-    </>
+    </div>
   );
 }

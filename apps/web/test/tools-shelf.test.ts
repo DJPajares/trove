@@ -2,6 +2,7 @@ import { expect, test } from 'vitest';
 
 import { currencyForCountry } from '@/lib/currency/country-currency';
 import { currencyPairHref } from '@/lib/currency/recent-pairs';
+import { defaultExpensesTrip } from '@/lib/expenses/default-trip';
 import { nextTripForTools, tripLocalCurrency } from '@/lib/tools/shelf';
 
 const trip = (
@@ -40,4 +41,13 @@ test('a pair opens the converter on that pair', () => {
   expect(currencyPairHref({ source: 'EUR', target: 'JPY' })).toBe(
     '/tools/currency?from=EUR&to=JPY',
   );
+});
+
+test('expenses open on the trip underway or ahead, else the most recent trip', () => {
+  const past = { ...trip('2026-09-01', '2026-09-05', ['JP'], 'completed'), id: 'past' };
+  const older = { ...trip('2026-05-01', '2026-05-05', ['FR'], 'completed'), id: 'older' };
+  const ahead = { ...trip('2026-12-05', '2026-12-08', ['PT']), id: 'ahead' };
+  expect(defaultExpensesTrip([past, ahead, older], '2026-10-11')?.id).toBe('ahead');
+  expect(defaultExpensesTrip([older, past], '2026-10-11')?.id).toBe('past');
+  expect(defaultExpensesTrip([], '2026-10-11')).toBeNull();
 });

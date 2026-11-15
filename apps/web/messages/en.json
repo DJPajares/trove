@@ -1875,7 +1875,7 @@
   },
   "tools": {
     "title": "Kit",
-    "description": "Your travel kit: currency and checklists, for planning and on the road.",
+    "description": "Your travel kit: currency, expenses and checklists, for planning and on the road.",
     "cover": {
       "kicker": "Kit · for your next trip",
       "daysUntil": "{count, plural, one {# day until} other {# days until}}",
@@ -1896,7 +1896,22 @@
     "lastPairWithRate": "Last: {pair} · {rate}",
     "templatesGlance": "{count, plural, one {# list} other {# lists}} · {names}",
     "templatesEmptyGlance": "A checklist once, for every trip",
-    "wayfinding": "Expenses, Reservations and Trip info live inside each trip."
+    "expensesGlance": "Spending for {trip}",
+    "expensesEmptyGlance": "What each trip costs, against its budget",
+    "wayfinding": "Reservations and Trip info live inside each trip."
+  },
+  "expensesPage": {
+    "eyebrow": "On the road",
+    "title": "Expenses",
+    "back": "Kit",
+    "chooseTrip": "Choose a trip",
+    "loading": "Loading your trips…",
+    "loadError": "We couldn't load your trips",
+    "loadErrorDescription": "Check your connection and try again.",
+    "tryAgain": "Try again",
+    "noTripsTitle": "No trips to spend on yet.",
+    "noTripsDescription": "Plan a trip and its expenses will gather here.",
+    "openTrips": "Go to Trips"
   },
   "currency": {
     "eyebrow": "On the road",

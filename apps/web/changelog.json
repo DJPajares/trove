@@ -1423,5 +1423,13 @@
         "Stops not on a day yet are easier to place, showing what each one is and the town it's in."
       ]
     }
+  },
+  {
+    "id": "expenses-in-kit",
+    "date": "2026-11-15",
+    "version": "1.33.0",
+    "summaries": {
+      "en": ["Open Expenses straight from Kit and switch between trips without leaving the page."]
+    }
   }
 ]

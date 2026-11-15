@@ -1,4 +1,4 @@
-import { ExpensesManager } from '@/components/expenses-manager';
+import { TripExpenses } from '@/components/expenses/trip-expenses';
 
 export default async function ExpensesPage({
   params,
@@ -13,5 +13,5 @@ export default async function ExpensesPage({
       ? { itineraryItemId: query.itineraryItemId, localDate: query.date }
       : undefined;
 
-  return <ExpensesManager quickAdd={quickAdd} tripId={tripId} />;
+  return <TripExpenses quickAdd={quickAdd} tripId={tripId} />;
 }

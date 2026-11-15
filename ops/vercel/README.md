@@ -7,7 +7,7 @@ Trove deploys as two Vercel projects connected to the same GitHub repository:
 | `trove`     | `apps/web`     | Next.js web application |
 | `trove-api` | `apps/api`     | Fastify API             |
 
-Use the `wonderBots` Vercel team and Git integration. The `main` branch deploys to production; pull requests receive preview deployments. Do not configure GitHub auto-merge or bypass deployment protections.
+Use the `wonderBots` Vercel team and Git integration. The `main` branch deploys to production. Pull requests and other branches get no Vercel deployment: each project's `vercel.json` sets `git.deploymentEnabled` to build `main` only. To try a branch on Vercel, deploy it by hand with the Vercel CLI, or temporarily add the branch name to that setting. Do not configure GitHub auto-merge or bypass deployment protections.
 
 ## Web environment variables
 

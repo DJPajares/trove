@@ -1443,5 +1443,15 @@
         "Moments with three photos now lay all three out together, like prints on a page, with nothing to scroll past."
       ]
     }
+  },
+  {
+    "id": "trip-visibility-in-form",
+    "date": "2026-11-16",
+    "version": "1.34.0",
+    "summaries": {
+      "en": [
+        "Choose whether a trip is private or public while creating or editing it. Public trips can be read by anyone with their link."
+      ]
+    }
   }
 ]

@@ -79,6 +79,8 @@ const tripFields = {
   referenceTimeZone: timeZoneSchema.nullable().optional(),
   startDate: dateSchema,
   startingLocation: z.string().trim().max(200).nullable().optional(),
+  // Chosen with the rest of the trip; Share remains the dedicated control.
+  visibility: z.enum(['private', 'public']).optional(),
 } as const;
 const tripCreateSchema = z.object(tripFields).strict();
 const tripUpdateSchema = z
@@ -111,6 +113,7 @@ const tripUpdateSchema = z
     referenceTimeZone: tripFields.referenceTimeZone,
     startDate: tripFields.startDate.optional(),
     startingLocation: tripFields.startingLocation,
+    visibility: tripFields.visibility,
   })
   .strict();
 const tripParamsSchema = z.object({ tripId: z.uuid() }).strict();

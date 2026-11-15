@@ -34,7 +34,16 @@ import {
 import { TripShrinkReview } from '@/components/trip-shrink-review';
 import type { DayNoteResolution, TripShrinkImpact } from '@trove/types';
 import { DatePicker } from '@/components/date-picker';
-import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
+import { TripShareDisclosure } from '@/components/trip-share-disclosure';
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from '@/components/ui/field';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
 import { SheetFooter } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
@@ -73,6 +82,7 @@ type FormState = {
   partySize: string;
   planningReadiness: 'in_progress' | 'ready';
   startDate: string;
+  visibility: 'private' | 'public';
 };
 
 type PendingShrink = {
@@ -101,6 +111,7 @@ function createInitialForm(trip: Trip | null): FormState {
     partySize: String(trip?.partySize ?? 1),
     planningReadiness: trip?.planningReadiness ?? 'in_progress',
     startDate: trip?.startDate ?? today,
+    visibility: trip?.visibility ?? 'private',
   };
 }
 
@@ -228,6 +239,7 @@ export function TripForm({ alternative, onCancel, onDelete, onSaved, trip }: Tri
       partySize,
       planningReadiness: form.planningReadiness,
       startDate: form.startDate,
+      visibility: form.visibility,
     };
   }
 
@@ -434,6 +446,51 @@ export function TripForm({ alternative, onCancel, onDelete, onSaved, trip }: Tri
     </>
   );
 
+  // Private or public, chosen with the rest of the trip. Public is the read-only
+  // link of PRD 8.2, so choosing it shows what that link carries before the
+  // trip is saved - the same disclosure Share shows.
+  const turningPublic = form.visibility === 'public' && trip?.visibility !== 'public';
+  const visibilityOptions = [
+    { hint: t('visibilityPrivateHint'), label: t('visibilityPrivate'), value: 'private' },
+    { hint: t('visibilityPublicHint'), label: t('visibilityPublic'), value: 'public' },
+  ] as const;
+  const visibilityField = (
+    <FieldSet className="gap-2">
+      <FieldLegend className="mb-0" variant="label">
+        {t('visibilityLabel')}
+      </FieldLegend>
+      <RadioGroup
+        className="grid-cols-2"
+        onValueChange={(value) => updateField('visibility', value as FormState['visibility'])}
+        value={form.visibility}
+      >
+        {visibilityOptions.map((option) => (
+          <label
+            className="flex cursor-pointer items-start gap-3 rounded-[var(--radius-lg)] border border-border-subtle bg-card p-3 transition-colors duration-[var(--motion-fast)] has-[[data-checked]]:border-primary has-[[data-checked]]:bg-surface-tint hover:bg-surface-hover motion-reduce:transition-none"
+            key={option.value}
+          >
+            <RadioGroupItem className="mt-0.5" value={option.value} />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium">{option.label}</span>
+              <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">
+                {option.hint}
+              </span>
+            </span>
+          </label>
+        ))}
+      </RadioGroup>
+      {turningPublic ? (
+        <TripShareDisclosure
+          className="rounded-[var(--radius-lg)] bg-surface-tint p-3"
+          trip={trip}
+        />
+      ) : null}
+      {form.visibility === 'public' ? (
+        <FieldDescription>{t('visibilityLinkHint')}</FieldDescription>
+      ) : null}
+    </FieldSet>
+  );
+
   return (
     <>
       <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
@@ -491,6 +548,7 @@ export function TripForm({ alternative, onCancel, onDelete, onSaved, trip }: Tri
               />
               <FieldDescription id="trip-countries-hint">{t('countriesHint')}</FieldDescription>
             </Field>
+            {visibilityField}
           </section>
 
           {trip ? (

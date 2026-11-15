@@ -19,7 +19,8 @@ const kicker = 'text-[0.6875rem] font-semibold tracking-[0.12em] text-muted-fore
 
 /**
  * Plan Score and the one insight worth knowing: the trip's while planning, the
- * day's while travelling. Once the trip is over, neither is the point any more.
+ * day's while travelling, each in its own card. Once the trip is over, neither
+ * is the point any more.
  */
 export function TripHubGoodToKnow({
   overview,
@@ -47,12 +48,12 @@ export function TripHubGoodToKnow({
             dayId={liveDayId}
             headingLevel={3}
             initialItemLimit={1}
-            surface="inset"
+            surface="card"
             tripId={trip.id}
           />
         ) : null
       ) : (
-        <TripInsights headingLevel={3} initialItemLimit={1} surface="inset" tripId={trip.id} />
+        <TripInsights headingLevel={3} initialItemLimit={1} surface="card" tripId={trip.id} />
       )}
     </section>
   );

@@ -229,7 +229,7 @@ function TripScoreAndInsights({
       <TripInsights
         enabled={hasBeenVisible}
         resolveAction={resolveAction}
-        surface="inset"
+        surface="card"
         tripId={tripId}
       />
     </div>

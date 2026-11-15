@@ -10,10 +10,10 @@ import { cn } from '@/lib/utils';
 export const DAY_SKETCH_BOX = { height: 80, padding: 11, width: 128 } as const;
 
 /**
- * The wider box a day card on the All days board draws into: the whole card's
- * width, so the route has room to read as one.
+ * The small tile in the corner of a day card on the All days board, drawn at
+ * its own size so the pins keep their size there.
  */
-export const BOARD_SKETCH_BOX = { height: 64, padding: 12, width: 180 } as const;
+export const BOARD_SKETCH_BOX = { height: 60, padding: 9, width: 96 } as const;
 
 /**
  * The ground a sketch sits on: a pale tint with a faint dot grid, so the route

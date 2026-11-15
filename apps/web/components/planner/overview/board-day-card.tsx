@@ -8,7 +8,7 @@ import { formatSuggestedClock } from '@/lib/itinerary/day-time-suggestions';
 import type { PlannerDay } from '@/lib/itinerary/planner-days';
 import { cn } from '@/lib/utils';
 
-import { BOARD_SKETCH_BOX, SKETCH_TILE } from '../day-route-sketch';
+import { SKETCH_TILE } from '../day-route-sketch';
 import { paddedDayNumber } from '../planner-ribbon';
 
 /** How many of a day's stops its card names before it says "and more". */
@@ -131,11 +131,11 @@ export function BoardDayCard({
         <p className="text-sm text-muted-foreground">{t('overview.emptyDay')}</p>
       )}
 
-      {/* The stops above already count themselves; only the ones not shown
-          need saying, right under them. Raised over the card's own link, so it
-          opens the list here rather than the day. */}
-      {hidden > 0 ? (
-        <div className="-mt-1.5 flex">
+      <div className="mt-auto flex items-end justify-between gap-3">
+        {/* The stops above already count themselves; only the ones not shown
+            need saying. Raised over the card's own link, so it opens the list
+            here rather than the day. */}
+        {hidden > 0 ? (
           <button
             aria-expanded={expanded}
             className="relative z-10 -my-1 inline-flex min-h-8 items-center rounded-[var(--radius-sm)] text-xs font-semibold text-brand outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
@@ -144,19 +144,17 @@ export function BoardDayCard({
           >
             {expanded ? boardT('less') : boardT('more', { count: hidden })}
           </button>
-        </div>
-      ) : null}
-      {/* The day's route as a small map across the card. Decorative: the stops
-          above say where the day goes, and the card itself opens the day. */}
-      {sketch ? (
-        <div
-          aria-hidden="true"
-          className={cn('mt-auto w-full', SKETCH_TILE)}
-          style={{ aspectRatio: `${BOARD_SKETCH_BOX.width} / ${BOARD_SKETCH_BOX.height}` }}
-        >
-          {sketch}
-        </div>
-      ) : null}
+        ) : (
+          <span />
+        )}
+        {/* The day's route as a small map in the corner. Decorative: the stops
+            above say where the day goes, and the card itself opens the day. */}
+        {sketch ? (
+          <div aria-hidden="true" className={cn('h-[3.75rem] w-24 shrink-0', SKETCH_TILE)}>
+            {sketch}
+          </div>
+        ) : null}
+      </div>
     </article>
   );
 }

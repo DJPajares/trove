@@ -1367,5 +1367,16 @@
         "Each day’s route now shows as a small map with numbered stops, so it’s easier to read at a glance."
       ]
     }
+  },
+  {
+    "id": "welcome-tour",
+    "date": "2026-11-15",
+    "version": "1.31.0",
+    "summaries": {
+      "en": [
+        "New to Trove? A short welcome tour lets you try planning a day, Trip Mode and the journal before your first trip.",
+        "You can replay the tour any time from Settings."
+      ]
+    }
   }
 ]

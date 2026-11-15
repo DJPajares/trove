@@ -6,13 +6,11 @@ import { getAuthUserId } from '@/lib/auth/session';
 export default async function HomePage() {
   const authUserId = await getAuthUserId();
 
-  // Home sets a finished journey in the Memories journal's serif, so the font
-  // comes with it; the signed-out landing page never asks for it.
-  return authUserId ? (
+  // Home sets a finished journey in the Memories journal's serif, and the
+  // signed-out landing page sets its headings in it, so the font comes with both.
+  return (
     <div className={journalSerif.variable}>
-      <HomeExperience />
+      {authUserId ? <HomeExperience /> : <LandingExperience />}
     </div>
-  ) : (
-    <LandingExperience />
   );
 }

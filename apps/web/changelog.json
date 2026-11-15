@@ -1335,5 +1335,16 @@
         "Switch between Simple and Detailed any time. Trove remembers your choice, and finished trips open in Simple."
       ]
     }
+  },
+  {
+    "id": "landing-redesign",
+    "date": "2026-11-15",
+    "version": "1.30.0",
+    "summaries": {
+      "en": [
+        "Trove's welcome page has a new look, with the same full-width cover you see inside the app.",
+        "See a glimpse of planning, Trip Mode and Memories before you create an account."
+      ]
+    }
   }
 ]

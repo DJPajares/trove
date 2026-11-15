@@ -1,89 +1,99 @@
 'use client';
 
-import { motion, useReducedMotion } from 'motion/react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
 import { MediaFrame } from '@/components/media-frame';
+import { MEASURE, SCRIM } from '@/components/saved/finds-cover';
 import { Button } from '@/components/ui/button';
+import { useCoverUnderHeader } from '@/hooks/use-cover-under-header';
 import { landingHeroImage } from '@/lib/media/landing-images';
-import { motionDuration, motionEase } from '@/lib/motion';
+import { pageEntrance } from '@/lib/page-entrance';
+import { cn } from '@/lib/utils';
 
 /**
- * The signed-out hero: an asymmetric text/photo composition rather than the
- * old centered gradient panel.
+ * Across the whole viewport and up beneath the header, as the covers inside
+ * the app are. Signed out the header is sticky at every size, so its height
+ * is cancelled on a phone as well as from `md`.
+ */
+const COVER_BLEED =
+  'mx-[calc(50%-50vw)] -mt-[calc(var(--safe-top)+var(--header-height)+2rem+1px)] md:-mt-[calc(var(--safe-top)+var(--header-height)+3rem+1px)]';
+
+/** The landing page's own measure, shared by the cover's words and the sheet. */
+export const LANDING_MEASURE = 'mx-auto w-full max-w-5xl';
+
+/**
+ * The signed-out cover: the same full-width photograph and rising sheet a
+ * traveller meets on every screen once they are in, so signing in feels like
+ * walking further into the same place.
  *
- * Text, then both auth actions, then the photograph — in that fixed order on
- * every breakpoint. That keeps keyboard/tab order correct everywhere and
- * keeps the CTAs a small, constant distance below the headline regardless of
- * how tall the image renders, which is what actually keeps both actions
- * inside the initial viewport on a 390px-wide screen: `PageHeader`'s
- * `immersive` density would put them under the media column instead, and
- * `MediaFrame`'s own `hero` variant is a tall 4:5 portrait below `sm` that a
- * mobile hero can't afford alongside a title, a description and two buttons.
- * The photograph is pinned build-time data (see `lib/media/landing-images.ts`),
- * never a live resolve call, so a signed-out load costs zero provider requests.
+ * The words and both ways in sit at the foot of the photograph, a constant
+ * distance above the sheet, which keeps them inside the first screen on a
+ * phone. The photograph is pinned build-time data (see
+ * `lib/media/landing-images.ts`), never a live resolve call, so a signed-out
+ * load costs zero provider requests.
  */
 export function LandingHero() {
   const t = useTranslations('landing');
-  const shouldReduceMotion = useReducedMotion();
-
-  const reveal = (delay: number) => ({
-    animate: { opacity: 1, y: 0 },
-    initial: shouldReduceMotion ? false : { opacity: 0, y: 8 },
-    transition: shouldReduceMotion
-      ? { duration: 0 }
-      : { delay, duration: motionDuration.standard, ease: motionEase },
-  });
+  useCoverUnderHeader();
 
   return (
     <section
       aria-labelledby="landing-heading"
-      className="grid gap-8 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:items-stretch lg:gap-10"
+      className={cn(
+        'relative isolate flex min-h-[clamp(34rem,86svh,46rem)] flex-col justify-end overflow-hidden bg-surface-media text-white',
+        COVER_BLEED,
+      )}
+      data-slot="landing-cover"
     >
-      <motion.div className="flex flex-col justify-center" {...reveal(0)}>
-        <h1
-          className="max-w-[18ch] text-[clamp(2.125rem,7vw,3.75rem)] leading-[1.08] font-semibold tracking-[-0.03em] text-balance text-foreground"
-          id="landing-heading"
+      <MediaFrame
+        alt={t('heroImageAlt')}
+        className={cn('absolute inset-0 -z-20 h-full w-full rounded-none', pageEntrance.media)}
+        dataSlot="landing-hero-media"
+        preload
+        sizes="100vw"
+        source={{ kind: 'editorial', reference: landingHeroImage }}
+        variant="cover"
+      />
+      <div aria-hidden="true" className={SCRIM} />
+
+      <div className={MEASURE}>
+        <div
+          className={cn(
+            LANDING_MEASURE,
+            'pt-[calc(var(--safe-top)+var(--header-height)+4rem)] pb-20 md:pb-28',
+            pageEntrance.rise,
+          )}
         >
-          {t('heroTitle')}
-        </h1>
-        <p className="mt-5 max-w-[62ch] text-base leading-7 text-pretty text-muted-foreground md:text-lg md:leading-8">
-          {t('heroDescription')}
-        </p>
+          <h1
+            className="max-w-[11ch] font-journal text-[clamp(3.25rem,11vw,6.25rem)] leading-[0.92] font-normal tracking-[-0.01em] text-balance"
+            id="landing-heading"
+          >
+            {t.rich('heroTitle', { em: (chunks) => <em>{chunks}</em> })}
+          </h1>
+          <p className="mt-4 max-w-[40ch] text-base leading-[1.55] text-pretty text-white/90 md:text-lg">
+            {t('heroDescription')}
+          </p>
 
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <Button
-            className="w-full sm:w-auto"
-            nativeButton={false}
-            render={<Link href="/sign-up" />}
-            size="lg"
-          >
-            {t('heroPrimary')}
-          </Button>
-          <Button
-            className="w-full sm:w-auto"
-            nativeButton={false}
-            render={<Link href="/sign-in" />}
-            size="lg"
-            variant="outline"
-          >
-            {t('heroSecondary')}
-          </Button>
+          <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2">
+            <Button
+              className="rounded-full bg-white px-6 text-neutral-900 hover:bg-white/90 focus-visible:ring-white/70"
+              nativeButton={false}
+              render={<Link href="/sign-up" />}
+              size="lg"
+            >
+              {t('heroPrimary')}
+            </Button>
+            <Link
+              className="inline-flex min-h-11 items-center rounded-[var(--radius-sm)] text-[0.9375rem] font-semibold text-white/90 outline-none hover:text-white hover:underline focus-visible:ring-3 focus-visible:ring-white/70"
+              href="/sign-in"
+            >
+              {t('heroSecondary')}
+            </Link>
+          </div>
+          <p className="mt-3 text-[0.8125rem] text-white/75">{t('heroNote')}</p>
         </div>
-      </motion.div>
-
-      <motion.div {...reveal(shouldReduceMotion ? 0 : 0.06)}>
-        <MediaFrame
-          alt={t('heroImageAlt')}
-          className="h-52 w-full sm:h-64 lg:h-full lg:min-h-[26rem] lg:rounded-[var(--radius-2xl)]"
-          dataSlot="landing-hero-media"
-          preload
-          sizes="(max-width: 1023px) 100vw, 40vw"
-          source={{ kind: 'editorial', reference: landingHeroImage }}
-          variant="card"
-        />
-      </motion.div>
+      </div>
     </section>
   );
 }

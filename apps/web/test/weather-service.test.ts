@@ -121,20 +121,21 @@ beforeEach(async () => {
       const today = days.find((day) => day.date === weatherLocalDate(at, day.location.timeZone));
       return {
         attribution: { label: 'Open-Meteo', url: 'https://open-meteo.com/' },
-        current: today
-          ? {
-              observedAt: '2026-10-03T12:00',
-              temperature: 20,
-              apparentTemperature: 19,
-              weatherCode: 1,
-              isDay: true,
-            }
-          : null,
+        current: null,
         currentFetchedAt: today ? at.toISOString() : null,
         days,
         fetchedAt: at.toISOString(),
         horizon: window,
-        hours: [],
+        hours: today
+          ? [
+              {
+                time: `${today.date}T12:00`,
+                temperature: 21,
+                weatherCode: 1,
+                precipitationProbability: 10,
+              },
+            ]
+          : [],
         hoursDate: today?.date ?? null,
         provider: 'open_meteo',
         temperatureUnit: 'celsius',
@@ -341,16 +342,15 @@ test('Web Locks serialize tabs and the second rereads what the first kept', asyn
   expect(request).toHaveBeenCalled();
 });
 
-test("today's live reading goes stale after an hour while the days stay", async () => {
+test("today's hours are kept all day, with no request on the hour", async () => {
   const cache = service();
   await cache.trip('trip');
-  now += WEATHER_CACHE_POLICY.currentMs;
-  const stale = await cache.trip('trip');
-  expect(stale.current).toBeNull();
-  expect(stale.days[0]?.fetchedAt).toBe(new Date(NOW).toISOString());
+  now += WEATHER_CACHE_POLICY.currentMs * 3;
+  const later = await cache.trip('trip');
   await settled();
-  expect(transport.trip).toHaveBeenCalledTimes(2);
-  expect((await cache.trip('trip')).current).not.toBeNull();
+  expect(later.hours).toHaveLength(1);
+  expect(later.hoursDate).toBe('2026-10-03');
+  expect(transport.trip).toHaveBeenCalledTimes(1);
 });
 
 test('days ahead are not asked for again until a day arrives', async () => {
@@ -370,7 +370,7 @@ test('hidden and offline reads answer from the kept copy and ask nothing', async
   let online = true;
   const cache = service('traveller', true, () => online);
   await cache.trip('trip');
-  now += WEATHER_CACHE_POLICY.currentMs;
+  now = Date.parse('2026-10-03T15:00:05Z'); // The next day arrives in Tokyo.
   vi.stubGlobal('document', { hidden: true });
   await cache.trip('trip');
   vi.stubGlobal('document', { hidden: false });
@@ -415,13 +415,12 @@ test('metadata mappings persist and are fetched only when missing', async () => 
 test('a failed read keeps the kept copy and tries again after the pause', async () => {
   const cache = service();
   await cache.trip('trip');
-  now += WEATHER_CACHE_POLICY.currentMs;
+  now = Date.parse('2026-10-03T15:00:05Z'); // The next day arrives in Tokyo.
   vi.mocked(transport.trip).mockRejectedValue(new Error('server unavailable'));
   await cache.trip('trip');
   await settled();
   const kept = await service().trip('trip');
   expect(kept.days[0]?.fetchedAt).toBe(new Date(NOW).toISOString());
-  expect(kept.current).toBeNull();
   expect(transport.trip).toHaveBeenCalledTimes(2);
   now += WEATHER_CACHE_POLICY.retryMs;
   await cache.trip('trip');
@@ -465,7 +464,7 @@ test('a new reading is broadcast to another tab without a second request', async
   await first.trip('trip');
   await second.trip('trip');
   changed.length = 0;
-  now += WEATHER_CACHE_POLICY.currentMs;
+  now = Date.parse('2026-10-03T15:00:05Z'); // The next day arrives in Tokyo.
   await first.trip('trip');
   await vi.waitFor(() => expect(changed).toContain('trip:trip'));
   await second.trip('trip');

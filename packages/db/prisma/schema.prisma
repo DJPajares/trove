@@ -604,7 +604,8 @@ model WeatherForecastSnapshotDay {
 ///
 /// It is fetched once per day, not refreshed on every read: once while the day
 /// is in the provider's forecast range, then once more when the day arrives,
-/// which is when `lockedAt` is set and the row stops changing. The location is
+/// which is when `lockedAt` is set, the day's hours are kept, and the row stops
+/// changing. The location is
 /// stored so a day whose stay or stops move before it arrives is asked again
 /// for its new place. Temperatures are in celsius and converted on read.
 model TripDayWeather {
@@ -621,6 +622,9 @@ model TripDayWeather {
   fetchedAt                DateTime  @map("fetched_at") @db.Timestamptz(3)
   /// Set once the day has arrived and its weather was read for the last time.
   lockedAt                 DateTime? @map("locked_at") @db.Timestamptz(3)
+  /// The day's hours, in celsius, read once when the day arrives. "This hour" is
+  /// taken from them through the day, so nothing live is asked for after that.
+  hours                    Json?
 
   itineraryDay ItineraryDay @relation(fields: [itineraryDayId], references: [id], onDelete: Cascade)
   trip         Trip         @relation(fields: [tripId], references: [id], onDelete: Cascade)

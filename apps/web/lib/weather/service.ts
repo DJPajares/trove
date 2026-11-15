@@ -539,20 +539,12 @@ export class LocalWeatherService {
     this.pendingTrips.set(key, work);
     return work;
   }
-  /** A kept trip, with a live reading only while it is still current. */
+  /**
+   * A kept trip. Today's hours are a forecast for the whole day, so they stay
+   * good all day; "this hour" is picked from them as the clock moves.
+   */
   private tripAnswer(record: TripRecord): TripWeather {
-    const { weather } = record;
-    const live = Boolean(
-      weather.currentFetchedAt &&
-      weatherEvidenceFresh(weather.currentFetchedAt, WEATHER_CACHE_POLICY.currentMs, this.now()),
-    );
-    return {
-      ...weather,
-      current: live ? weather.current : null,
-      hours: live ? weather.hours : [],
-      hoursDate: live ? weather.hoursDate : null,
-      refreshAfter: record.refreshAfter,
-    };
+    return { ...record.weather, refreshAfter: record.refreshAfter };
   }
   /** When a trip's weather can next have changed. */
   private tripRefreshAfter(weather: TripWeather, mapping: WeatherLocations) {
@@ -566,9 +558,6 @@ export class LocalWeatherService {
     for (const day of mapping.days)
       if (day.location && day.date > weather.horizon.endDate)
         deadlines.push(forecastEligibility(day.date, day.location.timeZone, now));
-    // Today's live reading goes stale far sooner than any day's weather.
-    if (weather.currentFetchedAt && Number.isFinite(Date.parse(weather.currentFetchedAt)))
-      deadlines.push(Date.parse(weather.currentFetchedAt) + WEATHER_CACHE_POLICY.currentMs);
     return deadlines.length
       ? Math.max(now + 30_000, Math.min(...deadlines))
       : Number.POSITIVE_INFINITY;

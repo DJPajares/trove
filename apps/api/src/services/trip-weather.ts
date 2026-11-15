@@ -79,8 +79,9 @@ export type TripWeather = {
   currentFetchedAt: string | null;
   horizon: { endDate: string; startDate: string };
   /**
-   * The next week of hours, empty whenever `current` is - the two come from the
-   * same live reading and mean nothing apart from it.
+   * Today's hours, kept when the day arrived, from the hour it was read. There
+   * is no live reading: `current` is always null, and a screen takes "this
+   * hour" from these. `currentFetchedAt` is when they were read.
    */
   hours: WeatherHourlyForecast[];
   /**
@@ -249,6 +250,7 @@ export class TripWeatherService {
     const stored = await readStoredDayWeather(tripId);
     const kept = new Map<string, StoredDayWeather>();
     const ahead: typeof located = [];
+    const arriving: typeof located = [];
     const past: typeof located = [];
     const finalise: string[] = [];
 
@@ -266,7 +268,7 @@ export class TripWeatherService {
       if (entry.date > today) {
         if (!here && isWithinForecastWindow(entry.date, window)) ahead.push(entry);
       } else if (entry.date === today && isWithinForecastWindow(entry.date, window)) {
-        ahead.push(entry);
+        arriving.push(entry);
       } else if (entry.date >= shiftDate(today, -WEATHER_PAST_REACH_DAYS)) {
         past.push(entry);
       } else if (here) {
@@ -302,6 +304,7 @@ export class TripWeatherService {
           date: entry.date,
           fetchedAt: forecast.fetchedAt,
           forecast: match,
+          hours: null,
           itineraryDayId: entry.day.id,
           location: forecast.location,
           lockedAt: entry.date <= getLocalDate(now, entry.location.timeZone) ? now : null,
@@ -317,6 +320,53 @@ export class TripWeatherService {
       } catch {
         /* Whatever is kept still answers; the next read asks again. */
       }
+    }
+    // The day that arrives is read once, with its hours, and locked: one
+    // request per place, after which "this hour" comes from what was kept.
+    if (arriving.length) {
+      // As for the daily read: the trip's own place is claimed first, so a day
+      // the cap turns away borrows it without asking for an extra place.
+      const byPoint = new Map<string, { entries: typeof located; point: TripWeatherLocation }>();
+      if (tripLocation && fallbackKey)
+        byPoint.set(fallbackKey, { entries: [], point: { ...tripLocation } });
+      for (const entry of arriving) {
+        let key = weatherPointKey(entry.location);
+        if (!byPoint.has(key)) {
+          if (byPoint.size >= MAX_WEATHER_LOCATIONS && fallbackKey) key = fallbackKey;
+          else byPoint.set(key, { entries: [], point: { ...entry.location } });
+        }
+        byPoint.get(key)!.entries.push(entry);
+      }
+      await Promise.all(
+        [...byPoint.values()].map(async ({ entries, point }) => {
+          if (!entries.length) return;
+          try {
+            const context = await this.currentConditions.getWeather({
+              latitude: point.latitude,
+              longitude: point.longitude,
+              temperatureUnit: 'celsius',
+              timeZone: point.timeZone,
+            });
+            for (const entry of entries) {
+              const match = context.forecast.find((day) => day.date === entry.date);
+              if (!match) continue;
+              const row: StoredDayWeather = {
+                date: entry.date,
+                fetchedAt: new Date(context.fetchedAt),
+                forecast: match,
+                hours: context.hours.filter((hour) => hour.time.startsWith(entry.date)),
+                itineraryDayId: entry.day.id,
+                location: context.location,
+                lockedAt: now,
+              };
+              kept.set(entry.day.id, row);
+              written.push(row);
+            }
+          } catch {
+            /* What was kept still answers; the next read tries once more. */
+          }
+        }),
+      );
     }
     if (past.length) {
       const dates = past.map((entry) => entry.date).toSorted();
@@ -334,22 +384,6 @@ export class TripWeatherService {
     }
     await writeStoredDayWeather(tripId, written);
     await lockStoredDayWeather(finalise, now);
-
-    const today = located.find(
-      (entry) =>
-        entry.date === getLocalDate(now, entry.location.timeZone) && kept.has(entry.day.id),
-    );
-    let prefetched: Awaited<ReturnType<WeatherService['getWeather']>> | null = null;
-    if (today) {
-      try {
-        prefetched = await this.currentConditions.getWeather({
-          ...today.location,
-          temperatureUnit: options.temperatureUnit,
-        });
-      } catch {
-        /* Daily weather can still answer independently. */
-      }
-    }
 
     const days: TripWeatherDay[] = [];
     let oldestFetchedAt: Date | null = null;
@@ -369,7 +403,22 @@ export class TripWeatherService {
       });
     }
 
-    const live = await this.readNow(days, options.temperatureUnit, now, prefetched);
+    // Today's hours, as kept when the day arrived. The screens take "this hour"
+    // from them, so nothing live is asked for on a read.
+    const todayEntry = located.find(
+      (entry) => entry.date === getLocalDate(now, entry.location.timeZone),
+    );
+    const todayRow = todayEntry ? kept.get(todayEntry.day.id) : undefined;
+    const hours = (todayRow?.hours ?? []).map((hour) => ({
+      ...hour,
+      temperature: toPreferredUnit(hour.temperature, options.temperatureUnit),
+    }));
+    const live = {
+      current: null,
+      date: hours.length ? todayEntry!.date : null,
+      fetchedAt: hours.length ? todayRow!.fetchedAt.toISOString() : null,
+      hours,
+    };
 
     return {
       attribution: WEATHER_ATTRIBUTION,
@@ -430,66 +479,5 @@ export class TripWeatherService {
       })),
       fallback: destination ?? locations.find(Boolean) ?? null,
     };
-  }
-
-  /**
-   * What is true right now, and the hours just after it.
-   *
-   * Neither ever comes from the daily snapshot. That snapshot may be six
-   * hours old, and PRD 11 is explicit that cached weather must not be presented
-   * as the weather right now, so this reads the short-lived tier and returns
-   * nothing rather than something stale. The hours ride along on the same
-   * request: they answer the question the day's high and low cannot - whether
-   * the rain arrives before the afternoon is over - and cost nothing extra to
-   * ask for.
-   *
-   * It only runs when today is a day of this trip. A trip that starts in March
-   * has no "right now" to report, and asking anyway would spend a request on an
-   * answer no surface would draw.
-   */
-  private async readNow(
-    days: readonly TripWeatherDay[],
-    temperatureUnit: TemperatureUnit,
-    now: Date,
-    prefetched: Awaited<ReturnType<WeatherService['getWeather']>> | null = null,
-  ): Promise<{
-    current: WeatherCurrentConditions | null;
-    fetchedAt: string | null;
-    date: string | null;
-    hours: WeatherHourlyForecast[];
-  }> {
-    const nothing = { current: null, fetchedAt: null, date: null, hours: [] };
-
-    // Each day is asked whether it is today in its own zone, rather than one
-    // zone being asked what day it is everywhere. The trip's anchor is its
-    // destination or its first located place - routinely the airport the
-    // traveller left from, on another continent - so for several hours every
-    // night that anchor named a date the traveller was not living, and on the
-    // last day of a trip it named one that does not exist. A traveller mid-
-    // flight across the dateline can satisfy two days at once; the earlier one
-    // wins, being the day they have not finished yet.
-    const today = days.find((day) => day.date === getLocalDate(now, day.location.timeZone));
-    if (!today) return nothing;
-
-    try {
-      const weather =
-        prefetched ??
-        (await this.currentConditions.getWeather({
-          latitude: today.location.latitude,
-          longitude: today.location.longitude,
-          temperatureUnit,
-          timeZone: today.location.timeZone,
-        }));
-      return {
-        current: weather.current,
-        fetchedAt: weather.fetchedAt,
-        date: today.date,
-        hours: weather.hours ?? [],
-      };
-    } catch {
-      // A fortnight of forecasts is worth serving even when the reading for this
-      // minute is not.
-      return nothing;
-    }
   }
 }

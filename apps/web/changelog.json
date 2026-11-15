@@ -1408,7 +1408,8 @@
     "summaries": {
       "en": [
         "Each trip day now keeps its weather, so past days show it on every device.",
-        "Weather reads the same before and after a day, and days without it simply leave it out."
+        "Weather reads the same before and after a day, and days without it simply leave it out.",
+        "In Trip Mode, This hour now follows the day's saved hourly forecast."
       ]
     }
   }

@@ -1288,6 +1288,7 @@
       "weather": {
         "loading": "Loading weather",
         "now": "Weather now",
+        "thisHour": "Weather this hour",
         "forecast": "Weather forecast",
         "forecastCue": "Forecast",
         "forecastEvidence": "{kind} for {date} ({timeZone})",
@@ -1305,6 +1306,7 @@
         "hourlyLabel": "Hour by hour",
         "stripLabel": "Hour by hour forecast. {source}",
         "nowCell": "Now",
+        "thisHourCell": "This hour",
         "tomorrowCell": "{time} tomorrow",
         "hourCell": "{time}, {condition}, {temperature}",
         "hourCellWithPrecipitation": "{time}, {condition}, {temperature}, {probability}% chance of precipitation",

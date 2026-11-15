@@ -1,7 +1,7 @@
-import { getPrismaClient } from '@trove/db';
+import { getPrismaClient, Prisma } from '@trove/db';
 
 import { weatherPointKey } from './cached-weather.js';
-import type { WeatherDailyForecast } from './weather.js';
+import type { WeatherDailyForecast, WeatherHourlyForecast } from './weather.js';
 
 /**
  * How far back the provider answers for a day already gone. Open-Meteo's
@@ -18,6 +18,8 @@ export type StoredDayWeather = {
   lockedAt: Date | null;
   /** Celsius, as stored. */
   forecast: WeatherDailyForecast;
+  /** The day's hours, in celsius, kept when the day arrived; null before then. */
+  hours: WeatherHourlyForecast[] | null;
 };
 
 function toNumber(value: number | { toNumber(): number }) {
@@ -42,6 +44,7 @@ export async function readStoredDayWeather(tripId: string) {
             temperatureMin: toNumber(row.temperatureMinCelsius),
             weatherCode: row.weatherCode,
           },
+          hours: Array.isArray(row.hours) ? (row.hours as WeatherHourlyForecast[]) : null,
           itineraryDayId: row.itineraryDayId,
           location: {
             latitude: toNumber(row.latitude),
@@ -64,6 +67,7 @@ export async function writeStoredDayWeather(tripId: string, rows: readonly Store
       const data = {
         date: new Date(`${row.date}T00:00:00.000Z`),
         fetchedAt: row.fetchedAt,
+        hours: row.hours ?? Prisma.DbNull,
         latitude: row.location.latitude,
         lockedAt: row.lockedAt,
         longitude: row.location.longitude,

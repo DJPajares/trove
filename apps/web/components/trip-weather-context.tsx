@@ -66,22 +66,23 @@ export function TripWeatherContext({
   // Weather that could not be read takes no room in Trip Mode either.
   if (!data || (status === 'error' && !selected?.current && !selected?.forecast)) return null;
 
-  const { current, forecast: selectedForecast, readings: hourReadings } = selected!;
+  const { current, forecast: selectedForecast, readings: hourReadings, thisHour } = selected!;
   const condition = current ?? selectedForecast;
-  const evidence = current
-    ? evidenceDescription({
-        kind: 'current',
-        observedAt: current.observedAt,
-        timeZone: selectedForecast!.location.timeZone,
-      })
-    : selectedForecast
+  const evidence =
+    current && !thisHour
       ? evidenceDescription({
-          kind: 'forecast',
-          date: selectedForecast.date,
-          timeZone: selectedForecast.location.timeZone,
-          fetchedAt: selectedForecast.fetchedAt,
+          kind: 'current',
+          observedAt: current.observedAt,
+          timeZone: selectedForecast!.location.timeZone,
         })
-      : '';
+      : selectedForecast
+        ? evidenceDescription({
+            kind: 'forecast',
+            date: selectedForecast.date,
+            timeZone: selectedForecast.location.timeZone,
+            fetchedAt: selectedForecast.fetchedAt,
+          })
+        : '';
   const unit = t(`unit.${preferences.temperatureUnit}`);
   const formatTemperature = (value: number) => `${Math.round(value)}${unit}`;
   // A live reading says it is one; anything else says it is a forecast, and an
@@ -90,7 +91,7 @@ export function TripWeatherContext({
     condition && selectedForecast
       ? {
           condition: t(`condition.${weatherConditionKey(condition.weatherCode)}`),
-          tag: current ? t('nowCell') : t('forecastCue'),
+          tag: thisHour ? t('thisHourCell') : current ? t('nowCell') : t('forecastCue'),
           temperature: formatTemperature(current?.temperature ?? selectedForecast.temperatureMax),
           weatherCode: condition.weatherCode,
           isDay: current?.isDay,
@@ -106,7 +107,7 @@ export function TripWeatherContext({
   return (
     <section aria-labelledby="trip-weather-heading" className={frameClassName}>
       <h3 className="sr-only" id="trip-weather-heading">
-        {current ? t('now') : t('forecast')}
+        {thisHour ? t('thisHour') : current ? t('now') : t('forecast')}
       </h3>
 
       {hourReadings.length ? (

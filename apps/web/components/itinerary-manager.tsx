@@ -37,7 +37,11 @@ import { PlanScoreChip, PlanScorePanel } from '@/components/plan-score-panel';
 import { ScoreProblemNote, AttentionNote } from '@/components/planner/attention-note';
 import { DayMasthead } from '@/components/planner/day-masthead';
 import { DayWeatherCard } from '@/components/planner/day-weather-card';
-import { DAY_SKETCH_BOX, DayRouteSketch } from '@/components/planner/day-route-sketch';
+import {
+  BOARD_SKETCH_BOX,
+  DAY_SKETCH_BOX,
+  DayRouteSketch,
+} from '@/components/planner/day-route-sketch';
 import { DayEmpty } from '@/components/planner/day-empty';
 import { DayMenu } from '@/components/planner/day-menu';
 import { DayTimeline } from '@/components/planner/day-timeline';
@@ -1596,7 +1600,7 @@ export function ItineraryManager({
                 buildDaySequence({ bases: resolveDailyBases({ day }), items: day.items }),
                 itinerary.tripPlaces,
               );
-              const drawing = dayRouteDrawing(places, DAY_SKETCH_BOX);
+              const drawing = dayRouteDrawing(places, BOARD_SKETCH_BOX);
               return drawing ? <DayRouteSketch drawing={drawing} places={places} /> : null;
             }}
             stayName={(tripPlaceId) => placeName(tripPlaceById(tripPlaceId))}

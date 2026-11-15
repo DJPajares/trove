@@ -1356,5 +1356,16 @@
         "Signing in, creating an account and resetting your password now open on the same photo as Trove's welcome page."
       ]
     }
+  },
+  {
+    "id": "all-days-cards",
+    "date": "2026-11-15",
+    "version": "1.30.3",
+    "summaries": {
+      "en": [
+        "In All days, tap “+ more” to see the rest of a day’s stops right on its card.",
+        "Each day’s route now shows as a small map with numbered stops, so it’s easier to read at a glance."
+      ]
+    }
   }
 ]

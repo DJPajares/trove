@@ -9,6 +9,20 @@ import { cn } from '@/lib/utils';
 /** The box the day's route is drawn into; the SVG scales to its container. */
 export const DAY_SKETCH_BOX = { height: 80, padding: 11, width: 128 } as const;
 
+/**
+ * The small tile in the corner of a day card on the All days board, drawn at
+ * its own size so the pins keep their size there.
+ */
+export const BOARD_SKETCH_BOX = { height: 60, padding: 9, width: 96 } as const;
+
+/**
+ * The ground a sketch sits on: a pale tint with a faint dot grid, so the route
+ * reads as a small map rather than a line on the page. Not geography; nothing
+ * here is loaded.
+ */
+export const SKETCH_TILE =
+  'overflow-hidden rounded-[var(--radius-md)] bg-surface-tint/60 bg-[radial-gradient(circle,var(--color-border)_0.75px,transparent_1px)] bg-[length:9px_9px]';
+
 /** Past this many stops a number in every mark is too small to read, so marks go plain. */
 const MAX_NUMBERED = 9;
 
@@ -100,10 +114,36 @@ export function DayRouteSketch({
   return (
     <svg
       aria-hidden="true"
-      className={cn('h-full w-full text-primary/60', className)}
+      className={cn('h-full w-full text-primary', className)}
       data-slot="day-route-sketch"
       viewBox={`0 0 ${drawing.width} ${drawing.height}`}
     >
+      {/* An edge in the card's colour under each drawn leg, so the route stands
+          off the tile's dots as a road does off a map. */}
+      {drawing.legs.map((leg, index) =>
+        leg.style === 'unknown' || leg.stay ? null : (
+          <motion.path
+            animate={{ pathLength: 1 }}
+            className="stroke-card"
+            d={leg.path}
+            fill="none"
+            initial={reduced ? false : { pathLength: 0 }}
+            key={`edge-${leg.key}`}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="5"
+            transition={
+              reduced
+                ? { duration: 0 }
+                : {
+                    delay: (index / Math.max(1, drawing.legs.length)) * 0.5,
+                    duration: 0.7,
+                    ease: EASE,
+                  }
+            }
+          />
+        ),
+      )}
       {drawing.legs.map((leg, index) => {
         const dashed = leg.style === 'unknown' || leg.stay;
         return (
@@ -117,7 +157,7 @@ export function DayRouteSketch({
             strokeDasharray={leg.style === 'unknown' ? '0.1 3.5' : leg.stay ? '3 2.5' : undefined}
             strokeLinecap="round"
             strokeLinejoin="round"
-            strokeWidth={leg.style === 'unknown' ? 1.75 : 1.5}
+            strokeWidth={leg.style === 'unknown' ? 1.75 : 2.25}
             transition={
               reduced
                 ? { duration: 0 }

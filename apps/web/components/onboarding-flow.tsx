@@ -201,6 +201,10 @@ export function OnboardingFlow({
             variant="cover"
           />
           <div className={SCRIM} />
+          {/* The photograph fills the whole screen here, with no sheet beneath it,
+              so in dark mode its pale sky read as a light page. A dusk wash takes
+              it down to the app's own dark ground. */}
+          <div className="absolute inset-0 -z-10 hidden bg-[oklch(0.14_0.015_50/0.5)] dark:block" />
         </div>
       ) : null}
 

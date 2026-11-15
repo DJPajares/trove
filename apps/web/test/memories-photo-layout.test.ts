@@ -26,8 +26,14 @@ test('exactly two photos always resolve a pair template', () => {
   }
 });
 
-test('three or more photos always resolve a spread template', () => {
-  for (const count of [3, 4, 5, 8]) {
+test('three photos always resolve a trio template', () => {
+  for (const id of ['a', 'b', 'c', 'd']) {
+    expect(selectPhotoLayout(id, 3)?.kind).toBe('trio');
+  }
+});
+
+test('four or more photos always resolve a spread template', () => {
+  for (const count of [4, 5, 8]) {
     for (const id of ['a', 'b', 'c', 'd']) {
       expect(selectPhotoLayout(id, count)?.kind).toBe('spread');
     }

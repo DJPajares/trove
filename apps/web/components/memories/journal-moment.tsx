@@ -12,6 +12,7 @@ import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 const PRINT_SIZES = '(max-width: 640px) 88vw, 36rem';
 const STRIP_SIZES = '(max-width: 640px) 40vw, 14rem';
+const TRIO_LEAD_SIZES = '(max-width: 640px) 52vw, 21rem';
 
 /**
  * One kept moment, read rather than logged: the traveller's photographs first,
@@ -54,7 +55,13 @@ export function JournalMoment({
       onOpen={() => onOpen(index)}
       onPhotoError={onPhotoError}
       photo={photo}
-      sizes={index === 0 || template?.kind === 'pair' ? PRINT_SIZES : STRIP_SIZES}
+      sizes={
+        template?.kind === 'trio' && index === 0
+          ? TRIO_LEAD_SIZES
+          : index === 0 || template?.kind === 'pair'
+            ? PRINT_SIZES
+            : STRIP_SIZES
+      }
       tilt={tilts[index] ?? 0}
     />
   );
@@ -79,6 +86,39 @@ export function JournalMoment({
           {photos.map((photo, index) => (
             <div className={index === 1 ? '-ms-[16%] mt-[18%]' : undefined} key={photo.id}>
               {print(photo, index, template.aspect)}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {template?.kind === 'trio' && photos[0] ? (
+        // Three prints, all on the page: the lead stands tall on one side and
+        // the other two stack beside it, tucked a little under its edge.
+        <div
+          className={cn(
+            'grid grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] items-center gap-y-3 px-1',
+            template.lead === 'end' && 'grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]',
+          )}
+        >
+          <div
+            className={cn(
+              'relative z-10 row-span-2',
+              template.lead === 'end' ? 'col-start-2 row-start-1' : 'col-start-1',
+            )}
+          >
+            {print(photos[0], 0, template.leadAspect)}
+          </div>
+          {photos.slice(1, 3).map((photo, offset) => (
+            <div
+              className={cn(
+                'relative',
+                template.lead === 'end' ? 'col-start-1 -me-[20%]' : 'col-start-2 -ms-[20%]',
+                offset === 0 ? 'row-start-1 self-end' : 'row-start-2 self-start',
+                offset === 0 ? 'z-0' : 'z-20',
+              )}
+              key={photo.id}
+            >
+              {print(photo, offset + 1, template.sideAspect)}
             </div>
           ))}
         </div>

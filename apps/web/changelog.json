@@ -1389,5 +1389,16 @@
         "Replay the welcome tour any time from your account menu."
       ]
     }
+  },
+  {
+    "id": "tidier-itinerary-day",
+    "date": "2026-11-15",
+    "version": "1.31.2",
+    "summaries": {
+      "en": [
+        "Each itinerary day is tidier: its time, travel, route, weather and note now sit together in one card.",
+        "Ideas without a day are gathered in one list, each with a clear Add to day button."
+      ]
+    }
   }
 ]

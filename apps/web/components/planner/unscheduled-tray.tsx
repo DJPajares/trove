@@ -51,18 +51,24 @@ export function UnscheduledTray({
   if (!items.length) return null;
 
   return (
-    <section aria-labelledby="unscheduled-tray-heading" data-slot="unscheduled-tray">
-      <h2 className="text-lg font-semibold" id="unscheduled-tray-heading">
+    <section
+      aria-labelledby="unscheduled-tray-heading"
+      className="rounded-[var(--radius-2xl)] border border-border-subtle bg-card px-4 pt-4 pb-1 sm:px-5"
+      data-slot="unscheduled-tray"
+    >
+      <h2 className="text-base font-semibold" id="unscheduled-tray-heading">
         {trayT('title', { count: items.length })}
       </h2>
       <p className="mt-0.5 text-sm text-muted-foreground">{t('unscheduledDescription')}</p>
-      <ul aria-label={t('unscheduled')} className="mt-3 space-y-2">
+      {/* One card of rows rather than a card per idea: they are a list to
+          pick from, and the action is a word, not a button that truncates. */}
+      <ul aria-label={t('unscheduled')} className="mt-2 divide-y divide-border-subtle">
         {items.map((item) => {
           const view = resolveItem(item);
           const { Icon } = resolvePlaceCategoryFallback(item.tripPlace ? view.category : undefined);
           return (
             <li
-              className="relative flex items-center gap-3 rounded-[var(--radius-xl)] border border-dashed border-border bg-card/60 p-3"
+              className="relative flex items-center gap-3 py-3"
               id={`itinerary-item-${item.id}`}
               key={item.id}
               tabIndex={-1}
@@ -97,11 +103,12 @@ export function UnscheduledTray({
               <span className="relative z-10 flex shrink-0 items-center gap-1">
                 <Button
                   aria-label={t('scheduleItem', { name: view.name })}
+                  className="text-brand"
                   disabled={movementDisabled || organizingItemId === item.id}
                   onClick={() => onSchedule(item)}
                   size="sm"
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                 >
                   {trayT('schedule')}
                 </Button>

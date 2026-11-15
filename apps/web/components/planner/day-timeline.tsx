@@ -223,7 +223,7 @@ export function DayTimeline({
             ) : undefined
           }
         >
-          <p className="pt-3 pb-1 text-[length:var(--text-metadata)] font-semibold tracking-[0.14em] text-brand uppercase">
+          <p className="flex items-center gap-3 pt-3 pb-1 text-[length:var(--text-metadata)] font-semibold tracking-[0.14em] text-muted-foreground uppercase after:h-px after:flex-1 after:bg-border-subtle">
             {t(`schedule.${entry.band}`)}
           </p>
         </SpineRow>,

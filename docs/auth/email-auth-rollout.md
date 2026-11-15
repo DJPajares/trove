@@ -48,8 +48,13 @@ not an environment selector. See [Redirect URLs](https://supabase.com/docs/guide
    records where applicable. Preserve the website CNAME and existing root mail
    records; do not replace a root SPF record or configure inbound receiving.
 3. Wait until Resend reports the domain verified. Use sender
-   `wndrhive <no-reply@auth.wndrhive.com>` because SMTP From applies to every app
-   using this Auth project. Trove-specific branding lives in its template branch.
+   `Trove <no-reply@auth.wndrhive.com>`. People should recognise the name in their
+   inbox: a sender they have never heard of reads as spam, and the product they just
+   signed up to is Trove. SMTP From applies to every app using this Auth project, so
+   if another app sends mail from it, agree its sender name first. The address can
+   keep the `wndrhive.com` domain; most mail apps show only the name. A Trove-owned
+   sending domain (for example `auth.trove.wndrhive.com`) is a later option and needs
+   its own Resend domain and DNS records.
 4. Create a sending-only Resend API key restricted to `auth.wndrhive.com`. Enter
    it directly into **Supabase Authentication → Email → SMTP Settings**:
 
@@ -57,7 +62,7 @@ not an environment selector. See [Redirect URLs](https://supabase.com/docs/guide
    | -------------- | ---------------------------- |
    | Custom SMTP    | Enabled                      |
    | Sender address | `no-reply@auth.wndrhive.com` |
-   | Sender name    | `wndrhive`                   |
+   | Sender name    | `Trove`                      |
    | Host           | `smtp.resend.com`            |
    | Port           | `587` (STARTTLS)             |
    | Username       | `resend`                     |
@@ -108,8 +113,21 @@ email; their unsigned `type=recovery` hint cannot prove the authentication metho
 2. Verify the DNS domain and SMTP settings, then update the redirect configuration.
 3. Paste [confirmation.html](../../supabase/templates/en/confirmation.html) into
    **Confirm signup** and [recovery.html](../../supabase/templates/en/recovery.html)
-   into **Reset password**. Retain the neutral existing subjects. The English
-   templates are localization resources, separate from next-intl app messages.
+   into **Reset password**, and set their subjects, which Supabase keeps apart from
+   the template body:
+
+   | Template       | Subject                            |
+   | -------------- | ---------------------------------- |
+   | Confirm signup | `Confirm your Trove email address` |
+   | Reset password | `Reset your Trove password`        |
+
+   Subjects apply to every app in this project, as the sender does. Both name the
+   product, so the email is recognisable before it is opened. The English templates
+   are localization resources, separate from next-intl app messages.
+
+   The Trove templates say the link works once and expires in 1 hour, matching the
+   3600-second OTP expiry above. Change the wording if that setting changes.
+
 4. Trove destinations use `.RedirectTo` plus `.TokenHash`. Production/local
    callback prefixes and the allowlisted Trove preview hostname select the Trove
    branch. Other destinations keep `.ConfirmationURL`. Preview classification
@@ -127,6 +145,10 @@ email; their unsigned `type=recovery` hint cannot prove the authentication metho
 
 ## Acceptance checks
 
+- Check how the email reads in a real inbox: the sender shows as Trove, the subject
+  names Trove, the app tile shows (with remote images blocked it falls back to the
+  alt text), the account email appears in the body, and the message is not filed as
+  spam. Open it on a phone and in dark mode.
 - Test local, preview and production requests. Inspect each received href's host,
   callback, encoded `next`, and token type. Opening an email in a fresh browser
   must work without the initiating browser's PKCE verifier for new template links.

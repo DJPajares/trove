@@ -486,7 +486,7 @@ export function TripModeShell({
 
         <TripModeTabBar tripId={tripId} />
 
-        <div className="flex min-h-[min(32rem,55dvh)] flex-1 flex-col pt-6 pb-[calc(var(--bottom-bar-height)+var(--safe-bottom)+1rem)] sm:pt-8 lg:pb-8">
+        <div className="flex min-h-[min(32rem,55dvh)] flex-1 flex-col pt-6 pb-[calc(var(--bottom-bar-height)+var(--safe-bottom)+1rem)] sm:pt-8 md:pb-8">
           <ContentSkeleton shape="timeline" />
         </div>
       </section>
@@ -629,7 +629,7 @@ export function TripModeShell({
               {/* `flex-1` rather than a `dvh` guess: a view that wants the rest
                 of the screen gets exactly what the bars leave it, and gets it
                 right again when the preview banner opens above. */}
-              <div className="flex min-h-[min(32rem,55dvh)] flex-1 flex-col pt-5 pb-[calc(var(--bottom-bar-height)+var(--safe-bottom)+1rem)] sm:pt-6 lg:pb-8">
+              <div className="flex min-h-[min(32rem,55dvh)] flex-1 flex-col pt-5 pb-[calc(var(--bottom-bar-height)+var(--safe-bottom)+1rem)] sm:pt-6 md:pb-8">
                 <TripModePlaceDetailsContext.Provider value={placeDetailsContext}>
                   {children}
                   {mapLifecycle.render ? (

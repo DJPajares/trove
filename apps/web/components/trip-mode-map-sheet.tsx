@@ -60,7 +60,7 @@ export function TripModeMapSheet({
         // position stops below the header - and below the Preview controls,
         // whose height the shell publishes - so the two never overlap and both
         // stay usable while the sheet is open.
-        'absolute inset-x-0 bottom-0 z-[2] flex max-h-[calc(100dvh-var(--safe-top)-var(--header-offset)-4.25rem-var(--trip-mode-preview-offset,0px)-0.5rem)] flex-col overflow-hidden rounded-t-[var(--trip-sheet-radius)] border-t border-border-subtle bg-background pb-[calc(var(--bottom-bar-height)+var(--safe-bottom))] shadow-[var(--shadow-overlay)] md:max-h-[calc(100dvh-var(--safe-top)-var(--header-offset)-3.25rem-var(--trip-mode-preview-offset,0px)-0.5rem)] lg:static lg:max-h-none lg:rounded-none lg:border-0 lg:bg-transparent lg:pb-0 lg:shadow-none',
+        'absolute inset-x-0 bottom-0 z-[2] flex max-h-[calc(100dvh-var(--safe-top)-var(--header-offset)-4.25rem-var(--trip-mode-preview-offset,0px)-0.5rem)] flex-col overflow-hidden rounded-t-[var(--trip-sheet-radius)] border-t border-border-subtle bg-background pb-[calc(var(--bottom-bar-height)+var(--safe-bottom))] shadow-[var(--shadow-overlay)] md:max-h-[calc(100dvh-var(--safe-top)-var(--header-offset)-6.75rem-var(--trip-mode-preview-offset,0px)-0.5rem)] md:pb-[var(--safe-bottom)] lg:static lg:max-h-none lg:rounded-none lg:border-0 lg:bg-transparent lg:pb-0 lg:shadow-none',
       )}
       drag={reducedMotion ? false : 'y'}
       dragConstraints={{ bottom: 0, top: 0 }}

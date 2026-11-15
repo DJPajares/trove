@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import { MediaFrame } from '@/components/media-frame';
+import { panelSurfaceClass } from '@/components/panel-surface';
 import { useTripPlacesDrawer } from '@/components/trip-places-provider';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -61,7 +62,7 @@ function StopThumbnail({
   const reference = primaryEditorialImage(images.get(editorialSubjectKey(subject)));
   const frame = cn(
     'size-16 shrink-0 rounded-[var(--radius-xl)]',
-    current && 'ring-2 ring-brand ring-offset-2 ring-offset-background',
+    current && 'ring-2 ring-brand ring-offset-2 ring-offset-card',
     travelled && 'opacity-70 saturate-[0.6]',
   );
   if (reference) {
@@ -118,6 +119,8 @@ function StopMarker({
 /**
  * The shape of the trip: where it goes and for how long, in order. Geographic
  * context only - no map, no distances - and every day a tap away underneath.
+ * The route shares one card, so its stops read as one journey rather than
+ * loose rows; the trip's own description stays above it as the section's intro.
  */
 export function TripHubJourney({
   overview,
@@ -199,7 +202,7 @@ export function TripHubJourney({
       ) : null}
 
       {stops.length ? (
-        <ol aria-label={t('destinations')} className="mt-5">
+        <ol aria-label={t('destinations')} className={cn('mt-5', panelSurfaceClass('card'))}>
           {stops.map((stop, index) => {
             const current = Boolean(focusDayId && stop.days.some((day) => day.id === focusDayId));
             const travelled = index < currentIndex;
@@ -310,7 +313,7 @@ export function TripHubJourney({
           })}
         </ol>
       ) : destinations.length ? (
-        <ol aria-label={t('destinations')} className="mt-5">
+        <ol aria-label={t('destinations')} className={cn('mt-5', panelSurfaceClass('card'))}>
           {destinations.map((destination, index) => {
             const last = index === destinations.length - 1;
             return (

@@ -1908,7 +1908,7 @@ export function ItineraryManager({
               dayId={selectedDay.id}
               enabled={insightsVisible}
               resolveAction={resolveScoreAction}
-              surface="inset"
+              surface="card"
               tripId={tripId}
             />
           </PlannerDayView>

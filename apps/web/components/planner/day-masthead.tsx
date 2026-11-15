@@ -95,12 +95,19 @@ export function DayMasthead({
   const locale = useLocale();
   const reduced = useReducedMotion();
 
+  const asDate = new Date(`${date}T00:00:00.000Z`);
   const longDate = new Intl.DateTimeFormat(locale, {
     day: 'numeric',
     month: 'long',
     timeZone: 'UTC',
     weekday: 'long',
-  }).format(new Date(`${date}T00:00:00.000Z`));
+  }).format(asDate);
+  const shortDate = new Intl.DateTimeFormat(locale, {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+    weekday: 'short',
+  }).format(asDate);
 
   function onSwipe(_: PointerEvent | MouseEvent | TouchEvent, info: PanInfo) {
     const forward = info.offset.x < -SWIPE_DISTANCE || info.velocity.x < -SWIPE_VELOCITY;
@@ -150,6 +157,11 @@ export function DayMasthead({
               <span className="text-[2.75rem] font-semibold tracking-[-0.045em] tabular-nums sm:text-[3.25rem]">
                 {paddedDayNumber(dayNumber)}
               </span>
+              {heading.source === 'date' ? null : (
+                <span className="pb-1 text-[length:var(--text-metadata)] font-semibold tracking-[0.14em] uppercase opacity-85">
+                  {shortDate}
+                </span>
+              )}
             </p>
             <DayTitle
               display={heading.source === 'date' ? longDate : heading.title}
@@ -159,17 +171,20 @@ export function DayMasthead({
               numberLabel={t('dayLabel', { number: dayNumber })}
               onRename={onRename}
             />
-            {heading.source === 'date' ? null : (
-              <p className="mt-1 text-sm opacity-85">{longDate}</p>
-            )}
+            {/* The full date, for assistive tech: the line above shows it short. */}
+            {heading.source === 'date' ? null : <p className="sr-only">{longDate}</p>}
           </div>
         </div>
       </motion.div>
 
-      {weather}
-
-      {/* What the day is, and what can be done with it, read as one block. */}
-      <div className="space-y-3">
+      {/* The day at a glance, as one card: its measures beside its route, then
+          its weather and its note. They are facts about the day rather than
+          things to open, so they share one surface instead of floating apart. */}
+      <section
+        aria-label={t('glanceLabel', { number: dayNumber })}
+        className="space-y-3.5 rounded-[var(--radius-2xl)] border border-border-subtle bg-card p-4 sm:p-5"
+        data-slot="day-glance"
+      >
         <div className="flex items-stretch gap-3">
           <div className="min-w-0 flex-1 space-y-2">
             <DaySummary
@@ -183,7 +198,7 @@ export function DayMasthead({
           {/* The day's shape at a glance, and the way into the real map. */}
           <button
             aria-label={t('openMapLabel', { number: dayNumber })}
-            className="group flex w-28 shrink-0 flex-col gap-1.5 rounded-[var(--radius-lg)] bg-card p-1.5 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none sm:w-36 lg:hidden"
+            className="group flex w-28 shrink-0 flex-col gap-1.5 rounded-[var(--radius-lg)] bg-background p-1.5 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none sm:w-36 lg:hidden"
             // Where focus returns when the map is closed by its own way back.
             data-planner-open-map=""
             onClick={onOpenMap}
@@ -207,9 +222,12 @@ export function DayMasthead({
           </button>
         </div>
 
-        <DayNote key={dayId} note={note} onSave={onSaveNote} />
-        {actions ? <div className="hidden items-center gap-2 md:flex">{actions}</div> : null}
-      </div>
+        <div className="space-y-1.5 border-t border-border-subtle pt-3">
+          {weather}
+          <DayNote key={dayId} note={note} onSave={onSaveNote} />
+        </div>
+      </section>
+      {actions ? <div className="hidden items-center gap-2 md:flex">{actions}</div> : null}
 
       {attention}
     </header>

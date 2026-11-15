@@ -18,7 +18,7 @@ import { useWeatherEvidenceDescription } from '@/lib/weather/use-evidence-descri
 
 /** A forecast is something to open, so it keeps a shape; an absence is only a line. */
 const frameClassName =
-  'flex min-h-[4.25rem] items-center gap-3.5 rounded-[var(--radius-xl)] bg-card px-4 py-3';
+  '-mx-2 flex min-h-14 items-center gap-3 rounded-[var(--radius-lg)] px-2 py-1.5';
 const quietClassName = 'flex items-center gap-2.5 px-1 text-sm text-muted-foreground';
 
 /**

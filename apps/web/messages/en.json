@@ -2078,6 +2078,7 @@
         "kicker": "Day",
         "today": "Today",
         "dayLabel": "Day {number}",
+        "glanceLabel": "Day {number} at a glance",
         "stops": "{count, plural, =0 {Nothing planned yet} one {# stop} other {# stops}}",
         "facts": {
           "plannedAt": "across {count, plural, one {# stop} other {# stops}}"
@@ -2182,8 +2183,8 @@
         "unscheduledHint": "Keep it without a day for now"
       },
       "unscheduled": {
-        "title": "{count, plural, one {Unscheduled · # stop} other {Unscheduled · # stops}}",
-        "schedule": "Schedule…"
+        "title": "{count, plural, one {# idea without a day} other {# ideas without a day}}",
+        "schedule": "Add to day"
       },
       "dayMenu": {
         "plan": "Plan",
@@ -2274,7 +2275,7 @@
     "itemListLabel": "Items for this day",
     "addItem": "Add stop",
     "unscheduled": "Unscheduled",
-    "unscheduledDescription": "Ideas kept here retain their details until you assign a day.",
+    "unscheduledDescription": "Kept here, details and all, until you add them to a day.",
     "dailyBase": "Stay",
     "dailyBaseHelp": "Where this day starts and ends, usually where you're staying. Leave it unset to use an accommodation booked for this day.",
     "dailyBaseArrival": "Start the day at",

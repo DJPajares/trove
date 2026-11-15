@@ -144,7 +144,7 @@ export function DayMasthead({
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 bg-gradient-to-t from-neutral-950/80 via-neutral-950/30 to-neutral-950/5"
         />
-        <div className="pointer-events-none relative flex min-h-44 flex-col p-4 text-media-fallback-foreground sm:min-h-52 sm:p-6 lg:min-h-56">
+        <div className="pointer-events-none relative flex h-44 flex-col p-4 text-media-fallback-foreground sm:h-52 sm:p-6 lg:h-56">
           <div className="flex items-start justify-between gap-3">
             <div className="pointer-events-auto shrink-0">{dayMenu}</div>
             {scoreChip ? <div className="pointer-events-auto min-w-0">{scoreChip}</div> : null}

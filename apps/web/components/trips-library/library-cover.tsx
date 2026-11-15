@@ -123,13 +123,22 @@ function StatusLine({ nextUp, trip }: Readonly<{ nextUp: TripNextUp | null; trip
  */
 const COVER_BLEED =
   'mx-[calc(50%-50vw)] -mt-[calc(var(--safe-top)+2rem)] md:-mt-[calc(var(--safe-top)+var(--header-height)+3rem+1px)]';
-/** Each slide holds the height, so a long name grows the cover rather than clipping. */
-export const COVER_HEIGHT = 'min-h-[clamp(30rem,68svh,38rem)] md:min-h-[36rem] lg:min-h-[40rem]';
+/**
+ * Each slide holds the height, so a long name grows the cover rather than
+ * clipping. The same as Finds and Kit, so the covers match from page to page.
+ */
+export const COVER_HEIGHT = 'min-h-[clamp(28rem,62svh,36rem)] md:min-h-[34rem] lg:min-h-[36rem]';
 export const LIBRARY_COVER_FRAME = `${COVER_BLEED} ${COVER_HEIGHT}`;
 
 /** The page's own measure inside the full-width photograph. */
 const MEASURE =
   'mx-auto w-full max-w-[var(--layout-app)] ps-[var(--gutter-inline-start)] pe-[var(--gutter-inline-end)]';
+
+/**
+ * Room kept beside a slide's last lines for the carousel's controls, which sit
+ * at the cover's foot on the right rather than in a band of their own.
+ */
+const FOOT = 'pe-28 md:pe-64';
 
 const SCRIM =
   'absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgba(8,18,13,0.62)_0%,rgba(8,18,13,0.14)_26%,rgba(8,18,13,0.22)_44%,rgba(8,18,13,0.78)_70%,rgba(8,18,13,0.9)_100%)]';
@@ -137,10 +146,13 @@ const SCRIM =
 export type LibraryCoverSlide = { editorial: EditorialImageReference | null; trip: Trip };
 
 function CoverSlide({
+  controls,
   first,
   nextUp,
   slide: { editorial, trip },
 }: Readonly<{
+  /** The carousel's controls sit at the slide's foot, beside its last lines. */
+  controls: boolean;
   first: boolean;
   nextUp: TripNextUp | null;
   slide: LibraryCoverSlide;
@@ -178,7 +190,7 @@ function CoverSlide({
       <div className={MEASURE}>
         <div
           className={cn(
-            'mx-auto w-full max-w-5xl space-y-5 pt-[calc(var(--safe-top)+5rem)] pb-24 md:pt-[calc(var(--safe-top)+var(--header-height)+3rem)] md:pb-28',
+            'mx-auto w-full max-w-5xl space-y-5 pt-[calc(var(--safe-top)+5rem)] pb-16 md:pt-[calc(var(--safe-top)+var(--header-height)+3rem)] md:pb-24',
             first && pageEntrance.rise,
           )}
         >
@@ -215,12 +227,14 @@ function CoverSlide({
                 {trip.name}
               </Link>
             </h2>
-            <p className="text-sm font-medium text-white/85 tabular-nums">
+            <p className={cn('text-sm font-medium text-white/85 tabular-nums', controls && FOOT)}>
               {formatTripDateRange(trip.startDate, trip.endDate, locale)}
             </p>
           </div>
 
-          <StatusLine nextUp={nextUp} trip={trip} />
+          <div className={cn(controls && FOOT)}>
+            <StatusLine nextUp={nextUp} trip={trip} />
+          </div>
         </div>
       </div>
     </li>
@@ -337,6 +351,7 @@ export function LibraryCover({
       >
         {slides.map((slide, position) => (
           <CoverSlide
+            controls={count > 1}
             first={position === 0}
             key={slide.trip.id}
             nextUp={position === 0 ? nextUp : null}
@@ -346,9 +361,9 @@ export function LibraryCover({
       </ol>
 
       {count > 1 ? (
-        <div className="pointer-events-none absolute inset-x-0 bottom-11 z-20 md:bottom-14">
+        <div className="pointer-events-none absolute inset-x-0 bottom-16 z-20 md:bottom-24">
           <div className={MEASURE}>
-            <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4">
+            <div className="mx-auto flex w-full max-w-5xl items-center justify-end gap-3">
               <div className="pointer-events-auto flex items-center">
                 {slides.map(({ trip }, position) => (
                   <button

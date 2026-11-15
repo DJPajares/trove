@@ -128,7 +128,7 @@ export function ToolsLauncher() {
   ];
 
   return (
-    <section className="mx-auto w-full max-w-3xl" style={entrance.style}>
+    <section className="mx-auto w-full max-w-5xl" style={entrance.style}>
       {trips.isPending ? (
         <Skeleton aria-hidden="true" className={cn('rounded-none', FINDS_COVER_FRAME)} />
       ) : (

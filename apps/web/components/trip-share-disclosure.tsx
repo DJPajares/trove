@@ -10,7 +10,7 @@ import type { Trip } from '@/lib/trips/api';
 import { cn } from '@/lib/utils';
 
 /**
- * What a public trip's read-only link shows, and what it never does (PRD 8.2).
+ * What a public trip shows, wherever it is read, and what it never does (PRD 8).
  * Shown wherever a trip can be made public - the Share dialog and the trip
  * form - so the traveller reads the same disclosure before either choice.
  */

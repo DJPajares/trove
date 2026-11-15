@@ -1453,5 +1453,15 @@
         "Choose whether a trip is private or public while creating or editing it. Public trips can be read by anyone with their link."
       ]
     }
+  },
+  {
+    "id": "public-trip-meaning",
+    "date": "2026-11-16",
+    "version": "1.34.1",
+    "summaries": {
+      "en": [
+        "Making a trip public now explains plainly that other travellers can find it around Trove, not just through its link."
+      ]
+    }
   }
 ]

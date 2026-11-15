@@ -446,8 +446,8 @@ export function TripForm({ alternative, onCancel, onDelete, onSaved, trip }: Tri
     </>
   );
 
-  // Private or public, chosen with the rest of the trip. Public is the read-only
-  // link of PRD 8.2, so choosing it shows what that link carries before the
+  // Private or public, chosen with the rest of the trip. Public opens the trip to
+  // anyone (PRD 8), so choosing it shows what a public trip carries before the
   // trip is saved - the same disclosure Share shows.
   const turningPublic = form.visibility === 'public' && trip?.visibility !== 'public';
   const visibilityOptions = [

@@ -1905,6 +1905,8 @@
     "title": "Expenses",
     "back": "Kit",
     "chooseTrip": "Choose a trip",
+    "moreCountries": "{count, plural, one {and # more country} other {and # more countries}}",
+    "moreCountriesShort": "+{count}",
     "loading": "Loading your trips…",
     "loadError": "We couldn't load your trips",
     "loadErrorDescription": "Check your connection and try again.",

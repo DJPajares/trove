@@ -91,7 +91,6 @@ export function LandingHero() {
               {t('heroSecondary')}
             </Link>
           </div>
-          <p className="mt-3 text-[0.8125rem] text-white/75">{t('heroNote')}</p>
         </div>
       </div>
     </section>

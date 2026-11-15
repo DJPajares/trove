@@ -3217,28 +3217,28 @@
   },
   "landing": {
     "heroTitle": "Plan it. Live it. <em>Remember it.</em>",
-    "heroDescription": "One place for the whole of a trip, from the first café you save to the photos you keep.",
+    "heroDescription": "Plan your itinerary, follow it day by day while you travel, and keep a journal of the trip, all in one app.",
     "heroPrimary": "Create your account",
     "heroSecondary": "I already have one",
     "heroNote": "Your plans stay private.",
     "heroImageAlt": "A coastal cliff road above the ocean at sunset.",
-    "chaptersKicker": "One trip, three chapters",
-    "chaptersTitle": "The same trip, before, during and after.",
+    "chaptersKicker": "What Trove does",
+    "chaptersTitle": "One app for before, during and after your trip.",
     "chapters": {
       "plan": {
         "eyebrow": "Plan it",
-        "title": "Shape each day",
-        "description": "Add places, times or just a name. Trove works out the travel between stops and tells you what could be better."
+        "title": "Itinerary planner",
+        "description": "Build your trip day by day. Add the places you want to visit and the times you want to be there, and see the route and travel time between each stop on a map."
       },
       "live": {
         "eyebrow": "Live it",
-        "title": "Know what’s next",
-        "description": "On the day, Trip Mode shows what’s on now, what’s next and how to get there. It works offline too."
+        "title": "Travel companion",
+        "description": "While you travel, Trip Mode guides you through each day: where you should be now, what comes next, and directions to get there. Prepare the trip beforehand and it works without signal."
       },
       "remember": {
         "eyebrow": "Remember it",
-        "title": "Keep the story",
-        "description": "Add a photo or a line as you go. Afterwards, the trip reads like a journal, day by day."
+        "title": "Travel journal",
+        "description": "Add photos and notes to each day, during the trip or once you’re home. Trove keeps them in order as a journal of the whole trip, day by day."
       }
     },
     "preview": {
@@ -3263,48 +3263,77 @@
         "action": "Directions"
       },
       "remember": {
+        "day": "Day 2 · Belém",
         "quote": "“Custard tarts still warm, eaten on the kerb.”"
+      },
+      "ai": {
+        "promptLabel": "Your trip",
+        "prompt": "Five days in Lisbon in March. Good coffee, old trams and one day trip.",
+        "chips": {
+          "who": "Two of us",
+          "pace": "Balanced",
+          "travel": "Flying in"
+        },
+        "draftLabel": "Your draft",
+        "days": {
+          "one": { "label": "Day 1", "name": "Alfama and the castle", "count": "4 stops" },
+          "two": { "label": "Day 2", "name": "Belém", "count": "3 stops" },
+          "three": { "label": "Day 3", "name": "Day trip to Sintra", "count": "3 stops" }
+        },
+        "more": "+ 2 more days"
       }
     },
-    "headStartKicker": "A head start",
-    "headStartTitle": "You don’t have to start from a blank page.",
-    "draft": {
-      "title": "Describe the trip. Get a first draft.",
-      "promptLabel": "You write",
-      "prompt": "Five slow days in Lisbon in March. Good coffee, old trams, one day trip.",
-      "description": "Trove drafts the days for you to review. Change anything before you keep it."
+    "ai": {
+      "kicker": "Plan with AI",
+      "title": "Describe your trip. Trove plans the days.",
+      "description": "Write where you’re going and what you enjoy, in your own words. Trove turns it into a day-by-day itinerary with places, times and travel between them.",
+      "points": {
+        "brief": {
+          "title": "Tell it what matters",
+          "description": "Add who’s coming, your pace, must-sees and any work hours to plan around."
+        },
+        "finds": {
+          "title": "Uses what you’ve saved",
+          "description": "Places you’ve saved to Finds are worked into the plan where they fit."
+        },
+        "review": {
+          "title": "You stay in charge",
+          "description": "Review every day of the draft and change anything before it becomes your itinerary."
+        }
+      }
     },
+    "moreKicker": "Also in Trove",
+    "moreTitle": "Everything else the trip needs.",
     "finds": {
       "title": "Finds",
-      "description": "Save any place the moment you hear about it. Trove groups your finds by town, ready for the trip that takes you there.",
+      "description": "Save places you want to visit, from any city, before you have a trip planned. Trove sorts them by city, ready to add when you plan a trip there.",
       "towns": {
-        "one": { "name": "Kyoto", "count": "6 finds" },
-        "two": { "name": "Lisbon", "count": "4 finds" },
-        "three": { "name": "Hội An", "count": "3 finds" }
+        "one": { "name": "Kyoto", "count": "6 places" },
+        "two": { "name": "Lisbon", "count": "4 places" },
+        "three": { "name": "Hội An", "count": "3 places" }
       }
     },
     "also": {
       "logistics": {
         "title": "Reservations and tasks",
-        "description": "Flights, stays and to-dos, kept with the trip they belong to."
+        "description": "Keep flights, stays and to-dos with the trip they belong to."
       },
       "expenses": {
         "title": "Expenses",
-        "description": "What the trip costs, in every currency you spend."
+        "description": "Track what the trip costs, in every currency you spend."
       },
       "kit": {
         "title": "Kit",
-        "description": "A currency converter and checklists you reuse on every trip."
+        "description": "A currency converter and reusable checklists, like a packing list, for every trip."
       },
       "offline": {
         "title": "Offline",
-        "description": "Prepare a trip before you fly, and the plan is there without signal."
+        "description": "Prepare a trip before you go, and your plan is there without signal."
       }
     },
     "closingTitle": "Start with one trip.",
     "closingDescription": "An account keeps your plans private and with you on every device.",
-    "closingAction": "Create your account",
-    "photographyTitle": "Photography"
+    "closingAction": "Create your account"
   },
   "auth": {
     "resetError": "We couldn’t update your password. Try again or request a fresh reset link.",

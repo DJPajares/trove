@@ -1,8 +1,10 @@
 'use client';
 
+import { ArrowDown } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { MediaFrame } from '@/components/media-frame';
+import * as Icons from '@/lib/icons';
 import { landingHeroImage, landingLiveItImage } from '@/lib/media/landing-images';
 import { cn } from '@/lib/utils';
 
@@ -14,7 +16,7 @@ import { cn } from '@/lib/utils';
  */
 
 const SHOT =
-  'grid min-h-60 content-center rounded-[var(--radius-2xl)] border border-border-subtle bg-card p-4 shadow-[var(--shadow-control)]';
+  'grid min-h-[17rem] content-center rounded-[var(--radius-2xl)] border border-border-subtle bg-card p-4 shadow-[var(--shadow-control)]';
 
 const STOPS = ['one', 'two', 'three'] as const;
 
@@ -98,7 +100,10 @@ export function RememberPreview() {
 
   return (
     <div aria-hidden="true" className={SHOT} data-slot="landing-preview-remember">
-      <div className="flex justify-center pt-1 pb-4">
+      <p className="text-center text-[0.6875rem] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+        {t('day')}
+      </p>
+      <div className="flex justify-center pt-3 pb-4">
         <div className={cn(print, '-me-3 -rotate-[5deg]')}>
           <MediaFrame
             alt=""
@@ -123,6 +128,57 @@ export function RememberPreview() {
       <p className="text-center font-journal text-lg leading-tight font-normal italic">
         {t('quote')}
       </p>
+    </div>
+  );
+}
+
+const DAYS = ['one', 'two', 'three'] as const;
+const CHIPS = ['who', 'pace', 'travel'] as const;
+
+/** The AI planner: a brief in the traveller's words, and the draft it becomes. */
+export function AiPreview() {
+  const t = useTranslations('landing.preview.ai');
+  const label = 'text-[0.6875rem] font-semibold tracking-[0.1em] uppercase opacity-65';
+
+  return (
+    <div aria-hidden="true" className="grid gap-3" data-slot="landing-preview-ai">
+      <div className="rounded-[var(--radius-xl)] border border-white/15 bg-white/8 p-4">
+        <p className={label}>{t('promptLabel')}</p>
+        <p className="mt-1.5 font-journal text-xl leading-snug font-normal">{t('prompt')}</p>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {CHIPS.map((chip) => (
+            <span
+              className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-xs font-semibold"
+              key={chip}
+            >
+              {t(`chips.${chip}`)}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <ArrowDown className="mx-auto size-4 opacity-60" />
+
+      <div className="rounded-[var(--radius-xl)] bg-card p-4 text-card-foreground shadow-[var(--shadow-control)]">
+        <p className="flex items-center gap-1.5 text-[0.6875rem] font-semibold tracking-[0.1em] text-brand uppercase">
+          <Icons.Ai className="size-3.5" />
+          {t('draftLabel')}
+        </p>
+        <ol className="mt-2 divide-y divide-border-subtle">
+          {DAYS.map((day) => (
+            <li className="flex items-baseline gap-3 py-2 text-sm" key={day}>
+              <span className="w-11 shrink-0 text-xs font-semibold text-muted-foreground">
+                {t(`days.${day}.label`)}
+              </span>
+              <span className="min-w-0 flex-1 truncate font-semibold">{t(`days.${day}.name`)}</span>
+              <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                {t(`days.${day}.count`)}
+              </span>
+            </li>
+          ))}
+        </ol>
+        <p className="pt-1 text-xs text-muted-foreground">{t('more')}</p>
+      </div>
     </div>
   );
 }

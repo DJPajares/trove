@@ -53,7 +53,7 @@ export function AppShell({ children, isSignedIn }: Readonly<AppShellProps>) {
               need the room. Sign in stays one tap away from the landing
               hero and from the sign-up page's own link. */}
           <Button
-            className="ml-1 hidden sm:inline-flex"
+            className="ml-1 hidden text-foreground hover:bg-foreground/10 sm:inline-flex"
             nativeButton={false}
             render={<Link href="/sign-in" />}
             size="sm"

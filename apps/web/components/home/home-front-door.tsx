@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { useEffect, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { COVER_HEIGHT } from '@/components/saved/finds-cover';
 import { Skeleton } from '@/components/ui/skeleton';
 import * as Icons from '@/lib/icons';
 import { pageEntrance } from '@/lib/page-entrance';
@@ -23,10 +24,13 @@ const TENSES = [
  * under the status area and the floating controls; from `md` it runs under the
  * header, which turns to the photograph's ink while the cover is behind it.
  *
- * Shared with the skeleton, so the cover does not move when the trips arrive.
+ * Its height is the one every cover shares (`COVER_HEIGHT`), so Home, Trips,
+ * Finds and Kit match from page to page. Shared with the skeleton, so the
+ * cover does not move when the trips arrive.
  */
-export const HOME_COVER_FRAME =
-  'mx-[calc(50%-50vw)] -mt-[calc(var(--safe-top)+2rem)] min-h-[clamp(25rem,60svh,34rem)] md:-mt-[calc(var(--safe-top)+var(--header-height)+3rem+1px)] md:min-h-[34rem] lg:min-h-[38rem]';
+const HOME_COVER_BLEED =
+  'mx-[calc(50%-50vw)] -mt-[calc(var(--safe-top)+2rem)] md:-mt-[calc(var(--safe-top)+var(--header-height)+3rem+1px)]';
+export const HOME_COVER_FRAME = `${HOME_COVER_BLEED} ${COVER_HEIGHT}`;
 
 /**
  * Everything beneath the cover: a sheet in the page's own colour, as wide as

@@ -92,7 +92,7 @@ export function KitCover({
       <div className={MEASURE}>
         <div
           className={cn(
-            'mx-auto w-full max-w-3xl pt-[calc(var(--safe-top)+5rem)] pb-16 md:pt-[calc(var(--safe-top)+var(--header-height)+3rem)] md:pb-24',
+            'mx-auto w-full max-w-5xl pt-[calc(var(--safe-top)+5rem)] pb-16 md:pt-[calc(var(--safe-top)+var(--header-height)+3rem)] md:pb-24',
             enter && pageEntrance.rise,
           )}
         >

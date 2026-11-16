@@ -5,6 +5,10 @@
 Configure only the providers needed for your work. Start with Supabase and the
 app connection values; AI, Maps/Places, and editorial imagery have separate setup.
 
+Moving every Google value to a different Google Cloud account (for example when
+a free trial ends)? Follow the
+[Google Cloud account switch checklist](google-cloud-account-switch.md).
+
 - [Environment files](#environment-files)
 - [Supabase](#supabase)
 - [AI planning (Vertex AI)](#ai-planning-vertex-ai)
@@ -80,7 +84,8 @@ access.
 … or it is disabled`. Enabling takes a few minutes to propagate.
 3. **Create a service account** under
    [IAM & Admin → Service Accounts](https://console.cloud.google.com/iam-admin/serviceaccounts),
-   then grant it the **Vertex AI User** role (`roles/aiplatform.user`) from
+   then grant it the **Agent Platform User** role (`roles/aiplatform.user`,
+   formerly **Vertex AI User**) from
    [IAM & Admin → IAM](https://console.cloud.google.com/iam-admin/iam).
    Without the role, authentication succeeds but every request returns
    `403 Permission 'aiplatform.endpoints.predict' denied`. Role grants also
@@ -115,7 +120,7 @@ counts. It never prints the prompt or generated object.
 | `configuration_missing`, AI planning disabled in the UI      | No resolvable credentials                        | Set the credential pair (step 4), or use the ADC instructions below  |
 | `error:1E08010C:DECODER routines::unsupported`               | `private_key_id` pasted instead of `private_key` | Copy `private_key` from the JSON key file (step 4)                   |
 | `403 … API has not been used in project … or it is disabled` | Vertex AI API not enabled                        | Enable `aiplatform.googleapis.com` (step 2), then wait a few minutes |
-| `403 Permission 'aiplatform.endpoints.predict' denied`       | Service account has no role                      | Grant **Vertex AI User** (step 3), then wait a few minutes           |
+| `403 Permission 'aiplatform.endpoints.predict' denied`       | Service account has no role                      | Grant **Agent Platform User** (step 3), then wait a few minutes      |
 | `configuration_invalid`                                      | Credentials load but Vertex rejects them         | Usually step 2 or 3 above; check the API logs for the underlying 403 |
 
 ### Environment keys

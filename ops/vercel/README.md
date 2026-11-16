@@ -16,6 +16,8 @@ Set these in `trove` for Preview and Production:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `NEXT_PUBLIC_API_URL`
+- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` and `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID` —
+  website-restricted Maps JavaScript key and its vector map ID.
 - `AUTH_RECOVERY_SECRET` — server-only recovery receipt signing key; preserve
   separate Preview and Production values.
 - `SIGN_UP_DISABLED` and `PLAN_SCORE_DISABLED` — server-only feature switches.
@@ -40,6 +42,8 @@ Set these in `trove-api` for Preview and Production:
 - `AI_MODEL` — the approved Vertex model identifier.
 - `AI_THINKING_LEVEL` — `low`, `medium` (default), or `high` for Gemini 3.8 Flash.
 - `AI_TIMEOUT_MS` and `AI_MAX_OUTPUT_TOKENS` — bounded request limits (defaults `120000` and `16384`).
+- `GOOGLE_PLACES_API_KEY` and `GOOGLE_ROUTES_API_KEY` — server-only Places API
+  (New) and Routes API keys.
 - `GOOGLE_VERTEX_PROJECT` and `GOOGLE_VERTEX_LOCATION`.
 - `GOOGLE_VERTEX_CLIENT_EMAIL` and `GOOGLE_VERTEX_PRIVATE_KEY` — server-only
   service-account credentials; set both or neither. Preserve private-key
@@ -68,6 +72,9 @@ Set these in `trove-api` for Preview and Production:
   one-minute `POST /maintenance/notification-dispatch`. Do not reuse
   `CRON_SECRET` or expose it to the web project. See
   [`docs/notifications/dispatch-runbook.md`](../../docs/notifications/dispatch-runbook.md).
+
+To move every Google value to a new Google Cloud account, follow
+[`docs/google-cloud-account-switch.md`](../../docs/google-cloud-account-switch.md).
 
 Before launching AI-assisted trip creation to signed-in users, work through
 [`docs/ai/launch-runbook.md`](../../docs/ai/launch-runbook.md): production Vertex

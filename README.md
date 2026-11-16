@@ -69,6 +69,7 @@ Supabase provides Auth and private Storage alongside the database.
 | Contribution and AI delivery rules                     | [AGENTS.md](AGENTS.md)                                                                        |
 | Local development, checks, and troubleshooting         | [Development](docs/development.md)                                                            |
 | Environment variables and provider credentials         | [Environment setup](docs/environment.md)                                                      |
+| Moving to a new Google Cloud account                   | [Google Cloud account switch](docs/google-cloud-account-switch.md)                            |
 | Database, migrations, and sample data                  | [Database package](packages/db/README.md)                                                     |
 | Deployment and maintenance                             | [Vercel operations](ops/vercel/README.md)                                                     |
 | Private file storage setup                             | [Supabase operations](ops/supabase/README.md)                                                 |

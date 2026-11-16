@@ -178,6 +178,18 @@ function installStubPrisma() {
       photo.uri = String(uri);
       return [{ evidence: structuredClone(row.cachedEvidence) }];
     },
+    // forgetPlacePhotos: drop the photo references of one exact snapshot.
+    $executeRaw: async (query: { values: unknown[] }) => {
+      const [externalId, acquiredAt] = query.values;
+      const row = providerRefs.get(String(externalId));
+      if (
+        !row?.cachedEvidence ||
+        row.cachedEvidenceAt?.getTime() !== (acquiredAt as Date).getTime()
+      )
+        return 0;
+      delete row.cachedEvidence.photos;
+      return 1;
+    },
     placeProviderRef: {
       findUnique: async (args: {
         where: { provider_externalPlaceId: { externalPlaceId: string }; placeId?: string };
@@ -544,6 +556,8 @@ function photoPlacesProvider(mediaAnswers: Record<string, string[]> = {}) {
       if (answer === 'not_found' || answer === 'unavailable') {
         throw new PlaceProviderError(answer === 'not_found' ? 'not_found' : 'provider_unavailable');
       }
+      // Google's 400 INVALID_ARGUMENT for an aged-out photo reference.
+      if (answer === 'expired') throw new PlaceProviderError('invalid_request');
       return answer ?? `https://lh3.googleusercontent.com/${request.name}`;
     },
     search: async () => [],
@@ -2724,6 +2738,73 @@ test('failed secondary photos do not trigger retries or adjacent requests on ope
     service().getPhoto({ ...photoRequest, photoId: placePhotoId('places/ChIJmuseum/photos/p3') }),
   ).resolves.toMatchObject({ status: 'ok' });
   expect(media()).toBe(4);
+});
+
+test('a refused photo reference refreshes the snapshot once instead of failing forever', async () => {
+  let now = new Date('2026-10-01T00:00:00Z');
+  seedProviderRef('ChIJmuseum');
+  const { provider, details, media } = photoPlacesProvider({
+    'places/ChIJmuseum/photos/p2': ['expired'],
+  });
+  const request = {
+    detail: 'evidence' as const,
+    externalPlaceId: 'ChIJmuseum',
+    languageCode: 'en',
+    purpose: 'details' as const,
+  };
+  const service = () => new CachedPlacesService(provider, () => now);
+  await service().getDetails(request);
+  expect([details(), media()]).toEqual([1, 1]);
+
+  // Weeks later Google refuses a stored reference: the sheet is told to refresh.
+  now = new Date('2026-10-20T00:00:00Z');
+  await expect(
+    service().getPhoto({
+      ...request,
+      evidenceFetchedAt: '2026-10-01T00:00:00.000Z',
+      photoId: placePhotoId('places/ChIJmuseum/photos/p2'),
+    }),
+  ).resolves.toEqual({ status: 'stale' });
+  expect(providerRefs.get('ChIJmuseum')?.cachedEvidence?.photos).toBeUndefined();
+
+  // The refresh acquires fresh references once; the retried photo then resolves.
+  const refreshed = await service().getDetails(request);
+  expect(refreshed.status === 'ok' && refreshed.freshness.fetchedAt).toBe(now.toISOString());
+  expect([details(), media()]).toEqual([2, 3]);
+  await expect(
+    service().getPhoto({
+      ...request,
+      evidenceFetchedAt: now.toISOString(),
+      photoId: placePhotoId('places/ChIJmuseum/photos/p2'),
+    }),
+  ).resolves.toMatchObject({ status: 'ok' });
+  await service().getDetails(request);
+  expect([details(), media()]).toEqual([2, 4]);
+});
+
+test('an opened sheet whose cover reference was refused re-acquires it in the same request', async () => {
+  let now = new Date('2026-10-01T00:00:00Z');
+  seedProviderRef('ChIJmuseum');
+  const { provider, details, media } = photoPlacesProvider({
+    'places/ChIJmuseum/photos/p1': ['unavailable', 'expired'],
+  });
+  const request = {
+    detail: 'evidence' as const,
+    externalPlaceId: 'ChIJmuseum',
+    languageCode: 'en',
+    purpose: 'details' as const,
+  };
+  const service = () => new CachedPlacesService(provider, () => now);
+  await service().getDetails(request);
+  expect([details(), media()]).toEqual([1, 1]);
+
+  now = new Date('2026-10-20T00:00:00Z');
+  resetCachedPlacesMemo();
+  const opened = await service().getDetails(request);
+  expect([details(), media()]).toEqual([2, 3]);
+  expect(opened.status === 'ok' && opened.place.photos?.[0]?.uri).toBe(
+    'https://lh3.googleusercontent.com/places/ChIJmuseum/photos/p1',
+  );
 });
 
 test('photo write failures still reuse resolved URLs in the current API instance', async () => {

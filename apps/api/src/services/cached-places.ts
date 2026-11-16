@@ -2,6 +2,7 @@ import {
   readCachedPlaceEvidence,
   storePlaceEvidence,
   storePlacePhotoUri,
+  forgetPlacePhotos,
   PLACE_EVIDENCE_TTL_MS,
 } from './place-evidence-cache.js';
 import { singleFlight } from './single-flight.js';
@@ -132,6 +133,8 @@ function answersPurpose(request: PlaceDetailsRequest, result: PlaceDetailsResult
   return true;
 }
 
+const PHOTOS_EXPIRED = Symbol('photos-expired');
+
 export class CachedPlacesService extends PlacesService {
   private readonly providerName: PlacesProvider['name'];
   private readonly now: () => Date;
@@ -182,13 +185,21 @@ export class CachedPlacesService extends PlacesService {
       const memoized = stored ? { kind: 'hit' as const, result: stored } : this.readMemo(request);
       if (memoized.kind === 'hit' && answersPurpose(request, memoized.result)) {
         this.recordHit(request, 'place-evidence');
-        return this.withCoverPhoto(request, memoized.result);
+        const answer = await this.withCoverPhoto(request, memoized.result);
+        if (answer !== PHOTOS_EXPIRED) return answer;
+        // The opened sheet still deserves photos: one fresh Details request
+        // replaces the refused references, exactly as an incomplete snapshot would.
+        cacheMissReason = 'incomplete_snapshot';
+      } else {
+        cacheMissReason = memoized.kind === 'hit' ? 'incomplete_snapshot' : memoized.reason;
       }
-      cacheMissReason = memoized.kind === 'hit' ? 'incomplete_snapshot' : memoized.reason;
     }
 
     const result = await this.acquire(request, cacheMissReason);
-    return this.withCoverPhoto(request, result);
+    const answer = await this.withCoverPhoto(request, result);
+    // References just issued are never refused; if they are, show the place
+    // without photos rather than spending another request.
+    return answer === PHOTOS_EXPIRED ? result : answer;
   }
 
   private acquire(
@@ -222,11 +233,14 @@ export class CachedPlacesService extends PlacesService {
     });
   }
 
-  /** Resolve only the cover on opening; the other slots require explicit selection. */
+  /**
+   * Resolve only the cover on opening; the other slots require explicit selection.
+   * Returns PHOTOS_EXPIRED when Google refused the stored cover reference.
+   */
   private async withCoverPhoto(
     request: PlaceDetailsRequest,
     result: PlaceDetailsResult,
-  ): Promise<PlaceDetailsResult> {
+  ): Promise<PlaceDetailsResult | typeof PHOTOS_EXPIRED> {
     if (request.purpose !== 'details' || result.status !== 'ok') return result;
     let answer = this.withKnownPhotoUris(request, result);
     const cover = answer.place.photos?.[0];
@@ -239,6 +253,7 @@ export class CachedPlacesService extends PlacesService {
         evidenceFetchedAt: result.freshness.fetchedAt,
         photoId: placePhotoId(cover.name),
       });
+      if (media.status === 'stale') return PHOTOS_EXPIRED;
       answer = this.withKnownPhotoUris(request, answer);
       if (media.status === 'ok') {
         answer = {
@@ -324,6 +339,13 @@ export class CachedPlacesService extends PlacesService {
           photoIndex,
           signal: request.signal,
         });
+        if (media.status === 'expired') {
+          // Every reference in a snapshot was issued together, so the siblings
+          // are as dead as this one: drop them all and let details re-acquire.
+          evidenceMemo.delete(key);
+          await forgetPlacePhotos(request.externalPlaceId, request.evidenceFetchedAt);
+          return { status: 'stale' };
+        }
         if (media.status !== 'ok') return media;
         const persisted = await storePlacePhotoUri(
           request,

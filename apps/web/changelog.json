@@ -1512,5 +1512,15 @@
     "summaries": {
       "en": ["The + button now starts a new checklist when you're on Checklists."]
     }
+  },
+  {
+    "id": "place-photos-refresh-themselves",
+    "date": "2026-11-17",
+    "version": "1.38.2",
+    "summaries": {
+      "en": [
+        "Place photos that had stopped loading now refresh themselves when you open the place, and Try again brings them back."
+      ]
+    }
   }
 ]

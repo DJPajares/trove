@@ -137,6 +137,25 @@ export async function storePlaceEvidence(
   }
 }
 
+/**
+ * Drop a snapshot's photo references once Google has refused one of them, so the
+ * next opened sheet re-acquires fresh references instead of retrying dead ones.
+ * Leaves every other field and the snapshot's age untouched.
+ */
+export async function forgetPlacePhotos(externalPlaceId: string, fetchedAt: string) {
+  try {
+    await getPrismaClient().$executeRaw(Prisma.sql`
+      UPDATE trove.place_provider_refs
+      SET cached_evidence = cached_evidence - 'photos'
+      WHERE provider = 'google'
+        AND external_place_id = ${externalPlaceId}
+        AND cached_evidence_at = ${new Date(fetchedAt)}
+    `);
+  } catch {
+    /* The memo is cleared regardless; a later refusal retries this. */
+  }
+}
+
 /** Update one photo in place, preserving concurrent URLs and the snapshot's original age. */
 export async function storePlacePhotoUri(
   request: Omit<PlaceDetailsRequest, 'detail'>,

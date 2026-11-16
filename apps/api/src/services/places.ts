@@ -119,8 +119,16 @@ export type PlacePhotoMediaRequest = {
   signal?: AbortSignal;
 };
 
+/**
+ * `expired`: Google refused the stored photo reference itself. References age
+ * out on Google's side well inside the 30-day evidence window, and the only
+ * remedy is a fresh reference from Place Details.
+ */
 export type PlacePhotoMediaResult =
-  { status: 'ok'; uri: string } | { status: 'not_found' } | { status: 'unavailable' };
+  | { status: 'ok'; uri: string }
+  | { status: 'not_found' }
+  | { status: 'unavailable' }
+  | { status: 'expired' };
 
 /** Public photo identity without exposing Google's resource name. */
 export function placePhotoId(name: string) {
@@ -131,7 +139,9 @@ export type PlacePhotoRequest = Omit<PlaceDetailsRequest, 'detail' | 'purpose'> 
   photoId: string;
   evidenceFetchedAt: string;
 };
-export type PlacePhotoResult = PlacePhotoMediaResult | { status: 'stale' | 'disabled' };
+/** An expired reference reaches callers as `stale`: the snapshot must be refreshed. */
+export type PlacePhotoResult =
+  Exclude<PlacePhotoMediaResult, { status: 'expired' }> | { status: 'stale' | 'disabled' };
 
 export type ProviderPlaceDetails = {
   attributions: ProviderAttribution[];
@@ -402,9 +412,10 @@ export class PlacesService {
     } catch (error) {
       const providerError = getProviderError(error);
       this.warn('getPhotoMedia', providerError);
-      return providerError.code === 'not_found'
-        ? { status: 'not_found' }
-        : { status: 'unavailable' };
+      if (providerError.code === 'not_found') return { status: 'not_found' };
+      // Google answers an aged-out photo reference with 400 INVALID_ARGUMENT.
+      if (providerError.code === 'invalid_request') return { status: 'expired' };
+      return { status: 'unavailable' };
     }
   }
 }

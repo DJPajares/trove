@@ -1463,5 +1463,15 @@
         "Making a trip public now explains plainly that other travellers can find it around Trove, not just through its link."
       ]
     }
+  },
+  {
+    "id": "kit-purpose-tiles",
+    "date": "2026-11-16",
+    "version": "1.35.0",
+    "summaries": {
+      "en": [
+        "Kit now shows its tools at a glance, each with a line on what it’s for. Task templates are now called Checklists."
+      ]
+    }
   }
 ]

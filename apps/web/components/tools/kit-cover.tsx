@@ -25,10 +25,9 @@ export type KitShortcut = {
 
 /**
  * The top of Kit, in the same frame as Home, Trips and Finds. With a trip
- * ahead it is that trip's photograph and countdown, and the two things this
- * page does for it - its currency, and a checklist - sit on the photograph as
- * glass cards, a tap each. With no trip ahead it is Trove's bundled artwork and
- * the page's own name.
+ * ahead it is that trip's photograph and countdown, with the trip currency's
+ * rate on the photograph as a glass card, a tap away. With no trip ahead it is
+ * Trove's bundled artwork and the page's own name.
  */
 export function KitCover({
   description,

@@ -248,7 +248,7 @@ Search, Notifications, the Light/Dark toggle, and Account share one floating but
 
 On mobile, where the signed-in shell has no header, the floating control yields to the scroll direction so it never sits on top of a sticky trip or Trip Mode header. On desktop and tablet, it occupies the header's open right rail and remains available while the stable header is visible.
 
-The Tools launcher introduces Currency and Task Templates through short purpose-led summaries and links to their independent pages. It never embeds every tool interface into one screen.
+The Tools launcher (Kit) introduces Currency, Expenses and Checklists (Task Templates) as tiles, each with its name and one purpose-led sentence and no live state, linking to their independent pages. Its cover may carry one trip-specific shortcut, the next trip's currency rate. It never embeds every tool interface into one screen.
 
 Trip Mode may introduce its own Now / Today / Map / Trip navigation, and on mobile that navigation takes the bottom bar for the duration: two navigations stacked on one phone screen is one too many, and the traveller's thumb can only reach the lower one. The Memories journal likewise brings its own controls to the bottom of the phone. The global bar and its Create action step aside while a Trip Mode route or the Memories journal is open, and return the moment it is left.
 

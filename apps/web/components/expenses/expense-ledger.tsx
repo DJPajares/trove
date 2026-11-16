@@ -1,11 +1,12 @@
 'use client';
 
-import { CalendarPlus, ChevronRight, X } from 'lucide-react';
+import { CalendarPlus, ChevronDown, ChevronRight, X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { useTripReadOnly } from '@/components/trip-provider';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollShadow } from '@/components/ui/scroll-shadow';
 import { Item, ItemContent, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item';
 import type { CachedCurrencyRateBoard } from '@/lib/currency/api';
@@ -68,6 +69,16 @@ export function ExpenseLedger({
   const t = useTranslations('expenses');
   const readOnly = useTripReadOnly();
   const locale = useLocale();
+  // Days the traveller folded away. Everything starts open; a long trip can be
+  // folded to its day totals and opened one day at a time.
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
+  const setDayOpen = (key: string, open: boolean) =>
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (open) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   const visible = expenses.filter((expense) => matchesSpendFilter(expense, filter, days));
   const expensesByDay = new Map<string, Expense[]>();
@@ -246,23 +257,53 @@ export function ExpenseLedger({
         : 'border-border bg-card hover:bg-surface-hover',
     );
 
-  const daySection = (key: string, title: string, summary: ReactNode, rows: Expense[]) => (
-    <section aria-label={title} className="space-y-2" key={key}>
-      {/* The day's name and what it cost, on the page itself rather than on a
-          band of its own, so the card below reads as that day's receipt. */}
-      <div className="flex items-baseline justify-between gap-3 px-1">
-        <h3 className="text-sm font-semibold">{title}</h3>
-        {summary}
-      </div>
-      <ItemGroup
-        aria-label={t('expenseList')}
-        className="overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-card shadow-[var(--shadow-surface)]"
-        variant="list"
+  const daySection = (key: string, title: string, summary: ReactNode, rows: Expense[]) => {
+    const open = !collapsed.has(key);
+    return (
+      <Collapsible
+        key={key}
+        onOpenChange={(next) => setDayOpen(key, next)}
+        open={open}
+        render={<section aria-label={title} />}
       >
-        {rows.map(renderExpense)}
-      </ItemGroup>
-    </section>
-  );
+        {/* The day's name and what it cost, on the page itself rather than on a
+            band of its own, so the card below reads as that day's receipt. The
+            whole row folds the day away, leaving its total and a count. */}
+        <h3 className="text-sm">
+          <CollapsibleTrigger className="group/day flex w-full items-baseline justify-between gap-3 rounded-[var(--radius-md)] px-1 py-1.5 text-left text-foreground hover:text-foreground">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <ChevronDown
+                aria-hidden="true"
+                className="size-4 shrink-0 -rotate-90 self-center text-muted-foreground transition-[rotate] duration-[var(--motion-standard)] group-data-[panel-open]/day:rotate-0 motion-reduce:transition-none"
+              />
+              <span className="truncate font-semibold">{title}</span>
+              {open ? null : (
+                <span className="shrink-0 font-normal text-muted-foreground tabular-nums">
+                  · {t('itemCount', { count: rows.length })}
+                </span>
+              )}
+            </span>
+            {summary}
+          </CollapsibleTrigger>
+        </h3>
+        <CollapsiblePanel>
+          <ItemGroup
+            aria-label={t('expenseList')}
+            className="mt-1.5 overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-card shadow-[var(--shadow-surface)]"
+            variant="list"
+          >
+            {rows.map(renderExpense)}
+          </ItemGroup>
+        </CollapsiblePanel>
+      </Collapsible>
+    );
+  };
+
+  const groupKeys = [
+    ...daySections.map((day) => day.id),
+    ...(unassignedExpenses.length ? ['trip-level'] : []),
+  ];
+  const anyOpen = groupKeys.some((key) => !collapsed.has(key));
 
   return (
     <section aria-labelledby="expense-ledger-heading" className="space-y-4">
@@ -270,9 +311,22 @@ export function ExpenseLedger({
         <h2 className="text-lg font-semibold" id="expense-ledger-heading">
           {t('expenseList')}
         </h2>
-        <p className="text-sm text-muted-foreground tabular-nums">
-          {t('itemCount', { count: visible.length })}
-        </p>
+        <div className="flex items-baseline gap-3">
+          <p className="text-sm text-muted-foreground tabular-nums">
+            {t('itemCount', { count: visible.length })}
+          </p>
+          {groupKeys.length > 1 ? (
+            <Button
+              className="-mr-2"
+              onClick={() => setCollapsed(anyOpen ? new Set(groupKeys) : new Set())}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              {anyOpen ? t('collapseAll') : t('expandAll')}
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {categories.length > 1 ? (
@@ -344,9 +398,9 @@ export function ExpenseLedger({
             ? daySection(
                 'trip-level',
                 t('tripLevelExpenses'),
-                <p className="text-xs text-muted-foreground">
+                <span className="text-xs font-normal text-muted-foreground">
                   {t('tripLevelExpensesDescription')}
-                </p>,
+                </span>,
                 unassignedExpenses,
               )
             : null}
@@ -370,16 +424,16 @@ function DaySummary({
   srApproximate: (amount: string) => string;
 }>) {
   if (!approximate) {
-    return <p className="text-sm font-semibold tabular-nums">{label}</p>;
+    return <span className="shrink-0 font-semibold tabular-nums">{label}</span>;
   }
   return (
-    <p className="text-sm tabular-nums" title={label}>
+    <span className="shrink-0 tabular-nums" title={label}>
       <span aria-hidden="true" className="font-semibold">
         ≈ {approximate}
       </span>
       <span className="sr-only">
         {label}, {srApproximate(approximate)}
       </span>
-    </p>
+    </span>
   );
 }

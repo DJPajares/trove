@@ -1484,5 +1484,15 @@
         "Tap a category to filter your expenses, now listed newest day first."
       ]
     }
+  },
+  {
+    "id": "expenses-fold-days",
+    "date": "2026-11-16",
+    "version": "1.37.0",
+    "summaries": {
+      "en": [
+        "Fold any day in your expenses down to its total, or collapse and expand them all at once."
+      ]
+    }
   }
 ]

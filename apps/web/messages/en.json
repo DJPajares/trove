@@ -1826,6 +1826,8 @@
     "noActualSpend": "No recorded spend yet",
     "expenseList": "Expenses",
     "itemCount": "{count, plural, one {# item} other {# items}}",
+    "collapseAll": "Collapse all",
+    "expandAll": "Expand all",
     "emptyTitle": "Track spending when it matters.",
     "emptyDescription": "Add an amount and currency now. Details can follow when you have them.",
     "dayActualSpend": "Actual spend for {date}",

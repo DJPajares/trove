@@ -30,6 +30,7 @@ import { useNowTick } from '@/hooks/use-now-tick';
 import {
   buildSpendBreakdown,
   convertTotals,
+  matchesSpendFilter,
   type SpendFilter,
 } from '@/lib/expenses/spend-insights';
 import { getLocalDate } from '@/lib/trips/lifecycle';
@@ -263,15 +264,21 @@ export function TripExpenses({
     );
   }
 
-  const breakdown = reference
-    ? buildSpendBreakdown({
-        board,
-        days: data.days,
-        expenses: data.expenses,
-        referenceCurrency: reference.code,
-        today: trip ? getLocalDate(now, trip.referenceTimeZone) : null,
-      })
-    : null;
+  const breakdownOf = (expenses: typeof data.expenses) =>
+    reference
+      ? buildSpendBreakdown({
+          board,
+          days: data.days,
+          expenses,
+          referenceCurrency: reference.code,
+          today: trip ? getLocalDate(now, trip.referenceTimeZone) : null,
+        })
+      : null;
+  const breakdown = breakdownOf(data.expenses);
+  // What the filter keeps, rolled up the same way, for the sections it narrows.
+  const filteredBreakdown = filter
+    ? breakdownOf(data.expenses.filter((expense) => matchesSpendFilter(expense, filter, data.days)))
+    : breakdown;
 
   // The budget spread evenly over the trip, so the daily chart can show where
   // a day's even share sits; in the same currency the chart is drawn in.
@@ -356,6 +363,8 @@ export function TripExpenses({
               budgetPerDay={budgetPerDay}
               currencyCode={reference.code}
               filter={filter}
+              filterLabel={filterLabel}
+              filtered={filteredBreakdown ?? breakdown}
               onFilterChange={setFilter}
               tripPlaces={data.tripPlaces}
             />

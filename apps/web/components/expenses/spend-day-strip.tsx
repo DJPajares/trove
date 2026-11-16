@@ -65,6 +65,7 @@ export function SpendDayStrip({
     spendingDays.length > 1
       ? spendingDays.reduce((top, day) => (spentOn(day) > spentOn(top) ? day : top))
       : null;
+  const showBudget = Boolean(budgetPerDay) && scale > 0;
   const shortDate = (value: string) =>
     date(value, { day: 'numeric', month: 'short', weekday: 'short' });
 
@@ -148,28 +149,42 @@ export function SpendDayStrip({
             : t('day.hint')}
       </p>
       <div className="relative">
-        {budgetPerDay && scale > 0 ? (
+        {/* The floor every column stands on, so a quiet day reads as a short
+            bar rather than a stray mark. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 border-t border-border"
+          style={{ bottom: BAR_BASELINE }}
+        />
+        {/* Gridline-style: behind the bars, unlabelled, named by the key below
+            so it never sits on top of a column's figure. */}
+        {showBudget ? (
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 z-10 border-t border-dashed border-muted-foreground/60"
+            className="pointer-events-none absolute inset-x-0 border-t border-dashed border-muted-foreground/60"
             // Bars stand on BAR_BASELINE: the list's padding, the button's
             // inset, the two-line date and the gap above it.
-            style={{ bottom: heightOf(budgetPerDay) + BAR_BASELINE }}
-          >
-            <span className="absolute -top-4 right-0 bg-card pl-1 text-[0.625rem] leading-none text-muted-foreground tabular-nums">
-              {t('day.budgetLine', { amount: compact(budgetPerDay) })}
-            </span>
-          </div>
+            style={{ bottom: heightOf(budgetPerDay ?? 0) + BAR_BASELINE }}
+          />
         ) : null}
         <ScrollShadow
           orientation="horizontal"
           render={<ol />}
           aria-label={t('day.label')}
-          className="interaction-scrollbar -mx-1 flex gap-0.5 px-1 pb-1"
+          className="interaction-scrollbar relative -mx-1 flex gap-0.5 px-1 pb-1"
         >
           {breakdown.days.map(column)}
         </ScrollShadow>
       </div>
+      {showBudget ? (
+        <p className="flex items-center justify-end gap-2 text-xs text-muted-foreground tabular-nums">
+          <span
+            aria-hidden="true"
+            className="w-4 border-t-2 border-dashed border-muted-foreground/60"
+          />
+          {t('day.budgetLine', { amount: money(budgetPerDay ?? 0) })}
+        </p>
+      ) : null}
       {breakdown.offDay.count > 0 && breakdown.offDay.total.minorUnits !== null ? (
         <p className="text-xs text-muted-foreground tabular-nums">
           {t('day.offDay', {

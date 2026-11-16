@@ -21,9 +21,9 @@ secrets) stays as it is.
 | `GOOGLE_VERTEX_LOCATION`          | Vertex endpoint — normally unchanged | Keep `global`                                     | `.env`                | `trove-api`    |
 | `GOOGLE_VERTEX_CLIENT_EMAIL`      | Service-account email                | [Step 3](#3-create-the-vertex-ai-service-account) | `.env`                | `trove-api`    |
 | `GOOGLE_VERTEX_PRIVATE_KEY`       | Service-account private key          | [Step 3](#3-create-the-vertex-ai-service-account) | `.env`                | `trove-api`    |
-| `GOOGLE_PLACES_API_KEY`           | Server key for Places API (New)      | [Step 4](#4-create-the-three-api-keys)            | `.env`                | `trove-api`    |
-| `GOOGLE_ROUTES_API_KEY`           | Server key for Routes API            | [Step 4](#4-create-the-three-api-keys)            | `.env`                | `trove-api`    |
-| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Browser key for Maps JavaScript API  | [Step 4](#4-create-the-three-api-keys)            | `apps/web/.env.local` | `trove`        |
+| `GOOGLE_PLACES_API_KEY`           | Shared server key (Places)           | [Step 4](#4-create-the-two-api-keys)              | `.env`                | `trove-api`    |
+| `GOOGLE_ROUTES_API_KEY`           | Shared server key (Routes)           | [Step 4](#4-create-the-two-api-keys)              | `.env`                | `trove-api`    |
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Browser key for Maps JavaScript API  | [Step 4](#4-create-the-two-api-keys)              | `apps/web/.env.local` | `trove`        |
 | `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID`  | Vector map ID for map pins           | [Step 5](#5-create-the-map-id)                    | `apps/web/.env.local` | `trove`        |
 
 Tip: open a scratch note and fill in this table as you go, then paste everything
@@ -61,12 +61,12 @@ in [step 6](#6-swap-the-values-in). Never commit the note.
 
 With the new project selected, open each link and click **Enable**:
 
-| API                                                                                              | Used by                    |
-| ------------------------------------------------------------------------------------------------ | -------------------------- |
-| [Vertex AI API](https://console.cloud.google.com/apis/library/aiplatform.googleapis.com)         | AI planning                |
-| [Places API (New)](https://console.cloud.google.com/apis/library/places.googleapis.com)          | Place search and details   |
-| [Routes API](https://console.cloud.google.com/apis/library/routes.googleapis.com)                | Travel times between stops |
-| [Maps JavaScript API](https://console.cloud.google.com/apis/library/maps-backend.googleapis.com) | The in-app map             |
+| API                                                                                              | Used by                              |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------ |
+| [Agent Platform API](https://console.cloud.google.com/apis/library/aiplatform.googleapis.com)    | AI planning (formerly Vertex AI API) |
+| [Places API (New)](https://console.cloud.google.com/apis/library/places.googleapis.com)          | Place search and details             |
+| [Routes API](https://console.cloud.google.com/apis/library/routes.googleapis.com)                | Travel times between stops           |
+| [Maps JavaScript API](https://console.cloud.google.com/apis/library/maps-backend.googleapis.com) | The in-app map                       |
 
 Make sure it is **Places API (New)**, not the legacy "Places API". Enabling can
 take a few minutes to propagate.
@@ -75,9 +75,18 @@ take a few minutes to propagate.
 
 1. Go to [IAM & Admin → Service Accounts](https://console.cloud.google.com/iam-admin/serviceaccounts)
    → **Create service account**. Name it e.g. `vertex-runtime`.
-2. On the **Permissions** step, add the role **Vertex AI User**
-   (`roles/aiplatform.user`). Without it every AI request returns
+2. On the **Permissions** step, add the role **Agent Platform User**
+   (`roles/aiplatform.user`; older pages call it **Vertex AI User**). Search
+   the role picker for `aiplatform.user` if the name differs. The role is
+   required: without it authentication succeeds but every AI request returns
    `403 Permission 'aiplatform.endpoints.predict' denied`.
+
+   Already created the service account without it? Grant it afterwards: go to
+   [IAM & Admin → IAM](https://console.cloud.google.com/iam-admin/iam) →
+   **Grant access**, paste the service account's email as the principal, pick
+   **Agent Platform User**, and save. The existing JSON key keeps working;
+   allow a few minutes for the grant to propagate.
+
 3. Open the new service account → **Keys** → **Add key** → **Create new key** →
    **JSON**. A `.json` file downloads.
 4. Open the file in a text editor and copy two fields:
@@ -93,21 +102,26 @@ take a few minutes to propagate.
 
 5. Delete the downloaded JSON file once both values are saved somewhere safe.
 
-## 4. Create the three API keys
+## 4. Create the two API keys
 
-All three are created from
+Both are created from
 [APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials)
 → **Create credentials** → **API key**. After each key is created, choose
 **Edit API key** to name and restrict it.
 
-| Key name (suggested)  | API restrictions    | Application restrictions                                                                                  | Variable                          |
-| --------------------- | ------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| `trove-places-server` | Places API (New)    | None (Vercel has no fixed egress IP)                                                                      | `GOOGLE_PLACES_API_KEY`           |
-| `trove-routes-server` | Routes API          | None (Vercel has no fixed egress IP)                                                                      | `GOOGLE_ROUTES_API_KEY`           |
-| `trove-maps-browser`  | Maps JavaScript API | **Websites**: `https://trove.wndrhive.com/*`, `http://localhost:3000/*`, plus any preview origins you use | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` |
+| Key name (suggested) | API restrictions             | Application restrictions                                                                                  | Variable                                                             |
+| -------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `trove-server`       | Places API (New), Routes API | None (Vercel has no fixed egress IP)                                                                      | `GOOGLE_PLACES_API_KEY` **and** `GOOGLE_ROUTES_API_KEY` (same value) |
+| `trove-maps-browser` | Maps JavaScript API          | **Websites**: `https://trove.wndrhive.com/*`, `http://localhost:3000/*`, plus any preview origins you use | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`                                    |
 
-Keep the browser key separate from the two server keys: it is shipped to every
-visitor's browser, so it must only work on Trove's own websites.
+Why not one key for everything? `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` is shipped to
+every visitor's browser, so anyone can copy it. Its website restriction is what
+stops a copied key from being used elsewhere — but that same restriction makes
+Google reject the API's server-side Places and Routes calls, which come from
+Vercel, not from a website. A single key therefore has to be left unrestricted
+and exposed, letting anyone run up Places charges on your billing account. Two
+keys is the minimum safe split; the server key can stay unrestricted by origin
+because it never leaves the API.
 
 ## 5. Create the map ID
 
@@ -175,7 +189,7 @@ origin, `ApiNotActivatedMapError` means an API from step 2 is not enabled, and
 
 Once everything above passes in production:
 
-1. In the **old** project, delete the three API keys and the service account's
+1. In the **old** project, delete the API keys and the service account's
    key, so the old credentials cannot be used if they ever leaked.
 2. Optionally shut the old project down from
    [IAM & Admin → Settings](https://console.cloud.google.com/iam-admin/settings) →

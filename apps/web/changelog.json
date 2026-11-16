@@ -1494,5 +1494,15 @@
         "Fold any day in your expenses down to its total, or collapse and expand them all at once."
       ]
     }
+  },
+  {
+    "id": "expenses-breakdowns-follow-filter",
+    "date": "2026-11-16",
+    "version": "1.38.0",
+    "summaries": {
+      "en": [
+        "Filter your expenses by a category, day or place and the rest of the page follows, so you can see when and where that money went."
+      ]
+    }
   }
 ]

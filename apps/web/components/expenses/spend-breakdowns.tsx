@@ -40,16 +40,27 @@ function Section({
  * when they say something, the currencies it was paid in and the places it
  * was spent at. Any card, day or row narrows the ledger below to what it
  * counts, and choosing it again shows everything.
+ *
+ * A filter narrows the other sections too, so choosing Food redraws the days,
+ * currencies and places as Food alone. The section that set the filter keeps
+ * the whole trip, or there would be nothing left in it to choose instead.
  */
 export function SpendBreakdowns({
   breakdown,
   budgetPerDay,
   currencyCode,
   filter,
+  filterLabel,
+  filtered,
   onFilterChange,
   tripPlaces,
 }: Readonly<{
+  /** The whole trip. */
   breakdown: SpendBreakdown;
+  /** The same rollup over only the expenses the filter keeps; the whole trip without one. */
+  filtered: SpendBreakdown;
+  /** Names the active filter in the traveller's own words, or null when there is none. */
+  filterLabel: string | null;
   /** The budget spread evenly over the trip's days, in minor units; null without one. */
   budgetPerDay: number | null;
   currencyCode: string;
@@ -68,27 +79,38 @@ export function SpendBreakdowns({
     onFilterChange(filter?.kind === kind && filter.value === value ? null : { kind, value });
 
   const activeValue = (kind: SpendFilter['kind']) => (filter?.kind === kind ? filter.value : null);
+  /** What a section draws: the whole trip if it set the filter, else what the filter keeps. */
+  const view = (kind: SpendFilter['kind']) =>
+    filter && filter.kind !== kind ? filtered : breakdown;
+  /** Says a section is showing a slice, so a smaller chart is not mistaken for the trip. */
+  const narrowedBy = (kind: SpendFilter['kind']) =>
+    filter && filter.kind !== kind && filterLabel
+      ? t('breakdowns.filteredBy', { label: filterLabel })
+      : undefined;
+  const cardClass =
+    'rounded-[var(--radius-xl)] border border-border-subtle bg-card p-2 shadow-[var(--shadow-surface)]';
 
-  const categoryRows: (SpendRankRow & { tintClassName: string })[] = breakdown.byCategory.map(
-    (bucket) => {
-      const category = bucket.key === 'uncategorised' ? null : bucket.key;
-      const { Icon, barClassName, tintClassName } = resolveExpenseCategory(category);
+  const categoryRows: (SpendRankRow & { tintClassName: string })[] = view(
+    'category',
+  ).byCategory.map((bucket) => {
+    const category = bucket.key === 'uncategorised' ? null : bucket.key;
+    const { Icon, barClassName, tintClassName } = resolveExpenseCategory(category);
 
-      return {
-        amount: money(bucket.total.minorUnits),
-        barClassName,
-        count: bucket.count,
-        icon: <Icon aria-hidden="true" />,
-        id: bucket.key,
-        label: category ? t(`categories.${category}`) : t('noCategory'),
-        share: bucket.share,
-        tintClassName,
-      };
-    },
-  );
+    return {
+      amount: money(bucket.total.minorUnits),
+      barClassName,
+      count: bucket.count,
+      icon: <Icon aria-hidden="true" />,
+      id: bucket.key,
+      label: category ? t(`categories.${category}`) : t('noCategory'),
+      share: bucket.share,
+      tintClassName,
+    };
+  });
 
   const placeById = new Map(tripPlaces.map((place) => [place.id, place]));
-  const shownPlaces = allPlaces ? breakdown.byPlace : breakdown.byPlace.slice(0, PLACE_LIMIT);
+  const places = view('place').byPlace;
+  const shownPlaces = allPlaces ? places : places.slice(0, PLACE_LIMIT);
   const placeRows: SpendRankRow[] = shownPlaces.map((bucket) => ({
     amount: money(bucket.total.minorUnits),
     barClassName: 'bg-muted-foreground/50',
@@ -97,7 +119,8 @@ export function SpendBreakdowns({
     label: resolvePlaceLabel(placeById.get(bucket.key) ?? null, t('unnamedPlace')),
     share: bucket.share,
   }));
-  const hiddenPlaces = Math.max(0, breakdown.byPlace.length - PLACE_LIMIT);
+  const hiddenPlaces = Math.max(0, places.length - PLACE_LIMIT);
+  const currencies = view('currency').byCurrency;
   const rowLabel = (row: SpendRankRow) =>
     t('a11y.categoryBar', {
       amount: row.amount,
@@ -109,7 +132,10 @@ export function SpendBreakdowns({
   return (
     <div className="space-y-8">
       {categoryRows.length ? (
-        <Section aside={t('breakdowns.tapToFilter')} title={t('breakdowns.whereItWent')}>
+        <Section
+          aside={narrowedBy('category') ?? t('breakdowns.tapToFilter')}
+          title={t('breakdowns.whereItWent')}
+        >
           {/* The whole trip in one bar, each category its share of it. */}
           <span aria-hidden="true" className="flex h-2.5 gap-0.5 overflow-hidden rounded-full">
             {categoryRows
@@ -163,50 +189,56 @@ export function SpendBreakdowns({
         </Section>
       ) : null}
 
-      <Section title={t('breakdowns.days')}>
+      <Section aside={narrowedBy('day')} title={t('breakdowns.days')}>
         <SpendDayStrip
           activeId={activeValue('day')}
-          breakdown={breakdown}
-          budgetPerDay={budgetPerDay}
+          breakdown={view('day')}
+          // A day's whole budget against one category's spend would read as
+          // room to spare that the rest of the day has already used.
+          budgetPerDay={filter && filter.kind !== 'day' ? null : budgetPerDay}
           currencyCode={currencyCode}
           onSelect={(id) => toggle('day', id)}
         />
       </Section>
 
       {/* One currency says nothing a total has not already said. */}
-      {breakdown.byCurrency.length > 1 ? (
-        <Section title={t('breakdowns.paidIn')}>
-          <SpendCurrencyList
-            activeId={activeValue('currency')}
-            onSelect={(code) => toggle('currency', code)}
-            referenceCurrency={currencyCode}
-            rows={breakdown.byCurrency}
-          />
+      {currencies.length > 1 ? (
+        <Section aside={narrowedBy('currency')} title={t('breakdowns.paidIn')}>
+          <div className={cardClass}>
+            <SpendCurrencyList
+              activeId={activeValue('currency')}
+              onSelect={(code) => toggle('currency', code)}
+              referenceCurrency={currencyCode}
+              rows={currencies}
+            />
+          </div>
         </Section>
       ) : null}
 
       {placeRows.length ? (
-        <Section title={t('breakdowns.places')}>
-          <SpendRankList
-            activeId={activeValue('place')}
-            emptyLabel={t('breakdowns.place.none')}
-            onSelect={(id) => toggle('place', id)}
-            rowLabel={rowLabel}
-            rows={placeRows}
-          />
-          {hiddenPlaces > 0 ? (
-            <Button
-              className="-ml-2.5"
-              onClick={() => setAllPlaces((value) => !value)}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              {allPlaces
-                ? t('breakdowns.place.fewer')
-                : t('breakdowns.place.all', { count: hiddenPlaces })}
-            </Button>
-          ) : null}
+        <Section aside={narrowedBy('place')} title={t('breakdowns.places')}>
+          <div className={cardClass}>
+            <SpendRankList
+              activeId={activeValue('place')}
+              emptyLabel={t('breakdowns.place.none')}
+              onSelect={(id) => toggle('place', id)}
+              rowLabel={rowLabel}
+              rows={placeRows}
+            />
+            {hiddenPlaces > 0 ? (
+              <Button
+                className="mt-1"
+                onClick={() => setAllPlaces((value) => !value)}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                {allPlaces
+                  ? t('breakdowns.place.fewer')
+                  : t('breakdowns.place.all', { count: hiddenPlaces })}
+              </Button>
+            ) : null}
+          </div>
         </Section>
       ) : null}
     </div>

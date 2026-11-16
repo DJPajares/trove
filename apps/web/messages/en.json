@@ -1797,6 +1797,7 @@
       "days": "Each day",
       "whereItWent": "Where it went",
       "tapToFilter": "Tap to filter",
+      "filteredBy": "{label} only",
       "share": "{percent} of spending",
       "paidIn": "Paid in",
       "places": "Places",

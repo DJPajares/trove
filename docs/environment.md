@@ -5,6 +5,10 @@
 Configure only the providers needed for your work. Start with Supabase and the
 app connection values; AI, Maps/Places, and editorial imagery have separate setup.
 
+Moving every Google value to a different Google Cloud account (for example when
+a free trial ends)? Follow the
+[Google Cloud account switch checklist](google-cloud-account-switch.md).
+
 - [Environment files](#environment-files)
 - [Supabase](#supabase)
 - [AI planning (Vertex AI)](#ai-planning-vertex-ai)

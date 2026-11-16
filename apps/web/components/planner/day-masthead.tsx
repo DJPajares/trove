@@ -222,9 +222,15 @@ export function DayMasthead({
           </button>
         </div>
 
-        <div className="space-y-1.5 border-t border-border-subtle pt-3">
+        <div className="space-y-3 border-t border-border-subtle pt-3">
           {weather}
-          <DayNote key={dayId} note={note} onSave={onSaveNote} />
+          {/* The note is the traveller's own word on the day, not part of the
+              forecast, so a rule sets it apart - only when weather sits above
+              it, since an empty forecast renders nothing and leaves the note
+              first, where the rule above already serves. */}
+          <div className="border-border-subtle [&:not(:first-child)]:border-t [&:not(:first-child)]:pt-3">
+            <DayNote key={dayId} note={note} onSave={onSaveNote} />
+          </div>
         </div>
       </section>
       {actions ? <div className="hidden items-center gap-2 md:flex">{actions}</div> : null}

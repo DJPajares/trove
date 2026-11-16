@@ -1504,5 +1504,13 @@
         "Filter your expenses by a category, day or place and the rest of the page follows, so you can see when and where that money went."
       ]
     }
+  },
+  {
+    "id": "checklists-plus-button",
+    "date": "2026-11-17",
+    "version": "1.38.1",
+    "summaries": {
+      "en": ["The + button now starts a new checklist when you're on Checklists."]
+    }
   }
 ]

@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/page-header';
 import { PageState } from '@/components/page-state';
+import { useRegisterPrimaryAction } from '@/components/primary-action-provider';
 import {
   ApplyTemplateSheet,
   type AppliedTemplate,
@@ -122,6 +123,14 @@ export function TaskTemplatesManager() {
   }
 
   const openBlank = () => openDraft('', [], null);
+  // The bottom bar's plus button starts a new checklist here, the same as the
+  // button in the header - including before the first one exists, where the
+  // empty state offers the same blank start.
+  useRegisterPrimaryAction({
+    enabled: status === 'idle',
+    label: t('newTemplate'),
+    onTrigger: openBlank,
+  });
   const openStarter = (starter: Starter) =>
     openDraft(
       starter.name,

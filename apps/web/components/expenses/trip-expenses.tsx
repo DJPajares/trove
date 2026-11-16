@@ -27,7 +27,11 @@ import { TripSpendPanel } from '@/components/expenses/trip-spend-panel';
 import { useSpendReference } from '@/hooks/use-spend-reference';
 import { useTripContext } from '@/components/trip-provider';
 import { useNowTick } from '@/hooks/use-now-tick';
-import { buildSpendBreakdown, type SpendFilter } from '@/lib/expenses/spend-insights';
+import {
+  buildSpendBreakdown,
+  convertTotals,
+  type SpendFilter,
+} from '@/lib/expenses/spend-insights';
 import { getLocalDate } from '@/lib/trips/lifecycle';
 import {
   createBudgetForm,
@@ -269,6 +273,17 @@ export function TripExpenses({
       })
     : null;
 
+  // The budget spread evenly over the trip, so the daily chart can show where
+  // a day's even share sits; in the same currency the chart is drawn in.
+  const budgetMinorUnits =
+    reference && data.budget
+      ? convertTotals([data.budget], reference.code, board).minorUnits
+      : null;
+  const budgetPerDay =
+    budgetMinorUnits !== null && data.days.length > 0
+      ? Math.round(budgetMinorUnits / data.days.length)
+      : null;
+
   const filterLabel = (() => {
     if (!filter) return null;
     if (filter.kind === 'currency') return filter.value;
@@ -288,23 +303,21 @@ export function TripExpenses({
   })();
 
   return (
-    <section className="space-y-7">
+    // The extra room at the end keeps the last expense well clear of the
+    // phone's floating add button, not just tucked under its edge.
+    <section className="space-y-7 pb-8 md:pb-0">
       {placement === 'trip' ? (
         <TripSectionHeader
           description={t('description')}
           primaryAction={{ label: t('addExpense'), onSelect: openCreate }}
         />
-      ) : (
-        <div className="flex items-center justify-between gap-4">
-          <p className="max-w-(--layout-reading) text-sm leading-[1.5] text-pretty text-muted-foreground">
-            {t('description')}
-          </p>
-          {readOnly ? null : (
-            <Button className="hidden shrink-0 md:inline-flex" onClick={openCreate} type="button">
-              <Plus aria-hidden="true" data-icon="inline-start" />
-              {t('addExpense')}
-            </Button>
-          )}
+      ) : readOnly ? null : (
+        // On a phone the bottom bar's plus adds an expense; from `md` it is here.
+        <div className="hidden justify-end md:flex">
+          <Button className="shrink-0" onClick={openCreate} type="button">
+            <Plus aria-hidden="true" data-icon="inline-start" />
+            {t('addExpense')}
+          </Button>
         </div>
       )}
 
@@ -340,6 +353,7 @@ export function TripExpenses({
           {breakdown && reference ? (
             <SpendBreakdowns
               breakdown={breakdown}
+              budgetPerDay={budgetPerDay}
               currencyCode={reference.code}
               filter={filter}
               onFilterChange={setFilter}
@@ -348,12 +362,14 @@ export function TripExpenses({
           ) : null}
 
           <ExpenseLedger
+            categories={breakdown?.byCategory.map((bucket) => bucket.key) ?? []}
             days={data.days}
             expenses={data.expenses}
             filter={filter}
             filterLabel={filterLabel}
             onClearFilter={() => setFilter(null)}
             onEdit={openEdit}
+            onFilterChange={setFilter}
             board={board}
             reference={reference?.code ?? null}
           />

@@ -1473,5 +1473,16 @@
         "Kit now shows its tools at a glance, each with a line on what it’s for. Task templates are now called Checklists."
       ]
     }
+  },
+  {
+    "id": "expenses-at-a-glance",
+    "date": "2026-11-16",
+    "version": "1.36.0",
+    "summaries": {
+      "en": [
+        "See where your trip money goes at a glance, with a card for each category and amounts on every day of the chart.",
+        "Tap a category to filter your expenses, now listed newest day first."
+      ]
+    }
   }
 ]

@@ -31,6 +31,8 @@ export const EXPENSE_CATEGORY_ORDER = [
 type ExpenseCategoryPresentation = {
   Icon: LucideIcon;
   barClassName: string;
+  /** A soft well of the category's colour with its icon in the full tint. */
+  tintClassName: string;
 };
 
 /**
@@ -47,12 +49,36 @@ type ExpenseCategoryPresentation = {
  * the icon and the category's name.
  */
 const EXPENSE_CATEGORY_PRESENTATION: Record<ExpenseCategory, ExpenseCategoryPresentation> = {
-  activities: { Icon: Landmark, barClassName: 'bg-category-activities' },
-  food: { Icon: UtensilsCrossed, barClassName: 'bg-category-food' },
-  other: { Icon: Icons.Other, barClassName: 'bg-category-other' },
-  shopping: { Icon: ShoppingBag, barClassName: 'bg-category-shopping' },
-  stay: { Icon: BedDouble, barClassName: 'bg-category-stay' },
-  transport: { Icon: TramFront, barClassName: 'bg-category-transport' },
+  activities: {
+    Icon: Landmark,
+    barClassName: 'bg-category-activities',
+    tintClassName: 'bg-category-activities/14 text-category-activities',
+  },
+  food: {
+    Icon: UtensilsCrossed,
+    barClassName: 'bg-category-food',
+    tintClassName: 'bg-category-food/14 text-category-food',
+  },
+  other: {
+    Icon: Icons.Other,
+    barClassName: 'bg-category-other',
+    tintClassName: 'bg-category-other/14 text-category-other',
+  },
+  shopping: {
+    Icon: ShoppingBag,
+    barClassName: 'bg-category-shopping',
+    tintClassName: 'bg-category-shopping/14 text-category-shopping',
+  },
+  stay: {
+    Icon: BedDouble,
+    barClassName: 'bg-category-stay',
+    tintClassName: 'bg-category-stay/14 text-category-stay',
+  },
+  transport: {
+    Icon: TramFront,
+    barClassName: 'bg-category-transport',
+    tintClassName: 'bg-category-transport/14 text-category-transport',
+  },
 };
 
 /**

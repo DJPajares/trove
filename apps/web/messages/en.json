@@ -1740,7 +1740,9 @@
       "nothing": "nothing spent",
       "selected": "{date} · {amount}",
       "offDay": "{amount} on no trip day ({count, plural, one {# expense} other {# expenses}})",
-      "hint": "Tap a day to see what it cost."
+      "hint": "Tap a day to see what it cost.",
+      "biggest": "{date} cost the most: {amount}.",
+      "budgetLine": "Daily budget {amount}"
     },
     "title": "Expenses for {trip}",
     "description": "What you actually spent, kept apart from what you planned to.",
@@ -1756,6 +1758,7 @@
       "ofBudget": "of {budget}",
       "addBudget": "Add a budget to see if you’re on track",
       "stats": {
+        "left": "Left of budget",
         "dailyAverage": "Daily average",
         "leftPerDay": "Left per day · {days, plural, one {# day} other {# days}}"
       },
@@ -1780,7 +1783,7 @@
         "stale": "Exchange rates may have changed, so treat this total as approximate.",
         "unavailable": "Exchange rates aren’t available right now, so totals stay in the currencies you paid in.",
         "unconvertible": "{count, plural, one {# amount} other {# amounts}} couldn’t be converted, so it isn’t included.",
-        "reference": "Converted at reference rates. Your bank or cash exchange rate may differ."
+        "reference": "≈ Converted at reference rates."
       }
     },
     "a11y": {
@@ -1793,6 +1796,8 @@
       "empty": "Nothing recorded yet.",
       "days": "Each day",
       "whereItWent": "Where it went",
+      "tapToFilter": "Tap to filter",
+      "share": "{percent} of spending",
       "paidIn": "Paid in",
       "places": "Places",
       "currency": {
@@ -1806,6 +1811,8 @@
       }
     },
     "filters": {
+      "all": "All",
+      "byCategory": "Show expenses by category",
       "clear": "Clear filter",
       "noMatches": "No expenses match this filter."
     },
@@ -1818,10 +1825,10 @@
     "actualSpendDescription": "Only recorded expenses are included.",
     "noActualSpend": "No recorded spend yet",
     "expenseList": "Expenses",
+    "itemCount": "{count, plural, one {# item} other {# items}}",
     "emptyTitle": "Track spending when it matters.",
     "emptyDescription": "Add an amount and currency now. Details can follow when you have them.",
     "dayActualSpend": "Actual spend for {date}",
-    "dayActualSummary": "Actual: {total}",
     "tripLevelExpenses": "Trip-level expenses",
     "tripLevelExpensesDescription": "Undated expenses count toward the trip total, not a specific day.",
     "editExpense": "Edit {title}",

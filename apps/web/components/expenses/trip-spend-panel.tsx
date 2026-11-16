@@ -91,7 +91,15 @@ export function TripSpendPanel({
     : null;
   const percentLabel = new Intl.NumberFormat(locale, { style: 'percent' });
 
+  // Three numbers a traveller acts on, read across one row: what is left of the
+  // budget, what an average day has cost, and what each remaining day can take.
   const stats = [
+    budgetTotal && position.remainingMinorUnits !== null && position.remainingMinorUnits > 0
+      ? {
+          label: t('spend.stats.left'),
+          value: formatMinorUnits(locale, position.remainingMinorUnits, reference.code),
+        }
+      : null,
     perDay !== null
       ? {
           label: t('spend.stats.dailyAverage'),
@@ -109,7 +117,7 @@ export function TripSpendPanel({
   return (
     <section
       aria-label={t('title', { trip: trip?.name ?? '' })}
-      className="space-y-4 rounded-[var(--radius-xl)] border border-border-subtle bg-card p-4 sm:p-5"
+      className="space-y-4 rounded-[var(--radius-xl)] border border-border-subtle bg-card p-4 shadow-[var(--shadow-surface)] sm:p-5"
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 space-y-1">
@@ -155,14 +163,14 @@ export function TripSpendPanel({
       ) : null}
 
       {stats.length ? (
-        <dl className="grid grid-cols-2 gap-2">
+        <dl
+          className="grid gap-3 border-t border-border-subtle pt-4"
+          style={{ gridTemplateColumns: `repeat(${stats.length}, minmax(0, 1fr))` }}
+        >
           {stats.map((stat) => (
-            <div
-              className="flex flex-col-reverse gap-0.5 rounded-[var(--radius-lg)] bg-surface-tint/60 px-3 py-2.5"
-              key={stat.label}
-            >
-              <dt className="text-xs text-muted-foreground">{stat.label}</dt>
-              <dd className="text-base font-semibold tabular-nums">{stat.value}</dd>
+            <div className="flex min-w-0 flex-col-reverse gap-0.5" key={stat.label}>
+              <dt className="text-xs leading-4 text-muted-foreground">{stat.label}</dt>
+              <dd className="truncate text-base font-semibold tabular-nums">{stat.value}</dd>
             </div>
           ))}
         </dl>
@@ -215,7 +223,7 @@ function TotalAmount({ reference, total }: Readonly<{ reference: string; total: 
             })
           : undefined
       }
-      className="flex items-baseline gap-1 text-3xl font-semibold tracking-[-0.02em] tabular-nums"
+      className="flex items-baseline gap-1.5 font-journal text-[2.75rem] leading-none font-normal tracking-[-0.01em] tabular-nums"
     >
       {total.isApproximate ? (
         <span aria-hidden="true" className="text-muted-foreground">

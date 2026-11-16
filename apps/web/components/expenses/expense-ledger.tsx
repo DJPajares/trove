@@ -2,11 +2,11 @@
 
 import { CalendarPlus, ChevronRight, X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
+import type { ReactNode } from 'react';
 
 import { useTripReadOnly } from '@/components/trip-provider';
-import { EditorialSection } from '@/components/editorial-section';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 import { Item, ItemContent, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item';
 import type { CachedCurrencyRateBoard } from '@/lib/currency/api';
 import {
@@ -20,7 +20,7 @@ import {
   expenseTitle as resolveExpenseTitle,
   placeLabel as resolvePlaceLabel,
 } from '@/lib/expenses/labels';
-import { resolveExpenseCategory } from '@/lib/expenses/categories';
+import { resolveExpenseCategory, type SpendCategoryKey } from '@/lib/expenses/categories';
 import * as Icons from '@/lib/icons';
 import {
   approximateInReference,
@@ -28,24 +28,30 @@ import {
   matchesSpendFilter,
   type SpendFilter,
 } from '@/lib/expenses/spend-insights';
+import { cn } from '@/lib/utils';
 
 /**
- * Every recorded expense, grouped by the day it belongs to.
+ * Every recorded expense, grouped by the day it belongs to, newest day first,
+ * under a row of category chips that narrow it.
  *
  * Amounts here are always the currency the traveller actually paid in. The
  * converted view lives at the top of the screen; a ledger that rewrote what a
  * receipt said would be a worse record than the receipt.
  */
 export function ExpenseLedger({
+  categories,
   days,
   expenses,
   filter,
   filterLabel,
   onClearFilter,
   onEdit,
+  onFilterChange,
   board,
   reference,
 }: Readonly<{
+  /** The categories this trip has spent in, biggest first: the chips offered. */
+  categories: readonly SpendCategoryKey[];
   days: ReadonlyArray<{ actualSpend: CurrencyTotal[]; date: string; id: string }>;
   expenses: readonly Expense[];
   filter: SpendFilter | null;
@@ -53,6 +59,7 @@ export function ExpenseLedger({
   filterLabel: string | null;
   onClearFilter: () => void;
   onEdit: (expense: Expense) => void;
+  onFilterChange: (filter: SpendFilter | null) => void;
   /** The rates the screen's headline already converts with; null when none were needed. */
   board: CachedCurrencyRateBoard | null;
   /** The one currency the screen's totals are in, usually the traveller's home currency. */
@@ -77,16 +84,21 @@ export function ExpenseLedger({
     }
   }
 
+  // Newest day first: during a trip, what was just spent is what gets checked.
   const daySections = days
     .map((day) => ({ ...day, expenses: expensesByDay.get(day.id) ?? [] }))
-    .filter((day) => day.expenses.length > 0);
+    .filter((day) => day.expenses.length > 0)
+    .reverse();
 
   const money = (total: CurrencyTotal) =>
     formatCurrencyAmount(locale, total.amount, total.currencyCode);
-  const dateOnly = (value: string) =>
-    new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeZone: 'UTC' }).format(
-      new Date(`${value}T00:00:00.000Z`),
-    );
+  const dayHeading = (value: string) =>
+    new Intl.DateTimeFormat(locale, {
+      day: 'numeric',
+      month: 'short',
+      timeZone: 'UTC',
+      weekday: 'short',
+    }).format(new Date(`${value}T00:00:00.000Z`));
   const totals = (values: CurrencyTotal[], empty: string) =>
     values.length ? values.map(money).join(', ') : empty;
 
@@ -118,23 +130,27 @@ export function ExpenseLedger({
   };
 
   const renderExpense = (expense: Expense) => {
-    const { Icon } = resolveExpenseCategory(expense.category);
+    const { Icon, tintClassName } = resolveExpenseCategory(expense.category);
+    const meta = [
+      expense.tripPlace ? placeLabel(expense.tripPlace) : null,
+      expense.category ? t(`categories.${expense.category}`) : null,
+    ].filter(Boolean);
     const onDay = Boolean(expenseDayId(expense, days));
     const rowApproximate = approximate([
       { amount: expense.amount, currencyCode: expense.currencyCode },
     ]);
     return (
       <Item
-        className="relative flex-nowrap items-start px-3 py-3.5 hover:bg-surface-hover"
+        className="relative flex-nowrap items-start px-4 py-3 hover:bg-surface-hover"
         key={expense.id}
       >
         <ItemMedia
-          className="size-10 rounded-[var(--radius-md)] bg-secondary text-secondary-foreground"
+          className={cn('size-10 rounded-[var(--radius-md)]', tintClassName)}
           variant="icon"
         >
           <Icon aria-hidden="true" />
         </ItemMedia>
-        <ItemContent className="min-w-0 gap-1.5">
+        <ItemContent className="min-w-0 gap-1">
           {/* What it was and what it cost read first, side by side: the amount
               keeps its own column so a long title never pushes it to a new line. */}
           <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3">
@@ -178,11 +194,13 @@ export function ExpenseLedger({
               ) : null}
             </span>
           </div>
-          {expense.tripPlace ? (
+          {/* Where and what kind, on one quiet line. */}
+          {meta.length ? (
             <p className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
-              <Icons.Place aria-hidden="true" className="size-3.5 shrink-0" />
-              <span className="sr-only">{t('placeLabel')}: </span>
-              <span className="truncate">{placeLabel(expense.tripPlace)}</span>
+              {expense.tripPlace ? (
+                <Icons.Place aria-hidden="true" className="size-3.5 shrink-0" />
+              ) : null}
+              <span className="truncate">{meta.join(' · ')}</span>
             </p>
           ) : null}
           {expense.note ? (
@@ -191,19 +209,8 @@ export function ExpenseLedger({
               {expense.note}
             </p>
           ) : null}
-          {expense.category || (expense.localDate && !onDay) ? (
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-0.5">
-              {expense.category ? (
-                <Badge size="sm" variant="muted">
-                  {t(`categories.${expense.category}`)}
-                </Badge>
-              ) : null}
-              {expense.localDate && !onDay ? (
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {expense.localDate}
-                </span>
-              ) : null}
-            </div>
+          {expense.localDate && !onDay ? (
+            <span className="text-xs text-muted-foreground tabular-nums">{expense.localDate}</span>
           ) : null}
           {expense.localDate && !onDay ? (
             <p className="text-xs leading-5 text-muted-foreground">{t('unassignedDatedExpense')}</p>
@@ -230,9 +237,84 @@ export function ExpenseLedger({
     );
   };
 
+  const categoryFilter = filter?.kind === 'category' ? filter.value : null;
+  const chip = (active: boolean) =>
+    cn(
+      'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none',
+      active
+        ? 'border-foreground bg-foreground text-background'
+        : 'border-border bg-card hover:bg-surface-hover',
+    );
+
+  const daySection = (key: string, title: string, summary: ReactNode, rows: Expense[]) => (
+    <section aria-label={title} className="space-y-2" key={key}>
+      {/* The day's name and what it cost, on the page itself rather than on a
+          band of its own, so the card below reads as that day's receipt. */}
+      <div className="flex items-baseline justify-between gap-3 px-1">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        {summary}
+      </div>
+      <ItemGroup
+        aria-label={t('expenseList')}
+        className="overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-card shadow-[var(--shadow-surface)]"
+        variant="list"
+      >
+        {rows.map(renderExpense)}
+      </ItemGroup>
+    </section>
+  );
+
   return (
-    <div className="space-y-7">
-      {filterLabel ? (
+    <section aria-labelledby="expense-ledger-heading" className="space-y-4">
+      <div className="flex items-baseline justify-between gap-3 px-1">
+        <h2 className="text-lg font-semibold" id="expense-ledger-heading">
+          {t('expenseList')}
+        </h2>
+        <p className="text-sm text-muted-foreground tabular-nums">
+          {t('itemCount', { count: visible.length })}
+        </p>
+      </div>
+
+      {categories.length > 1 ? (
+        <ScrollShadow
+          aria-label={t('filters.byCategory')}
+          className="-mx-1 flex gap-2 px-1 pb-1 [scrollbar-width:none]"
+          orientation="horizontal"
+          role="group"
+        >
+          <button
+            aria-pressed={!filter}
+            className={chip(!filter)}
+            onClick={() => onFilterChange(null)}
+            type="button"
+          >
+            {t('filters.all')}
+          </button>
+          {categories.map((key) => (
+            <button
+              aria-pressed={categoryFilter === key}
+              className={chip(categoryFilter === key)}
+              key={key}
+              onClick={() =>
+                onFilterChange(categoryFilter === key ? null : { kind: 'category', value: key })
+              }
+              type="button"
+            >
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'size-2 rounded-full',
+                  resolveExpenseCategory(key === 'uncategorised' ? null : key).barClassName,
+                )}
+              />
+              {key === 'uncategorised' ? t('noCategory') : t(`categories.${key}`)}
+            </button>
+          ))}
+        </ScrollShadow>
+      ) : null}
+
+      {/* A day, place or currency chosen above the ledger, named so it can be cleared. */}
+      {filterLabel && filter?.kind !== 'category' ? (
         <div className="flex items-center gap-2">
           <Button onClick={onClearFilter} size="sm" variant="outline">
             {filterLabel}
@@ -243,44 +325,41 @@ export function ExpenseLedger({
       ) : null}
 
       {visible.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t('filters.noMatches')}</p>
+        <p className="px-1 text-sm text-muted-foreground">{t('filters.noMatches')}</p>
       ) : (
-        <>
-          {daySections.map((day) => (
-            <EditorialSection
-              actions={
-                <DaySummary
-                  approximate={approximate(dayAmounts(day))}
-                  label={t('dayActualSummary', {
-                    total: totals(dayAmounts(day), t('noActualSpend')),
-                  })}
-                  srApproximate={(amount) => t('approximateAmount', { amount })}
-                />
-              }
-              key={day.id}
-              title={dateOnly(day.date)}
-            >
-              <ItemGroup aria-label={t('expenseList')} variant="list">
-                {day.expenses.map(renderExpense)}
-              </ItemGroup>
-            </EditorialSection>
-          ))}
-          {unassignedExpenses.length ? (
-            <EditorialSection
-              description={t('tripLevelExpensesDescription')}
-              title={t('tripLevelExpenses')}
-            >
-              <ItemGroup aria-label={t('tripLevelExpenses')} variant="list">
-                {unassignedExpenses.map(renderExpense)}
-              </ItemGroup>
-            </EditorialSection>
-          ) : null}
-        </>
+        <div className="space-y-6">
+          {daySections.map((day) =>
+            daySection(
+              day.id,
+              dayHeading(day.date),
+              <DaySummary
+                approximate={approximate(dayAmounts(day))}
+                label={totals(dayAmounts(day), t('noActualSpend'))}
+                srApproximate={(amount) => t('approximateAmount', { amount })}
+              />,
+              day.expenses,
+            ),
+          )}
+          {unassignedExpenses.length
+            ? daySection(
+                'trip-level',
+                t('tripLevelExpenses'),
+                <p className="text-xs text-muted-foreground">
+                  {t('tripLevelExpensesDescription')}
+                </p>,
+                unassignedExpenses,
+              )
+            : null}
+        </div>
       )}
-    </div>
+    </section>
   );
 }
 
+/**
+ * What a day cost: the converted total when there is one, which is what the
+ * rest of the screen reads in, with the paid amounts kept for anyone who asks.
+ */
 function DaySummary({
   approximate,
   label,
@@ -290,15 +369,17 @@ function DaySummary({
   label: string;
   srApproximate: (amount: string) => string;
 }>) {
+  if (!approximate) {
+    return <p className="text-sm font-semibold tabular-nums">{label}</p>;
+  }
   return (
-    <p className="text-sm font-medium text-muted-foreground">
-      {label}
-      {approximate ? (
-        <>
-          <span aria-hidden="true"> · ≈ {approximate}</span>
-          <span className="sr-only">, {srApproximate(approximate)}</span>
-        </>
-      ) : null}
+    <p className="text-sm tabular-nums" title={label}>
+      <span aria-hidden="true" className="font-semibold">
+        ≈ {approximate}
+      </span>
+      <span className="sr-only">
+        {label}, {srApproximate(approximate)}
+      </span>
     </p>
   );
 }

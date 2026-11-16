@@ -134,6 +134,7 @@ function answersPurpose(request: PlaceDetailsRequest, result: PlaceDetailsResult
 }
 
 const PHOTOS_EXPIRED = Symbol('photos-expired');
+const PHOTO_REFRESH_MIN_AGE_MS = 24 * 60 * 60 * 1_000;
 
 export class CachedPlacesService extends PlacesService {
   private readonly providerName: PlacesProvider['name'];
@@ -197,8 +198,8 @@ export class CachedPlacesService extends PlacesService {
 
     const result = await this.acquire(request, cacheMissReason);
     const answer = await this.withCoverPhoto(request, result);
-    // References just issued are never refused; if they are, show the place
-    // without photos rather than spending another request.
+    // Unreachable for a fresh acquisition (the age floor answers `unavailable`);
+    // kept so no path can ever chain a second Details request.
     return answer === PHOTOS_EXPIRED ? result : answer;
   }
 
@@ -340,6 +341,15 @@ export class CachedPlacesService extends PlacesService {
           signal: request.signal,
         });
         if (media.status === 'expired') {
+          // Cost ceiling: a snapshot younger than a day is never refreshed for
+          // its photos, so a refusal that persists (a misconfigured key also
+          // answers 400 INVALID_ARGUMENT) costs at most one Details request per
+          // place per day, and only when someone opens it.
+          if (
+            this.now().getTime() - Date.parse(request.evidenceFetchedAt) <
+            PHOTO_REFRESH_MIN_AGE_MS
+          )
+            return { status: 'unavailable' };
           // Every reference in a snapshot was issued together, so the siblings
           // are as dead as this one: drop them all and let details re-acquire.
           evidenceMemo.delete(key);

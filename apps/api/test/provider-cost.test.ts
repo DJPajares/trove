@@ -2807,6 +2807,51 @@ test('an opened sheet whose cover reference was refused re-acquires it in the sa
   );
 });
 
+test('a refusal that persists costs at most one Details request per place per day', async () => {
+  let now = new Date('2026-10-01T00:00:00Z');
+  seedProviderRef('ChIJmuseum');
+  const { provider, details, media } = photoPlacesProvider({
+    'places/ChIJmuseum/photos/p1': Array(20).fill('expired'),
+    'places/ChIJmuseum/photos/p2': Array(20).fill('expired'),
+  });
+  const request = {
+    detail: 'evidence' as const,
+    externalPlaceId: 'ChIJmuseum',
+    languageCode: 'en',
+    purpose: 'details' as const,
+  };
+  const service = () => new CachedPlacesService(provider, () => now);
+  const open = async () => {
+    resetCachedPlacesMemo();
+    return service().getDetails(request);
+  };
+  await open();
+  expect(details()).toBe(1);
+
+  // A fresh snapshot is never refreshed, however often it is opened or retried.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await open();
+    const fetchedAt = providerRefs.get('ChIJmuseum')!.cachedEvidenceAt!.toISOString();
+    await expect(
+      service().getPhoto({
+        ...request,
+        evidenceFetchedAt: fetchedAt,
+        photoId: placePhotoId('places/ChIJmuseum/photos/p2'),
+      }),
+    ).resolves.toEqual({ status: 'unavailable' });
+  }
+  expect(details()).toBe(1);
+  expect(providerRefs.get('ChIJmuseum')?.cachedEvidence?.photos).toHaveLength(3);
+
+  // A day on, one open refreshes once; the new refusal is then capped again.
+  now = new Date('2026-10-02T00:00:01Z');
+  await open();
+  await open();
+  await open();
+  expect(details()).toBe(2);
+  expect(media()).toBeLessThanOrEqual(15);
+});
+
 test('photo write failures still reuse resolved URLs in the current API instance', async () => {
   const now = new Date('2026-10-01T00:00:00Z');
   seedProviderRef('ChIJmuseum');

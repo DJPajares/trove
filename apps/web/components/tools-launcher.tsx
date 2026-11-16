@@ -174,7 +174,7 @@ export function ToolsLauncher() {
               className={cn(index === tiles.length - 1 && 'col-span-2 sm:col-span-1')}
               key={tile.label}
             >
-              <ToolTile {...tile} square={index !== tiles.length - 1} />
+              <ToolTile {...tile} />
             </li>
           ))}
         </ul>
@@ -195,23 +195,14 @@ type ToolTileProps = {
 
 /**
  * One tool: its icon, its name and what it is for. It never shows the tool's
- * state, so the shelf reads the same on every visit (PRD 4.5).
+ * state, so the shelf reads the same on every visit (PRD 4.5). The three parts
+ * stack from the top at fixed offsets, so icons, names and first lines of the
+ * purpose line up across a row however long each purpose runs.
  */
-function ToolTile({
-  href,
-  icon,
-  label,
-  purpose,
-  square,
-  tone,
-}: Readonly<ToolTileProps & { square: boolean }>) {
+function ToolTile({ href, icon, label, purpose, tone }: Readonly<ToolTileProps>) {
   return (
     <Link
-      className={cn(
-        'group flex h-full flex-col gap-3 rounded-[var(--radius-xl)] border border-border-subtle bg-card p-4 shadow-[var(--shadow-surface)] outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none',
-        square && 'min-h-44',
-        'sm:aspect-[4/3] sm:min-h-0',
-      )}
+      className="group flex h-full flex-col items-start rounded-[var(--radius-xl)] border border-border-subtle bg-card p-4 shadow-[var(--shadow-surface)] outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none sm:p-5"
       href={href}
     >
       <span
@@ -224,18 +215,14 @@ function ToolTile({
       >
         {icon}
       </span>
-      <span className="mt-auto min-w-0">
-        <span className="flex items-center gap-1 font-semibold">
-          {label}
-          <ChevronRight
-            aria-hidden="true"
-            className="size-4 shrink-0 text-muted-foreground transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
-          />
-        </span>
-        <span className="mt-1 block text-sm leading-snug text-pretty text-muted-foreground">
-          {purpose}
-        </span>
+      <span className="mt-4 flex min-w-0 items-center gap-1 leading-6 font-semibold">
+        {label}
+        <ChevronRight
+          aria-hidden="true"
+          className="size-4 shrink-0 text-muted-foreground transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
+        />
       </span>
+      <span className="mt-1 text-sm leading-5 text-pretty text-muted-foreground">{purpose}</span>
     </Link>
   );
 }

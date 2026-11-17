@@ -1522,5 +1522,17 @@
         "Place photos that had stopped loading now refresh themselves when you open the place, and Try again brings them back."
       ]
     }
+  },
+  {
+    "id": "plan-with-ai-redesign",
+    "date": "2026-11-17",
+    "version": "1.39.0",
+    "summaries": {
+      "en": [
+        "Plan with AI now shows how many AI plans you have left, when more arrive, and how they're used.",
+        "Pick how full each day should be, how many are coming, and where you're staying, and choose whether to use your saved finds.",
+        "Trips longer than your plan allows are flagged when you pick the dates."
+      ]
+    }
   }
 ]

@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 
 import {
+  aiPlanningBriefDayCount,
   composeAiPlanningBrief,
   fixedAiPlanningBriefMatcher,
   splitAiPlanningBrief,
@@ -68,4 +69,40 @@ test('a closing paragraph that is not all choices stays as the traveller’s tex
   const typed = "Kyoto in autumn.\n\nThere are two of us. We'll decide the rest later.";
   expect(splitAiPlanningBrief(typed, matchers)).toStrictEqual({ selections: [], text: typed });
   expect(splitAiPlanningBrief('There are two of us and a dog.', matchers).selections).toEqual([]);
+});
+
+test('a counted group and a named stay come back with their values', () => {
+  const friends = templateAiPlanningBriefMatcher("We're {count} friends.", ({ count = '' }) => ({
+    key: 'who',
+    label: `${count} friends`,
+    option: 'friends',
+    sentence: `We're ${count} friends.`,
+  }));
+  const stay = templateAiPlanningBriefMatcher("We're staying at {stay}.", ({ stay = '' }) => ({
+    key: 'stay',
+    label: stay,
+    option: 'named',
+    sentence: `We're staying at ${stay}.`,
+  }));
+  const sent = "Lisbon for a long weekend.\n\nWe're 5 friends. We're staying at Casa do Bairro.";
+  expect(splitAiPlanningBrief(sent, [friends, stay])).toStrictEqual({
+    selections: [
+      { key: 'who', label: '5 friends', option: 'friends', sentence: "We're 5 friends." },
+      {
+        key: 'stay',
+        label: 'Casa do Bairro',
+        option: 'named',
+        sentence: "We're staying at Casa do Bairro.",
+      },
+    ],
+    text: 'Lisbon for a long weekend.',
+  });
+});
+
+test('a date range counts its days inclusively, and nothing when incomplete or reversed', () => {
+  expect(aiPlanningBriefDayCount('2026-12-01', '2026-12-01')).toBe(1);
+  expect(aiPlanningBriefDayCount('2026-12-01', '2026-12-10')).toBe(10);
+  expect(aiPlanningBriefDayCount('2026-12-01', '2026-12-15')).toBe(15);
+  expect(aiPlanningBriefDayCount('2026-12-10', '2026-12-01')).toBe(0);
+  expect(aiPlanningBriefDayCount('', '2026-12-01')).toBe(0);
 });

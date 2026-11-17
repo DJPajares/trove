@@ -266,7 +266,7 @@
       "planWithAi": "Plan with AI",
       "promptLabel": "Where to, and what matters?",
       "promptPlaceholder": "Tokyo and Kyoto in October: food, small museums, one work afternoon and time to wander.",
-      "promptHint": "Trove fills any gaps and uses your finds where they fit.",
+      "promptHint": "Trove fills in anything you leave out.",
       "examplesLabel": "Try",
       "exampleLabels": {
         "tokyoFood": "Tokyo food weekend",
@@ -310,16 +310,16 @@
           "who": "Who's coming",
           "pace": "Pace",
           "mustSee": "Must-sees",
-          "work": "Work & plans",
-          "travel": "Getting there"
+          "stay": "Stays",
+          "rhythm": "Daily rhythm"
         },
         "trays": {
           "when": "When are you going?",
           "who": "Who's coming?",
-          "pace": "What pace suits you?",
+          "pace": "How full should each day be?",
           "mustSee": "Anything you can't miss?",
-          "work": "Any work or plans to fit in?",
-          "travel": "How are you getting there?"
+          "stay": "Where are you staying?",
+          "rhythm": "What does a day look like?"
         },
         "picks": {
           "when": {
@@ -351,65 +351,50 @@
             },
             "family": {
               "label": "Family with kids",
-              "sentence": "We're a family with kids."
+              "chip": "Family of {count}",
+              "sentence": "We're a family of {count}, with kids."
             },
             "friends": {
               "label": "Group of friends",
-              "sentence": "We're a group of friends."
+              "chip": "{count} friends",
+              "sentence": "We're {count} friends."
             }
           },
           "pace": {
-            "slow": {
-              "label": "Slow",
-              "sentence": "We'd like a slow pace."
+            "relaxed": {
+              "label": "Relaxed",
+              "hint": "2–3 stops a day",
+              "sentence": "Keep a relaxed pace, about two or three stops a day."
             },
             "balanced": {
               "label": "Balanced",
-              "sentence": "A balanced pace suits us."
+              "hint": "3–4 stops a day",
+              "sentence": "Keep a balanced pace, about three or four stops a day."
             },
-            "full": {
-              "label": "Full days",
-              "sentence": "We're happy with full days."
-            },
+            "packed": {
+              "label": "Packed",
+              "hint": "5–6 stops a day",
+              "sentence": "Keep it packed, about five or six stops a day."
+            }
+          },
+          "stay": {
+            "noHotels": {
+              "label": "Skip hotel suggestions",
+              "sentence": "Don't suggest hotels; we'll sort our own stay."
+            }
+          },
+          "rhythm": {
             "early": {
               "label": "Early starts",
-              "sentence": "We don't mind early starts."
-            }
-          },
-          "work": {
-            "dailyHours": {
-              "label": "A few hours a day",
-              "sentence": "I need a few hours of work time each day."
+              "sentence": "We like early starts."
             },
-            "weekdays": {
-              "label": "Weekdays are for work",
-              "sentence": "I work during the day on weekdays, so keep those plans to evenings."
+            "late": {
+              "label": "Late mornings",
+              "sentence": "We like late mornings."
             },
-            "meetings": {
-              "label": "A day for meetings",
-              "sentence": "Keep one day free for meetings."
-            },
-            "offline": {
-              "label": "Fully off work",
-              "sentence": "This trip is fully off work."
-            }
-          },
-          "travel": {
-            "flying": {
-              "label": "Flying in",
-              "sentence": "We're flying in and out."
-            },
-            "train": {
-              "label": "By train",
-              "sentence": "We're arriving by train."
-            },
-            "car": {
-              "label": "With a car",
-              "sentence": "We'll have a car."
-            },
-            "transit": {
-              "label": "Public transport only",
-              "sentence": "We'll get around by public transport only."
+            "evenings": {
+              "label": "Free evenings",
+              "sentence": "Keep our evenings free."
             }
           }
         },
@@ -422,7 +407,22 @@
         "mustSeeLabel": "Places you can't miss",
         "mustSeePlaceholder": "Fushimi Inari, Nishiki Market",
         "mustSeeSentence": "Must see {places}.",
+        "mustSeeHint": "Type the places, separated by commas.",
         "addMustSee": "Add to brief",
+        "groupSize": "How many of you, including you?",
+        "groupFewer": "One fewer",
+        "groupMore": "One more",
+        "stayLabel": "Already booked? Name your stay",
+        "stayPlaceholder": "Hotel name or area",
+        "staySentence": "We're staying at {stay}.",
+        "addStay": "Add",
+        "dayCount": "{count, plural, one {# day} other {# days}}",
+        "dayLimit": "Your plan covers trips up to {days} days.",
+        "dayLimitOver": "That's {count} days. Your plan covers up to {days}, so shorten the dates.",
+        "findsTitle": "{count, plural, =0 {Use my saved finds} one {Use my # saved find} other {Use my # saved finds}}",
+        "findsHint": "Trove adds them where they fit the route.",
+        "findsOffLabel": "Not using my finds",
+        "findsOffSentence": "Don't use my saved places.",
         "nudges": {
           "moreFood": {
             "label": "More food",
@@ -447,14 +447,22 @@
         }
       },
       "credits": {
-        "left": "{count, plural, one {# AI Planner credit left} other {# AI Planner credits left}}",
-        "use": "{count, plural, one {Uses your last AI Planner credit} other {Uses 1 of # AI Planner credits}}",
-        "dayLimit": "trips up to {days} days",
-        "renews": "renews {date}"
+        "left": "{count, plural, one {<n>#</n> AI plan left} other {<n>#</n> AI plans left}}",
+        "meter": "{count} of {total} AI plans left",
+        "use": "{count, plural, one {Uses your last AI plan} other {Uses 1 of your #}}",
+        "renews": "{count, plural, one {# new plan on {date}} other {# new plans on {date}}}",
+        "noRenewal": "These don’t renew",
+        "howLabel": "How it works",
+        "how": {
+          "used": "A plan is used only when you get one you can review.",
+          "refund": "If planning fails or times out, you get it back.",
+          "again": "Planning it again uses another.",
+          "days": "Plans cover trips up to {days} days."
+        }
       },
       "noCredits": {
-        "eyebrow": "{tier} plan",
-        "title": "You've used all your AI plans",
+        "eyebrow": "No AI plans left",
+        "title": "{count, plural, =0 {You've used all your AI plans} one {You've used your AI plan} other {You've used all # of your AI plans}}",
         "briefLabel": "Your brief",
         "copy": "Copy",
         "copied": "Copied",
@@ -465,7 +473,7 @@
         "creditKept": "Your brief is kept, and your credit wasn't used."
       },
       "quotaRetryAt": "Your next AI plan is available after {retryAt}.",
-      "quotaRetryUnknown": "Your credits do not renew automatically. You can still create a trip manually.",
+      "quotaRetryUnknown": "These don’t renew. You can still set up a trip yourself: start with a name and dates, and add places as you go.",
       "reviewReadyTitle": "Your plan is ready",
       "reviewReadyDescription": "You can review the itinerary details in the next step.",
       "reviewReadyAction": "Continue reviewing",
@@ -656,11 +664,7 @@
         "close": "Close",
         "errorHint": "Your latest saved draft remains available. Try again when you are ready."
       },
-      "tiers": {
-        "free": "Free",
-        "paid": "Paid"
-      },
-      "creditRenewal": "Credits renew on {date}."
+      "creditRenewal": "New AI plans arrive on {date}."
     },
     "editTitle": "Edit trip",
     "editDescription": "Adjust the trip without locking the plan.",

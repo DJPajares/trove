@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ChevronUp, Plus, X } from 'lucide-react';
+import { Check, ChevronUp, Minus, Plus, X } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useId, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 
@@ -9,6 +9,12 @@ import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
+  AI_PLANNING_FINDS_KEY,
+  AI_PLANNING_GROUP_MAX,
+  AI_PLANNING_GROUP_MIN,
+  aiPlanningBriefDayCount,
+  aiPlanningBriefGroups,
+  aiPlanningGroupDefault,
   aiPlanningBriefIngredients,
   aiPlanningBriefNudges,
   aiPlanningBriefPicks,
@@ -16,6 +22,7 @@ import {
   fixedAiPlanningBriefMatcher,
   splitAiPlanningBrief,
   templateAiPlanningBriefMatcher,
+  type AiPlanningBriefGroup,
   type AiPlanningBriefIngredient,
   type AiPlanningBriefPickIngredient,
   type AiPlanningBriefSelection,
@@ -25,7 +32,15 @@ import * as Icons from '@/lib/icons';
 import { cn } from '@/lib/utils';
 import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
-const selectionOrder: readonly string[] = [...aiPlanningBriefIngredients, ...aiPlanningBriefNudges];
+const selectionOrder: readonly string[] = [
+  ...aiPlanningBriefIngredients,
+  ...aiPlanningBriefNudges,
+  AI_PLANNING_FINDS_KEY,
+];
+
+function isGroup(option: string): option is AiPlanningBriefGroup {
+  return (aiPlanningBriefGroups as readonly string[]).includes(option);
+}
 
 function isPickIngredient(key: string): key is AiPlanningBriefPickIngredient {
   return Object.hasOwn(aiPlanningBriefPicks, key);
@@ -61,6 +76,24 @@ export function useAiPlanningBriefCatalogue() {
       option: 'dates',
       sentence: t('datesSentence', { end, start }),
     });
+    const group = (option: AiPlanningBriefGroup, count: number): AiPlanningBriefSelection => ({
+      key: 'who',
+      label: t(`picks.who.${option}.chip`, { count }),
+      option,
+      sentence: t(`picks.who.${option}.sentence`, { count }),
+    });
+    const stayed = (stay: string): AiPlanningBriefSelection => ({
+      key: 'stay',
+      label: stay,
+      option: 'named',
+      sentence: t('staySentence', { stay }),
+    });
+    const findsOff: AiPlanningBriefSelection = {
+      key: AI_PLANNING_FINDS_KEY,
+      label: t('findsOffLabel'),
+      option: 'off',
+      sentence: t('findsOffSentence'),
+    };
     const mustSee = (places: string): AiPlanningBriefSelection => ({
       key: 'mustSee',
       label: places,
@@ -75,8 +108,20 @@ export function useAiPlanningBriefCatalogue() {
     });
     const matchers = [
       ...(Object.keys(aiPlanningBriefPicks) as AiPlanningBriefPickIngredient[]).flatMap((key) =>
-        aiPlanningBriefPicks[key].map((option) => fixedAiPlanningBriefMatcher(pick(key, option))),
+        aiPlanningBriefPicks[key]
+          .filter((option) => !(key === 'who' && isGroup(option)))
+          .map((option) => fixedAiPlanningBriefMatcher(pick(key, option))),
       ),
+      ...aiPlanningBriefGroups.map((option) =>
+        templateAiPlanningBriefMatcher(
+          String(t.raw(`picks.who.${option}.sentence`)),
+          ({ count = '' }) => group(option, Number(count)),
+        ),
+      ),
+      templateAiPlanningBriefMatcher(String(t.raw('staySentence')), ({ stay = '' }) =>
+        stayed(stay),
+      ),
+      fixedAiPlanningBriefMatcher(findsOff),
       ...aiPlanningBriefNudges.map((key) => fixedAiPlanningBriefMatcher(nudge(key))),
       templateAiPlanningBriefMatcher(String(t.raw('datesSentence')), ({ end = '', start = '' }) =>
         dates(start, end),
@@ -87,8 +132,11 @@ export function useAiPlanningBriefCatalogue() {
     ];
     return {
       dates,
+      findsOff,
       formatDate: (isoDate: string) => dateFormat.format(new Date(`${isoDate}T00:00:00Z`)),
+      group,
       mustSee,
+      stayed,
       nudge,
       pick,
       split: (prompt: string) => splitAiPlanningBrief(prompt, matchers),
@@ -116,6 +164,7 @@ export function AiPlanningBriefField({
   id,
   initialTray = null,
   label,
+  maxDays = null,
   mode,
   onSelectionsChange,
   onTextChange,
@@ -130,6 +179,8 @@ export function AiPlanningBriefField({
   /** Opens one tray straight away, e.g. "When" for a traveller changing dates. */
   initialTray?: AiPlanningBriefIngredient | null;
   label: ReactNode;
+  /** The longest trip the traveller's plan covers, checked before exact dates are used. */
+  maxDays?: number | null;
   /** `ingredients` helps write a first brief; `nudges` offers quick changes to one. */
   mode: 'ingredients' | 'nudges';
   onSelectionsChange: (selections: AiPlanningBriefSelection[]) => void;
@@ -148,7 +199,13 @@ export function AiPlanningBriefField({
   const [places, setPlaces] = useState(
     () => selections.find((selection) => selection.key === 'mustSee')?.label ?? '',
   );
+  const [stayName, setStayName] = useState(
+    () => selections.find((selection) => selection.option === 'named')?.label ?? '',
+  );
+  const [groupCount, setGroupCount] = useState<number | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const dayCount = aiPlanningBriefDayCount(startDate, endDate);
+  const overDayLimit = Boolean(maxDays && dayCount > maxDays);
   const selected = (key: string) => selections.find((selection) => selection.key === key) ?? null;
   // A first brief leads with three ingredients and keeps the rest behind More;
   // quick changes lead with When. Either way, any choice the brief already
@@ -162,14 +219,14 @@ export function AiPlanningBriefField({
   const moreHidden =
     mode === 'ingredients' && ingredients.length < aiPlanningBriefIngredients.length;
 
-  function choose(key: string, next: AiPlanningBriefSelection | null) {
+  function choose(key: string, next: AiPlanningBriefSelection | null, keepOpen = false) {
     const previous = selected(key);
     onSelectionsChange(
       [...selections.filter((selection) => selection.key !== key), ...(next ? [next] : [])].sort(
         (a, b) => selectionOrder.indexOf(a.key) - selectionOrder.indexOf(b.key),
       ),
     );
-    setTray(null);
+    if (!keepOpen) setTray(null);
     const name = next ? next.label : previous?.label;
     if (name) setAnnouncement(next ? t('turnedOn', { name }) : t('turnedOff', { name }));
   }
@@ -314,23 +371,54 @@ export function AiPlanningBriefField({
                 <div className="grid grid-cols-2 gap-2">
                   {aiPlanningBriefPicks[tray].map((option) => {
                     const on = selected(tray)?.option === option;
+                    const hintKey = `picks.${tray}.${option}.hint`;
                     return (
                       <Button
                         aria-pressed={on}
                         className={cn(
-                          'h-auto min-h-11 rounded-[var(--radius-lg)] px-3 py-2 text-sm font-semibold whitespace-normal shadow-none',
+                          'h-auto min-h-11 flex-col items-start gap-0.5 rounded-[var(--radius-lg)] px-3 py-2 text-left text-sm font-semibold whitespace-normal shadow-none',
                           on && chipOnClass,
                         )}
                         key={option}
-                        onClick={() => choose(tray, on ? null : catalogue.pick(tray, option))}
+                        onClick={() => {
+                          if (on) return choose(tray, null);
+                          // A group keeps its tray open so the head count can follow.
+                          if (tray === 'who' && isGroup(option)) {
+                            const count = groupCount ?? aiPlanningGroupDefault[option];
+                            setGroupCount(count);
+                            return choose(tray, catalogue.group(option, count), true);
+                          }
+                          choose(tray, catalogue.pick(tray, option));
+                        }}
                         type="button"
                         variant="outline"
                       >
                         {t(`picks.${tray}.${option}.label`)}
+                        {t.has(hintKey) ? (
+                          <span className="text-xs font-normal text-muted-foreground">
+                            {t(hintKey)}
+                          </span>
+                        ) : null}
                       </Button>
                     );
                   })}
                 </div>
+              ) : null}
+              {tray === 'who' && selected('who') && isGroup(selected('who')!.option) ? (
+                <GroupSize
+                  count={groupCount ?? Number(/\d+/u.exec(selected('who')!.label)?.[0] ?? 2)}
+                  label={t('groupSize')}
+                  lessLabel={t('groupFewer')}
+                  moreLabel={t('groupMore')}
+                  onChange={(count) => {
+                    setGroupCount(count);
+                    choose(
+                      'who',
+                      catalogue.group(selected('who')!.option as AiPlanningBriefGroup, count),
+                      true,
+                    );
+                  }}
+                />
               ) : null}
               {tray === 'when' ? (
                 <Collapsible defaultOpen={selected('when')?.option === 'dates'}>
@@ -359,9 +447,27 @@ export function AiPlanningBriefField({
                         />
                       </Field>
                     </div>
+                    {dayCount || maxDays ? (
+                      <p
+                        className={cn(
+                          'mt-2 text-[length:var(--text-metadata)] text-muted-foreground',
+                          overDayLimit && 'font-semibold text-destructive',
+                        )}
+                        role={overDayLimit ? 'alert' : undefined}
+                      >
+                        {overDayLimit
+                          ? t('dayLimitOver', { count: dayCount, days: maxDays! })
+                          : [
+                              dayCount ? t('dayCount', { count: dayCount }) : null,
+                              maxDays ? t('dayLimit', { days: maxDays }) : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                      </p>
+                    ) : null}
                     <Button
                       className="mt-3"
-                      disabled={!startDate || !endDate || endDate < startDate}
+                      disabled={!startDate || !endDate || endDate < startDate || overDayLimit}
                       onClick={() =>
                         choose(
                           'when',
@@ -408,6 +514,36 @@ export function AiPlanningBriefField({
                   </Button>
                 </div>
               ) : null}
+              {tray === 'mustSee' ? (
+                <p className="text-[length:var(--text-metadata)] text-muted-foreground">
+                  {t('mustSeeHint')}
+                </p>
+              ) : null}
+              {tray === 'stay' ? (
+                <div className="flex items-end gap-2">
+                  <Field className="min-w-0 flex-1">
+                    <FieldLabel htmlFor={`${trayId}-stay`}>{t('stayLabel')}</FieldLabel>
+                    <Input
+                      id={`${trayId}-stay`}
+                      onChange={(event) => setStayName(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && stayName.trim())
+                          choose('stay', catalogue.stayed(stayName.trim()));
+                      }}
+                      placeholder={t('stayPlaceholder')}
+                      value={stayName}
+                    />
+                  </Field>
+                  <Button
+                    disabled={!stayName.trim()}
+                    onClick={() => choose('stay', catalogue.stayed(stayName.trim()))}
+                    type="button"
+                    variant="secondary"
+                  >
+                    {t('addStay')}
+                  </Button>
+                </div>
+              ) : null}
             </div>
           ) : null}
 
@@ -420,6 +556,52 @@ export function AiPlanningBriefField({
             {announcement}
           </p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** A head count for a family or group, kept between two and twenty. */
+function GroupSize({
+  count,
+  label,
+  lessLabel,
+  moreLabel,
+  onChange,
+}: Readonly<{
+  count: number;
+  label: string;
+  lessLabel: string;
+  moreLabel: string;
+  onChange: (count: number) => void;
+}>) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <p className="text-sm text-muted-foreground">{label}</p>
+      <div className="flex items-center gap-1 rounded-full border border-border bg-background p-0.5">
+        <Button
+          aria-label={lessLabel}
+          disabled={count <= AI_PLANNING_GROUP_MIN}
+          onClick={() => onChange(count - 1)}
+          size="icon"
+          type="button"
+          variant="ghost"
+        >
+          <Minus aria-hidden="true" />
+        </Button>
+        <output aria-live="polite" className="min-w-7 text-center font-semibold tabular-nums">
+          {count}
+        </output>
+        <Button
+          aria-label={moreLabel}
+          disabled={count >= AI_PLANNING_GROUP_MAX}
+          onClick={() => onChange(count + 1)}
+          size="icon"
+          type="button"
+          variant="ghost"
+        >
+          <Plus aria-hidden="true" />
+        </Button>
       </div>
     </div>
   );

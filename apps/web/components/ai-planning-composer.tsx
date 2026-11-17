@@ -85,11 +85,19 @@ export function AiPlanningComposer({
   const failedRun = session?.status === 'failed';
 
   useEffect(() => {
-    // The same ideas for the whole visit: reopening the drawer, or returning from
-    // setting up by hand, shows what the traveller was already looking at.
+    // Each opening rotates to new ideas while the brief is empty. A brief that
+    // started from an idea reopens beside that idea; Strict Mode's replay must
+    // not consume a second set.
     if (initializedExamples.current) return;
     initializedExamples.current = true;
-    setExamples(aiPlanningExampleRotation.forVisit());
+    const words = prompt.trim();
+    const inUse =
+      (Object.keys(aiPlanningExampleCategories) as AiPlanningExampleId[]).find(
+        (id) => words && t(`examples.${id}`) === words,
+      ) ?? null;
+    setExamples(aiPlanningExampleRotation.forOpening({ hasBrief, inUse }));
+    // Read once per opening, from the brief as it stood when the drawer opened.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {

@@ -107,13 +107,27 @@ export function createAiPlanningExampleRotation({
 
   return {
     /**
-     * The ideas for this visit: rotated once when the page loads, then the same
-     * set every time the drawer reopens, so closing it to check something never
-     * swaps the ideas a traveller was looking at.
+     * The ideas for one opening of the drawer. An empty brief gets the next set,
+     * so ideas keep rotating. A brief that started from an idea keeps the set
+     * holding that idea, so it can always be found again; any other brief keeps
+     * the set already on show rather than swapping it mid-thought.
      */
-    forVisit(): readonly AiPlanningExampleId[] {
-      shown ??= this.next();
-      return shown;
+    forOpening({
+      hasBrief,
+      inUse,
+    }: {
+      hasBrief: boolean;
+      inUse: AiPlanningExampleId | null;
+    }): readonly AiPlanningExampleId[] {
+      if (inUse) {
+        shown =
+          Object.values(aiPlanningExampleSets).find((set) =>
+            (set as readonly AiPlanningExampleId[]).includes(inUse),
+          ) ?? shown;
+        if (shown) return shown;
+      }
+      if (hasBrief && shown) return shown;
+      return this.next();
     },
     next(): readonly AiPlanningExampleId[] {
       if (!initialized) {

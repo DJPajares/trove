@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { CircleAlert, CircleCheck, Copy } from 'lucide-react';
+import { CircleAlert, CircleCheck, Copy, RotateCcw } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
@@ -45,9 +45,9 @@ function retryAtLabel(value: string) {
  * outlives this sheet, so the lifecycle it drives lives in
  * `useAiPlanningLifecycle` above it and arrives here as one object.
  *
- * It opens on one question and a roomy brief. Ideas show while the brief is
- * empty; once the traveller is writing, they give way to how Trove fills the
- * gaps. Setting the trip up by hand stays beside the main action throughout.
+ * It opens on one question and a roomy brief, with ideas to start from that
+ * stay on show (the one in use is marked) and a way to start fresh. Setting the
+ * trip up by hand stays beside the main action throughout.
  */
 export function AiPlanningComposer({
   lifecycle,
@@ -77,8 +77,8 @@ export function AiPlanningComposer({
   } = lifecycle;
   const errorKey = aiPlanningErrorMessageKey(visibleError);
   const busy = operation !== 'idle' || generating;
-  // Words decide whether ideas still help; words or choices make a brief.
-  const hasWords = prompt.trim().length > 0;
+  // Words or choices make a brief. Ideas stay on show either way, so the one a
+  // brief started from can always be found again, or swapped for another.
   const hasBrief = composedPrompt.length > 0;
   const exhausted = availability?.status === 'quota_exhausted';
   const unavailable = availability?.status === 'unavailable';
@@ -202,12 +202,32 @@ export function AiPlanningComposer({
                 selections={briefSelections}
                 text={prompt}
               />
-              <p
-                className="-mt-2 px-1 text-[length:var(--text-metadata)] leading-snug text-muted-foreground"
-                id={`${PROMPT_ID}-hint`}
-              >
-                {t('promptHint')}
-              </p>
+              <div className="-mt-2 flex items-center justify-between gap-3 px-1">
+                <p
+                  className="text-[length:var(--text-metadata)] leading-snug text-muted-foreground"
+                  id={`${PROMPT_ID}-hint`}
+                >
+                  {t('promptHint')}
+                </p>
+                {/* Clears the words, every option and the kept copy, for a
+                    fresh start. Ideas stay below to start again from. */}
+                {hasBrief ? (
+                  <Button
+                    className="-my-1 shrink-0 text-muted-foreground hover:text-foreground"
+                    disabled={busy}
+                    onClick={() => {
+                      void startOver();
+                      document.getElementById(PROMPT_ID)?.focus();
+                    }}
+                    size="sm"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <RotateCcw aria-hidden="true" data-icon="inline-start" />
+                    {t('startFresh')}
+                  </Button>
+                ) : null}
+              </div>
               <FindsSwitch
                 disabled={busy}
                 onChange={setBriefSelections}
@@ -216,8 +236,9 @@ export function AiPlanningComposer({
             </>
           )}
 
-          {!exhausted && !hasWords && examples.length ? (
+          {!exhausted && examples.length ? (
             <IdeaCards
+              current={prompt}
               disabled={busy}
               examples={examples}
               onUse={(text, selections) => {
@@ -344,10 +365,13 @@ const IDEA_TINTS: Record<TrovePlaceCategory, string> = {
  * editable. Who and pace are read out with the name.
  */
 function IdeaCards({
+  current,
   disabled,
   examples,
   onUse,
 }: Readonly<{
+  /** The brief's words, so the idea it came from stays marked. */
+  current: string;
   disabled: boolean;
   examples: readonly AiPlanningExampleId[];
   onUse: (text: string, selections: AiPlanningBriefSelection[]) => void;
@@ -389,10 +413,12 @@ function IdeaCards({
           const meta = [selections[1]!.label, selections[2]!.label].join(' · ');
           const category = aiPlanningExampleCategories[example];
           const { Icon } = resolvePlaceCategoryFallback(category);
+          const inUse = current.trim() === t(`examples.${example}`);
           return (
             <button
               aria-label={t('exampleUse', { label, meta })}
-              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border-subtle px-3 text-sm font-medium text-foreground outline-none transition-colors duration-[var(--motion-standard)] hover:border-border hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-50 motion-reduce:transition-none"
+              aria-pressed={inUse}
+              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border-subtle px-3 text-sm font-medium text-foreground outline-none transition-colors duration-[var(--motion-standard)] hover:border-border hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-50 aria-pressed:border-brand/50 aria-pressed:bg-secondary aria-pressed:text-secondary-foreground motion-reduce:transition-none"
               disabled={disabled}
               key={example}
               onClick={() => onUse(t(`examples.${example}`), selections)}

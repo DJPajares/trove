@@ -1565,5 +1565,16 @@
         "Closing Plan with AI no longer loses what you wrote. Your brief, options and ideas are still there when you come back."
       ]
     }
+  },
+  {
+    "id": "plan-with-ai-start-fresh",
+    "date": "2026-11-17",
+    "version": "1.40.3",
+    "summaries": {
+      "en": [
+        "Plan with AI keeps its ideas in view and marks the one you started from. Start fresh clears everything in one tap.",
+        "On your phone, the Expenses page uses just the + button to add an expense."
+      ]
+    }
   }
 ]

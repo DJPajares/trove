@@ -326,21 +326,22 @@ function Notice({
   );
 }
 
-/** Each idea's quiet category tile; every class written whole so Tailwind can see it. */
-const IDEA_TILES: Record<TrovePlaceCategory, string> = {
-  destination: 'bg-brand/12 text-brand',
-  food_and_drink: 'bg-category-food/14 text-category-food',
-  other: 'bg-category-other/16 text-category-other',
-  shopping: 'bg-category-shopping/14 text-category-shopping',
-  stay: 'bg-category-stay/14 text-category-stay',
-  things_to_do: 'bg-category-activities/16 text-category-activities',
-  transport: 'bg-category-transport/14 text-category-transport',
+/** Each idea's category colour on its small glyph; every class written whole for Tailwind. */
+const IDEA_TINTS: Record<TrovePlaceCategory, string> = {
+  destination: 'text-brand',
+  food_and_drink: 'text-category-food',
+  other: 'text-category-other',
+  shopping: 'text-category-shopping',
+  stay: 'text-category-stay',
+  things_to_do: 'text-category-activities',
+  transport: 'text-category-transport',
 };
 
 /**
- * Ideas to start from, as small cards rather than bare labels: where, then who
- * and how full the days are. Using one fills the brief with its words and turns
- * on the same options a traveller would pick, so every chip stays editable.
+ * Ideas to start from, kept small and quiet so they read as suggestions beside
+ * the brief rather than part of it. Using one fills the brief with its words
+ * and turns on the same options a traveller would pick, so every chip stays
+ * editable. Who and pace are read out with the name.
  */
 function IdeaCards({
   disabled,
@@ -371,7 +372,7 @@ function IdeaCards({
   }
 
   return (
-    <section aria-labelledby="ai-planning-ideas" className="space-y-2.5">
+    <section aria-labelledby="ai-planning-ideas" className="space-y-2">
       <h3
         className="px-1 text-[length:var(--text-metadata)] font-semibold text-muted-foreground"
         id="ai-planning-ideas"
@@ -379,7 +380,7 @@ function IdeaCards({
         {t('examplesLabel')}
       </h3>
       <ScrollShadow
-        className="-mx-4 flex snap-x scroll-px-4 gap-2.5 px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-3 sm:px-0"
+        className="-mx-4 flex gap-2 px-4 pb-0.5 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0"
         orientation="horizontal"
       >
         {examples.map((example) => {
@@ -391,27 +392,15 @@ function IdeaCards({
           return (
             <button
               aria-label={t('exampleUse', { label, meta })}
-              className="group flex w-44 shrink-0 snap-start flex-col gap-2.5 rounded-[var(--radius-xl)] border border-border-subtle bg-card p-3 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:border-border hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-50 motion-reduce:transition-none sm:w-auto"
+              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border-subtle px-3 text-sm font-medium text-foreground outline-none transition-colors duration-[var(--motion-standard)] hover:border-border hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-50 motion-reduce:transition-none"
               disabled={disabled}
               key={example}
               onClick={() => onUse(t(`examples.${example}`), selections)}
+              title={meta}
               type="button"
             >
-              <span
-                aria-hidden="true"
-                className={cn(
-                  'grid size-8 place-items-center rounded-[var(--radius-md)]',
-                  IDEA_TILES[category],
-                )}
-              >
-                <Icon className="size-4" />
-              </span>
-              <span className="min-w-0 space-y-0.5">
-                <span className="block text-sm leading-snug font-semibold text-balance">
-                  {label}
-                </span>
-                <span className="block truncate text-xs text-muted-foreground">{meta}</span>
-              </span>
+              <Icon aria-hidden="true" className={cn('size-3.5 shrink-0', IDEA_TINTS[category])} />
+              {label}
             </button>
           );
         })}

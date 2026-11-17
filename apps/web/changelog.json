@@ -1541,7 +1541,8 @@
     "version": "1.40.0",
     "summaries": {
       "en": [
-        "Plan with AI has fresh trip ideas to start from. Tap one to fill in the details and options, then make it your own."
+        "Plan with AI has fresh trip ideas to start from. Tap one to fill in the details and options, then make it your own.",
+        "Scrolling rows and panels no longer fade an edge when there's nothing more to see there."
       ]
     }
   }

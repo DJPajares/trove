@@ -1,19 +1,27 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import { CircleAlert, CircleCheck, Copy } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 
-import { AiPlanningAllowance } from '@/components/ai-planning-allowance';
-import { AiPlanningBriefField } from '@/components/ai-planning-brief-field';
+import { AiPlanningAllowance, AiPlanningSpendNote } from '@/components/ai-planning-allowance';
+import {
+  AiPlanningBriefField,
+  useAiPlanningBriefCatalogue,
+} from '@/components/ai-planning-brief-field';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { SheetHeading } from '@/components/ui/sheet';
 import type { AiPlanningAvailability } from '@/lib/ai-planning/api';
+import { AI_PLANNING_FINDS_KEY, type AiPlanningBriefSelection } from '@/lib/ai-planning/brief';
 import { aiPlanningExampleRotation, type AiPlanningExampleId } from '@/lib/ai-planning/examples';
 import { aiPlanningErrorMessageKey } from '@/lib/ai-planning/presentation';
 import type { AiPlanningLifecycle } from '@/lib/ai-planning/use-lifecycle';
 import * as Icons from '@/lib/icons';
+import { queryKeys } from '@/lib/query/keys';
+import { fetchSavedPlaces } from '@/lib/saved/api';
 import { cn } from '@/lib/utils';
 import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
@@ -179,6 +187,7 @@ export function AiPlanningComposer({
                     {t('promptLabel')}
                   </label>
                 }
+                maxDays={availability?.maxItineraryDays ?? null}
                 mode="ingredients"
                 onSelectionsChange={setBriefSelections}
                 onTextChange={setPrompt}
@@ -192,6 +201,11 @@ export function AiPlanningComposer({
               >
                 {t('promptHint')}
               </p>
+              <FindsSwitch
+                disabled={busy}
+                onChange={setBriefSelections}
+                selections={briefSelections}
+              />
             </>
           )}
 
@@ -228,9 +242,7 @@ export function AiPlanningComposer({
         </ScrollShadow>
 
         <div className="space-y-2.5 border-t border-border-subtle bg-background px-4 pt-3 pb-4 sm:px-6">
-          {!exhausted ? (
-            <AiPlanningAllowance availability={availability} className="px-1" spending={hasBrief} />
-          ) : null}
+          {!exhausted ? <AiPlanningAllowance availability={availability} className="px-1" /> : null}
           <div className="flex gap-2">
             {session && generating ? (
               <Button
@@ -270,6 +282,9 @@ export function AiPlanningComposer({
               </>
             )}
           </div>
+          {!exhausted && !unavailable && hasBrief && canGenerate ? (
+            <AiPlanningSpendNote availability={availability} className="px-1 text-end" />
+          ) : null}
         </div>
       </form>
     </>
@@ -323,6 +338,55 @@ function Notice({
   );
 }
 
+/**
+ * The traveller's saved finds go into every plan where they fit (PRD 7.6); this
+ * makes that visible and lets them leave the finds out of this one. Off is sent
+ * as a sentence with the brief, like any other choice. Hidden with no finds.
+ */
+function FindsSwitch({
+  disabled,
+  onChange,
+  selections,
+}: Readonly<{
+  disabled: boolean;
+  onChange: (selections: AiPlanningBriefSelection[]) => void;
+  selections: readonly AiPlanningBriefSelection[];
+}>) {
+  const t = useTranslations('trips.aiPlanning.brief');
+  const catalogue = useAiPlanningBriefCatalogue();
+  const saved = useQuery({ queryFn: fetchSavedPlaces, queryKey: queryKeys.savedPlaces() });
+  const count = saved.data?.savedPlaces.length ?? 0;
+  if (!count) return null;
+  const on = !selections.some((selection) => selection.key === AI_PLANNING_FINDS_KEY);
+  return (
+    <label className="flex cursor-pointer items-center gap-3 rounded-[var(--radius-xl)] border border-border-subtle bg-card px-4 py-3">
+      <span
+        aria-hidden="true"
+        className="grid size-9 shrink-0 place-items-center rounded-[var(--radius-md)] bg-surface-tint text-brand"
+      >
+        <Icons.Saved className="size-[1.125rem]" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">{t('findsTitle', { count })}</span>
+        <span className="block text-[length:var(--text-metadata)] leading-snug text-muted-foreground">
+          {t('findsHint')}
+        </span>
+      </span>
+      <Switch
+        checked={on}
+        disabled={disabled}
+        onCheckedChange={(checked) =>
+          onChange(
+            checked
+              ? selections.filter((selection) => selection.key !== AI_PLANNING_FINDS_KEY)
+              : [...selections, catalogue.findsOff],
+          )
+        }
+      />
+    </label>
+  );
+}
+
 /** Out of credits is a pause, not a dead end: the brief stays, and so does the manual path. */
 function CreditsSpent({ availability }: Readonly<{ availability: AiPlanningAvailability }>) {
   const t = useTranslations('trips.aiPlanning');
@@ -346,16 +410,16 @@ function CreditsSpent({ availability }: Readonly<{ availability: AiPlanningAvail
         </div>
       ) : null}
       <div className="space-y-1.5">
-        {availability.tier ? (
+        {availability.status === 'quota_exhausted' ? (
           <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-score-media-brand uppercase">
-            {t('noCredits.eyebrow', { tier: t(`tiers.${availability.tier}`) })}
+            {t('noCredits.eyebrow')}
           </p>
         ) : null}
         <h3
           className="font-journal text-[1.875rem] leading-[1.05] font-normal text-balance"
           id="ai-planning-credits-spent"
         >
-          {t('noCredits.title')}
+          {t('noCredits.title', { count: allowance })}
         </h3>
         <p className="text-sm leading-relaxed text-score-media-muted">{body}</p>
       </div>

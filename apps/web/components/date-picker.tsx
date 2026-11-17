@@ -141,7 +141,7 @@ function DatePicker({
             }
             aria-required={required}
             className={cn(
-              'h-11 w-full justify-start gap-2.5 px-3 text-base font-normal md:text-sm',
+              'h-11 w-full justify-start gap-2.5 bg-field px-3 text-base font-normal hover:bg-field md:text-sm dark:bg-field',
               !displayDate && 'text-muted-foreground',
               className,
             )}

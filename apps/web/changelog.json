@@ -1545,5 +1545,15 @@
         "Scrolling rows and panels no longer fade an edge when there's nothing more to see there."
       ]
     }
+  },
+  {
+    "id": "fields-stand-out",
+    "date": "2026-11-17",
+    "version": "1.40.1",
+    "summaries": {
+      "en": [
+        "Text boxes, pickers and search fields now have their own fill, so they're easy to spot on any page or card, in light and dark mode."
+      ]
+    }
   }
 ]

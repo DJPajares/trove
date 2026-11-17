@@ -20,7 +20,7 @@ function NativeSelect({ className, size = 'default', ...props }: NativeSelectPro
       <select
         data-slot="native-select"
         data-size={size}
-        className="h-11 w-full min-w-0 appearance-none rounded-[var(--radius-md)] border border-input bg-background py-2 pr-9 pl-3 text-base transition-[color,background-color,border-color,box-shadow] duration-[var(--motion-standard)] outline-none select-none selection:bg-primary selection:text-primary-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-60 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-[size=sm]:h-9 data-[size=sm]:py-1 md:text-sm dark:bg-input/20 dark:hover:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40"
+        className="h-11 w-full min-w-0 appearance-none rounded-[var(--radius-md)] border border-input bg-field py-2 pr-9 pl-3 text-base transition-[color,background-color,border-color,box-shadow] duration-[var(--motion-standard)] outline-none select-none selection:bg-primary selection:text-primary-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-60 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-[size=sm]:h-9 data-[size=sm]:py-1 md:text-sm dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40"
         {...props}
       />
       <ChevronDownIcon

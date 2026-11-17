@@ -58,7 +58,7 @@ export function SearchSelect({
       <ComboboxInput
         aria-describedby={describedBy}
         aria-label={label}
-        className="h-11 w-full min-w-0 rounded-[var(--radius-md)] border border-input bg-background text-base shadow-[var(--shadow-control)] outline-none placeholder:text-muted-foreground hover:border-border-strong focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 md:text-sm dark:bg-input/20"
+        className="h-11 w-full min-w-0 rounded-[var(--radius-md)] border border-input bg-field text-base shadow-[var(--shadow-control)] outline-none placeholder:text-muted-foreground hover:border-border-strong focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 md:text-sm"
         clearLabel={t('clear', { label })}
         id={id}
         placeholder={placeholder}

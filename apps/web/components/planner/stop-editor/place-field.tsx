@@ -319,7 +319,7 @@ export function PlaceField({
             <ComboboxInput
               autoComplete="off"
               autoFocus={!hasIdentity || pickerOpen}
-              className="h-11 w-full min-w-0 rounded-[var(--radius-md)] border border-input bg-background py-2 text-base shadow-[var(--shadow-control)] md:text-sm"
+              className="h-11 w-full min-w-0 rounded-[var(--radius-md)] border border-input bg-field py-2 text-base shadow-[var(--shadow-control)] md:text-sm"
               clearLabel={t('clearPlaceQuery')}
               id="stop-editor-place"
               placeholder={t('placeOrPlanPlaceholder')}

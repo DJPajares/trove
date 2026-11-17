@@ -36,6 +36,9 @@
   --border-subtle: oklch(0.895 0.018 78);
   --border-strong: oklch(0.775 0.03 77);
   --input: oklch(0.858 0.023 78);
+  /* Where a traveller types or picks. A step below both the page and a card, so
+     a field reads as a well to fill wherever it sits; its border does the rest. */
+  --field: oklch(0.93 0.021 79);
   --ring: oklch(0.575 0.08 115);
   --surface: oklch(0.962 0.016 79);
   --surface-raised: oklch(0.985 0.009 79);
@@ -249,6 +252,8 @@
   --border-subtle: oklch(0.3 0.016 55);
   --border-strong: oklch(0.44 0.02 55);
   --input: oklch(0.36 0.018 55);
+  /* Dark mode lifts fields instead: a step above both the page and a card. */
+  --field: oklch(0.255 0.017 55);
   --ring: oklch(0.74 0.13 58);
   --surface: oklch(0.175 0.014 55);
   --surface-raised: oklch(0.215 0.016 55);
@@ -344,6 +349,7 @@
   --color-border-subtle: var(--border-subtle);
   --color-border-strong: var(--border-strong);
   --color-input: var(--input);
+  --color-field: var(--field);
   --color-ring: var(--ring);
   --color-surface: var(--surface);
   --color-surface-raised: var(--surface-raised);

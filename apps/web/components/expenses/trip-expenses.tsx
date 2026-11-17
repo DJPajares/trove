@@ -344,7 +344,14 @@ export function TripExpenses({
       {data.expenses.length === 0 ? (
         <PageState
           actions={
-            <Button disabled={readOnly} onClick={openCreate} variant="outline">
+            // On a phone the bottom bar's plus already adds an expense, here and
+            // in a trip, so a second add button would only repeat it.
+            <Button
+              className="max-md:hidden"
+              disabled={readOnly}
+              onClick={openCreate}
+              variant="outline"
+            >
               <Plus aria-hidden="true" data-icon="inline-start" />
               {t('addFirstExpense')}
             </Button>

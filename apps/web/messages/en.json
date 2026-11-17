@@ -502,6 +502,7 @@
       "starting": "Starting plan…",
       "cancel": "Cancel planning",
       "startOver": "Start over",
+      "startFresh": "Start fresh",
       "cancelling": "Cancelling…",
       "cancelled": "Planning cancelled. Your brief is ready to edit or try again.",
       "generating": {

@@ -16,7 +16,14 @@ import { Switch } from '@/components/ui/switch';
 import { SheetHeading } from '@/components/ui/sheet';
 import type { AiPlanningAvailability } from '@/lib/ai-planning/api';
 import { AI_PLANNING_FINDS_KEY, type AiPlanningBriefSelection } from '@/lib/ai-planning/brief';
-import { aiPlanningExampleRotation, type AiPlanningExampleId } from '@/lib/ai-planning/examples';
+import {
+  aiPlanningExampleCategories,
+  aiPlanningExamplePicks,
+  aiPlanningExampleRotation,
+  type AiPlanningExampleId,
+} from '@/lib/ai-planning/examples';
+import { resolvePlaceCategoryFallback } from '@/lib/media/place-category-fallback';
+import type { TrovePlaceCategory } from '@/lib/place-categories';
 import { aiPlanningErrorMessageKey } from '@/lib/ai-planning/presentation';
 import type { AiPlanningLifecycle } from '@/lib/ai-planning/use-lifecycle';
 import * as Icons from '@/lib/icons';
@@ -210,34 +217,15 @@ export function AiPlanningComposer({
           )}
 
           {!exhausted && !hasWords && examples.length ? (
-            <ScrollShadow
-              orientation="horizontal"
-              render={<section />}
-              aria-labelledby="ai-planning-ideas"
-              className="-mx-4 flex items-center gap-2 px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0"
-            >
-              <h3
-                className="shrink-0 px-1 text-[length:var(--text-metadata)] font-semibold text-muted-foreground"
-                id="ai-planning-ideas"
-              >
-                {t('examplesLabel')}
-              </h3>
-              {examples.map((example) => (
-                <Button
-                  className="h-11 shrink-0 rounded-full border-border bg-background px-4 font-journal text-[1.0625rem] font-normal shadow-none"
-                  disabled={busy}
-                  key={example}
-                  onClick={() => {
-                    setPrompt(t(`examples.${example}`));
-                    document.getElementById(PROMPT_ID)?.focus();
-                  }}
-                  type="button"
-                  variant="outline"
-                >
-                  {t(`exampleLabels.${example}`)}
-                </Button>
-              ))}
-            </ScrollShadow>
+            <IdeaCards
+              disabled={busy}
+              examples={examples}
+              onUse={(text, selections) => {
+                setPrompt(text);
+                setBriefSelections(selections);
+                document.getElementById(PROMPT_ID)?.focus();
+              }}
+            />
           ) : null}
         </ScrollShadow>
 
@@ -334,6 +322,100 @@ function Notice({
         <p className="text-sm leading-relaxed text-muted-foreground">{children}</p>
         {action ? <div className="pt-1">{action}</div> : null}
       </div>
+    </section>
+  );
+}
+
+/** Each idea's quiet category tile; every class written whole so Tailwind can see it. */
+const IDEA_TILES: Record<TrovePlaceCategory, string> = {
+  destination: 'bg-brand/12 text-brand',
+  food_and_drink: 'bg-category-food/14 text-category-food',
+  other: 'bg-category-other/16 text-category-other',
+  shopping: 'bg-category-shopping/14 text-category-shopping',
+  stay: 'bg-category-stay/14 text-category-stay',
+  things_to_do: 'bg-category-activities/16 text-category-activities',
+  transport: 'bg-category-transport/14 text-category-transport',
+};
+
+/**
+ * Ideas to start from, as small cards rather than bare labels: where, then who
+ * and how full the days are. Using one fills the brief with its words and turns
+ * on the same options a traveller would pick, so every chip stays editable.
+ */
+function IdeaCards({
+  disabled,
+  examples,
+  onUse,
+}: Readonly<{
+  disabled: boolean;
+  examples: readonly AiPlanningExampleId[];
+  onUse: (text: string, selections: AiPlanningBriefSelection[]) => void;
+}>) {
+  const t = useTranslations('trips.aiPlanning');
+  const catalogue = useAiPlanningBriefCatalogue();
+
+  function selectionsFor(example: AiPlanningExampleId) {
+    const picks = aiPlanningExamplePicks[example];
+    const who =
+      typeof picks.who === 'string'
+        ? catalogue.pick('who', picks.who)
+        : catalogue.group(picks.who.group, picks.who.count);
+    const mustSeeKey = `exampleMustSees.${example}`;
+    return [
+      catalogue.pick('when', picks.when),
+      who,
+      catalogue.pick('pace', picks.pace),
+      ...(t.has(mustSeeKey) ? [catalogue.mustSee(t(mustSeeKey))] : []),
+      ...(picks.rhythm ? [catalogue.pick('rhythm', picks.rhythm)] : []),
+    ];
+  }
+
+  return (
+    <section aria-labelledby="ai-planning-ideas" className="space-y-2.5">
+      <h3
+        className="px-1 text-[length:var(--text-metadata)] font-semibold text-muted-foreground"
+        id="ai-planning-ideas"
+      >
+        {t('examplesLabel')}
+      </h3>
+      <ScrollShadow
+        className="-mx-4 flex snap-x scroll-px-4 gap-2.5 px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-3 sm:px-0"
+        orientation="horizontal"
+      >
+        {examples.map((example) => {
+          const selections = selectionsFor(example);
+          const label = t(`exampleLabels.${example}`);
+          const meta = [selections[1]!.label, selections[2]!.label].join(' · ');
+          const category = aiPlanningExampleCategories[example];
+          const { Icon } = resolvePlaceCategoryFallback(category);
+          return (
+            <button
+              aria-label={t('exampleUse', { label, meta })}
+              className="group flex w-44 shrink-0 snap-start flex-col gap-2.5 rounded-[var(--radius-xl)] border border-border-subtle bg-card p-3 text-left outline-none transition-colors duration-[var(--motion-standard)] hover:border-border hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 disabled:opacity-50 motion-reduce:transition-none sm:w-auto"
+              disabled={disabled}
+              key={example}
+              onClick={() => onUse(t(`examples.${example}`), selections)}
+              type="button"
+            >
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'grid size-8 place-items-center rounded-[var(--radius-md)]',
+                  IDEA_TILES[category],
+                )}
+              >
+                <Icon className="size-4" />
+              </span>
+              <span className="min-w-0 space-y-0.5">
+                <span className="block text-sm leading-snug font-semibold text-balance">
+                  {label}
+                </span>
+                <span className="block truncate text-xs text-muted-foreground">{meta}</span>
+              </span>
+            </button>
+          );
+        })}
+      </ScrollShadow>
     </section>
   );
 }

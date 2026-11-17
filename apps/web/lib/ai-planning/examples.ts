@@ -1,36 +1,64 @@
 import type { TrovePlaceCategory } from '@/lib/place-categories';
 
 export const aiPlanningExampleSets = {
-  foodAndNature: ['tokyoFood', 'costaRicaOutdoors', 'singaporeWork'],
-  sharedAdventures: ['lisbonBudget', 'scottishRoadTrip', 'barcelonaFamily'],
-  differentPaces: ['romePacked', 'icelandPhotography', 'beachEscape'],
-  activeExploration: ['bangkokFood', 'queenstownAdventure', 'vietnamFriends'],
+  foodAndNature: ['tokyoSlow', 'baliRetreat', 'bangkokFood'],
+  sharedAdventures: ['barcelonaFamily', 'hanoiFriends', 'kyotoCouple'],
+  differentPaces: ['romePacked', 'parisSlow', 'istanbulWeekend'],
+  activeExploration: ['queenstownOutdoors', 'lisbonViews', 'singaporeEvenings'],
 } as const;
 
 type ExampleSetId = keyof typeof aiPlanningExampleSets;
 export type AiPlanningExampleId = (typeof aiPlanningExampleSets)[ExampleSetId][number];
 
 /**
- * The tint and glyph each idea card borrows from the place-category fallbacks.
+ * The tint and glyph each idea card borrows from the place categories.
  * Decorative and local: an idea card never fetches a photograph, so browsing
  * ideas stays free of provider requests.
  */
 export const aiPlanningExampleCategories: Record<AiPlanningExampleId, TrovePlaceCategory> = {
+  baliRetreat: 'stay',
   bangkokFood: 'food_and_drink',
   barcelonaFamily: 'things_to_do',
-  beachEscape: 'stay',
-  costaRicaOutdoors: 'things_to_do',
-  icelandPhotography: 'destination',
-  lisbonBudget: 'destination',
-  queenstownAdventure: 'things_to_do',
+  hanoiFriends: 'food_and_drink',
+  istanbulWeekend: 'shopping',
+  kyotoCouple: 'destination',
+  lisbonViews: 'destination',
+  parisSlow: 'food_and_drink',
+  queenstownOutdoors: 'things_to_do',
   romePacked: 'things_to_do',
-  scottishRoadTrip: 'transport',
-  singaporeWork: 'destination',
-  tokyoFood: 'food_and_drink',
-  vietnamFriends: 'destination',
+  singaporeEvenings: 'food_and_drink',
+  tokyoSlow: 'destination',
 };
 
-export const AI_PLANNING_EXAMPLES_STORAGE_KEY = 'trove:ai-planning-examples:v1';
+/**
+ * The brief options an idea turns on beside its words, so a traveller starts
+ * from the same chips they would have picked: who's coming, how full the days
+ * are, roughly when, and any daily rhythm. Must-sees are words, kept with the
+ * idea's messages. Every value here is one the planner reads (PRD 7.6).
+ */
+export type AiPlanningExamplePicks = {
+  pace: 'balanced' | 'packed' | 'relaxed';
+  rhythm?: 'early' | 'evenings' | 'late';
+  when: 'flexibleShort' | 'flexibleWeek' | 'nextMonth' | 'thisWeekend';
+  who: 'couple' | 'solo' | { count: number; group: 'family' | 'friends' };
+};
+
+export const aiPlanningExamplePicks: Record<AiPlanningExampleId, AiPlanningExamplePicks> = {
+  baliRetreat: { pace: 'relaxed', when: 'flexibleWeek', who: 'couple' },
+  bangkokFood: { pace: 'balanced', when: 'flexibleShort', who: { count: 3, group: 'friends' } },
+  barcelonaFamily: { pace: 'relaxed', when: 'flexibleShort', who: { count: 4, group: 'family' } },
+  hanoiFriends: { pace: 'balanced', when: 'flexibleWeek', who: { count: 6, group: 'friends' } },
+  istanbulWeekend: { pace: 'balanced', when: 'thisWeekend', who: 'solo' },
+  kyotoCouple: { pace: 'relaxed', rhythm: 'early', when: 'flexibleShort', who: 'couple' },
+  lisbonViews: { pace: 'relaxed', rhythm: 'late', when: 'nextMonth', who: 'couple' },
+  parisSlow: { pace: 'relaxed', rhythm: 'late', when: 'flexibleShort', who: 'couple' },
+  queenstownOutdoors: { pace: 'packed', when: 'flexibleShort', who: 'solo' },
+  romePacked: { pace: 'packed', rhythm: 'early', when: 'flexibleShort', who: 'couple' },
+  singaporeEvenings: { pace: 'balanced', when: 'flexibleWeek', who: 'solo' },
+  tokyoSlow: { pace: 'balanced', when: 'flexibleShort', who: 'solo' },
+};
+
+export const AI_PLANNING_EXAMPLES_STORAGE_KEY = 'trove:ai-planning-examples:v2';
 const setIds = Object.keys(aiPlanningExampleSets) as ExampleSetId[];
 
 type RotationState = { remaining: ExampleSetId[]; last: ExampleSetId };

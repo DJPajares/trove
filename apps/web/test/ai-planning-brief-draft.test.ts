@@ -44,12 +44,19 @@ test('a broken kept draft is ignored rather than thrown', () => {
   expect(readAiPlanningBriefDraft(store)).toBeNull();
 });
 
-test('reopening the drawer in the same visit shows the same ideas', () => {
+test('ideas rotate on each empty opening but stay beside a brief that uses one', () => {
   const rotation = createAiPlanningExampleRotation({
     getStorage: () => ({ getItem: () => null, setItem: () => undefined }),
     random: () => 0,
   });
-  const first = rotation.forVisit();
-  expect(rotation.forVisit()).toBe(first);
-  expect(rotation.forVisit()).toBe(first);
+  const first = rotation.forOpening({ hasBrief: false, inUse: null });
+  const second = rotation.forOpening({ hasBrief: false, inUse: null });
+  expect(second).not.toEqual(first);
+
+  // A brief of the traveller's own keeps the set on show.
+  expect(rotation.forOpening({ hasBrief: true, inUse: null })).toBe(second);
+
+  // A brief from an idea brings back the set that holds it, even after rotating.
+  const idea = first[1]!;
+  expect(rotation.forOpening({ hasBrief: true, inUse: idea })).toContain(idea);
 });

@@ -85,11 +85,11 @@ export function AiPlanningComposer({
   const failedRun = session?.status === 'failed';
 
   useEffect(() => {
-    // Mounting marks a new opening, including returning from setting up by hand.
-    // Strict Mode replays this effect; it must not consume a second set.
+    // The same ideas for the whole visit: reopening the drawer, or returning from
+    // setting up by hand, shows what the traveller was already looking at.
     if (initializedExamples.current) return;
     initializedExamples.current = true;
-    setExamples(aiPlanningExampleRotation.next());
+    setExamples(aiPlanningExampleRotation.forVisit());
   }, []);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {

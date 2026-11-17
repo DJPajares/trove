@@ -103,7 +103,18 @@ export function createAiPlanningExampleRotation({
   let state: RotationState | null = null;
   let storage: RotationStorage | undefined;
 
+  let shown: readonly AiPlanningExampleId[] | null = null;
+
   return {
+    /**
+     * The ideas for this visit: rotated once when the page loads, then the same
+     * set every time the drawer reopens, so closing it to check something never
+     * swaps the ideas a traveller was looking at.
+     */
+    forVisit(): readonly AiPlanningExampleId[] {
+      shown ??= this.next();
+      return shown;
+    },
     next(): readonly AiPlanningExampleId[] {
       if (!initialized) {
         initialized = true;
@@ -134,7 +145,8 @@ export function createAiPlanningExampleRotation({
       } catch {
         // Keep the in-memory queue when persistence is unavailable or full.
       }
-      return aiPlanningExampleSets[last];
+      shown = aiPlanningExampleSets[last];
+      return shown;
     },
   };
 }

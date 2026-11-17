@@ -4,6 +4,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
+  clearAiPlanningBriefDraft,
+  readAiPlanningBriefDraft,
+  writeAiPlanningBriefDraft,
+} from '@/lib/ai-planning/brief-draft';
+import {
   AiPlanningApiError,
   cancelAiPlanningSession,
   createAiPlanningSession,
@@ -64,6 +69,7 @@ export function useAiPlanningLifecycle(
   const pendingPlanningAttempt = useRef<PendingPlanningAttempt | null>(null);
   const retiredSessionIds = useRef(new Set<string>());
   const promptTouched = useRef(false);
+  const draftRestored = useRef(false);
   const mirroredRecoveryId = useRef<string | null>(null);
   const pendingCancellation = useRef<{ clearBrief: boolean; runAttempt: number } | null>(null);
   const cancellingSessionId = useRef<string | null>(null);
@@ -72,6 +78,7 @@ export function useAiPlanningLifecycle(
   );
 
   const clearBrief = useCallback(() => {
+    clearAiPlanningBriefDraft();
     setPromptValue('');
     setBriefSelectionsValue([]);
     setRetainedBriefExpiresAt(null);
@@ -86,7 +93,14 @@ export function useAiPlanningLifecycle(
     cancellingSessionId.current = null;
     retiredSessionIds.current.clear();
     mirroredRecoveryId.current = null;
-    clearBrief();
+    // Signed-out or not yet signed in. The kept draft stays on the device: only
+    // signing out (below) or using it clears that.
+    setPromptValue('');
+    setBriefSelectionsValue([]);
+    setRetainedBriefExpiresAt(null);
+    promptTouched.current = false;
+    pendingPlanningAttempt.current = null;
+    draftRestored.current = false;
     setSession(null);
     setOperation('idle');
     setCancelled(false);
@@ -107,6 +121,19 @@ export function useAiPlanningLifecycle(
       }),
     [clearBrief],
   );
+
+  // Bring back a brief kept on this device, once per signed-in visit, before
+  // anything is saved over it.
+  useEffect(() => {
+    if (!enabled || draftRestored.current) return;
+    draftRestored.current = true;
+    const kept = readAiPlanningBriefDraft();
+    if (!kept || promptTouched.current) return;
+    const brief = splitBriefRef.current?.(kept) ?? { selections: [], text: kept };
+    promptTouched.current = true;
+    setPromptValue(brief.text);
+    setBriefSelectionsValue(brief.selections);
+  }, [enabled]);
 
   const recoveryQuery = useQuery({
     enabled,
@@ -299,6 +326,13 @@ export function useAiPlanningLifecycle(
         ? 'request_failed'
         : null;
   const composedPrompt = composeAiPlanningBrief(prompt, briefSelections);
+
+  // Keep what the traveller has written, so closing the drawer or a reload of a
+  // backgrounded app never loses it. Only once the kept draft has been read.
+  useEffect(() => {
+    if (!enabled || !draftRestored.current || !promptTouched.current) return;
+    writeAiPlanningBriefDraft(composedPrompt);
+  }, [composedPrompt, enabled]);
   const canGenerate =
     isAiPlanningPromptValid(composedPrompt) &&
     !generating &&

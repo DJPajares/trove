@@ -1555,5 +1555,15 @@
         "Text boxes, pickers and search fields now have their own fill, so they're easy to spot on any page or card, in light and dark mode."
       ]
     }
+  },
+  {
+    "id": "plan-with-ai-keeps-brief",
+    "date": "2026-11-17",
+    "version": "1.40.2",
+    "summaries": {
+      "en": [
+        "Closing Plan with AI no longer loses what you wrote. Your brief, options and ideas are still there when you come back."
+      ]
+    }
   }
 ]

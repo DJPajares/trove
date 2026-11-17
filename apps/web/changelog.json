@@ -1534,5 +1534,16 @@
         "Trips longer than your plan allows are flagged when you pick the dates."
       ]
     }
+  },
+  {
+    "id": "plan-with-ai-idea-cards",
+    "date": "2026-11-17",
+    "version": "1.40.0",
+    "summaries": {
+      "en": [
+        "Plan with AI has fresh trip ideas to start from. Tap one to fill in the details and options, then make it your own.",
+        "Scrolling rows and panels no longer fade an edge when there's nothing more to see there."
+      ]
+    }
   }
 ]

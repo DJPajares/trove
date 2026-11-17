@@ -40,8 +40,32 @@ function useScrollShadow(
       const position = Math.abs(vertical ? element.scrollTop : element.scrollLeft);
       const viewport = vertical ? element.clientHeight : element.clientWidth;
       const content = vertical ? element.scrollHeight : element.scrollWidth;
-      element.toggleAttribute('data-scroll-start', position > EDGE_TOLERANCE);
-      element.toggleAttribute('data-scroll-end', position + viewport < content - EDGE_TOLERANCE);
+      let start = position > EDGE_TOLERANCE;
+      let end = position + viewport < content - EDGE_TOLERANCE;
+
+      // Scrolling alone is not enough to fade an edge. A snapping row rests a
+      // padding's width in from its start, and its last item can snap short of
+      // the end, so the position says "scrolled" while nothing is hidden. An
+      // edge fades only while some content is actually cut off beyond it.
+      const box = element.getBoundingClientRect();
+      let low = Infinity;
+      let high = -Infinity;
+      for (const child of element.children) {
+        const rect = child.getBoundingClientRect();
+        if (!rect.width && !rect.height) continue;
+        low = Math.min(low, vertical ? rect.top : rect.left);
+        high = Math.max(high, vertical ? rect.bottom : rect.right);
+      }
+      if (low !== Infinity) {
+        const cutLow = low < (vertical ? box.top : box.left) - EDGE_TOLERANCE;
+        const cutHigh = high > (vertical ? box.bottom : box.right) + EDGE_TOLERANCE;
+        const rtl = !vertical && getComputedStyle(element).direction === 'rtl';
+        start = start && (rtl ? cutHigh : cutLow);
+        end = end && (rtl ? cutLow : cutHigh);
+      }
+
+      element.toggleAttribute('data-scroll-start', start);
+      element.toggleAttribute('data-scroll-end', end);
     };
 
     // Content that grows or shrinks changes what is left to scroll, so watch

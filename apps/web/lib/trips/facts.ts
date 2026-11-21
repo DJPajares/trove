@@ -10,7 +10,7 @@ import { calendarDayDistance } from './lifecycle';
  * `calendarDayDistance` measures the gap between two dates, and a traveller
  * counts the days they are away.
  */
-export function tripDayCount(trip: Trip) {
+export function tripDayCount(trip: Pick<Trip, 'endDate' | 'startDate'>) {
   return calendarDayDistance(trip.startDate, trip.endDate) + 1;
 }
 

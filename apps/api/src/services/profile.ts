@@ -35,7 +35,6 @@ export type ProfileUpdate = {
   distanceUnit?: 'km' | 'mi' | null;
   homeCountryCode?: string | null;
   homeCurrencyCode?: string | null;
-  isPublic?: boolean;
   temperatureUnit?: 'celsius' | 'fahrenheit' | null;
   timeFormat?: '12h' | '24h' | null;
   travelStyles?: string[];
@@ -54,7 +53,6 @@ type ProfilePersistenceUpdate = {
   homeCountryCode?: string | null;
   homeCurrencyCode?: string | null;
   homeTimeZone?: string | null;
-  isPublic?: boolean;
   temperatureUnit?: 'CELSIUS' | 'FAHRENHEIT' | null;
   timeFormat?: 'HOUR_12' | 'HOUR_24' | null;
   travelStyles?: string[];
@@ -186,7 +184,6 @@ function serializeProfile(
     homeCurrencyCode: profile.homeCurrencyCode?.trim() || null,
     homeTimeZone: profile.homeTimeZone,
     id: profile.id,
-    isPublic: profile.isPublic,
     temperatureUnit: mapProfileValue(profile.temperatureUnit),
     timeFormat: mapProfileValue(profile.timeFormat),
     travelStyles: profile.travelStyles,
@@ -260,7 +257,6 @@ export async function updateProfile(userId: string, accessToken: string, changes
     ...(changes.homeCurrencyCode !== undefined
       ? { homeCurrencyCode: changes.homeCurrencyCode }
       : {}),
-    ...(changes.isPublic !== undefined ? { isPublic: changes.isPublic } : {}),
     ...(changes.temperatureUnit !== undefined
       ? {
           temperatureUnit:

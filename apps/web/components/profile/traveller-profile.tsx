@@ -28,6 +28,8 @@ import {
 import {
   summarizeTravels,
   type CountryStamp,
+  type TravelSummary,
+  type TravelTrip,
   type VisitedPlace,
 } from '@/lib/profile/travel-summary';
 import { COUNTRY_CENTRES } from '@/lib/profile/country-centres';
@@ -218,9 +220,15 @@ export function CountryStamps({ stamps }: Readonly<{ stamps: CountryStamp[] }>) 
 
 function Journey({
   editorial,
+  href,
   index,
   trip,
-}: Readonly<{ editorial: EditorialImageReference | null; index: number; trip: Trip }>) {
+}: Readonly<{
+  editorial: EditorialImageReference | null;
+  href: string;
+  index: number;
+  trip: TravelTrip;
+}>) {
   const t = useTranslations('travellerProfile.journeys');
   const itineraryT = useTranslations('itinerary');
   const locale = useLocale();
@@ -245,7 +253,7 @@ function Journey({
         <h3 className="font-journal text-[1.625rem] leading-[1.02] text-foreground [overflow-wrap:anywhere]">
           <Link
             className="outline-none after:absolute after:inset-0 after:rounded-[var(--radius-lg)] focus-visible:after:ring-3 focus-visible:after:ring-ring/40"
-            href={`/trips/${trip.id}/memories`}
+            href={href}
           >
             {trip.name}
           </Link>
@@ -527,13 +535,6 @@ export function TravellerProfile() {
     ? namedCountries([profile.homeCountryCode], locale)[0]?.name
     : undefined;
   const coverPrint = coverTrip ? journeyPrints(coverTrip, editorialFor(coverTrip)) : null;
-  const stats = [
-    { count: summary.countries.length, key: 'countries' },
-    { count: summary.cities, key: 'cities' },
-    { count: summary.completed.length, key: 'trips' },
-    { count: summary.daysAway, key: 'days' },
-  ] as const;
-
   return (
     <div className="mx-auto w-full max-w-5xl">
       <ProfileCover
@@ -604,89 +605,145 @@ export function TravellerProfile() {
           />
         ) : (
           <>
-            <TravelGlance firstYear={summary.firstYear} stats={stats} />
-
-            <section aria-labelledby="profile-map" className="space-y-4">
-              <h2 className={SECTION_TITLE} id="profile-map">
-                {t('map.title')}
-              </h2>
-              <TravelMap
-                homeCountryCode={profile?.homeCountryCode ?? null}
-                places={summary.places}
-              />
-              {summary.countries.length ? <CountryStamps stamps={summary.countries} /> : null}
-            </section>
-
-            <section aria-labelledby="profile-journeys" className="space-y-6">
-              <div className="flex items-baseline justify-between gap-4">
-                <h2 className={SECTION_TITLE} id="profile-journeys">
-                  {t('journeys.title')}
-                </h2>
-                <Link
-                  className="group inline-flex shrink-0 items-center gap-1 rounded-[var(--radius-sm)] text-sm font-medium text-brand outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
-                  href="/trips?show=past"
-                >
-                  {t('journeys.all', { count: summary.completed.length })}
-                  <ChevronRight aria-hidden="true" className="size-4" />
-                </Link>
-              </div>
-              <ul className="space-y-7">
-                {journeys.map((trip, index) => (
-                  <Journey editorial={editorialFor(trip)} index={index} key={trip.id} trip={trip} />
-                ))}
-              </ul>
-            </section>
-
-            {favourites.length ? (
-              <section aria-labelledby="profile-favourites" className="space-y-4">
-                <div className="space-y-1">
-                  <h2 className={SECTION_TITLE} id="profile-favourites">
-                    {t('favourites.title')}
-                  </h2>
-                  <p className="text-sm text-muted-foreground">{t('favourites.description')}</p>
-                </div>
-                <ul className="-ms-[var(--gutter-inline-start)] -me-[var(--gutter-inline-end)] flex snap-x gap-3 overflow-x-auto ps-[var(--gutter-inline-start)] pe-[var(--gutter-inline-end)] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0 [&::-webkit-scrollbar]:hidden">
-                  {favourites.map((trip) => {
-                    const { cover, prints } = journeyPrints(trip, editorialFor(trip));
-                    return (
-                      <li className="w-40 shrink-0 snap-start md:w-auto" key={trip.id}>
-                        <Link
-                          className="group relative isolate flex aspect-[3/4] flex-col justify-end overflow-hidden rounded-[var(--radius-2xl)] bg-surface-media p-3.5 text-white shadow-[var(--shadow-card)] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                          href={`/trips/${trip.id}/memories`}
-                        >
-                          <TripMedia
-                            alt=""
-                            className="absolute inset-0 -z-20 h-full w-full rounded-none transition-transform duration-[var(--motion-slow)] ease-[var(--ease-standard)] group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-                            fallbackSources={prints[0] === cover ? [] : [cover]}
-                            sizes="(max-width: 767px) 160px, 15rem"
-                            source={prints[0] ?? cover}
-                            variant="card"
-                          />
-                          <span
-                            aria-hidden="true"
-                            className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,transparent_45%,rgba(8,18,13,0.88)_100%)]"
-                          />
-                          <span className="line-clamp-2 font-journal text-lg leading-[1.05]">
-                            {trip.name}
-                          </span>
-                          {trip.experienceRating === null ? null : (
-                            <ExperienceRatingMark
-                              className="mt-1"
-                              rating={trip.experienceRating}
-                              tone="onImage"
-                              wordClassName="sr-only"
-                            />
-                          )}
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
-            ) : null}
+            <ProfileTravels
+              editorialFor={editorialFor}
+              homeCountryCode={profile?.homeCountryCode ?? null}
+              hrefFor={(trip) => `/trips/${trip.id}/memories`}
+              summary={summary}
+              voice="own"
+            />
           </>
         )}
       </HomeSheet>
     </div>
+  );
+}
+
+/**
+ * A traveller's travels: the glance, where they have been, their journeys and
+ * favourite moments. Their own profile passes every trip; their public view
+ * (PRD 8.3) passes only Public ones, so the two pages are one layout and the
+ * public one can never show more than it is given.
+ */
+export function ProfileTravels<T extends TravelTrip>({
+  editorialFor,
+  homeCountryCode,
+  hrefFor,
+  summary,
+  voice,
+}: Readonly<{
+  editorialFor: (trip: T) => EditorialImageReference | null;
+  homeCountryCode: string | null;
+  hrefFor: (trip: T) => string;
+  summary: TravelSummary<T>;
+  /** Whose page it is: the traveller's own, or theirs as others see it. */
+  voice: 'own' | 'public';
+}>) {
+  const t = useTranslations('travellerProfile');
+  const publicT = useTranslations('publicTraveller');
+  const own = voice === 'own';
+  const journeys = summary.completed.slice(0, JOURNEY_LIMIT);
+  const favourites = summary.favourites.slice(0, FAVOURITE_LIMIT);
+  const stats = [
+    { count: summary.countries.length, key: 'countries' },
+    { count: summary.cities, key: 'cities' },
+    { count: summary.completed.length, key: 'trips' },
+    { count: summary.daysAway, key: 'days' },
+  ] as const;
+
+  return (
+    <>
+      <TravelGlance firstYear={summary.firstYear} stats={stats} />
+
+      <section aria-labelledby="profile-map" className="space-y-4">
+        <h2 className={SECTION_TITLE} id="profile-map">
+          {own ? t('map.title') : publicT('mapTitle')}
+        </h2>
+        <TravelMap
+          homeCountryCode={homeCountryCode}
+          messages={own ? 'travellerProfile.map' : 'publicTraveller.map'}
+          places={summary.places}
+        />
+        {summary.countries.length ? <CountryStamps stamps={summary.countries} /> : null}
+      </section>
+
+      <section aria-labelledby="profile-journeys" className="space-y-6">
+        <div className="flex items-baseline justify-between gap-4">
+          <h2 className={SECTION_TITLE} id="profile-journeys">
+            {t('journeys.title')}
+          </h2>
+          {own ? (
+            <Link
+              className="group inline-flex shrink-0 items-center gap-1 rounded-[var(--radius-sm)] text-sm font-medium text-brand outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+              href="/trips?show=past"
+            >
+              {t('journeys.all', { count: summary.completed.length })}
+              <ChevronRight aria-hidden="true" className="size-4" />
+            </Link>
+          ) : null}
+        </div>
+        <ul className="space-y-7">
+          {journeys.map((trip, index) => (
+            <Journey
+              editorial={editorialFor(trip)}
+              href={hrefFor(trip)}
+              index={index}
+              key={trip.id}
+              trip={trip}
+            />
+          ))}
+        </ul>
+      </section>
+
+      {favourites.length ? (
+        <section aria-labelledby="profile-favourites" className="space-y-4">
+          <div className="space-y-1">
+            <h2 className={SECTION_TITLE} id="profile-favourites">
+              {t('favourites.title')}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {own ? t('favourites.description') : publicT('favouritesDescription')}
+            </p>
+          </div>
+          <ul className="-ms-[var(--gutter-inline-start)] -me-[var(--gutter-inline-end)] flex snap-x gap-3 overflow-x-auto ps-[var(--gutter-inline-start)] pe-[var(--gutter-inline-end)] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0 [&::-webkit-scrollbar]:hidden">
+            {favourites.map((trip) => {
+              const { cover, prints } = journeyPrints(trip, editorialFor(trip));
+              return (
+                <li className="w-40 shrink-0 snap-start md:w-auto" key={trip.id}>
+                  <Link
+                    className="group relative isolate flex aspect-[3/4] flex-col justify-end overflow-hidden rounded-[var(--radius-2xl)] bg-surface-media p-3.5 text-white shadow-[var(--shadow-card)] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                    href={hrefFor(trip)}
+                  >
+                    <TripMedia
+                      alt=""
+                      className="absolute inset-0 -z-20 h-full w-full rounded-none transition-transform duration-[var(--motion-slow)] ease-[var(--ease-standard)] group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+                      fallbackSources={prints[0] === cover ? [] : [cover]}
+                      sizes="(max-width: 767px) 160px, 15rem"
+                      source={prints[0] ?? cover}
+                      variant="card"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,transparent_45%,rgba(8,18,13,0.88)_100%)]"
+                    />
+                    <span className="line-clamp-2 font-journal text-lg leading-[1.05]">
+                      {trip.name}
+                    </span>
+                    {trip.experienceRating === null ? null : (
+                      <ExperienceRatingMark
+                        className="mt-1"
+                        rating={trip.experienceRating}
+                        tone="onImage"
+                        wordClassName="sr-only"
+                      />
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
+    </>
   );
 }

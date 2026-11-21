@@ -59,7 +59,7 @@ function tripFixture(visibility: 'PRIVATE' | 'PUBLIC') {
     description: 'Cherry blossom season, finally.',
     endDate: new Date('2026-05-03T00:00:00.000Z'),
     id: visibility === 'PUBLIC' ? PUBLIC_TRIP_ID : PRIVATE_TRIP_ID,
-    owner: { displayName: 'Ana', isPublic: true },
+    owner: { displayName: 'Ana' },
     ownerId: 'owner-1',
     sourceAttribution: null as string | null,
     sourceTripId: null as string | null,
@@ -169,15 +169,6 @@ test('a shared copy says whose trip it is based on', async () => {
   expect(itinerary.trip.ownerName).toBe('Ana');
   // Where the copy came from is a credit, not a link: never the original's id.
   expect(JSON.stringify(itinerary)).not.toContain('sourceTripId');
-});
-
-test('the owner’s name links to their profile only while that profile is Public', async () => {
-  trips[0] = { ...trips[0]!, owner: { displayName: 'Ana', isPublic: false } };
-  const itinerary = await listPublicItinerary(PUBLIC_TRIP_ID);
-
-  expect(itinerary.trip.ownerId).toBeNull();
-  // Their name still credits them; it just opens nothing.
-  expect(itinerary.trip.ownerName).toBe('Ana');
 });
 
 /**

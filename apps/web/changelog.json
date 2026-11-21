@@ -1662,5 +1662,16 @@
         "Trips that were already Public can be added to your profile with one tap."
       ]
     }
+  },
+  {
+    "id": "profile-shows-public-travels",
+    "date": "2026-11-21",
+    "version": "1.45.0",
+    "summaries": {
+      "en": [
+        "Your profile is open to everyone again, with no switch: it shows your journeys, favourite moments and where you’ve been from your Public trips.",
+        "Private trips and their memories never appear on it."
+      ]
+    }
   }
 ]

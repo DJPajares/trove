@@ -17,9 +17,30 @@ export type VisitedPlace = {
   name: string;
 };
 
-export type TravelSummary = {
+/**
+ * What a profile reads from a trip. The traveller's own trips carry all of it;
+ * their public view builds the same from their Public trips (PRD 8.3).
+ */
+export type TravelTrip = Pick<
+  Trip,
+  | 'archivedAt'
+  | 'countries'
+  | 'coverPhotoUrl'
+  | 'endDate'
+  | 'experienceNote'
+  | 'experienceRating'
+  | 'id'
+  | 'lifecycle'
+  | 'memoryPhotos'
+  | 'name'
+  | 'startDate'
+> & {
+  destinations: readonly Pick<Trip['destinations'][number], 'location' | 'name' | 'placeId'>[];
+};
+
+export type TravelSummary<T extends TravelTrip = Trip> = {
   /** Completed, unarchived trips, most recent first. */
-  completed: Trip[];
+  completed: T[];
   /** Every country visited, in the order first visited. */
   countries: CountryStamp[];
   /** Distinct destinations across completed trips. */
@@ -29,7 +50,7 @@ export type TravelSummary = {
   /** Destinations with known coordinates, else the trip's countries, once each, oldest first. */
   places: VisitedPlace[];
   /** Completed trips the traveller rated 4 or 5 that have Memory photos, best first. */
-  favourites: Trip[];
+  favourites: T[];
 };
 
 const FAVOURITE_MIN_RATING = 4;
@@ -44,7 +65,7 @@ const year = (date: string) => Number(date.slice(0, 4));
  * counts trips (PRD 6.3). Everything is derived from the trips list the app
  * already holds, so the profile costs no request of its own.
  */
-export function summarizeTravels(trips: readonly Trip[]): TravelSummary {
+export function summarizeTravels<T extends TravelTrip>(trips: readonly T[]): TravelSummary<T> {
   const completed = trips
     .filter((trip) => trip.lifecycle === 'completed' && !trip.archivedAt)
     .toSorted((left, right) => right.endDate.localeCompare(left.endDate));

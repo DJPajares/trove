@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, CircleAlert, MapPin, Pencil } from 'lucide-react';
+import { ChevronRight, CircleAlert, Eye, MapPin, Pencil } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
@@ -450,6 +450,19 @@ export function TravellerProfile() {
               <Pencil aria-hidden="true" data-icon="inline-start" />
               {t('editProfile')}
             </Button>
+            {profile?.id ? (
+              // How others see this profile (PRD 8.3), in the same ivory-on-scrim
+              // treatment as Edit profile beside it.
+              <Button
+                className="self-start rounded-full border-transparent bg-white/94 text-[oklch(0.285_0.039_47)] hover:bg-white hover:text-[oklch(0.285_0.039_47)] md:self-end dark:bg-white/94 dark:hover:bg-white"
+                nativeButton={false}
+                render={<Link href={`/travellers/${encodeURIComponent(profile.id)}`} />}
+                variant="outline"
+              >
+                <Eye aria-hidden="true" data-icon="inline-start" />
+                {t('viewPublic')}
+              </Button>
+            ) : null}
           </div>
         </div>
       </section>

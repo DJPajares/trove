@@ -76,7 +76,7 @@ The current approved scope does not provide:
 
 - social networking,
 - real-time collaboration,
-- public profiles,
+- public profiles beyond the read-only traveller profile in Section 8.3,
 - assistant chat or autonomous replanning,
 - business travel administration,
 - a separate Travel Wallet,
@@ -90,7 +90,7 @@ The current approved scope does not provide:
 - native iOS/Android apps,
 - full multilingual UI.
 
-AI-assisted trip creation (Section 7.6) and owner-enabled read-only itinerary links (Section 8.2), with saving a copy from them (Section 8.1), are approved extensions to the original MVP. Neither authorizes the broader AI, collaboration, or discovery workflows deferred here.
+AI-assisted trip creation (Section 7.6), owner-enabled read-only itinerary links (Section 8.2) with saving a copy from them (Section 8.1), and read-only traveller profiles listing Public trips (Section 8.3) are approved extensions to the original MVP. Neither authorizes the broader AI, collaboration, or discovery workflows deferred here.
 
 ---
 
@@ -601,7 +601,7 @@ Existing and manually created itinerary durations are `USER_OWNED`. Editing an `
 
 # 8. Trip Ownership & Sharing
 
-Trips are **private by default and edited only by their owner**. Public trips (below) are the sole approved public exception, reached today only through their read-only itinerary links (Section 8.2); they do not expose the whole Trip. A signed-in traveller who opens such a link may save their own copy of it (Section 8.1); the copy is a new private Trip they own, not access to the original.
+Trips are **private by default and edited only by their owner**. Public trips (below) are the sole approved public exception, reached today through their read-only itinerary links (Section 8.2) and their owner's traveller profile (Section 8.3); they do not expose the whole Trip. A signed-in traveller who opens such a link may save their own copy of it (Section 8.1); the copy is a new private Trip they own, not access to the original.
 
 The data model may remain future-ready for:
 
@@ -624,7 +624,7 @@ Future-ready concepts may include:
 
 Future-ready fields do not authorize additional collaboration or sharing workflows beyond Sections 8.1 and 8.2, or a discovery surface without its own specification.
 
-**Trip visibility.** Every trip is either **Private** or **Public**, and new trips start Private. Public means the trip is open to anyone: its read-only itinerary link is on (Section 8.2), and it may appear around Trove, such as in Home discovery, search and the owner's profile, where other travellers can find it, read it and save it. Each of those surfaces still needs its own specification, and until one ships the link is the only way in; the disclosure describes all of them now so that choosing Public is informed consent to them. The owner chooses visibility in three places, all writing the same stored setting: while creating the trip, while editing it, and through Share in the trip actions menu. The trip form and Share show the same disclosure of what a public trip reveals before it is saved, and choosing Public in the form is saved together with the rest of the trip, so a refused save leaves it Private. Trips made Public before this disclosure agreed only to the link: a discovery surface must not list one until its owner has confirmed Public again under the current disclosure. Whatever surface lists a Public trip shows only what the link shows.
+**Trip visibility.** Every trip is either **Private** or **Public**, and new trips start Private. Public means the trip is open to anyone: its read-only itinerary link is on (Section 8.2), and it may appear around Trove, such as in Home discovery, search and the owner's profile, where other travellers can find it, read it and save it. Each of those surfaces still needs its own specification; the owner's profile has one (Section 8.3), and the others stay closed until theirs ships; the disclosure describes all of them now so that choosing Public is informed consent to them. The owner chooses visibility in three places, all writing the same stored setting: while creating the trip, while editing it, and through Share in the trip actions menu. The trip form and Share show the same disclosure of what a public trip reveals before it is saved, and choosing Public in the form is saved together with the rest of the trip, so a refused save leaves it Private. Trips made Public before this disclosure agreed only to the link: a discovery surface must not list one until its owner has confirmed Public again under the current disclosure. Whatever surface lists a Public trip shows only what the link shows.
 
 ## 8.1 Saving a Copy of a Shared Trip
 
@@ -648,6 +648,7 @@ The public projection contains only:
 
 - trip name, description, countries, and inclusive dates;
 - the owner's display name, and the original creator's display name when the trip is itself a copy;
+- an opaque reference to the owner's traveller profile (Section 8.3), so their name can open it;
 - scheduled days' dates, names, and notes;
 - scheduled stops' names, addresses/custom location text, dayparts, local start/end times, durations, and notes, including scheduled Custom Places and label-only blocks.
 
@@ -660,6 +661,19 @@ Rules:
 - Public reads use only the allowlisted projection and permitted stored Place context; they cannot trigger billable provider calls or expose authenticated endpoints. Missing or expired provider detail degrades to available context.
 - The page is excluded from indexing and discovery. It offers no maps, Trip Mode, collaborator management, expiry, or recipient permissions in the current scope. Its one action beyond reading is Save a copy (Section 8.1).
 - Private Custom Places remain owner-owned. Sharing a scheduled stop's name/address/notes exposes only that projection, not access to its underlying private Place record.
+
+## 8.3 Traveller Profiles
+
+Every traveller has a **public view** of their profile alongside their own private one. Anyone may open the public view, signed in or not, at an address built from an opaque traveller ID; there are no handles.
+
+- **Entry point.** The owner's name on a shared itinerary (Section 8.2) opens their public view. The "Based on {name}'s trip" credit on a copy still does not link anywhere.
+- **Contents.** The traveller's display name, or "a Trove traveller" without one, and a list of their listed Public trips. Each list entry shows only the trip's name, countries and dates, and opens the trip's read-only itinerary link. Nothing else on the profile is public: bio, travel styles, avatar, cover, home country, Memories, ratings and travel statistics stay in the private view.
+- **Which trips are listed.** A Public trip is listed only once its owner has chosen Public under the current disclosure (Section 8): when the trip is created Public, or switched from Private to Public, after this section shipped. Trips that were already Public before then stay reachable by their link but are not listed; switching one to Private and back lists it. Archived trips are not listed. Private trips never appear, and nothing reveals how many exist.
+- **Empty and unknown.** A traveller with no listed trips still has a public view, saying they have nothing to show yet. An unknown or malformed traveller ID gets one not-found response, identical in every case.
+- **The owner's own view.** The private profile offers a way to see the public view as others do, and the public view tells its owner that this is what others see.
+- Public reads follow the same rules as Section 8.2: no caching between database and reader, no billable provider call, no decorative imagery, rate limited, and excluded from indexing.
+
+Following, messaging, traveller search, Home discovery and any other public profile field remain deferred.
 
 ---
 

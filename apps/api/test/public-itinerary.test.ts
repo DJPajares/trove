@@ -144,6 +144,8 @@ test('a shared trip renders its days in travel order', async () => {
     endDate: '2026-05-03',
     id: PUBLIC_TRIP_ID,
     name: 'Kyoto in spring',
+    // Opens the owner's public profile (PRD 8.3).
+    ownerId: 'owner-1',
     // Disclosed to the owner before they share (PRD 8.2).
     ownerName: 'Ana',
     startDate: '2026-05-01',

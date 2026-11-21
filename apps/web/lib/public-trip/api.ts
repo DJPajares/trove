@@ -37,6 +37,11 @@ export type PublicItinerary = {
     endDate: string;
     id: string;
     name: string;
+    /**
+     * The owner's traveller id, which opens their public profile. Optional for
+     * an API that predates traveller profiles.
+     */
+    ownerId?: string;
     /** The sharer's display name; null where they have none. */
     ownerName?: string | null;
     startDate: string;
@@ -70,4 +75,35 @@ export async function fetchPublicItinerary(tripId: string): Promise<PublicItiner
 
   if (!response.ok) return null;
   return (await response.json()) as PublicItinerary;
+}
+
+export type PublicTravellerTrip = {
+  /** ISO 3166-1 alpha-2, in the order the traveller picked them. */
+  countries: string[];
+  endDate: string;
+  id: string;
+  name: string;
+  startDate: string;
+};
+
+export type PublicTravellerProfile = {
+  traveller: { id: string; name: string | null };
+  /** Only Public trips their owner listed; each opens its shared itinerary. */
+  trips: PublicTravellerTrip[];
+};
+
+/**
+ * A traveller's public view, read on the server without credentials, under the
+ * same rules as the shared itinerary above: no caching, and null for every way
+ * of not finding one.
+ */
+export async function fetchPublicTravellerProfile(
+  travellerId: string,
+): Promise<PublicTravellerProfile | null> {
+  const response = await fetch(`${apiUrl}/public/travellers/${encodeURIComponent(travellerId)}`, {
+    cache: 'no-store',
+  });
+
+  if (!response.ok) return null;
+  return (await response.json()) as PublicTravellerProfile;
 }

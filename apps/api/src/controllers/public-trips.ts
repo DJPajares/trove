@@ -2,11 +2,17 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { listPublicItinerary, PublicTripNotFoundError } from '../services/public-itinerary.js';
+import {
+  PublicTravellerNotFoundError,
+  readPublicTravellerProfile,
+} from '../services/public-traveller-profile.js';
 
 const tripParamsSchema = z.object({ tripId: z.uuid() }).strict();
+const travellerParamsSchema = z.object({ travellerId: z.uuid() }).strict();
 
 /** One body for every way this can fail to find a trip, so none of them is a tell. */
 const notFound = { code: 'trip_not_found' } as const;
+const travellerNotFound = { code: 'traveller_not_found' } as const;
 
 /**
  * Nothing about a shared trip may be held anywhere between the database and the
@@ -43,6 +49,30 @@ export function createPublicTripControllers() {
       } catch (error) {
         if (error instanceof PublicTripNotFoundError) {
           return reply.code(404).header('Cache-Control', NO_STORE).send(notFound);
+        }
+        throw error;
+      }
+    },
+
+    /**
+     * A traveller's public view (PRD 8.3), under the same no-store rule as a
+     * shared trip: making a trip Private must take it off the profile at once.
+     *
+     * An unknown traveller and an id that is not a uuid answer 404 with one body.
+     */
+    async getPublicTravellerProfile(request: FastifyRequest, reply: FastifyReply) {
+      const params = travellerParamsSchema.safeParse(request.params);
+      if (!params.success) {
+        return reply.code(404).header('Cache-Control', NO_STORE).send(travellerNotFound);
+      }
+
+      try {
+        const profile = await readPublicTravellerProfile(params.data.travellerId);
+
+        return reply.header('Cache-Control', NO_STORE).send(profile);
+      } catch (error) {
+        if (error instanceof PublicTravellerNotFoundError) {
+          return reply.code(404).header('Cache-Control', NO_STORE).send(travellerNotFound);
         }
         throw error;
       }

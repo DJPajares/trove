@@ -12,6 +12,8 @@ import {
   buildTripMapPoints,
   dailyBasePoints,
   deviceFramesWithDay,
+  foldBaseNumbersIntoStops,
+  pointStopNumbers,
   type ItineraryMapPoint,
   viewportPoints,
 } from '../lib/maps/itinerary-map.ts';
@@ -564,4 +566,58 @@ test('device location joins the frame only when it is near the day', () => {
   expect(deviceFramesWithDay({ latitude: 1.3521, longitude: 103.8198 }, hanoi)).toBe(false);
   // With nothing of the day to frame, the device is the frame.
   expect(deviceFramesWithDay({ latitude: 1.3521, longitude: 103.8198 }, [])).toBe(true);
+});
+
+test('a day that returns to its stay carries both of its numbers on one pin', () => {
+  const [stay] = basePointsFor({
+    day: { dailyBaseTripPlaceId: 'hotel' },
+    itemCount: 3,
+    tripPlaces: ['hotel'],
+  });
+
+  expect(stay?.baseRole).toBe('both');
+  expect(pointStopNumbers(stay!)).toStrictEqual([1, 5]);
+});
+
+test('a stop visited twice in a day carries every number it is visited at', () => {
+  const points = buildItineraryMapPoints({
+    itinerary: { tripPlaces: [], unscheduledItems: [] },
+    orderOffset: 1,
+    resolveItemName: (entry) => entry.id,
+    resolvePlaceName: (place) => place.id,
+    selectedDay: {
+      items: [item('coffee', 'cafe'), item('lunch', 'market'), item('again', 'cafe')],
+    },
+  });
+
+  expect(points.map((entry) => [entry.tripPlaceId, pointStopNumbers(entry)])).toStrictEqual([
+    ['cafe', [2, 4]],
+    ['market', [3]],
+  ]);
+});
+
+test('a stay that is also a scheduled stop keeps its stay numbers on the stop pin', () => {
+  const bases = { arrivalTripPlaceId: 'hotel', departureTripPlaceId: 'hotel' };
+  const numbers = dayStopNumbers({ bases, itemCount: 2 });
+  const stops = buildItineraryMapPoints({
+    itinerary: { tripPlaces: [], unscheduledItems: [] },
+    orderOffset: numbers.itemOffset,
+    resolveItemName: (entry) => entry.id,
+    resolvePlaceName: (place) => place.id,
+    selectedDay: { items: [item('breakfast', 'hotel'), item('museum', 'museum')] },
+  });
+
+  expect(
+    foldBaseNumbersIntoStops(stops, bases, numbers).map((entry) => [
+      entry.tripPlaceId,
+      pointStopNumbers(entry),
+    ]),
+  ).toStrictEqual([
+    ['hotel', [1, 2, 4]],
+    ['museum', [3]],
+  ]);
+});
+
+test('a pin with no number has none to show', () => {
+  expect(pointStopNumbers(point('shrine', 'considered'))).toStrictEqual([]);
 });

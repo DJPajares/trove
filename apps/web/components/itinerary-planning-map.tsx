@@ -26,6 +26,7 @@ import {
 import {
   deviceFramesWithDay,
   type ItineraryMapPoint,
+  pointStopNumbers,
   viewportPoints,
 } from '@/lib/maps/itinerary-map';
 import { mapDayTint } from '@/lib/maps/map-day-tints';
@@ -111,6 +112,12 @@ type GoogleMapMouseEvent = {
   domEvent: Event;
 };
 
+/** Every stop number a pin carries, as drawn on it: `1·5`. */
+function stopNumbersText(point: ItineraryMapPoint) {
+  const numbers = pointStopNumbers(point);
+  return numbers.length ? numbers.join('·') : null;
+}
+
 const MARKER_SELECTED_CLASS =
   'transition-[transform,box-shadow] duration-[var(--motion-fast)] motion-reduce:transition-none data-[selected=true]:scale-110 data-[selected=true]:ring-4 data-[selected=true]:ring-ring/35';
 
@@ -122,7 +129,7 @@ function markerContent(point: ItineraryMapPoint) {
         'size-9 border-primary bg-card text-primary shadow-[var(--shadow-control)]',
         MARKER_SELECTED_CLASS,
       ),
-      point.order,
+      stopNumbersText(point),
     );
     element.dataset.selected = 'false';
     return element;
@@ -132,7 +139,10 @@ function markerContent(point: ItineraryMapPoint) {
     'grid place-items-center border-2 font-semibold shadow-[var(--shadow-control)] transition-[transform,box-shadow] duration-[var(--motion-fast)] motion-reduce:transition-none',
     point.kind === 'scheduled'
       ? cn(
-          'size-9 rounded-full border-background text-xs',
+          // A Place visited more than once grows into a pill to carry each number.
+          point.laterOrders?.length
+            ? 'h-9 min-w-9 rounded-full border-background px-2 text-xs tabular-nums'
+            : 'size-9 rounded-full border-background text-xs',
           point.dayIndex === undefined
             ? 'bg-primary text-primary-foreground'
             : mapDayTint(point.dayIndex).marker,
@@ -141,7 +151,7 @@ function markerContent(point: ItineraryMapPoint) {
     'data-[selected=true]:scale-110 data-[selected=true]:ring-4 data-[selected=true]:ring-ring/35',
   );
   element.dataset.selected = 'false';
-  element.textContent = point.order ? String(point.order) : '';
+  element.textContent = stopNumbersText(point) ?? '';
   return element;
 }
 
@@ -196,6 +206,11 @@ export function ItineraryPlanningMap({
   const t = useTranslations('itinerary.map');
   const routeT = useTranslations('itinerary.routes');
   const locale = useLocale();
+  /** `2 and 6`, in the reader's language, for a pin that stands for two visits. */
+  const spokenStops = (point: ItineraryMapPoint) =>
+    new Intl.ListFormat(locale, { type: 'conjunction' }).format(
+      pointStopNumbers(point).map(String),
+    ) || '0';
   const { resolvedTheme } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<GoogleMapInstance | null>(null);
@@ -288,6 +303,7 @@ export function ItineraryPlanningMap({
           ...selectedPoint,
           name: selectedRoute.origin.label ?? selectedPoint.name,
           order: selectedRoute.origin.order,
+          laterOrders: undefined,
           itemId: selectedRoute.origin.kind === 'itinerary_item' ? selectedRoute.origin.id : null,
         }
       : selectedPoint;
@@ -554,11 +570,11 @@ export function ItineraryPlanningMap({
             title:
               point.kind === 'scheduled'
                 ? point.dayIndex === undefined
-                  ? t('scheduledMarkerLabel', { name: point.name, order: point.order ?? 0 })
+                  ? t('scheduledMarkerLabel', { name: point.name, order: spokenStops(point) })
                   : t('scheduledDayMarkerLabel', {
                       day: point.dayIndex + 1,
                       name: point.name,
-                      order: point.order ?? 0,
+                      order: spokenStops(point),
                     })
                 : point.kind === 'base'
                   ? t(baseMarkerLabelKey(point.baseRole), { name: point.name })
@@ -812,7 +828,7 @@ export function ItineraryPlanningMap({
           <p className="mt-0.5 text-xs text-muted-foreground">
             {describeSelection?.(cardPoint) ??
               (cardPoint.kind === 'scheduled'
-                ? t('scheduledSelection', { order: cardPoint.order ?? 0 })
+                ? t('scheduledSelection', { order: spokenStops(cardPoint) })
                 : cardPoint.kind === 'base'
                   ? t(baseSelectionKey(cardPoint.baseRole))
                   : t('consideredSelection'))}

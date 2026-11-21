@@ -45,6 +45,7 @@ import { haversineMeters } from '@/lib/maps/haversine';
 import {
   buildItineraryMapPoints,
   dailyBasePoints,
+  foldBaseNumbersIntoStops,
   type ItineraryMapLocation,
   type ItineraryMapPoint,
 } from '@/lib/maps/itinerary-map';
@@ -219,14 +220,18 @@ export function TripModeMapView({
     bases: dailyBases,
     itemCount: day.items.length,
   });
-  const allMapPoints = buildItineraryMapPoints({
-    itinerary,
-    orderOffset: stopNumbers.itemOffset,
-    resolveItemName: itemName,
-    resolvePlaceLocation: placeLocation,
-    resolvePlaceName: placeName,
-    selectedDay: day,
-  });
+  const allMapPoints = foldBaseNumbersIntoStops(
+    buildItineraryMapPoints({
+      itinerary,
+      orderOffset: stopNumbers.itemOffset,
+      resolveItemName: itemName,
+      resolvePlaceLocation: placeLocation,
+      resolvePlaceName: placeName,
+      selectedDay: day,
+    }),
+    dailyBases,
+    stopNumbers,
+  );
   const scheduledPoints = allMapPoints.filter((point) => point.kind === 'scheduled');
   const baseTripPlaceId =
     dailyBases.arrivalTripPlaceId ??

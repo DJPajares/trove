@@ -1629,5 +1629,15 @@
         "Your day's first and last rows now show just where you're staying, so the hotel name has room to read in full."
       ]
     }
+  },
+  {
+    "id": "memory-viewer-blank-photo",
+    "date": "2026-11-21",
+    "version": "1.42.4",
+    "summaries": {
+      "en": [
+        "Opening a Memory from its third photo or later now shows that photo instead of a blank page."
+      ]
+    }
   }
 ]

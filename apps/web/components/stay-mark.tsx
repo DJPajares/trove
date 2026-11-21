@@ -18,7 +18,7 @@ export const STAY_MARK_BADGE_CLASS =
 export function StayMarkContent({
   iconClassName,
   number,
-}: Readonly<{ iconClassName?: string; number?: number | null }>) {
+}: Readonly<{ iconClassName?: string; number?: number | string | null }>) {
   return (
     <>
       <Icons.DailyBase aria-hidden="true" className={cn('size-4', iconClassName)} />
@@ -39,7 +39,7 @@ const BED_PATHS = [
   'M2 18h20',
 ];
 
-export function stayMarkElement(className: string, number: number | null) {
+export function stayMarkElement(className: string, label: string | null) {
   const element = document.createElement('span');
   element.className = cn(STAY_MARK_CLASS, className);
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -57,10 +57,10 @@ export function stayMarkElement(className: string, number: number | null) {
     svg.append(path);
   }
   element.append(svg);
-  if (number) {
+  if (label) {
     const badge = document.createElement('span');
     badge.className = STAY_MARK_BADGE_CLASS;
-    badge.textContent = String(number);
+    badge.textContent = label;
     element.append(badge);
   }
   return element;

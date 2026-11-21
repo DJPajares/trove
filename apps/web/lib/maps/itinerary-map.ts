@@ -31,6 +31,11 @@ export type ItineraryMapPoint = {
   longitude: number;
   name: string;
   order: number | null;
+  /**
+   * Further stop numbers this pin stands for, ascending, after `order`. A day can
+   * return to its Stay or visit a Place twice; one pin carries every visit.
+   */
+  laterOrders?: number[];
   /** Other days this Place is already scheduled on. Only set on `considered` points. */
   otherDayNumbers?: number[];
   tripPlaceId: string;
@@ -98,6 +103,43 @@ export function deviceFramesWithDay(
   );
 }
 
+/** Every stop number a pin stands for, first visit first. */
+export function pointStopNumbers(point: Pick<ItineraryMapPoint, 'laterOrders' | 'order'>) {
+  return point.order === null ? [] : [point.order, ...(point.laterOrders ?? [])];
+}
+
+function withStopNumber(point: ItineraryMapPoint, number: number | null): ItineraryMapPoint {
+  if (number === null) return point;
+  const numbers = [...new Set([...pointStopNumbers(point), number])].sort((a, b) => a - b);
+  const { laterOrders: _previous, ...rest } = point;
+  return {
+    ...rest,
+    order: numbers[0] ?? null,
+    ...(numbers.length > 1 ? { laterOrders: numbers.slice(1) } : {}),
+  };
+}
+
+/**
+ * A Stay that is also a scheduled stop has no pin of its own - the stop's pin is
+ * where it is - so the numbers it holds as the day's start and end go onto that
+ * pin instead of disappearing.
+ */
+export function foldBaseNumbersIntoStops(
+  points: ItineraryMapPoint[],
+  bases: DailyBaseIds,
+  numbers: Pick<DayStopNumbers, 'arrival' | 'departure'>,
+) {
+  return points.map((point) => {
+    if (point.kind !== 'scheduled') return point;
+    let next = point;
+    if (bases.arrivalTripPlaceId === point.tripPlaceId)
+      next = withStopNumber(next, numbers.arrival);
+    if (bases.departureTripPlaceId === point.tripPlaceId)
+      next = withStopNumber(next, numbers.departure);
+    return next;
+  });
+}
+
 export function viewportPoints(points: ItineraryMapPoint[]) {
   const ofTheDay = points.filter((point) => point.kind !== 'considered');
   return ofTheDay.length ? ofTheDay : points;
@@ -128,7 +170,14 @@ export function buildItineraryMapPoints(input: {
   input.selectedDay.items.forEach((item, index) => {
     const tripPlace = item.tripPlace;
     const location = tripPlace ? resolvePlaceLocation(tripPlace) : null;
-    if (!tripPlace || !location || points.has(tripPlace.id)) return;
+    if (!tripPlace || !location) return;
+    const order = index + 1 + (input.orderOffset ?? 0);
+    const visited = points.get(tripPlace.id);
+    // A second visit is the same pin, carrying the later number too.
+    if (visited) {
+      points.set(tripPlace.id, withStopNumber(visited, order));
+      return;
+    }
     points.set(tripPlace.id, {
       id: tripPlace.id,
       itemId: item.id,
@@ -136,7 +185,7 @@ export function buildItineraryMapPoints(input: {
       latitude: location.latitude,
       longitude: location.longitude,
       name: input.resolveItemName(item),
-      order: index + 1 + (input.orderOffset ?? 0),
+      order,
       tripPlaceId: tripPlace.id,
     });
   });
@@ -209,7 +258,7 @@ export function dailyBasePoints(input: {
 
   if (arrivalId && arrivalId === departureId) {
     const both = point(arrivalId, 'both', input.numbers.arrival);
-    return both ? [both] : [];
+    return both ? [withStopNumber(both, input.numbers.departure)] : [];
   }
 
   return [
@@ -289,7 +338,11 @@ export function buildTripMapPoints(input: {
         if (tripPlace || item.customLocation) unlocated += 1;
         return;
       }
-      if (stops.has(tripPlace.id)) return;
+      const visited = stops.get(tripPlace.id);
+      if (visited) {
+        stops.set(tripPlace.id, withStopNumber(visited, index + 1 + numbers.itemOffset));
+        return;
+      }
       stops.set(tripPlace.id, {
         dayIndex,
         id: tripPlace.id,
@@ -354,7 +407,11 @@ export function buildTripMapPoints(input: {
   };
 
   if (focus) {
-    const stops = [...focus.stops.values()].map((point) => ({
+    const stops = foldBaseNumbersIntoStops(
+      [...focus.stops.values()],
+      focus.bases,
+      focus.numbers,
+    ).map((point) => ({
       ...point,
       dayNumbers: dayNumbersByPlace.get(point.tripPlaceId) ?? [],
     }));

@@ -137,6 +137,7 @@ import { itineraryViewHref, resolveItineraryView } from '@/lib/itinerary/view';
 import {
   buildItineraryMapPoints,
   dailyBasePoints,
+  foldBaseNumbersIntoStops,
   type ItineraryMapPoint,
 } from '@/lib/maps/itinerary-map';
 import { useTripPlaceHours } from '@/lib/trip-places/use-trip-place-hours';
@@ -804,16 +805,20 @@ export function ItineraryManager({
 
   const mapPoints = useMemo(() => {
     if (activeView !== 'day' || !itinerary || !selectedDay) return [];
-    const points = buildItineraryMapPoints({
-      itinerary,
-      orderOffset: stopNumbers.itemOffset,
-      placeUse,
-      resolveItemName: itemName,
-      resolvePlaceLocation: placeLocation,
-      resolvePlaceName: (tripPlace) => placeName(tripPlace) ?? t('providerPlace'),
-      selectedDay,
-      selectedDayNumber: selectedIndex + 1,
-    });
+    const points = foldBaseNumbersIntoStops(
+      buildItineraryMapPoints({
+        itinerary,
+        orderOffset: stopNumbers.itemOffset,
+        placeUse,
+        resolveItemName: itemName,
+        resolvePlaceLocation: placeLocation,
+        resolvePlaceName: (tripPlace) => placeName(tripPlace) ?? t('providerPlace'),
+        selectedDay,
+        selectedDayNumber: selectedIndex + 1,
+      }),
+      dailyBases,
+      stopNumbers,
+    );
     const bases = dailyBasePoints({
       bases: dailyBases,
       numbers: stopNumbers,

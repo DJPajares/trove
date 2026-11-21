@@ -22,6 +22,7 @@ import {
   TripValidationError,
   updateTrip,
   updateTripExperienceRating,
+  listTripOnProfile,
   updateTripVisibility,
 } from '../services/trips.js';
 
@@ -330,6 +331,18 @@ export async function copySharedTripController(request: FastifyRequest, reply: F
     if (error instanceof PublicTripNotFoundError) {
       return reply.code(404).send({ code: 'trip_not_found' });
     }
+    return handleTripError(error, reply);
+  }
+}
+
+export async function listTripOnProfileController(request: FastifyRequest, reply: FastifyReply) {
+  const context = getRequestContext(request, reply);
+  const tripId = parseTripId(request, reply);
+  if (!context || !tripId) return;
+
+  try {
+    return { trip: await listTripOnProfile(context.userId, context.accessToken, tripId) };
+  } catch (error) {
     return handleTripError(error, reply);
   }
 }

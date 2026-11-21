@@ -70,11 +70,17 @@ function arcPath(from: { x: number; y: number }, to: { x: number; y: number }) {
  * a home country, from one place to the next in the order they went. No map
  * provider, so no request and no terms.
  */
-function TravelMap({
+export function TravelMap({
   homeCountryCode,
+  messages = 'travellerProfile.map',
   places,
-}: Readonly<{ homeCountryCode: string | null; places: VisitedPlace[] }>) {
-  const t = useTranslations('travellerProfile.map');
+}: Readonly<{
+  homeCountryCode: string | null;
+  /** Whose voice the map speaks in: the traveller's own, or a stranger's (PRD 8.3). */
+  messages?: 'publicTraveller.map' | 'travellerProfile.map';
+  places: VisitedPlace[];
+}>) {
+  const t = useTranslations(messages);
   const locale = useLocale();
   const land = worldLandDots();
   const homeCentre = homeCountryCode ? COUNTRY_CENTRES[homeCountryCode] : undefined;
@@ -174,7 +180,7 @@ const STAMP_INKS = [
 const STAMP_TILTS = [-2, 2.5, -1.5, 1.5, -3, 2, -1, 3];
 
 /** Each country once, as a passport stamp: its name, the year first visited, how many trips. */
-function CountryStamps({ stamps }: Readonly<{ stamps: CountryStamp[] }>) {
+export function CountryStamps({ stamps }: Readonly<{ stamps: CountryStamp[] }>) {
   const t = useTranslations('travellerProfile.stamps');
   const locale = useLocale();
   const names = new Map(

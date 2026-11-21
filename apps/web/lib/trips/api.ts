@@ -101,6 +101,11 @@ export type Trip = {
    * snapshots written before sharing existed remain readable offline.
    */
   visibility?: 'private' | 'public';
+  /**
+   * A Public trip its owner has listed on their profile (PRD 8.3). A trip made
+   * Public before profiles listed trips is not, until its owner lists it.
+   */
+  listedOnProfile?: boolean;
   /** Optional so older offline snapshots omit weather instead of failing. */
   weatherLocation?: { latitude: number; longitude: number; timeZone: string } | null;
 };
@@ -367,6 +372,11 @@ export async function updateTripVisibility(tripId: string, visibility: 'private'
     body: JSON.stringify({ visibility }),
     method: 'PATCH',
   });
+}
+
+/** Show an already Public trip on the owner's profile (PRD 8.3). */
+export async function listTripOnProfile(tripId: string) {
+  return tripRequest<{ trip: Trip }>(`/trips/${tripId}/profile-listing`, { method: 'POST' });
 }
 
 export async function uploadTripCover(file: File) {

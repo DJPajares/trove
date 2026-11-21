@@ -370,6 +370,8 @@ async function serializeTrip(
     tripPreparedness,
     updatedAt: trip.updatedAt.toISOString(),
     visibility: mapVisibility(trip.visibility),
+    /** A Public trip its owner has listed on their profile (PRD 8.3). Always false while Private. */
+    listedOnProfile: trip.visibility === 'PUBLIC' && trip.publicListedAt !== null,
     weatherLocation,
   };
 }
@@ -1070,6 +1072,28 @@ export async function updateTripVisibility(
     data: tripVisibilityWrite(visibility, existing.visibility),
   });
 
+  return getTrip(userId, accessToken, tripId);
+}
+
+/**
+ * Lists a trip that is already Public on its owner's profile (PRD 8.3).
+ *
+ * A trip made Public before profiles listed trips agreed only to its link being
+ * read. Pressing "Show on my profile", beside the disclosure, is the owner
+ * choosing listing under the current disclosure - what going Private and back
+ * used to stand for. A Private trip cannot be listed: making it Public is the
+ * way, and that lists it.
+ */
+export async function listTripOnProfile(userId: string, accessToken: string, tripId: string) {
+  const prisma = getPrismaClient();
+  const existing = await prisma.trip.findFirst({
+    where: { id: tripId, ownerId: userId },
+    select: { publicListedAt: true, visibility: true },
+  });
+  if (!existing || existing.visibility !== 'PUBLIC') throw new TripNotFoundError();
+  if (!existing.publicListedAt) {
+    await prisma.trip.update({ where: { id: tripId }, data: { publicListedAt: new Date() } });
+  }
   return getTrip(userId, accessToken, tripId);
 }
 

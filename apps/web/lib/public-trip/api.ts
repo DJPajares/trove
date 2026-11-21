@@ -41,7 +41,8 @@ export type PublicItinerary = {
      * The owner's traveller id, which opens their public profile. Optional for
      * an API that predates traveller profiles.
      */
-    ownerId?: string;
+    /** Null while the owner's profile is Private: their name then opens nothing. */
+    ownerId?: string | null;
     /** The sharer's display name; null where they have none. */
     ownerName?: string | null;
     startDate: string;

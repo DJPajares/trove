@@ -30,6 +30,7 @@ const profileUpdateSchema = z
       .refine((code) => timeZoneForCountry(code) !== null, { error: 'unknown_country_code' })
       .nullable()
       .optional(),
+    isPublic: z.boolean().optional(),
     homeCurrencyCode: z
       .string()
       .trim()

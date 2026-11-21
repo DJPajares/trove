@@ -2697,7 +2697,7 @@ Validate the changed product behavior and its important invariants:
   - build validation,
   - focused manual or automated checks for the changed functionality.
 
-For documentation-only changes, validate consistency, references, formatting, and scenario walkthroughs. Do not report product, provider, deployment, or browser gates as passed when only the specification was reviewed. AGENTS.md owns the execution workflow.
+For documentation-only changes, validate consistency, references, formatting, and scenario walkthroughs. Do not report product, provider, deployment, or browser gates as passed when only the specification was reviewed. CLAUDE.md owns the execution workflow.
 
 ---
 

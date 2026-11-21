@@ -3,7 +3,7 @@
 [Back to README](../README.md) · [Environment and provider setup](environment.md)
 
 Run commands from the repository root. For delivery and contribution rules, follow
-[AGENTS.md](../AGENTS.md); product requirements live in [PRD.md](../PRD.md).
+[CLAUDE.md](../CLAUDE.md); product requirements live in [PRD.md](../PRD.md).
 
 ## Database setup
 
@@ -40,7 +40,7 @@ Schema changes, shadow databases, and production migrations are covered in the
 
 The PR [quality workflow](../.github/workflows/quality.yml) defines the shared
 checks. Run focused tests for the behavior you change, following
-[AGENTS.md](../AGENTS.md#testing).
+[CLAUDE.md](../CLAUDE.md#testing).
 
 ## Offline development
 

@@ -6,7 +6,7 @@
 
 <!-- List focused checks and simple steps a reviewer can use to see the changes. -->
 
-<!-- Bump apps/web and/or apps/api package.json versions for every deployed change (AGENTS.md, Versioning). -->
+<!-- Bump apps/web and/or apps/api package.json versions for every deployed change (CLAUDE.md, Versioning). -->
 
 ## Changelog
 

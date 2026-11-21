@@ -43,7 +43,8 @@ export async function PublicItinerary({
   });
   const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00.000Z`));
   const countries = namedCountries(itinerary.trip.countries, locale);
-  const { basedOn, ownerName } = itinerary.trip;
+  const { basedOn, ownerId, ownerName } = itinerary.trip;
+  const sharedBy = ownerName ? t('sharedBy', { name: ownerName }) : t('sharedByAnonymous');
 
   return (
     <div className="flex flex-col gap-6">
@@ -80,7 +81,18 @@ export async function PublicItinerary({
           </p>
         ) : null}
         <p className="text-sm text-muted-foreground">
-          {ownerName ? t('sharedBy', { name: ownerName }) : t('sharedByAnonymous')}
+          {/* The owner's name opens their public profile (PRD 8.3). The copy
+              credit beside it deliberately links nowhere. */}
+          {ownerId ? (
+            <Link
+              className="rounded-sm underline decoration-border underline-offset-4 transition-colors hover:text-foreground hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none motion-reduce:transition-none"
+              href={`/travellers/${encodeURIComponent(ownerId)}`}
+            >
+              {sharedBy}
+            </Link>
+          ) : (
+            sharedBy
+          )}
           {basedOn ? (
             <>
               <span aria-hidden="true"> · </span>

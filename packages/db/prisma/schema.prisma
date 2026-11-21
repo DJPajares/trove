@@ -828,6 +828,11 @@ model Trip {
   budgetAmount                   Decimal?              @map("budget_amount") @db.Decimal(12, 2)
   budgetCurrencyCode             String?               @map("budget_currency_code") @db.Char(3)
   visibility                     TripVisibility        @default(PRIVATE)
+  /// When the owner last chose Public under the current disclosure (PRD 8, 8.3):
+  /// creating the trip Public or switching it from Private. Only then may their
+  /// traveller profile list it. Null on Private trips and on trips made Public
+  /// before that disclosure, which stay reachable by link but unlisted.
+  publicListedAt                 DateTime?             @map("public_listed_at") @db.Timestamptz(3)
   referenceTimeZone              String                @map("reference_time_zone")
   referenceTimeZoneSource        TripTimeZoneSource    @map("reference_time_zone_source")
   referenceTimeZoneSourcePlaceId String?               @map("reference_time_zone_source_place_id") @db.Uuid
@@ -866,6 +871,7 @@ model Trip {
 
   @@unique([id, ownerId])
   @@index([ownerId, archivedAt])
+  @@index([ownerId, publicListedAt])
   @@index([ownerId])
   @@index([creatorId])
   @@index([startingPlaceId])

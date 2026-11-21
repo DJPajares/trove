@@ -398,3 +398,24 @@ export function tripCopyCredit(trip: {
     (trip.creatorId !== null && trip.creatorId !== trip.ownerId);
   return isCopy ? { creatorName: trip.sourceAttribution } : null;
 }
+
+type StoredVisibility = 'PRIVATE' | 'PUBLIC';
+
+/**
+ * The visibility write for a trip, with the listing stamp that goes with it.
+ *
+ * A traveller profile lists a Public trip only once its owner chose Public under
+ * the current disclosure (PRD 8.3), and `publicListedAt` is the record of that
+ * choice. So the stamp is set on the move to Public and nowhere else: saving a
+ * trip that is already Public keeps whatever it had, which leaves a trip made
+ * Public before the disclosure unlisted until it goes Private and back.
+ */
+export function tripVisibilityWrite(
+  next: 'private' | 'public',
+  current: StoredVisibility | 'SHARED' | null,
+  now = new Date(),
+): { publicListedAt?: Date | null; visibility: StoredVisibility } {
+  if (next === 'private') return { publicListedAt: null, visibility: 'PRIVATE' };
+  if (current === 'PUBLIC') return { visibility: 'PUBLIC' };
+  return { publicListedAt: now, visibility: 'PUBLIC' };
+}

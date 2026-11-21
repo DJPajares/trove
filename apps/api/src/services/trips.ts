@@ -42,6 +42,7 @@ import {
   resolveTripTimeZone,
   shiftDateOnly,
   tripCopyCredit,
+  tripVisibilityWrite,
 } from './trip-rules.js';
 
 export const TRIP_COVERS_BUCKET = 'trip-covers';
@@ -659,7 +660,7 @@ export async function createTrip(userId: string, accessToken: string, input: Tri
         startDate: start,
         startingPlaceId: startingPlace?.id ?? null,
         // Private unless the traveller chose otherwise when creating it.
-        visibility: input.visibility === 'public' ? 'PUBLIC' : 'PRIVATE',
+        ...tripVisibilityWrite(input.visibility ?? 'private', null),
       },
     });
 
@@ -1006,7 +1007,7 @@ export async function updateTrip(
               : {}),
             // Saved with the rest of the edit, so a refused save publishes nothing.
             ...(input.visibility !== undefined
-              ? { visibility: input.visibility === 'public' ? 'PUBLIC' : 'PRIVATE' }
+              ? tripVisibilityWrite(input.visibility, current.visibility)
               : {}),
             ...(shouldResolveTimeZone
               ? {
@@ -1060,13 +1061,13 @@ export async function updateTripVisibility(
   const prisma = getPrismaClient();
   const existing = await prisma.trip.findFirst({
     where: { id: tripId, ownerId: userId },
-    select: { id: true },
+    select: { id: true, visibility: true },
   });
   if (!existing) throw new TripNotFoundError();
 
   await prisma.trip.update({
     where: { id: tripId },
-    data: { visibility: visibility === 'public' ? 'PUBLIC' : 'PRIVATE' },
+    data: tripVisibilityWrite(visibility, existing.visibility),
   });
 
   return getTrip(userId, accessToken, tripId);

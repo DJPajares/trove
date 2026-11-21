@@ -10,6 +10,7 @@ import {
   resolveCountryPrimaryTimeZone,
   resolveDestinationCountryCode,
   resolveTripWeatherLocation,
+  tripVisibilityWrite,
   resolveTripTimeZone,
   shiftDateOnly,
 } from '../src/services/trip-rules.js';
@@ -309,4 +310,24 @@ test('a bare city names no country', () => {
   expect(resolveDestinationCountryCode('Hanoi')).toBeNull();
   expect(resolveDestinationCountryCode('Springfield')).toBeNull();
   expect(resolveDestinationCountryCode('')).toBeNull();
+});
+
+test('choosing Public stamps the trip for listing only on the move from Private', () => {
+  const now = new Date('2026-11-21T00:00:00.000Z');
+
+  expect(tripVisibilityWrite('public', null, now)).toEqual({
+    publicListedAt: now,
+    visibility: 'PUBLIC',
+  });
+  expect(tripVisibilityWrite('public', 'PRIVATE', now)).toEqual({
+    publicListedAt: now,
+    visibility: 'PUBLIC',
+  });
+  // Already Public: a trip shared before the disclosure stays unlisted, and one
+  // listed since keeps its stamp.
+  expect(tripVisibilityWrite('public', 'PUBLIC', now)).toEqual({ visibility: 'PUBLIC' });
+  expect(tripVisibilityWrite('private', 'PUBLIC', now)).toEqual({
+    publicListedAt: null,
+    visibility: 'PRIVATE',
+  });
 });

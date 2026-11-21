@@ -24,4 +24,10 @@ export function registerPublicTripRoutes(app: FastifyInstance) {
     { config: PUBLIC_SHARE_RATE_LIMIT },
     controllers.getPublicItinerary,
   );
+
+  app.get(
+    '/public/travellers/:travellerId',
+    { config: PUBLIC_SHARE_RATE_LIMIT },
+    controllers.getPublicTravellerProfile,
+  );
 }

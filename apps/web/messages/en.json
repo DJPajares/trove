@@ -60,6 +60,7 @@
     "basedIn": "Based in {country}",
     "travellingSince": "Travelling since {year}",
     "editProfile": "Edit profile",
+    "viewPublic": "See public profile",
     "styles": "How you travel",
     "glance": {
       "title": "Travel at a glance",
@@ -4355,6 +4356,20 @@
       "markHighlight": "Mark as a highlight",
       "highlighted": "Highlight"
     }
+  },
+  "publicTraveller": {
+    "description": "A Trove traveller’s public trips.",
+    "anonymousName": "A Trove traveller",
+    "tripsTitle": "Public trips",
+    "empty": "No public trips to show yet.",
+    "emptyOwner": "Trips you make Public appear here. If one was already Public, switch it to Private and back to list it.",
+    "ownerNotice": "This is how other travellers see your profile.",
+    "ownerAction": "Back to your profile",
+    "footerPrompt": "Planning a trip of your own?",
+    "footerAction": "Try Trove",
+    "notFoundTitle": "Traveller not found",
+    "notFoundDescription": "This profile isn’t available. Check the link and try again.",
+    "notFoundAction": "Go to Trove"
   },
   "sharedTrip": {
     "title": "{trip}",

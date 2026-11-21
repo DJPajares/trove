@@ -120,12 +120,18 @@ export function DaySimpleList({
                     <StayMarkContent iconClassName="size-3.5" number={entry.stopNumber} />
                   </button>
                 </span>
+                {/* First or last, beside a bed: where it sits already says
+                    which end of the day it is, so only a screen reader, which
+                    cannot see where it sits, is told. */}
                 <button
+                  aria-label={viewT(entry.role === 'arrival' ? 'startsAt' : 'endsAt', {
+                    name: base.name,
+                  })}
                   className="min-h-9 min-w-0 truncate rounded-[var(--radius-sm)] text-left text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
                   onClick={() => onOpenBase(entry.tripPlaceId)}
                   type="button"
                 >
-                  {viewT(entry.role === 'arrival' ? 'startsAt' : 'endsAt', { name: base.name })}
+                  {base.name}
                 </button>
               </li>
             );

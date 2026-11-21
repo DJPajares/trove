@@ -12,8 +12,8 @@ import { SpineRow } from './spine';
  *
  * It is counted in the day - its bed carries the same number in its corner
  * that the map's does - but it is not something to plan, so it reads quieter
- * than a stop: no card of its own, a bed rather than a category, and a line
- * saying which end of the day it is. Where the day starts and ends is changed from
+ * than a stop: no card of its own and a bed rather than a category. Which end
+ * of the day it is goes without saying - it is the first row or the last. Where the day starts and ends is changed from
  * the day's header, not from here.
  */
 export function StayAnchor({
@@ -74,12 +74,12 @@ export function StayAnchor({
         )}
       >
         <div className="min-w-0 flex-1">
-          <p className="text-[0.6875rem] leading-none font-semibold tracking-[0.1em] text-muted-foreground uppercase">
-            {role === 'arrival' ? t('startOfDay') : t('endOfDay')}
-          </p>
+          {/* The day's first or last row, beside a bed: it needs no label to
+              say which end of the day it is. A screen reader still hears it. */}
+          <p className="sr-only">{role === 'arrival' ? t('startOfDay') : t('endOfDay')}</p>
           <button
             aria-label={t('viewDetails', { name })}
-            className="mt-1 max-w-full truncate rounded-[var(--radius-sm)] text-left text-sm font-medium text-foreground outline-none after:absolute after:inset-0 after:rounded-[var(--radius-lg)] hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+            className="max-w-full truncate rounded-[var(--radius-sm)] text-left text-sm font-medium text-foreground outline-none after:absolute after:inset-0 after:rounded-[var(--radius-lg)] hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
             onClick={onViewDetails}
             type="button"
           >

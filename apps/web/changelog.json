@@ -1619,5 +1619,15 @@
         "A place you visit twice in a day, including returning to where you're staying, now shows every stop number on its map pin."
       ]
     }
+  },
+  {
+    "id": "quiet-stay-rows",
+    "date": "2026-11-21",
+    "version": "1.42.3",
+    "summaries": {
+      "en": [
+        "Your day's first and last rows now show just where you're staying, so the hotel name has room to read in full."
+      ]
+    }
   }
 ]

@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import Fastify from 'fastify';
 import { beforeEach, expect, test } from 'vitest';
 
@@ -47,9 +48,40 @@ function trip(overrides: Partial<TripRow> & Pick<TripRow, 'id' | 'name'>): TripR
 }
 
 const profiles = [
-  { bio: 'Slow traveller', displayName: '  Ana  ', id: TRAVELLER_ID, homeCountryCode: 'PH' },
-  { bio: null, displayName: null, id: QUIET_TRAVELLER_ID, homeCountryCode: null },
+  {
+    avatarPath: `${TRAVELLER_ID}/avatar.jpg`,
+    bio: ' Slow traveller ',
+    coverMemoryPhoto: { contentType: 'image/jpeg', path: `${TRAVELLER_ID}/memory/cover.jpg` },
+    displayName: '  Ana  ',
+    homeCountryCode: 'PH',
+    id: TRAVELLER_ID,
+    // Never selected, so it must never be sent.
+    travelStyles: ['Food first'],
+  },
+  {
+    avatarPath: null,
+    bio: null,
+    coverMemoryPhoto: null,
+    displayName: null,
+    homeCountryCode: null,
+    id: QUIET_TRAVELLER_ID,
+    travelStyles: [],
+  },
 ];
+
+/** Signs whatever it is asked to, and remembers what that was. */
+let signed: string[] = [];
+const storage = () =>
+  ({
+    storage: {
+      from: (bucket: string) => ({
+        createSignedUrl: async (path: string) => {
+          signed.push(`${bucket}:${path}`);
+          return { data: { signedUrl: `https://storage.test/${bucket}/${path}` }, error: null };
+        },
+      }),
+    },
+  }) as unknown as SupabaseClient;
 
 let trips: TripRow[] = [];
 
@@ -69,6 +101,7 @@ function matches(row: TripRow, where: TripWhere) {
 }
 
 beforeEach(() => {
+  signed = [];
   trips = [
     trip({ id: 'trip-listed-old', name: 'Kyoto in spring' }),
     trip({
@@ -97,7 +130,9 @@ beforeEach(() => {
   (globalThis as { trovePrismaClient?: unknown }).trovePrismaClient = {
     profile: {
       findUnique: async (args: {
-        select: { ownedTrips: { select: Record<string, true>; where: TripWhere } };
+        select: Record<string, unknown> & {
+          ownedTrips: { select: Record<string, true>; where: TripWhere };
+        };
         where: { id: string };
       }) => {
         const profile = profiles.find((candidate) => candidate.id === args.where.id);
@@ -109,18 +144,34 @@ beforeEach(() => {
           .map((row) =>
             Object.fromEntries(Object.keys(select).map((key) => [key, row[key as keyof TripRow]])),
           );
-        return { displayName: profile.displayName, id: profile.id, ownedTrips: owned };
+        // Only what the service selected, as Prisma would.
+        const row = Object.fromEntries(
+          Object.keys(args.select)
+            .filter((key) => key !== 'ownedTrips')
+            .map((key) => [key, profile[key as keyof typeof profile]]),
+        );
+        return { ...row, ownedTrips: owned };
       },
     },
   };
 });
 
 test('a profile lists only Public trips its owner listed, newest first', async () => {
-  const profile = await readPublicTravellerProfile(TRAVELLER_ID);
+  const profile = await readPublicTravellerProfile(TRAVELLER_ID, { storage });
 
   // Exhaustive on purpose: this is everything a stranger is shown.
   expect(profile).toStrictEqual({
-    traveller: { id: TRAVELLER_ID, name: 'Ana' },
+    traveller: {
+      avatarUrl: `https://storage.test/profile-photos/${TRAVELLER_ID}/avatar.jpg`,
+      bio: 'Slow traveller',
+      coverPhoto: {
+        contentType: 'image/jpeg',
+        url: `https://storage.test/memory-photos/${TRAVELLER_ID}/memory/cover.jpg`,
+      },
+      homeCountryCode: 'PH',
+      id: TRAVELLER_ID,
+      name: 'Ana',
+    },
     trips: [
       {
         countries: ['PT'],
@@ -139,14 +190,33 @@ test('a profile lists only Public trips its owner listed, newest first', async (
     ],
   });
   const body = JSON.stringify(profile);
-  for (const hidden of ['Secret honeymoon', 'Old shared link', 'Put away', 'Slow traveller']) {
+  for (const hidden of ['Secret honeymoon', 'Old shared link', 'Put away', 'Food first']) {
     expect(body).not.toContain(hidden);
   }
+  // Only this traveller's own two photos are ever signed.
+  expect(signed).toStrictEqual([
+    `profile-photos:${TRAVELLER_ID}/avatar.jpg`,
+    `memory-photos:${TRAVELLER_ID}/memory/cover.jpg`,
+  ]);
+});
+
+test('a photo that cannot be signed is left out, not sent broken', async () => {
+  const profile = await readPublicTravellerProfile(TRAVELLER_ID, { storage: () => null });
+
+  expect(profile.traveller.avatarUrl).toBeNull();
+  expect(profile.traveller.coverPhoto).toBeNull();
 });
 
 test('a traveller with nothing listed still has a public view', async () => {
-  await expect(readPublicTravellerProfile(QUIET_TRAVELLER_ID)).resolves.toStrictEqual({
-    traveller: { id: QUIET_TRAVELLER_ID, name: null },
+  await expect(readPublicTravellerProfile(QUIET_TRAVELLER_ID, { storage })).resolves.toStrictEqual({
+    traveller: {
+      avatarUrl: null,
+      bio: null,
+      coverPhoto: null,
+      homeCountryCode: null,
+      id: QUIET_TRAVELLER_ID,
+      name: null,
+    },
     trips: [],
   });
 });

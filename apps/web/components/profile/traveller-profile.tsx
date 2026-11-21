@@ -5,7 +5,7 @@ import { ChevronRight, CircleAlert, Eye, MapPin, Pencil } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { useMemo, type CSSProperties } from 'react';
+import { useMemo, type CSSProperties, type ReactNode } from 'react';
 
 import { ExperienceRatingMark } from '@/components/experience-rating';
 import { HOME_COVER_FRAME, HOME_SHEET_FRAME, HomeSheet } from '@/components/home/home-front-door';
@@ -43,10 +43,10 @@ import { cn } from '@/lib/utils';
 const JOURNEY_LIMIT = 4;
 const FAVOURITE_LIMIT = 8;
 
-const SECTION_TITLE =
+export const SECTION_TITLE =
   'text-[length:var(--text-section-title)] leading-[1.18] font-semibold tracking-[-0.022em] text-foreground';
 
-function monthYear(date: string, locale: string) {
+export function monthYear(date: string, locale: string) {
   return new Intl.DateTimeFormat(locale, {
     month: 'long',
     timeZone: 'UTC',
@@ -261,6 +261,191 @@ function Journey({
   );
 }
 
+/** Ivory on the photograph's scrim in both themes, for the cover's own actions. */
+export const COVER_ACTION_CLASS =
+  // The outline variant's own dark-mode surface and hover ink are overridden, or
+  // the label (fixed dark) lands on a dark tint and turns light on hover.
+  'rounded-full border-transparent bg-white/94 text-[oklch(0.285_0.039_47)] hover:bg-white hover:text-[oklch(0.285_0.039_47)] dark:bg-white/94 dark:hover:bg-white';
+
+const COVER_MEDIA_CLASS =
+  'absolute inset-0 -z-20 h-full w-full rounded-none motion-safe:animate-in motion-safe:duration-[1400ms] motion-safe:ease-out motion-safe:zoom-in-105';
+
+/**
+ * The profile's cover: photograph, avatar, name, where they are based and since
+ * when, and their bio. Shared by the traveller's own profile and their public
+ * view (PRD 8.3), so the two read as one page; each passes what it may show.
+ */
+export function ProfileCover({
+  actions,
+  avatarUrl,
+  bio,
+  coverPhotoUrl,
+  coverPrint,
+  firstYear,
+  home,
+  initials,
+  name,
+}: Readonly<{
+  actions?: ReactNode;
+  avatarUrl: string | null;
+  bio: string | null;
+  coverPhotoUrl: string | null;
+  coverPrint: ReturnType<typeof journeyPrints> | null;
+  firstYear: number | null;
+  home: string | undefined;
+  initials: string;
+  name: string;
+}>) {
+  const t = useTranslations('travellerProfile');
+
+  return (
+    <section
+      aria-labelledby="profile-heading"
+      className={cn(
+        'relative isolate flex flex-col justify-end overflow-hidden bg-surface-media text-white',
+        HOME_COVER_FRAME,
+      )}
+      data-slot="profile-cover"
+    >
+      {coverPhotoUrl ? (
+        <TripMedia
+          alt=""
+          className={COVER_MEDIA_CLASS}
+          fallbackSources={coverPrint ? [coverPrint.prints[0] ?? coverPrint.cover] : []}
+          preload
+          sizes="100vw"
+          source={{ kind: 'memory', url: coverPhotoUrl }}
+          variant="cover"
+        />
+      ) : coverPrint ? (
+        <TripMedia
+          alt=""
+          className={COVER_MEDIA_CLASS}
+          fallbackSources={coverPrint.prints[0] === coverPrint.cover ? [] : [coverPrint.cover]}
+          preload
+          sizes="100vw"
+          source={coverPrint.prints[0] ?? coverPrint.cover}
+          variant="cover"
+        />
+      ) : (
+        <MediaFrame
+          alt=""
+          className={COVER_MEDIA_CLASS}
+          dataSlot="profile-cover-artwork"
+          photographicPlaceholder={dayHeaderFallback.preview}
+          preload
+          sizes="100vw"
+          source={{ kind: 'local', src: dayHeaderFallback.src }}
+          variant="card"
+        />
+      )}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgba(8,18,13,0.62)_0%,rgba(8,18,13,0.12)_28%,rgba(8,18,13,0.45)_56%,rgba(8,18,13,0.9)_100%)]"
+      />
+      {coverPhotoUrl || coverPrint ? null : <CoverArtworkCredit />}
+
+      <div className="mx-auto w-full max-w-[var(--layout-app)] ps-[var(--gutter-inline-start)] pe-[var(--gutter-inline-end)]">
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 pt-28 pb-14 motion-safe:animate-in motion-safe:fill-mode-both motion-safe:duration-700 motion-safe:ease-[var(--ease-standard)] motion-safe:fade-in motion-safe:slide-in-from-bottom-4 md:flex-row md:items-end md:gap-6 md:pb-20">
+          <span className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-on-media text-2xl font-semibold text-[oklch(0.21_0.04_55)] ring-3 ring-white/90 md:size-26 md:text-3xl">
+            {avatarUrl ? (
+              <Image
+                alt=""
+                className="size-full object-cover"
+                height={104}
+                src={avatarUrl}
+                unoptimized
+                width={104}
+              />
+            ) : (
+              <span aria-hidden="true">{initials}</span>
+            )}
+          </span>
+          <div className="min-w-0 flex-1 space-y-2">
+            <h1
+              className="font-journal text-[clamp(2.75rem,11vw,4.5rem)] leading-[0.95] font-normal tracking-[-0.01em] [overflow-wrap:anywhere]"
+              id="profile-heading"
+            >
+              {name}
+            </h1>
+            {home || firstYear ? (
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-white/85">
+                {home ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <MapPin aria-hidden="true" className="size-4" />
+                    {t('basedIn', { country: home })}
+                  </span>
+                ) : null}
+                {home && firstYear ? <span aria-hidden="true">·</span> : null}
+                {firstYear ? <span>{t('travellingSince', { year: firstYear })}</span> : null}
+              </p>
+            ) : null}
+            {bio ? (
+              <p className="max-w-[36ch] font-journal text-xl leading-snug text-pretty text-white/92 italic">
+                {bio}
+              </p>
+            ) : null}
+          </div>
+          {actions ? <div className="flex flex-wrap gap-2 md:self-end">{actions}</div> : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** The traveller's travels in numbers. Counts only, from whichever trips the caller may count. */
+export function TravelGlance({
+  firstYear,
+  stats,
+}: Readonly<{
+  firstYear: number | null;
+  stats: ReadonlyArray<{ count: number; key: 'cities' | 'countries' | 'days' | 'trips' }>;
+}>) {
+  const glanceT = useTranslations('travellerProfile.glance');
+  const locale = useLocale();
+
+  return (
+    <section aria-labelledby="profile-glance" className="space-y-4">
+      <h2 className={SECTION_TITLE} id="profile-glance">
+        {glanceT('title')}
+      </h2>
+      <dl
+        className={cn(
+          'grid grid-cols-2 gap-px overflow-hidden rounded-[var(--radius-2xl)] border border-border-subtle bg-border-subtle',
+          stats.length + (firstYear ? 1 : 0) > 4 ? 'sm:grid-cols-5' : 'sm:grid-cols-4',
+        )}
+      >
+        {stats.map(({ count, key }) => (
+          <div className="flex flex-col-reverse gap-0.5 bg-card p-4" key={key}>
+            <dt className="text-[length:var(--text-metadata)] text-muted-foreground">
+              {glanceT(key, { count })}
+            </dt>
+            <dd className="text-[1.75rem] leading-none font-semibold tracking-[-0.04em] tabular-nums">
+              {count.toLocaleString(locale)}
+            </dd>
+          </div>
+        ))}
+        {firstYear ? (
+          <div
+            className={cn(
+              'flex flex-col-reverse gap-0.5 bg-card p-4 sm:col-span-1',
+              // Fills the last row on a phone when the stats leave it empty.
+              stats.length % 2 === 0 && 'col-span-2',
+            )}
+          >
+            <dt className="text-[length:var(--text-metadata)] text-muted-foreground">
+              {glanceT('firstTrip')}
+            </dt>
+            <dd className="text-[1.75rem] leading-none font-semibold tracking-[-0.04em] tabular-nums">
+              {firstYear}
+            </dd>
+          </div>
+        ) : null}
+      </dl>
+    </section>
+  );
+}
+
 function ProfileSkeleton({ label }: Readonly<{ label: string }>) {
   return (
     <div aria-busy="true" aria-live="polite" role="status">
@@ -283,7 +468,6 @@ function ProfileSkeleton({ label }: Readonly<{ label: string }>) {
  */
 export function TravellerProfile() {
   const t = useTranslations('travellerProfile');
-  const glanceT = useTranslations('travellerProfile.glance');
   const locale = useLocale();
   const { profile } = usePreferences();
   const tripsQuery = useQuery({ queryFn: () => fetchTrips(), queryKey: queryKeys.trips() });
@@ -337,9 +521,6 @@ export function TravellerProfile() {
     ? namedCountries([profile.homeCountryCode], locale)[0]?.name
     : undefined;
   const coverPrint = coverTrip ? journeyPrints(coverTrip, editorialFor(coverTrip)) : null;
-  const mediaClass =
-    'absolute inset-0 -z-20 h-full w-full rounded-none motion-safe:animate-in motion-safe:duration-[1400ms] motion-safe:ease-out motion-safe:zoom-in-105';
-
   const stats = [
     { count: summary.countries.length, key: 'countries' },
     { count: summary.cities, key: 'cities' },
@@ -349,100 +530,11 @@ export function TravellerProfile() {
 
   return (
     <div className="mx-auto w-full max-w-5xl">
-      <section
-        aria-labelledby="profile-heading"
-        className={cn(
-          'relative isolate flex flex-col justify-end overflow-hidden bg-surface-media text-white',
-          HOME_COVER_FRAME,
-        )}
-        data-slot="profile-cover"
-      >
-        {profile?.coverPhoto ? (
-          <TripMedia
-            alt=""
-            className={mediaClass}
-            fallbackSources={coverPrint ? [coverPrint.prints[0] ?? coverPrint.cover] : []}
-            preload
-            sizes="100vw"
-            source={{ kind: 'memory', url: profile.coverPhoto.url }}
-            variant="cover"
-          />
-        ) : coverPrint ? (
-          <TripMedia
-            alt=""
-            className={mediaClass}
-            fallbackSources={coverPrint.prints[0] === coverPrint.cover ? [] : [coverPrint.cover]}
-            preload
-            sizes="100vw"
-            source={coverPrint.prints[0] ?? coverPrint.cover}
-            variant="cover"
-          />
-        ) : (
-          <MediaFrame
-            alt=""
-            className={mediaClass}
-            dataSlot="profile-cover-artwork"
-            photographicPlaceholder={dayHeaderFallback.preview}
-            preload
-            sizes="100vw"
-            source={{ kind: 'local', src: dayHeaderFallback.src }}
-            variant="card"
-          />
-        )}
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgba(8,18,13,0.62)_0%,rgba(8,18,13,0.12)_28%,rgba(8,18,13,0.45)_56%,rgba(8,18,13,0.9)_100%)]"
-        />
-        {profile?.coverPhoto || coverPrint ? null : <CoverArtworkCredit />}
-
-        <div className="mx-auto w-full max-w-[var(--layout-app)] ps-[var(--gutter-inline-start)] pe-[var(--gutter-inline-end)]">
-          <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 pt-28 pb-14 motion-safe:animate-in motion-safe:fill-mode-both motion-safe:duration-700 motion-safe:ease-[var(--ease-standard)] motion-safe:fade-in motion-safe:slide-in-from-bottom-4 md:flex-row md:items-end md:gap-6 md:pb-20">
-            <span className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-on-media text-2xl font-semibold text-[oklch(0.21_0.04_55)] ring-3 ring-white/90 md:size-26 md:text-3xl">
-              {profile?.avatarUrl ? (
-                <Image
-                  alt=""
-                  className="size-full object-cover"
-                  height={104}
-                  src={profile.avatarUrl}
-                  unoptimized
-                  width={104}
-                />
-              ) : (
-                <span aria-hidden="true">{initials}</span>
-              )}
-            </span>
-            <div className="min-w-0 flex-1 space-y-2">
-              <h1
-                className="font-journal text-[clamp(2.75rem,11vw,4.5rem)] leading-[0.95] font-normal tracking-[-0.01em] [overflow-wrap:anywhere]"
-                id="profile-heading"
-              >
-                {name}
-              </h1>
-              {home || summary.firstYear ? (
-                <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-white/85">
-                  {home ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <MapPin aria-hidden="true" className="size-4" />
-                      {t('basedIn', { country: home })}
-                    </span>
-                  ) : null}
-                  {home && summary.firstYear ? <span aria-hidden="true">·</span> : null}
-                  {summary.firstYear ? (
-                    <span>{t('travellingSince', { year: summary.firstYear })}</span>
-                  ) : null}
-                </p>
-              ) : null}
-              {profile?.bio ? (
-                <p className="max-w-[36ch] font-journal text-xl leading-snug text-pretty text-white/92 italic">
-                  {profile.bio}
-                </p>
-              ) : null}
-            </div>
+      <ProfileCover
+        actions={
+          <>
             <Button
-              // Ivory on the photograph's scrim in both themes. The outline variant's own
-              // dark-mode surface and hover ink are overridden, or the label (fixed dark)
-              // lands on a dark tint and turns light on hover.
-              className="self-start rounded-full border-transparent bg-white/94 text-[oklch(0.285_0.039_47)] hover:bg-white hover:text-[oklch(0.285_0.039_47)] md:self-end dark:bg-white/94 dark:hover:bg-white"
+              className={COVER_ACTION_CLASS}
               nativeButton={false}
               render={<Link href="/settings" />}
               variant="outline"
@@ -451,10 +543,9 @@ export function TravellerProfile() {
               {t('editProfile')}
             </Button>
             {profile?.id ? (
-              // How others see this profile (PRD 8.3), in the same ivory-on-scrim
-              // treatment as Edit profile beside it.
+              // How others see this profile (PRD 8.3).
               <Button
-                className="self-start rounded-full border-transparent bg-white/94 text-[oklch(0.285_0.039_47)] hover:bg-white hover:text-[oklch(0.285_0.039_47)] md:self-end dark:bg-white/94 dark:hover:bg-white"
+                className={COVER_ACTION_CLASS}
                 nativeButton={false}
                 render={<Link href={`/travellers/${encodeURIComponent(profile.id)}`} />}
                 variant="outline"
@@ -463,9 +554,17 @@ export function TravellerProfile() {
                 {t('viewPublic')}
               </Button>
             ) : null}
-          </div>
-        </div>
-      </section>
+          </>
+        }
+        avatarUrl={profile?.avatarUrl ?? null}
+        bio={profile?.bio ?? null}
+        coverPhotoUrl={profile?.coverPhoto?.url ?? null}
+        coverPrint={coverPrint}
+        firstYear={summary.firstYear}
+        home={home}
+        initials={initials}
+        name={name}
+      />
 
       <HomeSheet>
         {profile?.travelStyles?.length ? (
@@ -499,33 +598,7 @@ export function TravellerProfile() {
           />
         ) : (
           <>
-            <section aria-labelledby="profile-glance" className="space-y-4">
-              <h2 className={SECTION_TITLE} id="profile-glance">
-                {glanceT('title')}
-              </h2>
-              <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-[var(--radius-2xl)] border border-border-subtle bg-border-subtle sm:grid-cols-5">
-                {stats.map(({ count, key }) => (
-                  <div className="flex flex-col-reverse gap-0.5 bg-card p-4" key={key}>
-                    <dt className="text-[length:var(--text-metadata)] text-muted-foreground">
-                      {glanceT(key, { count })}
-                    </dt>
-                    <dd className="text-[1.75rem] leading-none font-semibold tracking-[-0.04em] tabular-nums">
-                      {count.toLocaleString(locale)}
-                    </dd>
-                  </div>
-                ))}
-                {summary.firstYear ? (
-                  <div className="col-span-2 flex flex-col-reverse gap-0.5 bg-card p-4 sm:col-span-1">
-                    <dt className="text-[length:var(--text-metadata)] text-muted-foreground">
-                      {glanceT('firstTrip')}
-                    </dt>
-                    <dd className="text-[1.75rem] leading-none font-semibold tracking-[-0.04em] tabular-nums">
-                      {summary.firstYear}
-                    </dd>
-                  </div>
-                ) : null}
-              </dl>
-            </section>
+            <TravelGlance firstYear={summary.firstYear} stats={stats} />
 
             <section aria-labelledby="profile-map" className="space-y-4">
               <h2 className={SECTION_TITLE} id="profile-map">

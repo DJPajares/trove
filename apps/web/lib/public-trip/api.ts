@@ -87,7 +87,16 @@ export type PublicTravellerTrip = {
 };
 
 export type PublicTravellerProfile = {
-  traveller: { id: string; name: string | null };
+  traveller: {
+    /** Signed for ten minutes; null without one. */
+    avatarUrl: string | null;
+    bio: string | null;
+    /** The Memory photo they chose as their cover, signed for ten minutes. */
+    coverPhoto: { contentType: string; url: string } | null;
+    homeCountryCode: string | null;
+    id: string;
+    name: string | null;
+  };
   /** Only Public trips their owner listed; each opens its shared itinerary. */
   trips: PublicTravellerTrip[];
 };

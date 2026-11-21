@@ -1,95 +1,147 @@
-import { ChevronRight } from 'lucide-react';
-import Link from 'next/link';
-import { getTranslations } from 'next-intl/server';
+'use client';
 
+import { ArrowLeft, ChevronRight, Eye } from 'lucide-react';
+import Link from 'next/link';
+import { useLocale, useTranslations } from 'next-intl';
+import type { CSSProperties } from 'react';
+
+import { HomeSheet } from '@/components/home/home-front-door';
+import { JourneyPrint } from '@/components/journey-prints';
+import {
+  COVER_ACTION_CLASS,
+  monthYear,
+  ProfileCover,
+  SECTION_TITLE,
+  TravelGlance,
+} from '@/components/profile/traveller-profile';
 import { Button } from '@/components/ui/button';
+import { useCoverUnderHeader } from '@/hooks/use-cover-under-header';
+import type { TripMediaSource } from '@/lib/media/trip-media';
+import { publicTripDayCount, summarizePublicTravels } from '@/lib/profile/public-travel-summary';
 import type { PublicTravellerProfile as PublicTravellerProfileData } from '@/lib/public-trip/api';
+import { profileInitials } from '@/lib/shell/floating-actions';
 import { namedCountries } from '@/lib/trips/countries';
 
 type PublicTravellerProfileProps = {
   isOwner: boolean;
   isSignedIn: boolean;
-  locale: string;
   profile: PublicTravellerProfileData;
+  /** Date-only, from the server, so the counts agree between render and hydration. */
+  today: string;
 };
 
 /**
- * A traveller as anyone sees them: a name and the trips they made Public
- * (PRD 8.3). Each trip opens its shared itinerary, and says no more than that
- * itinerary does.
- *
- * A server component with no imagery: a cover would mean an editorial lookup
- * per trip on a page strangers can load at will, and the list reads fine as
- * text. It follows the shared itinerary's header and card treatment so the two
- * public pages feel like one place.
+ * Trove's own artwork stands in for every trip's photograph: a public page that
+ * anyone can load at will makes no editorial lookups, and a trip's own cover
+ * and Memories are not part of what its link shares (PRD 8.2, 8.3).
  */
-export async function PublicTravellerProfile({
+const TRIP_PRINT: TripMediaSource = { kind: 'fallback' };
+
+/**
+ * A traveller's public view (PRD 8.3): the same cover and sheet as their own
+ * profile, holding only what they share with everyone - their name, photo,
+ * cover, bio and home country, counts from their Public trips, and those trips,
+ * each opening its shared itinerary.
+ *
+ * Everything arrives as props from the server page; nothing here fetches.
+ */
+export function PublicTravellerProfile({
   isOwner,
   isSignedIn,
-  locale,
   profile,
+  today,
 }: Readonly<PublicTravellerProfileProps>) {
-  const t = await getTranslations('publicTraveller');
-  const dateFormatter = new Intl.DateTimeFormat(locale, {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-    year: 'numeric',
-  });
-  const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00.000Z`));
-  const name = profile.traveller.name ?? t('anonymousName');
+  const t = useTranslations('publicTraveller');
+  const itineraryT = useTranslations('itinerary');
+  const locale = useLocale();
+  useCoverUnderHeader();
+
+  const { traveller, trips } = profile;
+  const summary = summarizePublicTravels(trips, today);
+  const home = traveller.homeCountryCode
+    ? namedCountries([traveller.homeCountryCode], locale)[0]?.name
+    : undefined;
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          {t('eyebrow')}
-        </p>
-        <h1 className="text-[length:var(--text-page-title)] leading-[1.08] font-semibold tracking-[-0.035em] text-pretty">
-          {name}
-        </h1>
-        {isOwner ? (
-          <div className="mt-2 flex flex-wrap items-center gap-3 rounded-[var(--radius-xl)] border border-border-subtle px-4 py-3">
-            <p className="flex-1 text-sm text-muted-foreground">{t('ownerNotice')}</p>
+    <div className="mx-auto w-full max-w-5xl">
+      <ProfileCover
+        actions={
+          isOwner ? (
             <Button
+              className={COVER_ACTION_CLASS}
               nativeButton={false}
               render={<Link href="/profile" />}
-              size="sm"
-              variant="secondary"
+              variant="outline"
             >
+              <ArrowLeft aria-hidden="true" data-icon="inline-start" />
               {t('ownerAction')}
             </Button>
-          </div>
+          ) : null
+        }
+        avatarUrl={traveller.avatarUrl}
+        bio={traveller.bio}
+        coverPhotoUrl={traveller.coverPhoto?.url ?? null}
+        coverPrint={null}
+        firstYear={summary.firstYear}
+        home={home}
+        initials={profileInitials(traveller.name) ?? '?'}
+        name={traveller.name ?? t('anonymousName')}
+      />
+
+      <HomeSheet>
+        {isOwner ? (
+          <p className="flex items-center gap-2 rounded-[var(--radius-xl)] border border-border-subtle px-4 py-3 text-sm text-muted-foreground">
+            <Eye aria-hidden="true" className="size-4 shrink-0" />
+            {t('ownerNotice')}
+          </p>
         ) : null}
-      </header>
 
-      <section aria-labelledby="traveller-trips-heading" className="flex flex-col gap-3">
-        <h2
-          className="text-[length:var(--text-section-title)] leading-[1.18] font-semibold tracking-[-0.022em] text-foreground"
-          id="traveller-trips-heading"
-        >
-          {t('tripsTitle')}
-        </h2>
-        {profile.trips.length ? (
-          <ul className="overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card shadow-[var(--shadow-surface)]">
-            {profile.trips.map((trip, index) => {
-              const countries = namedCountries(trip.countries, locale);
+        {summary.trips ? (
+          <TravelGlance
+            firstYear={summary.firstYear}
+            stats={[
+              { count: summary.countries, key: 'countries' },
+              { count: summary.trips, key: 'trips' },
+              { count: summary.daysAway, key: 'days' },
+            ]}
+          />
+        ) : null}
 
-              return (
-                <li
-                  className={index > 0 ? 'border-t border-border-subtle' : undefined}
-                  key={trip.id}
-                >
-                  <Link
-                    className="flex items-center gap-3 px-4 py-4 transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset motion-reduce:transition-none md:px-6"
-                    href={`/shared/${encodeURIComponent(trip.id)}`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-base leading-6 font-semibold text-pretty text-foreground">
-                        {trip.name}
+        <section aria-labelledby="traveller-trips" className="space-y-6">
+          <h2 className={SECTION_TITLE} id="traveller-trips">
+            {t('tripsTitle')}
+          </h2>
+          {trips.length ? (
+            <ul className="space-y-7">
+              {trips.map((trip, index) => {
+                const countries = namedCountries(trip.countries, locale);
+
+                return (
+                  <li className="group relative flex items-center gap-4 sm:gap-6" key={trip.id}>
+                    <span aria-hidden="true" className="w-24 shrink-0 sm:w-28">
+                      <JourneyPrint
+                        className="group-hover:rotate-0"
+                        cover={TRIP_PRINT}
+                        sizes="7rem"
+                        source={TRIP_PRINT}
+                        style={{ '--tilt': index % 2 ? '3deg' : '-3deg' } as CSSProperties}
+                      />
+                    </span>
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <p className="text-[length:var(--text-metadata)] font-semibold tracking-[0.12em] text-accent-strong uppercase tabular-nums">
+                        {monthYear(trip.startDate, locale)} ·{' '}
+                        {itineraryT('dayCount', { count: publicTripDayCount(trip) })}
                       </p>
+                      <h3 className="font-journal text-[1.625rem] leading-[1.02] text-foreground [overflow-wrap:anywhere]">
+                        <Link
+                          className="outline-none after:absolute after:inset-0 after:rounded-[var(--radius-lg)] focus-visible:after:ring-3 focus-visible:after:ring-ring/40"
+                          href={`/shared/${encodeURIComponent(trip.id)}`}
+                        >
+                          {trip.name}
+                        </Link>
+                      </h3>
                       {countries.length ? (
-                        <p className="mt-0.5 text-[length:var(--text-metadata)] font-semibold tracking-[0.08em] text-brand uppercase">
+                        <p className="text-sm text-muted-foreground">
                           {countries.map((country, countryIndex) => (
                             <span key={country.code}>
                               {countryIndex > 0 ? <span aria-hidden="true">{' · '}</span> : null}
@@ -99,37 +151,31 @@ export async function PublicTravellerProfile({
                           ))}
                         </p>
                       ) : null}
-                      <p className="mt-0.5 text-[length:var(--text-metadata)] font-medium text-muted-foreground tabular-nums">
-                        {t('dateRange', {
-                          endDate: formatDate(trip.endDate),
-                          startDate: formatDate(trip.startDate),
-                        })}
-                      </p>
                     </div>
                     <ChevronRight
                       aria-hidden="true"
                       className="size-4 shrink-0 text-muted-foreground"
                     />
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="rounded-[var(--radius-xl)] border border-border bg-card px-4 py-6 text-sm text-muted-foreground">
-            {isOwner ? t('emptyOwner') : t('empty')}
-          </p>
-        )}
-      </section>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="rounded-[var(--radius-xl)] border border-border bg-card px-4 py-6 text-sm text-muted-foreground">
+              {isOwner ? t('emptyOwner') : t('empty')}
+            </p>
+          )}
+        </section>
 
-      {isSignedIn ? null : (
-        <footer className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-xl)] border border-border-subtle px-4 py-4">
-          <p className="text-sm text-muted-foreground">{t('footerPrompt')}</p>
-          <Button nativeButton={false} render={<Link href="/sign-up" />} size="sm">
-            {t('footerAction')}
-          </Button>
-        </footer>
-      )}
+        {isSignedIn ? null : (
+          <footer className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-xl)] border border-border-subtle px-4 py-4">
+            <p className="text-sm text-muted-foreground">{t('footerPrompt')}</p>
+            <Button nativeButton={false} render={<Link href="/sign-up" />} size="sm">
+              {t('footerAction')}
+            </Button>
+          </footer>
+        )}
+      </HomeSheet>
     </div>
   );
 }

@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { getLocale, getTranslations } from 'next-intl/server';
+import { getTranslations } from 'next-intl/server';
 
+import { journalSerif } from '@/components/memories/journal-font';
 import { PublicTravellerProfile } from '@/components/public-traveller-profile';
 import { getAuthUserId } from '@/lib/auth/session';
 import { fetchPublicTravellerProfile } from '@/lib/public-trip/api';
@@ -27,22 +28,21 @@ export async function generateMetadata({ params }: TravellerPageProps): Promise<
  * `/profile` a visitor would be sent to sign in before the page ran.
  */
 export default async function TravellerPage({ params }: TravellerPageProps) {
-  const [{ travellerId }, locale, userId] = await Promise.all([
-    params,
-    getLocale(),
-    getAuthUserId(),
-  ]);
+  const [{ travellerId }, userId] = await Promise.all([params, getAuthUserId()]);
   const profile = await fetchPublicTravellerProfile(travellerId);
 
   // Unknown and malformed ids alike, so the page is no more of a tell than the API.
   if (!profile) notFound();
 
+  // The profile's own serif, as on /profile, so the two views read as one page.
   return (
-    <PublicTravellerProfile
-      isOwner={userId === profile.traveller.id}
-      isSignedIn={userId !== null}
-      locale={locale}
-      profile={profile}
-    />
+    <div className={journalSerif.variable}>
+      <PublicTravellerProfile
+        isOwner={userId === profile.traveller.id}
+        isSignedIn={userId !== null}
+        profile={profile}
+        today={new Date().toISOString().slice(0, 10)}
+      />
+    </div>
   );
 }

@@ -4358,11 +4358,9 @@
     }
   },
   "publicTraveller": {
-    "eyebrow": "Traveller",
     "description": "A Trove traveller’s public trips.",
     "anonymousName": "A Trove traveller",
     "tripsTitle": "Public trips",
-    "dateRange": "{startDate} – {endDate}",
     "empty": "No public trips to show yet.",
     "emptyOwner": "Trips you make Public appear here. If one was already Public, switch it to Private and back to list it.",
     "ownerNotice": "This is how other travellers see your profile.",

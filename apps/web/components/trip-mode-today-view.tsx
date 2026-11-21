@@ -548,7 +548,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
       aria-hidden="true"
       className={cn(
         'relative z-[1] grid shrink-0 place-items-center bg-background',
-        kind === 'base' && 'size-3.5 rounded-[0.3rem] border-2 border-border-strong',
+        kind === 'base' && 'size-5 text-muted-foreground',
         kind === 'completed' && 'size-[1.125rem] rounded-full bg-brand text-primary-foreground',
         kind === 'current' && 'size-[1.125rem] rounded-full border-[5px] border-accent-strong',
         kind === 'skipped' && 'size-3.5 rounded-full border-2 border-dotted border-border-strong',
@@ -556,6 +556,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
       )}
     >
       {kind === 'completed' ? <Check className="size-3" strokeWidth={3.5} /> : null}
+      {kind === 'base' ? <Icons.DailyBase className="size-4" /> : null}
     </span>
   );
   const rowGrid = 'relative grid grid-cols-[3.75rem_1.25rem_minmax(0,1fr)] gap-x-3';

@@ -9,6 +9,7 @@ import type { ItineraryItem } from '@/lib/itinerary/api';
 import type { BandedEntry } from '@/lib/itinerary/day-bands';
 import { formatSuggestedClock } from '@/lib/itinerary/day-time-suggestions';
 import { formatTravelDuration } from '@/lib/itinerary/route-format';
+import { STAY_MARK_CLASS, StayMarkContent } from '@/components/stay-mark';
 import { cn } from '@/lib/utils';
 
 import type { StopView } from './stop-card';
@@ -105,14 +106,19 @@ export function DaySimpleList({
                   <button
                     aria-label={stopT('showOnMap', { number: entry.stopNumber })}
                     className={cn(
-                      mark,
-                      'size-3.5 border-2 border-border-strong bg-background focus-visible:ring-3 focus-visible:ring-ring/40',
-                      base.selected && 'border-primary ring-4 ring-ring/35',
+                      STAY_MARK_CLASS,
+                      'z-10 size-7 outline-none focus-visible:ring-3 focus-visible:ring-ring/40',
+                      base.located
+                        ? 'border-primary bg-card text-primary'
+                        : 'border-border bg-muted text-muted-foreground',
+                      base.selected && 'ring-4 ring-ring/35',
                     )}
                     disabled={!base.located}
                     onClick={() => onSelectBase(entry.tripPlaceId)}
                     type="button"
-                  />
+                  >
+                    <StayMarkContent iconClassName="size-3.5" number={entry.stopNumber} />
+                  </button>
                 </span>
                 <button
                   className="min-h-9 min-w-0 truncate rounded-[var(--radius-sm)] text-left text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"

@@ -16,6 +16,7 @@ import {
 } from '@/lib/maps/map-route-selection';
 
 import { PageState } from '@/components/page-state';
+import { stayMarkElement } from '@/components/stay-mark';
 import { Button } from '@/components/ui/button';
 import {
   getGoogleMapsMapId,
@@ -110,7 +111,22 @@ type GoogleMapMouseEvent = {
   domEvent: Event;
 };
 
+const MARKER_SELECTED_CLASS =
+  'transition-[transform,box-shadow] duration-[var(--motion-fast)] motion-reduce:transition-none data-[selected=true]:scale-110 data-[selected=true]:ring-4 data-[selected=true]:ring-ring/35';
+
 function markerContent(point: ItineraryMapPoint) {
+  // A Stay is a bed, numbered in its corner when the day counts it.
+  if (point.kind === 'base') {
+    const element = stayMarkElement(
+      cn(
+        'size-9 border-primary bg-card text-primary shadow-[var(--shadow-control)]',
+        MARKER_SELECTED_CLASS,
+      ),
+      point.order,
+    );
+    element.dataset.selected = 'false';
+    return element;
+  }
   const element = document.createElement('span');
   element.className = cn(
     'grid place-items-center border-2 font-semibold shadow-[var(--shadow-control)] transition-[transform,box-shadow] duration-[var(--motion-fast)] motion-reduce:transition-none',
@@ -121,9 +137,7 @@ function markerContent(point: ItineraryMapPoint) {
             ? 'bg-primary text-primary-foreground'
             : mapDayTint(point.dayIndex).marker,
         )
-      : point.kind === 'base'
-        ? 'size-8 rounded-[var(--radius-sm)] border-primary bg-card text-[0.6875rem] text-primary'
-        : 'size-7 rounded-full border-primary bg-card text-primary',
+      : 'size-7 rounded-full border-primary bg-card text-primary',
     'data-[selected=true]:scale-110 data-[selected=true]:ring-4 data-[selected=true]:ring-ring/35',
   );
   element.dataset.selected = 'false';

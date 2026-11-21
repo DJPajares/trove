@@ -613,10 +613,7 @@ export function TripModeMapView({
               </li>
               {baseTripPlace ? (
                 <li className="inline-flex items-center gap-2">
-                  <span
-                    aria-hidden="true"
-                    className="size-3 rounded-[var(--radius-xs)] border-2 border-primary"
-                  />
+                  <BedDouble aria-hidden="true" className="size-3.5 text-primary" />
                   {t('legend.base')}
                 </li>
               ) : null}

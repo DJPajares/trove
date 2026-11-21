@@ -1599,5 +1599,15 @@
         "Opening the map from far away now keeps the day's route in view instead of zooming out to show where you are."
       ]
     }
+  },
+  {
+    "id": "stay-bed-markers",
+    "date": "2026-11-21",
+    "version": "1.42.1",
+    "summaries": {
+      "en": [
+        "Where you're staying now shows as a bed on maps and in your day, with its stop number so a day that moves between hotels is easy to follow."
+      ]
+    }
   }
 ]

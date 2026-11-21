@@ -1595,7 +1595,8 @@
     "summaries": {
       "en": [
         "The Trip Mode map gives you more of the map: your next stop, when to leave and directions sit in one card at the bottom.",
-        "Location, your stay, other places and routes now share one tidy column of buttons."
+        "Location, your stay, other places and routes now share one tidy column of buttons.",
+        "Opening the map from far away now keeps the day's route in view instead of zooming out to show where you are."
       ]
     }
   }

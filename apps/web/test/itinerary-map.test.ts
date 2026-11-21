@@ -11,6 +11,7 @@ import {
   buildItineraryMapPoints,
   buildTripMapPoints,
   dailyBasePoints,
+  deviceFramesWithDay,
   type ItineraryMapPoint,
   viewportPoints,
 } from '../lib/maps/itinerary-map.ts';
@@ -550,4 +551,17 @@ test('only a stop that names a location it cannot draw is counted as missing one
   // A Custom Place with no coordinates is never placed on a guess.
   expect(whole.points.map((entry) => entry.id)).toStrictEqual(['museum']);
   expect(tripMap({ days, focusDayId: 'd1', tripPlaces }).unlocatedStopCount).toBe(2);
+});
+
+test('device location joins the frame only when it is near the day', () => {
+  const hanoi = [
+    { latitude: 21.0285, longitude: 105.8542 },
+    { latitude: 21.0379, longitude: 105.8496 },
+  ];
+  // Across town from the first stop.
+  expect(deviceFramesWithDay({ latitude: 21.0, longitude: 105.8 }, hanoi)).toBe(true);
+  // A traveller in Singapore previewing tomorrow in Hanoi keeps Hanoi in view.
+  expect(deviceFramesWithDay({ latitude: 1.3521, longitude: 103.8198 }, hanoi)).toBe(false);
+  // With nothing of the day to frame, the device is the frame.
+  expect(deviceFramesWithDay({ latitude: 1.3521, longitude: 103.8198 }, [])).toBe(true);
 });

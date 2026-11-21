@@ -10,7 +10,6 @@ import {
   listTripsController,
   updateTripController,
   updateTripExperienceRatingController,
-  listTripOnProfileController,
   updateTripVisibilityController,
 } from '../controllers/trips.js';
 import { requireAuthenticatedUser } from '../services/request-auth.js';
@@ -35,11 +34,6 @@ export function registerTripRoutes(app: FastifyInstance) {
     '/trips/:tripId/experience-rating',
     { preHandler: requireAuthenticatedUser },
     updateTripExperienceRatingController,
-  );
-  app.post(
-    '/trips/:tripId/profile-listing',
-    { preHandler: requireAuthenticatedUser },
-    listTripOnProfileController,
   );
   app.patch(
     '/trips/:tripId/visibility',

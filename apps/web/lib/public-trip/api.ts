@@ -41,8 +41,7 @@ export type PublicItinerary = {
      * The owner's traveller id, which opens their public profile. Optional for
      * an API that predates traveller profiles.
      */
-    /** Null while the owner's profile is Private: their name then opens nothing. */
-    ownerId?: string | null;
+    ownerId?: string;
     /** The sharer's display name; null where they have none. */
     ownerName?: string | null;
     startDate: string;
@@ -81,8 +80,17 @@ export async function fetchPublicItinerary(tripId: string): Promise<PublicItiner
 export type PublicTravellerTrip = {
   /** ISO 3166-1 alpha-2, in the order the traveller picked them. */
   countries: string[];
+  destinations: {
+    location: { latitude: number; longitude: number } | null;
+    name: string;
+    placeId: string;
+  }[];
   endDate: string;
+  experienceNote: string | null;
+  experienceRating: number | null;
   id: string;
+  /** A few of an ended trip's own Memory photos, signed briefly. */
+  memoryPhotos: { contentType: string; id: string; url: string }[];
   name: string;
   startDate: string;
 };
@@ -97,8 +105,9 @@ export type PublicTravellerProfile = {
     homeCountryCode: string | null;
     id: string;
     name: string | null;
+    travelStyles: string[];
   };
-  /** Only Public trips their owner listed; each opens its shared itinerary. */
+  /** Their Public trips, newest first; each opens its shared itinerary. */
   trips: PublicTravellerTrip[];
 };
 

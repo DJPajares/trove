@@ -24,7 +24,10 @@ const FAN_POSITIONS = [
  * A Memory photograph can outlive its hour-long link in a page left open, so
  * each one falls back to the cover rather than to an empty tile.
  */
-export function journeyPrints(trip: Trip, editorial: EditorialImageReference | null) {
+export function journeyPrints(
+  trip: Pick<Trip, 'coverPhotoUrl' | 'memoryPhotos'>,
+  editorial: EditorialImageReference | null,
+) {
   const cover = resolveTripMediaSource({ coverUrl: trip.coverPhotoUrl, editorial });
   const heic = canDecodeHeic();
   const photos = (trip.memoryPhotos ?? [])

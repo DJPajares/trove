@@ -9,55 +9,70 @@ import {
 } from '../src/services/public-traveller-profile.js';
 
 /**
- * A traveller's public view is reachable by anyone, so what matters is what it
- * lets out: Public trips their owner listed, and nothing about the rest.
+ * Every traveller's profile is open to anyone, so what matters is what it lets
+ * out: their profile and their Public trips with those trips' Memories, and
+ * nothing of a Private trip - not its name, its count, or its photos.
  */
 
 const TRAVELLER_ID = '44444444-4444-4444-8444-444444444444';
 const QUIET_TRAVELLER_ID = '55555555-5555-4555-8555-555555555555';
 const UNKNOWN_ID = '66666666-6666-4666-8666-666666666666';
-const PRIVATE_TRAVELLER_ID = '77777777-7777-4777-8777-777777777777';
+const NOW = new Date('2026-11-21T00:00:00.000Z');
 
+type Photo = { contentType: string; id: string; path: string };
 type TripRow = {
   archivedAt: Date | null;
-  bio?: string;
-  budgetAmount?: number;
+  budgetAmount: number;
   countries: string[];
-  description: string | null;
+  destinations: { place: Record<string, unknown>; placeId: string }[];
   endDate: Date;
+  experienceNote: string | null;
+  experienceRating: number | null;
   id: string;
+  memories: { photos: Photo[] }[];
   name: string;
   ownerId: string;
-  publicListedAt: Date | null;
   startDate: Date;
+  storyCoverPhoto: Photo | null;
   visibility: 'PRIVATE' | 'PUBLIC';
 };
+
+const photo = (id: string): Photo => ({
+  contentType: 'image/jpeg',
+  id,
+  path: `${TRAVELLER_ID}/memory/${id}.jpg`,
+});
 
 function trip(overrides: Partial<TripRow> & Pick<TripRow, 'id' | 'name'>): TripRow {
   return {
     archivedAt: null,
     budgetAmount: 1200,
     countries: ['JP'],
-    description: 'Private-ish framing',
+    destinations: [],
     endDate: new Date('2026-05-03T00:00:00.000Z'),
+    experienceNote: null,
+    experienceRating: null,
+    memories: [],
     ownerId: TRAVELLER_ID,
-    publicListedAt: new Date('2026-11-21T00:00:00.000Z'),
     startDate: new Date('2026-05-01T00:00:00.000Z'),
+    storyCoverPhoto: null,
     visibility: 'PUBLIC',
     ...overrides,
   };
 }
 
-const profiles = [
+const PUBLIC_COVER = { ...photo('cover'), memory: { trip: { visibility: 'PUBLIC' } } };
+
+const profiles: Record<string, unknown>[] = [
   {
     avatarPath: `${TRAVELLER_ID}/avatar.jpg`,
     bio: ' Slow traveller ',
-    coverMemoryPhoto: { contentType: 'image/jpeg', path: `${TRAVELLER_ID}/memory/cover.jpg` },
+    coverMemoryPhoto: PUBLIC_COVER,
     displayName: '  Ana  ',
     homeCountryCode: 'PH',
     id: TRAVELLER_ID,
-    isPublic: true,
     // Never selected, so it must never be sent.
+    temperatureUnit: 'CELSIUS',
     travelStyles: ['Food first'],
   },
   {
@@ -67,70 +82,76 @@ const profiles = [
     displayName: null,
     homeCountryCode: null,
     id: QUIET_TRAVELLER_ID,
-    isPublic: true,
-    travelStyles: [],
-  },
-  {
-    avatarPath: null,
-    bio: 'Keeps to themselves',
-    coverMemoryPhoto: null,
-    displayName: 'Private Pat',
-    homeCountryCode: 'SG',
-    id: PRIVATE_TRAVELLER_ID,
-    isPublic: false,
+    temperatureUnit: null,
     travelStyles: [],
   },
 ];
 
 /** Signs whatever it is asked to, and remembers what that was. */
 let signed: string[] = [];
+const sign = (bucket: string, path: string) => {
+  signed.push(`${bucket}:${path}`);
+  return `https://storage.test/${bucket}/${path}`;
+};
 const storage = () =>
   ({
     storage: {
       from: (bucket: string) => ({
-        createSignedUrl: async (path: string) => {
-          signed.push(`${bucket}:${path}`);
-          return { data: { signedUrl: `https://storage.test/${bucket}/${path}` }, error: null };
-        },
+        createSignedUrl: async (path: string) => ({
+          data: { signedUrl: sign(bucket, path) },
+          error: null,
+        }),
+        createSignedUrls: async (paths: string[]) => ({
+          data: paths.map((path) => ({ error: null, signedUrl: sign(bucket, path) })),
+          error: null,
+        }),
       }),
     },
   }) as unknown as SupabaseClient;
 
 let trips: TripRow[] = [];
 
-type TripWhere = {
-  archivedAt: null;
-  publicListedAt: { not: null };
-  visibility: 'PUBLIC';
-};
-
-/** Applies the service's own filter, so a loosened filter fails these tests. */
-function matches(row: TripRow, where: TripWhere) {
-  return (
-    row.visibility === where.visibility &&
-    row.archivedAt === where.archivedAt &&
-    (where.publicListedAt.not === null ? row.publicListedAt !== null : true)
-  );
-}
+type TripWhere = { archivedAt: null; visibility: 'PUBLIC' };
 
 beforeEach(() => {
   signed = [];
+  profiles[0]!.coverMemoryPhoto = PUBLIC_COVER;
   trips = [
-    trip({ id: 'trip-listed-old', name: 'Kyoto in spring' }),
     trip({
-      id: 'trip-listed-new',
-      name: 'Lisbon weekend',
+      destinations: [
+        {
+          place: {
+            customLatitude: 35.01,
+            customLongitude: 135.77,
+            customName: 'Kyoto',
+            id: 'place-kyoto',
+            kind: 'CUSTOM',
+            providerRefs: [],
+          },
+          placeId: 'place-kyoto',
+        },
+      ],
+      experienceNote: ' Slow and lovely ',
+      experienceRating: 5,
+      id: 'trip-kyoto',
+      memories: [{ photos: [photo('kyoto-1')] }, { photos: [photo('kyoto-2')] }],
+      name: 'Kyoto in spring',
+    }),
+    trip({
       countries: ['PT'],
       endDate: new Date('2027-02-15T00:00:00.000Z'),
+      id: 'trip-lisbon',
+      // Still ahead, so none of its photographs are signed.
+      memories: [{ photos: [photo('lisbon-plan')] }],
+      name: 'Lisbon weekend',
       startDate: new Date('2027-02-13T00:00:00.000Z'),
     }),
     trip({
       id: 'trip-private',
+      memories: [{ photos: [photo('honeymoon')] }],
       name: 'Secret honeymoon',
-      publicListedAt: null,
       visibility: 'PRIVATE',
     }),
-    trip({ id: 'trip-public-before-disclosure', name: 'Old shared link', publicListedAt: null }),
     trip({ archivedAt: new Date(), id: 'trip-archived', name: 'Put away' }),
     trip({
       id: 'trip-someone-else',
@@ -144,7 +165,7 @@ beforeEach(() => {
     profile: {
       findUnique: async (args: {
         select: Record<string, unknown> & {
-          ownedTrips: { select: Record<string, true>; where: TripWhere };
+          ownedTrips: { select: Record<string, unknown>; where: TripWhere };
         };
         where: { id: string };
       }) => {
@@ -152,7 +173,13 @@ beforeEach(() => {
         if (!profile) return null;
         const { select, where } = args.select.ownedTrips;
         const owned = trips
-          .filter((row) => row.ownerId === profile.id && matches(row, where))
+          // The service's own filter, so loosening it fails these tests.
+          .filter(
+            (row) =>
+              row.ownerId === profile.id &&
+              row.visibility === where.visibility &&
+              row.archivedAt === where.archivedAt,
+          )
           .sort((a, b) => b.startDate.getTime() - a.startDate.getTime())
           .map((row) =>
             Object.fromEntries(Object.keys(select).map((key) => [key, row[key as keyof TripRow]])),
@@ -161,7 +188,7 @@ beforeEach(() => {
         const row = Object.fromEntries(
           Object.keys(args.select)
             .filter((key) => key !== 'ownedTrips')
-            .map((key) => [key, profile[key as keyof typeof profile]]),
+            .map((key) => [key, profile[key]]),
         );
         return { ...row, ownedTrips: owned };
       },
@@ -169,59 +196,87 @@ beforeEach(() => {
   };
 });
 
-test('a profile lists only Public trips its owner listed, newest first', async () => {
-  const profile = await readPublicTravellerProfile(TRAVELLER_ID, { storage });
+test('a profile shows its Public trips, newest first, and nothing of the rest', async () => {
+  const profile = await readPublicTravellerProfile(TRAVELLER_ID, { now: NOW, storage });
 
-  // Exhaustive on purpose: this is everything a stranger is shown.
-  expect(profile).toStrictEqual({
-    traveller: {
-      avatarUrl: `https://storage.test/profile-photos/${TRAVELLER_ID}/avatar.jpg`,
-      bio: 'Slow traveller',
-      coverPhoto: {
-        contentType: 'image/jpeg',
-        url: `https://storage.test/memory-photos/${TRAVELLER_ID}/memory/cover.jpg`,
-      },
-      homeCountryCode: 'PH',
-      id: TRAVELLER_ID,
-      name: 'Ana',
+  expect(profile.traveller).toStrictEqual({
+    avatarUrl: `https://storage.test/profile-photos/${TRAVELLER_ID}/avatar.jpg`,
+    bio: 'Slow traveller',
+    coverPhoto: {
+      contentType: 'image/jpeg',
+      url: `https://storage.test/memory-photos/${TRAVELLER_ID}/memory/cover.jpg`,
     },
-    trips: [
+    homeCountryCode: 'PH',
+    id: TRAVELLER_ID,
+    name: 'Ana',
+    travelStyles: ['Food first'],
+  });
+  expect(profile.trips.map((entry) => entry.id)).toStrictEqual(['trip-lisbon', 'trip-kyoto']);
+  expect(profile.trips[1]).toStrictEqual({
+    countries: ['JP'],
+    destinations: [
+      { location: { latitude: 35.01, longitude: 135.77 }, name: 'Kyoto', placeId: 'place-kyoto' },
+    ],
+    endDate: '2026-05-03',
+    experienceNote: 'Slow and lovely',
+    experienceRating: 5,
+    id: 'trip-kyoto',
+    memoryPhotos: [
       {
-        countries: ['PT'],
-        endDate: '2027-02-15',
-        id: 'trip-listed-new',
-        name: 'Lisbon weekend',
-        startDate: '2027-02-13',
+        contentType: 'image/jpeg',
+        id: 'kyoto-1',
+        url: `https://storage.test/memory-photos/${TRAVELLER_ID}/memory/kyoto-1.jpg`,
       },
       {
-        countries: ['JP'],
-        endDate: '2026-05-03',
-        id: 'trip-listed-old',
-        name: 'Kyoto in spring',
-        startDate: '2026-05-01',
+        contentType: 'image/jpeg',
+        id: 'kyoto-2',
+        url: `https://storage.test/memory-photos/${TRAVELLER_ID}/memory/kyoto-2.jpg`,
       },
     ],
+    name: 'Kyoto in spring',
+    startDate: '2026-05-01',
   });
-  const body = JSON.stringify(profile);
-  for (const hidden of ['Secret honeymoon', 'Old shared link', 'Put away', 'Food first']) {
-    expect(body).not.toContain(hidden);
+  const text = JSON.stringify(profile);
+  for (const hidden of ['Secret honeymoon', 'honeymoon', 'Put away', 'budget', 'CELSIUS']) {
+    expect(text).not.toContain(hidden);
   }
-  // Only this traveller's own two photos are ever signed.
-  expect(signed).toStrictEqual([
-    `profile-photos:${TRAVELLER_ID}/avatar.jpg`,
-    `memory-photos:${TRAVELLER_ID}/memory/cover.jpg`,
-  ]);
+  // A Private trip's Memories are never so much as signed.
+  expect(signed.some((path) => path.includes('honeymoon'))).toBe(false);
+});
+
+test('a trip still ahead shows no photographs', async () => {
+  const profile = await readPublicTravellerProfile(TRAVELLER_ID, { now: NOW, storage });
+
+  expect(profile.trips[0]?.memoryPhotos).toStrictEqual([]);
+  expect(signed.some((path) => path.includes('lisbon-plan'))).toBe(false);
+});
+
+test('a profile cover from a Private trip is not shown', async () => {
+  profiles[0]!.coverMemoryPhoto = {
+    ...photo('private-cover'),
+    memory: { trip: { visibility: 'PRIVATE' } },
+  };
+  const profile = await readPublicTravellerProfile(TRAVELLER_ID, { now: NOW, storage });
+
+  expect(profile.traveller.coverPhoto).toBeNull();
+  expect(signed.some((path) => path.includes('private-cover'))).toBe(false);
 });
 
 test('a photo that cannot be signed is left out, not sent broken', async () => {
-  const profile = await readPublicTravellerProfile(TRAVELLER_ID, { storage: () => null });
+  const profile = await readPublicTravellerProfile(TRAVELLER_ID, {
+    now: NOW,
+    storage: () => null,
+  });
 
   expect(profile.traveller.avatarUrl).toBeNull();
   expect(profile.traveller.coverPhoto).toBeNull();
+  expect(profile.trips.every((entry) => entry.memoryPhotos.length === 0)).toBe(true);
 });
 
-test('a traveller with nothing listed still has a public view', async () => {
-  await expect(readPublicTravellerProfile(QUIET_TRAVELLER_ID, { storage })).resolves.toStrictEqual({
+test('every traveller has a public view, even with nothing Public yet', async () => {
+  await expect(
+    readPublicTravellerProfile(QUIET_TRAVELLER_ID, { now: NOW, storage }),
+  ).resolves.toStrictEqual({
     traveller: {
       avatarUrl: null,
       bio: null,
@@ -229,6 +284,7 @@ test('a traveller with nothing listed still has a public view', async () => {
       homeCountryCode: null,
       id: QUIET_TRAVELLER_ID,
       name: null,
+      travelStyles: [],
     },
     trips: [],
   });
@@ -276,19 +332,4 @@ test('every way of not finding a traveller looks the same', async () => {
   }
 
   await app.close();
-});
-
-test('a private profile answers exactly as a traveller who does not exist', async () => {
-  const privateError = await readPublicTravellerProfile(PRIVATE_TRAVELLER_ID, { storage }).catch(
-    (error: unknown) => error,
-  );
-  const unknownError = await readPublicTravellerProfile(UNKNOWN_ID, { storage }).catch(
-    (error: unknown) => error,
-  );
-
-  expect(privateError).toBeInstanceOf(PublicTravellerNotFoundError);
-  expect(unknownError).toBeInstanceOf(PublicTravellerNotFoundError);
-  expect(String(privateError)).toBe(String(unknownError));
-  // Nothing of theirs was signed on the way out.
-  expect(signed).toStrictEqual([]);
 });

@@ -21,8 +21,6 @@ export type Profile = {
   /** Derived by the server from the home country; never sent back. */
   homeTimeZone: string | null;
   id: string;
-  /** Whether others can open their public view (PRD 8.3). Off until they switch it on. */
-  isPublic?: boolean;
   temperatureUnit: 'celsius' | 'fahrenheit' | null;
   timeFormat: '12h' | '24h' | null;
   /** Short tags for how they like to travel. */

@@ -3,29 +3,26 @@
 import { ArrowLeft, ChevronRight, Eye } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import type { CSSProperties } from 'react';
+import { useMemo, type CSSProperties } from 'react';
 
 import { HomeSheet } from '@/components/home/home-front-door';
-import { JourneyPrint } from '@/components/journey-prints';
+import { JourneyPrint, journeyPrints } from '@/components/journey-prints';
 import {
-  CountryStamps,
   COVER_ACTION_CLASS,
   monthYear,
   ProfileCover,
+  ProfileTravels,
   SECTION_TITLE,
-  TravelGlance,
-  TravelMap,
 } from '@/components/profile/traveller-profile';
-import { UnlistedPublicTrips } from '@/components/profile/unlisted-public-trips';
 import { Button } from '@/components/ui/button';
 import { useCoverUnderHeader } from '@/hooks/use-cover-under-header';
 import type { TripMediaSource } from '@/lib/media/trip-media';
-import {
-  publicTravelMap,
-  publicTripDayCount,
-  summarizePublicTravels,
-} from '@/lib/profile/public-travel-summary';
-import type { PublicTravellerProfile as PublicTravellerProfileData } from '@/lib/public-trip/api';
+import { publicTripDayCount } from '@/lib/profile/public-travel-summary';
+import { summarizeTravels, type TravelTrip } from '@/lib/profile/travel-summary';
+import type {
+  PublicTravellerProfile as PublicTravellerProfileData,
+  PublicTravellerTrip,
+} from '@/lib/public-trip/api';
 import { profileInitials } from '@/lib/shell/floating-actions';
 import { namedCountries } from '@/lib/trips/countries';
 
@@ -37,18 +34,25 @@ type PublicTravellerProfileProps = {
   today: string;
 };
 
-/**
- * Trove's own artwork stands in for every trip's photograph: a public page that
- * anyone can load at will makes no editorial lookups, and a trip's own cover
- * and Memories are not part of what its link shares (PRD 8.2, 8.3).
- */
+/** Trove's own artwork for a trip with no photograph of its own: a public page makes no editorial lookups. */
 const TRIP_PRINT: TripMediaSource = { kind: 'fallback' };
 
+/** A Public trip read the way the traveller's own profile reads one of theirs. */
+function asTravelTrip(trip: PublicTravellerTrip, today: string): TravelTrip & { id: string } {
+  return {
+    ...trip,
+    archivedAt: null,
+    coverPhotoUrl: null,
+    lifecycle: trip.endDate < today ? 'completed' : trip.startDate <= today ? 'active' : 'planning',
+  };
+}
+
 /**
- * A traveller's public view (PRD 8.3): the same cover and sheet as their own
- * profile, holding only what they share with everyone - their name, photo,
- * cover, bio and home country, counts from their Public trips, and those trips,
- * each opening its shared itinerary.
+ * A traveller's profile as anyone sees it (PRD 8.3): the same page they see
+ * themselves - cover, travel styles, travels at a glance, where they have been,
+ * journeys and favourite moments - drawn only from their Public trips and those
+ * trips' Memories, which is all the server sends. Each trip opens its shared
+ * itinerary rather than their journal.
  *
  * Everything arrives as props from the server page; nothing here fetches.
  */
@@ -59,16 +63,24 @@ export function PublicTravellerProfile({
   today,
 }: Readonly<PublicTravellerProfileProps>) {
   const t = useTranslations('publicTraveller');
+  const profileT = useTranslations('travellerProfile');
   const itineraryT = useTranslations('itinerary');
   const locale = useLocale();
   useCoverUnderHeader();
 
   const { traveller, trips } = profile;
-  const summary = summarizePublicTravels(trips, today);
-  const travelMap = publicTravelMap(trips, today);
+  const summary = useMemo(
+    () => summarizeTravels(trips.map((trip) => asTravelTrip(trip, today))),
+    [today, trips],
+  );
+  // Only a trip with its own photographs leads the cover; otherwise the cover
+  // keeps Trove's artwork, as it would for a traveller with no Public trips.
+  const coverTrip =
+    summary.favourites[0] ?? summary.completed.find((trip) => trip.memoryPhotos?.length) ?? null;
   const home = traveller.homeCountryCode
     ? namedCountries([traveller.homeCountryCode], locale)[0]?.name
     : undefined;
+  const sharedHref = (trip: { id: string }) => `/shared/${encodeURIComponent(trip.id)}`;
 
   return (
     <div className="mx-auto w-full max-w-5xl">
@@ -89,7 +101,7 @@ export function PublicTravellerProfile({
         avatarUrl={traveller.avatarUrl}
         bio={traveller.bio}
         coverPhotoUrl={traveller.coverPhoto?.url ?? null}
-        coverPrint={null}
+        coverPrint={coverTrip ? journeyPrints(coverTrip, null) : null}
         firstYear={summary.firstYear}
         home={home}
         initials={profileInitials(traveller.name) ?? '?'}
@@ -104,33 +116,33 @@ export function PublicTravellerProfile({
           </p>
         ) : null}
 
-        {summary.trips ? (
-          <TravelGlance
-            firstYear={summary.firstYear}
-            stats={[
-              { count: summary.countries, key: 'countries' },
-              { count: summary.trips, key: 'trips' },
-              { count: summary.daysAway, key: 'days' },
-            ]}
-          />
-        ) : null}
-
-        {/* Where they have been, from their listed Public trips' countries only. */}
-        {travelMap.places.length ? (
-          <section aria-labelledby="traveller-map" className="space-y-4">
-            <h2 className={SECTION_TITLE} id="traveller-map">
-              {t('mapTitle')}
+        {traveller.travelStyles.length ? (
+          <section aria-labelledby="traveller-styles" className="space-y-3">
+            <h2 className={SECTION_TITLE} id="traveller-styles">
+              {profileT('styles')}
             </h2>
-            <TravelMap
-              homeCountryCode={traveller.homeCountryCode}
-              messages="publicTraveller.map"
-              places={travelMap.places}
-            />
-            <CountryStamps stamps={travelMap.stamps} />
+            <ul className="flex flex-wrap gap-2">
+              {traveller.travelStyles.map((style) => (
+                <li
+                  className="inline-flex h-9 items-center rounded-full bg-secondary px-4 text-sm font-medium text-secondary-foreground"
+                  key={style}
+                >
+                  {style}
+                </li>
+              ))}
+            </ul>
           </section>
         ) : null}
 
-        {isOwner ? <UnlistedPublicTrips /> : null}
+        {summary.completed.length ? (
+          <ProfileTravels
+            editorialFor={() => null}
+            homeCountryCode={traveller.homeCountryCode}
+            hrefFor={sharedHref}
+            summary={summary}
+            voice="public"
+          />
+        ) : null}
 
         <section aria-labelledby="traveller-trips" className="space-y-6">
           <h2 className={SECTION_TITLE} id="traveller-trips">
@@ -140,6 +152,8 @@ export function PublicTravellerProfile({
             <ul className="space-y-7">
               {trips.map((trip, index) => {
                 const countries = namedCountries(trip.countries, locale);
+                const { prints } = journeyPrints({ coverPhotoUrl: null, ...trip }, null);
+                const print = prints[0]?.kind === 'memory' ? prints[0] : TRIP_PRINT;
 
                 return (
                   <li className="group relative flex items-center gap-4 sm:gap-6" key={trip.id}>
@@ -148,7 +162,7 @@ export function PublicTravellerProfile({
                         className="group-hover:rotate-0"
                         cover={TRIP_PRINT}
                         sizes="7rem"
-                        source={TRIP_PRINT}
+                        source={print}
                         style={{ '--tilt': index % 2 ? '3deg' : '-3deg' } as CSSProperties}
                       />
                     </span>
@@ -160,7 +174,7 @@ export function PublicTravellerProfile({
                       <h3 className="font-journal text-[1.625rem] leading-[1.02] text-foreground [overflow-wrap:anywhere]">
                         <Link
                           className="outline-none after:absolute after:inset-0 after:rounded-[var(--radius-lg)] focus-visible:after:ring-3 focus-visible:after:ring-ring/40"
-                          href={`/shared/${encodeURIComponent(trip.id)}`}
+                          href={sharedHref(trip)}
                         >
                           {trip.name}
                         </Link>

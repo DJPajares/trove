@@ -51,10 +51,10 @@ export type PublicItinerary = {
     id: string;
     name: string;
     /**
-     * The owner's traveller id, which opens their public profile (PRD 8.3) - or
-     * null while that profile is Private, so the name links nowhere.
+     * The owner's traveller id, which opens their public profile (PRD 8.3). Every
+     * traveller has one, so this reveals nothing the link did not.
      */
-    ownerId: string | null;
+    ownerId: string;
     /**
      * The sharer's display name, disclosed to them before they share (PRD 8.2).
      * Null where they have not set one; the reader supplies its own wording.
@@ -112,7 +112,7 @@ export async function listPublicItinerary(
       endDate: true,
       id: true,
       name: true,
-      owner: { select: { displayName: true, isPublic: true } },
+      owner: { select: { displayName: true } },
       ownerId: true,
       sourceAttribution: true,
       sourceTripId: true,
@@ -165,8 +165,7 @@ export async function listPublicItinerary(
       endDate: formatDateOnly(trip.endDate),
       id: trip.id,
       name: trip.name,
-      // Only a Public profile is linked to; a private one is not even hinted at.
-      ownerId: trip.owner.isPublic ? trip.ownerId : null,
+      ownerId: trip.ownerId,
       ownerName: trip.owner.displayName?.trim() || null,
       startDate: formatDateOnly(trip.startDate),
     },

@@ -1,6 +1,5 @@
 'use client';
 
-import { ChevronUp } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useState, type ReactNode } from 'react';
@@ -30,9 +29,17 @@ import { ScrollShadow } from '@/components/ui/scroll-shadow';
  */
 export function TripModeMapSheet({
   children,
+  controls,
   peek,
 }: Readonly<{
   children: ReactNode;
+  /**
+   * The map's own buttons, stacked just above the sheet's top edge on a phone
+   * so they ride with it instead of floating halfway down the map. Hidden while
+   * the sheet is open: there is no map left beside them to act on. At `lg:`
+   * they head the rail instead.
+   */
+  controls?: ReactNode;
   /**
    * The one thing worth seeing without opening the sheet. It sits outside the
    * collapsible body, so the collapsed height is exactly the handle plus this -
@@ -45,74 +52,81 @@ export function TripModeMapSheet({
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <motion.section
-      aria-label={t('dayContextLabel')}
-      className={cn(
-        // The sheet is always exactly as tall as what it is showing. Collapsed
-        // that is the handle and the peek; expanded it is everything, capped so
-        // the map is never entirely covered and scrolling instead. A flat pixel
-        // cap did this job before and cut whatever happened to cross it in
-        // half - a button, a sentence - which is the one thing a sheet must not
-        // do.
-        //
-        // It runs down under the tab bar, padded by the bar's height, so the
-        // sheet and the bar meet with no strip of map between them. Its tallest
-        // position stops below the header - and below the Preview controls,
-        // whose height the shell publishes - so the two never overlap and both
-        // stay usable while the sheet is open.
-        'absolute inset-x-0 bottom-0 z-[2] flex max-h-[calc(100dvh-var(--safe-top)-var(--header-offset)-4.25rem-var(--trip-mode-preview-offset,0px)-0.5rem)] flex-col overflow-hidden rounded-t-[var(--trip-sheet-radius)] border-t border-border-subtle bg-background pb-[calc(var(--bottom-bar-height)+var(--safe-bottom))] shadow-[var(--shadow-overlay)] md:max-h-[calc(100dvh-var(--safe-top)-var(--header-offset)-6.75rem-var(--trip-mode-preview-offset,0px)-0.5rem)] md:pb-[var(--safe-bottom)] lg:static lg:max-h-none lg:rounded-none lg:border-0 lg:bg-transparent lg:pb-0 lg:shadow-none',
-      )}
-      drag={reducedMotion ? false : 'y'}
-      dragConstraints={{ bottom: 0, top: 0 }}
-      dragElastic={0.12}
-      initial={false}
-      onDragEnd={(_event, info) => {
-        if (info.offset.y < -40) setExpanded(true);
-        if (info.offset.y > 40) setExpanded(false);
-      }}
-      transition={
-        reducedMotion ? { duration: 0 } : { duration: motionDuration.standard, ease: motionEase }
-      }
-    >
-      <button
-        aria-expanded={expanded}
-        className="group flex shrink-0 flex-col items-center gap-1.5 px-4 pt-2.5 pb-1 outline-none focus-visible:ring-3 focus-visible:ring-ring/40 lg:hidden"
-        onClick={() => setExpanded((open) => !open)}
-        type="button"
-      >
-        <span
-          aria-hidden="true"
-          className="h-1 w-9 rounded-full bg-border-strong transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] group-hover:bg-text-subtle motion-reduce:transition-none"
-        />
-        <span className="inline-flex items-center gap-1 text-[length:var(--text-metadata)] font-medium text-muted-foreground">
-          <ChevronUp
-            aria-hidden="true"
-            className={cn(
-              'size-3.5 transition-transform duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none',
-              expanded && 'rotate-180',
-            )}
-          />
-          {t(expanded ? 'sheetCollapse' : 'sheetExpand')}
-        </span>
-      </button>
-
-      <div className="shrink-0 px-[var(--gutter-inline-start)] pb-1 lg:px-0 lg:pb-0">{peek}</div>
-
-      {/* Collapsed to nothing rather than clipped: the rest of the day is
-          behind the handle, which is what the handle is for. */}
-      <ScrollShadow
+    <div className="absolute inset-x-0 bottom-0 z-[2] lg:static">
+      {controls ? (
+        <div
+          className={cn(
+            'absolute end-3 bottom-full mb-3 transition-opacity duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none lg:static lg:mb-3 lg:flex lg:justify-end',
+            expanded &&
+              'pointer-events-none invisible opacity-0 lg:pointer-events-auto lg:visible lg:opacity-100',
+          )}
+        >
+          {controls}
+        </div>
+      ) : null}
+      <motion.section
+        aria-label={t('dayContextLabel')}
         className={cn(
-          'min-h-0 space-y-5 overscroll-contain px-[var(--gutter-inline-start)] transition-[max-height,opacity] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none lg:max-h-none lg:overflow-visible lg:px-0 lg:pt-5 lg:pb-0 lg:opacity-100',
-          //`flex-auto`, not`flex-1`: a zero basis would leave the body
-          // contributing nothing to the sheet's own height, so the sheet would
-          // size to the handle and the peek and hand the body no room back.
-          // With an auto basis the content counts, the sheet caps at 92%, and
-          // the body shrinks into what is left and scrolls.
-          expanded ? 'flex-auto pt-4 pb-4 opacity-100' : 'max-h-0 opacity-0 lg:opacity-100',
+          // The sheet is always exactly as tall as what it is showing. Collapsed
+          // that is the handle and the peek; expanded it is everything, capped so
+          // the map is never entirely covered and scrolling instead. A flat pixel
+          // cap did this job before and cut whatever happened to cross it in
+          // half - a button, a sentence - which is the one thing a sheet must not
+          // do.
+          //
+          // It runs down under the tab bar, padded by the bar's height, so the
+          // sheet and the bar meet with no strip of map between them. Its tallest
+          // position stops below the header - and below the Preview controls,
+          // whose height the shell publishes - so the two never overlap and both
+          // stay usable while the sheet is open.
+          'relative flex max-h-[calc(100dvh-var(--safe-top)-var(--header-offset)-4.25rem-var(--trip-mode-preview-offset,0px)-0.5rem)] flex-col overflow-hidden rounded-t-[var(--trip-sheet-radius)] border-t border-border-subtle bg-background pb-[calc(var(--bottom-bar-height)+var(--safe-bottom))] shadow-[var(--shadow-overlay)] md:max-h-[calc(100dvh-var(--safe-top)-var(--header-offset)-6.75rem-var(--trip-mode-preview-offset,0px)-0.5rem)] md:pb-[var(--safe-bottom)] lg:static lg:max-h-none lg:rounded-none lg:border-0 lg:bg-transparent lg:pb-0 lg:shadow-none',
         )}
+        drag={reducedMotion ? false : 'y'}
+        dragConstraints={{ bottom: 0, top: 0 }}
+        dragElastic={0.12}
+        initial={false}
+        onDragEnd={(_event, info) => {
+          if (info.offset.y < -40) setExpanded(true);
+          if (info.offset.y > 40) setExpanded(false);
+        }}
+        transition={
+          reducedMotion ? { duration: 0 } : { duration: motionDuration.standard, ease: motionEase }
+        }
       >
-        {children}
-      </ScrollShadow>
-    </motion.section>
+        <button
+          aria-expanded={expanded}
+          className="group flex shrink-0 flex-col items-center px-4 pt-2.5 pb-2.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/40 lg:hidden"
+          onClick={() => setExpanded((open) => !open)}
+          type="button"
+        >
+          <span
+            aria-hidden="true"
+            className="h-1 w-9 rounded-full bg-border-strong transition-colors duration-[var(--motion-standard)] ease-[var(--ease-standard)] group-hover:bg-text-subtle motion-reduce:transition-none"
+          />
+          {/* The bar says it can be pulled; the words are for a screen reader.
+            Spelled out on the sheet they were one more line between the
+            traveller and the map. */}
+          <span className="sr-only">{t(expanded ? 'sheetCollapse' : 'sheetExpand')}</span>
+        </button>
+
+        <div className="shrink-0 px-[var(--gutter-inline-start)] pb-1 lg:px-0 lg:pb-0">{peek}</div>
+
+        {/* Collapsed to nothing rather than clipped: the rest of the day is
+          behind the handle, which is what the handle is for. */}
+        <ScrollShadow
+          className={cn(
+            'min-h-0 space-y-5 overscroll-contain px-[var(--gutter-inline-start)] transition-[max-height,opacity] duration-[var(--motion-standard)] ease-[var(--ease-standard)] motion-reduce:transition-none lg:max-h-none lg:overflow-visible lg:px-0 lg:pt-5 lg:pb-0 lg:opacity-100',
+            //`flex-auto`, not`flex-1`: a zero basis would leave the body
+            // contributing nothing to the sheet's own height, so the sheet would
+            // size to the handle and the peek and hand the body no room back.
+            // With an auto basis the content counts, the sheet caps at 92%, and
+            // the body shrinks into what is left and scrolls.
+            expanded ? 'flex-auto pt-4 pb-4 opacity-100' : 'max-h-0 opacity-0 lg:opacity-100',
+          )}
+        >
+          {children}
+        </ScrollShadow>
+      </motion.section>
+    </div>
   );
 }

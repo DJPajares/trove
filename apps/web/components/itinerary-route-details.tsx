@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import type { ItineraryDayRoutes } from '@/lib/itinerary/api';
 import { formatDistanceValue } from '@/lib/itinerary/format-distance';
 import { formatTravelDuration } from '@/lib/itinerary/route-format';
+import { cn } from '@/lib/utils';
 
 type RouteLoadStatus = 'error' | 'idle' | 'loading';
 
@@ -14,15 +15,30 @@ export function ItineraryRouteSummary({
   distanceUnit,
   locale,
   status,
+  variant = 'card',
 }: Readonly<{
   data: ItineraryDayRoutes | null;
   distanceUnit: 'km' | 'mi';
   locale: string;
   status: RouteLoadStatus;
+  /** `inline` is one quiet line with no surface of its own, for a card that already has one. */
+  variant?: 'card' | 'inline';
 }>) {
   const t = useTranslations('itinerary.routes');
+  const inline = variant === 'inline';
 
   if (status === 'loading' && !data) {
+    if (inline)
+      return (
+        <p
+          aria-label={t('loading')}
+          className="flex items-center gap-1.5 text-[length:var(--text-metadata)] text-muted-foreground"
+          role="status"
+        >
+          <Route aria-hidden="true" className="size-3.5 animate-pulse motion-reduce:animate-none" />
+          {t('loading')}
+        </p>
+      );
     return (
       <div
         aria-label={t('loading')}
@@ -47,11 +63,22 @@ export function ItineraryRouteSummary({
       aria-label={t('summaryLabel')}
       // The same minimum the loading row holds, so the summary and its
       // attribution land in a box that was already their size.
-      className="border-b border-border bg-muted/20 px-4 py-3 sm:px-6"
+      className={inline ? undefined : 'border-b border-border bg-muted/20 px-4 py-3 sm:px-6'}
     >
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-        <span className="inline-flex items-center gap-2 font-medium">
-          <Route aria-hidden="true" className="size-4 text-primary" />
+      <div
+        className={cn(
+          inline
+            ? 'truncate text-[length:var(--text-metadata)] text-muted-foreground [&>span+span]:before:mx-1.5 [&>span+span]:before:content-["·"]'
+            : 'flex flex-wrap items-center gap-x-4 gap-y-1 text-sm',
+        )}
+      >
+        <span className={cn(inline ? 'inline' : 'inline-flex items-center gap-2 font-medium')}>
+          <Route
+            aria-hidden="true"
+            className={cn(
+              inline ? 'me-1.5 inline size-3.5 align-[-0.15em]' : 'size-4 text-primary',
+            )}
+          />
           {t('stops', { count: summary?.scheduledPlaceCount ?? 0 })}
         </span>
         {noLocalTravel ? (

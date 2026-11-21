@@ -31,6 +31,13 @@ import { googleMapsCoordinatesHref } from '@/lib/saved/api';
 import { cn } from '@/lib/utils';
 import * as Icons from '@/lib/icons';
 
+/**
+ * One cell of a stacked map control column: square, borderless, opaque, so a
+ * container's 1px gaps over a border-coloured ground draw the dividers.
+ */
+export const MAP_ICON_CONTROL =
+  'size-11 rounded-none border-0 bg-background text-foreground hover:bg-secondary aria-expanded:bg-secondary [&_svg]:size-5';
+
 type ItineraryPlanningMapProps = {
   ariaLabel?: string;
   /**
@@ -41,6 +48,12 @@ type ItineraryPlanningMapProps = {
   className?: string;
   /** Trip Mode carries controls in its day sheet, above the map. */
   controlsContainer?: HTMLElement | null;
+  /**
+   * Where the Other places and Routes toggles go, as icon buttons, when a
+   * surface stacks them with its own map controls. Their panels stay in
+   * `controlsContainer`.
+   */
+  togglesContainer?: HTMLElement | null;
   onControlsExpandedChange?: (expanded: boolean) => void;
   selectedRouteId?: string | null;
   onSelectRoute?: (leg: MapRouteLeg) => void;
@@ -145,6 +158,7 @@ export function ItineraryPlanningMap({
   ariaLabel,
   className,
   controlsContainer,
+  togglesContainer,
   onControlsExpandedChange,
   selectedRouteId = null,
   onSelectRoute,
@@ -180,6 +194,7 @@ export function ItineraryPlanningMap({
   const [chooserIds, setChooserIds] = useState<string[] | null>(null);
   const chooserId = useId();
   const controlsRef = useRef<HTMLDivElement>(null);
+  const togglesRef = useRef<HTMLDivElement>(null);
   const routesButtonRef = useRef<HTMLButtonElement>(null);
   // While hidden the map keeps working from what it last showed. Its opening
   // point and its empty state both come from these, and a hidden map whose day
@@ -302,7 +317,9 @@ export function ItineraryPlanningMap({
   const selectedRouteRef = useRef(selectedRoute);
   selectedRouteRef.current = selectedRoute;
   function clearSelection() {
-    const restoreFocus = controlsRef.current?.contains(document.activeElement);
+    const restoreFocus =
+      controlsRef.current?.contains(document.activeElement) ||
+      togglesRef.current?.contains(document.activeElement);
     setChooserIds(null);
     onClearSelection();
     if (restoreFocus)
@@ -649,6 +666,56 @@ export function ItineraryPlanningMap({
     });
   }, [routeLines, selectedPointId, selectedRoute, status, suspendUpdates]);
 
+  const iconToggles = togglesContainer !== undefined;
+  const toggles =
+    (routeLines.length || hasOtherPlaces) && status === 'ready' ? (
+      <div
+        className={cn(
+          'flex gap-2',
+          iconToggles
+            ? 'flex-col gap-px'
+            : controlsContainer
+              ? 'mb-2 justify-end'
+              : 'absolute end-3 top-3 z-[1]',
+        )}
+        ref={togglesRef}
+      >
+        {hasOtherPlaces ? (
+          <Button
+            aria-label={iconToggles ? t('otherPlacesControl') : undefined}
+            aria-pressed={showOtherPlaces}
+            className={iconToggles ? MAP_ICON_CONTROL : 'shadow-[var(--shadow-overlay)]'}
+            onClick={() => setShowOtherPlaces(!showOtherPlaces)}
+            size={iconToggles ? 'icon' : 'sm'}
+            title={t('otherPlacesHint')}
+            variant={iconToggles ? 'ghost' : 'outline'}
+          >
+            {showOtherPlaces ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
+            {iconToggles ? null : t('otherPlacesControl')}
+          </Button>
+        ) : null}
+        {routeLines.length ? (
+          <Button
+            aria-controls={chooserIds ? chooserId : undefined}
+            aria-expanded={Boolean(chooserIds)}
+            aria-label={iconToggles ? t('routesControl') : undefined}
+            className={iconToggles ? MAP_ICON_CONTROL : 'shadow-[var(--shadow-overlay)]'}
+            onClick={() => {
+              if (chooserIds) setChooserIds(null);
+              else setChooserIds(routeLines.map((leg) => leg.id));
+            }}
+            ref={routesButtonRef}
+            size={iconToggles ? 'icon' : 'sm'}
+            title={iconToggles ? t('routesControl') : undefined}
+            variant={iconToggles ? 'ghost' : 'outline'}
+          >
+            <Route aria-hidden="true" />
+            {iconToggles ? null : t('routesControl')}
+          </Button>
+        ) : null}
+      </div>
+    ) : null;
+
   const controls = (
     <div ref={controlsRef}>
       <span aria-atomic="true" aria-live="polite" className="sr-only" role="status">
@@ -661,45 +728,7 @@ export function ItineraryPlanningMap({
             })
           : ''}
       </span>
-      {(routeLines.length || hasOtherPlaces) && status === 'ready' ? (
-        <div
-          className={cn(
-            'flex gap-2',
-            controlsContainer ? 'mb-2 justify-end' : 'absolute end-3 top-3 z-[1]',
-          )}
-        >
-          {hasOtherPlaces ? (
-            <Button
-              aria-pressed={showOtherPlaces}
-              className="shadow-[var(--shadow-overlay)]"
-              onClick={() => setShowOtherPlaces(!showOtherPlaces)}
-              size="sm"
-              title={t('otherPlacesHint')}
-              variant="outline"
-            >
-              {showOtherPlaces ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
-              {t('otherPlacesControl')}
-            </Button>
-          ) : null}
-          {routeLines.length ? (
-            <Button
-              aria-controls={chooserIds ? chooserId : undefined}
-              aria-expanded={Boolean(chooserIds)}
-              className="shadow-[var(--shadow-overlay)]"
-              onClick={() => {
-                if (chooserIds) setChooserIds(null);
-                else setChooserIds(routeLines.map((leg) => leg.id));
-              }}
-              ref={routesButtonRef}
-              size="sm"
-              variant="outline"
-            >
-              <Route aria-hidden="true" />
-              {t('routesControl')}
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
+      {iconToggles ? null : toggles}
       {chooserIds && status === 'ready' ? (
         <div
           className={cn(
@@ -927,6 +956,7 @@ export function ItineraryPlanningMap({
         />
       ) : null}
       {controlsContainer ? createPortal(controls, controlsContainer) : controls}
+      {togglesContainer && toggles ? createPortal(toggles, togglesContainer) : null}
     </div>
   );
 }

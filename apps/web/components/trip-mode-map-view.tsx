@@ -17,7 +17,7 @@ import { useMemo, useState } from 'react';
 
 import { buildMapRouteLegs } from '@/lib/maps/map-route-selection';
 import { useMapSelection } from '@/hooks/use-map-selection';
-import { ItineraryPlanningMap } from '@/components/itinerary-planning-map';
+import { ItineraryPlanningMap, MAP_ICON_CONTROL } from '@/components/itinerary-planning-map';
 import { ExpandableDescription } from '@/components/expandable-description';
 import { ItineraryRouteSummary } from '@/components/itinerary-route-details';
 import { PageState } from '@/components/page-state';
@@ -51,7 +51,6 @@ import {
 import { queryKeys } from '@/lib/query/keys';
 import { cn } from '@/lib/utils';
 import * as Icons from '@/lib/icons';
-import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 type RouteState =
   | { data: null; status: 'error' | 'idle' | 'loading' }
@@ -97,6 +96,7 @@ export function TripModeMapView({
   const { openPlaceDetails } = useTripModePlaceDetails();
   const [mapControlsContainer, setMapControlsContainer] = useState<HTMLDivElement | null>(null);
   const [mapControlsExpanded, setMapControlsExpanded] = useState(false);
+  const [mapTogglesContainer, setMapTogglesContainer] = useState<HTMLDivElement | null>(null);
   const {
     position: deviceLocation,
     request: requestLocation,
@@ -320,14 +320,12 @@ export function TripModeMapView({
             }
           : null;
   const NoticeIcon = locationNotice?.icon;
-  const routeSummary = (
-    <ItineraryRouteSummary
-      data={routeState.status === 'loading' ? null : routeSummaryData}
-      distanceUnit={preferences.distanceUnit}
-      locale={locale}
-      status={routeState.status}
-    />
-  );
+  const routeSummaryProps = {
+    data: routeState.status === 'loading' ? null : routeSummaryData,
+    distanceUnit: preferences.distanceUnit,
+    locale,
+    status: routeState.status,
+  } as const;
 
   // The next move, read from the same context Now reads, so the map's peek and
   // Now can never disagree about where the traveller is going.
@@ -384,6 +382,7 @@ export function TripModeMapView({
               className="h-full lg:h-auto"
               currentLocation={deviceLocation}
               controlsContainer={mapControlsContainer}
+              togglesContainer={mapTogglesContainer}
               onControlsExpandedChange={setMapControlsExpanded}
               selectedRouteId={selectedRouteId}
               onSelectRoute={selectRoute}
@@ -419,56 +418,33 @@ export function TripModeMapView({
               </div>
             </div>
           )}
+        </section>
 
-          {/* Carried over the map on a phone rather than stacked above it: how
-              far and how long, which marker is which, and the device's own
-              position. At `lg:` the rail beside the map has room for all of it. */}
-          <div className="pointer-events-none absolute inset-x-3 top-[calc(var(--safe-top)+var(--header-offset)+5rem+var(--trip-mode-preview-offset,0px))] z-[1] flex flex-col items-start gap-2 md:top-[calc(var(--safe-top)+var(--header-offset)+7.5rem+var(--trip-mode-preview-offset,0px))] lg:hidden">
-            <div
-              className="pointer-events-auto w-full overflow-hidden rounded-[var(--radius-xl)] bg-background/95 shadow-[var(--shadow-overlay)] backdrop-blur supports-[backdrop-filter]:bg-background/88"
-              data-translucent-surface
-            >
-              {routeSummary}
-            </div>
-            {/* A solid dot is where the device is; a filled circle is where the
-                plan puts a stop. The two are never drawn alike. */}
-            <ul
-              aria-label={t('legendLabel')}
-              className="pointer-events-auto inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full bg-background/95 px-3 py-1.5 text-xs text-foreground shadow-[var(--shadow-control)]"
-            >
-              {deviceLocation ? (
-                <li className="inline-flex items-center gap-1.5">
-                  <span
-                    aria-hidden="true"
-                    className="size-2.5 rounded-full bg-status-info ring-2 ring-status-info/25"
-                  />
-                  {t('legend.device')}
-                </li>
-              ) : null}
-              <li className="inline-flex items-center gap-1.5">
-                <span aria-hidden="true" className="size-2.5 rounded-full bg-primary" />
-                {t('legend.planned')}
-              </li>
-            </ul>
-          </div>
-          {canLocate || basePoint ? (
-            <div className="absolute end-3 top-[42%] z-[1] flex flex-col gap-2 lg:hidden">
+        <TripModeMapSheet
+          controls={
+            // One column rather than buttons scattered over the map: where the
+            // traveller is, where they sleep, and the map's own toggles, which
+            // the map portals into the slot at the end once it is ready.
+            <div className="flex flex-col gap-px overflow-hidden rounded-full border border-border-subtle bg-border-subtle shadow-[var(--shadow-overlay)] lg:flex-row lg:shadow-none [&:not(:has(button))]:hidden">
               {canLocate ? (
                 <Button
                   aria-busy={locationStatus === 'loading'}
                   aria-describedby="trip-mode-map-location-status"
                   aria-label={locationStatus === 'ready' ? t('updateLocation') : t('useLocation')}
-                  className="size-12 rounded-full border-border-subtle bg-background shadow-[var(--shadow-overlay)]"
+                  className={cn(
+                    MAP_ICON_CONTROL,
+                    'lg:hidden',
+                    locationStatus === 'ready' && 'text-status-info',
+                  )}
                   disabled={locationStatus === 'loading'}
                   onClick={requestLocation}
                   size="icon"
-                  variant="outline"
+                  title={locationStatus === 'ready' ? t('updateLocation') : t('useLocation')}
+                  variant="ghost"
                 >
                   <LocateFixed
                     aria-hidden="true"
                     className={cn(
-                      'size-5',
-                      locationStatus === 'ready' && 'text-status-info',
                       locationStatus === 'loading' && 'animate-spin motion-reduce:animate-none',
                     )}
                   />
@@ -477,25 +453,29 @@ export function TripModeMapView({
               {basePoint ? (
                 <Button
                   aria-label={t('showOnMap', { name: basePoint.name })}
-                  className="size-12 rounded-full border-border-subtle bg-background shadow-[var(--shadow-overlay)]"
+                  className={cn(MAP_ICON_CONTROL, 'lg:hidden')}
                   onClick={() => setSelectedPointId(basePoint.id)}
                   size="icon"
-                  variant="outline"
+                  title={t('showOnMap', { name: basePoint.name })}
+                  variant="ghost"
                 >
-                  <BedDouble aria-hidden="true" className="size-5" />
+                  <BedDouble aria-hidden="true" />
                 </Button>
               ) : null}
+              <div
+                // Location and stay live elsewhere in the rail at `lg:`, so the
+                // toggles stand alone there, side by side.
+                className="empty:hidden lg:[&>div]:flex-row"
+                ref={setMapTogglesContainer}
+              />
             </div>
-          ) : null}
-        </section>
-
-        <TripModeMapSheet
+          }
           peek={
             <>
               <div ref={setMapControlsContainer} />
-              {/* On a phone the route summary rides on the map, so the peek can
-                  hold the next move - the thing a map in Trip Mode is opened
-                  to act on - and every stop of the day a tap away. */}
+              {/* On a phone the peek holds the next move - the thing a map in
+                  Trip Mode is opened to act on - and nothing else competes
+                  with the map for the screen. */}
               {!mapControlsExpanded && nextItem ? (
                 <div className="flex items-center gap-3 py-1.5 lg:hidden">
                   <span className="grid size-8 shrink-0 place-items-center rounded-full bg-accent-strong text-sm font-semibold text-primary-foreground tabular-nums">
@@ -545,53 +525,26 @@ export function TripModeMapView({
                   ) : null}
                 </div>
               ) : null}
-              {!mapControlsExpanded && day.items.length ? (
-                <ScrollShadow
-                  orientation="horizontal"
-                  render={<ul />}
-                  aria-label={t('todayItinerary')}
-                  className="interaction-scrollbar -mx-[var(--gutter-inline-start)] flex gap-2 px-[var(--gutter-inline-start)] pt-1 pb-2 lg:hidden"
-                >
-                  {day.items.map((item, index) => {
-                    const point = scheduledPoints.find((candidate) => candidate.itemId === item.id);
-                    const isNext = item.id === nextItem?.id;
-                    const settled = item.travelStatus !== 'upcoming';
-                    return (
-                      <li className="shrink-0" key={item.id}>
-                        <Button
-                          aria-label={t('showOnMap', { name: itemName(item) })}
-                          aria-pressed={selectedPointId === point?.id}
-                          className={cn(
-                            'h-10 rounded-full px-3 font-normal shadow-none',
-                            isNext ? 'border-accent-strong' : 'border-border-subtle',
-                            settled && 'text-muted-foreground',
-                          )}
-                          disabled={!point}
-                          onClick={() => point && setSelectedPointId(point.id)}
-                          size="sm"
-                          variant="outline"
-                        >
-                          <span
-                            aria-hidden="true"
-                            className={cn(
-                              'font-semibold tabular-nums',
-                              isNext && 'text-accent-strong',
-                            )}
-                          >
-                            {stopNumbers.itemOffset + index + 1}
-                          </span>
-                          <span aria-hidden="true" className="max-w-40 truncate">
-                            {itemName(item)}
-                          </span>
-                        </Button>
-                      </li>
-                    );
-                  })}
-                </ScrollShadow>
+              {/* The day in one quiet line under the next stop - or, with no
+                  next stop to show, the card's own subject. The stops themselves
+                  are the pins, and the list is behind the handle. */}
+              {!mapControlsExpanded ? (
+                nextItem ? (
+                  <div className="mt-2 border-t border-border-subtle pt-2.5 pb-1.5 lg:hidden">
+                    <ItineraryRouteSummary {...routeSummaryProps} variant="inline" />
+                  </div>
+                ) : (
+                  <div className="py-1.5 lg:hidden">
+                    <p className="truncate text-base font-semibold text-foreground">
+                      {day.name ?? date}
+                    </p>
+                    <ItineraryRouteSummary {...routeSummaryProps} variant="inline" />
+                  </div>
+                )
               ) : null}
               {/* How far and how long, beside the map where the rail has room. */}
               <div className="hidden lg:block lg:overflow-hidden lg:rounded-[var(--radius-xl)] lg:border lg:border-border-subtle lg:bg-card lg:shadow-[var(--shadow-surface)]">
-                {routeSummary}
+                <ItineraryRouteSummary {...routeSummaryProps} />
               </div>
             </>
           }

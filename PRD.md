@@ -90,7 +90,7 @@ The current approved scope does not provide:
 - native iOS/Android apps,
 - full multilingual UI.
 
-AI-assisted trip creation (Section 7.6), owner-enabled read-only itinerary links (Section 8.2) with saving a copy from them (Section 8.1), and read-only traveller profiles listing Public trips (Section 8.3) are approved extensions to the original MVP. Neither authorizes the broader AI, collaboration, or discovery workflows deferred here.
+AI-assisted trip creation (Section 7.6), owner-enabled read-only itinerary links (Section 8.2) with using them as your own trip (Section 8.1) or keeping them in Finds (Section 8.4), and read-only traveller profiles listing Public trips (Section 8.3) are approved extensions to the original MVP. Neither authorizes the broader AI, collaboration, or discovery workflows deferred here.
 
 ---
 
@@ -601,7 +601,7 @@ Existing and manually created itinerary durations are `USER_OWNED`. Editing an `
 
 # 8. Trip Ownership & Sharing
 
-Trips are **private by default and edited only by their owner**. Public trips (below) are the sole approved public exception, reached today through their read-only itinerary links (Section 8.2) and their owner's traveller profile (Section 8.3); they do not expose the whole Trip. A signed-in traveller who opens such a link may save their own copy of it (Section 8.1); the copy is a new private Trip they own, not access to the original.
+Trips are **private by default and edited only by their owner**. Public trips (below) are the sole approved public exception, reached today through their read-only itinerary links (Section 8.2) and their owner's traveller profile (Section 8.3); they do not expose the whole Trip. A signed-in traveller who opens such a link may use it as their own trip (Section 8.1), which makes a new private Trip they own, not access to the original, or keep it in Finds to read later (Section 8.4).
 
 The data model may remain future-ready for:
 
@@ -626,9 +626,9 @@ Future-ready fields do not authorize additional collaboration or sharing workflo
 
 **Trip visibility.** Every trip is either **Private** or **Public**, and new trips start Private. Public means the trip is open to anyone: its read-only itinerary link is on (Section 8.2), and it may appear around Trove, such as in Home discovery, search and the owner's profile, where other travellers can find it, read it and save it. Each of those surfaces still needs its own specification; the owner's profile has one (Section 8.3), and the others stay closed until theirs ships; the disclosure describes all of them now so that choosing Public is informed consent to them. The owner chooses visibility in three places, all writing the same stored setting: while creating the trip, while editing it, and through Share in the trip actions menu. The trip form and Share show the same disclosure of what a public trip reveals before it is saved, and choosing Public in the form is saved together with the rest of the trip, so a refused save leaves it Private. Trips made Public before this disclosure agreed only to the link: a discovery surface must not list one until its owner has confirmed Public again under the current disclosure. Whatever surface lists a Public trip shows only what the link shows.
 
-## 8.1 Saving a Copy of a Shared Trip
+## 8.1 Using a Shared Trip as Your Own
 
-A signed-in traveller reading a shared link (Section 8.2) may **Save a copy** to their own trips. User-facing language is "Save a copy", "your copy" and "Based on {name}'s trip"; avoid fork, clone, duplicate, source trip and attribution.
+A signed-in traveller reading a shared link (Section 8.2) may **Use this trip** to make a trip of their own from it. User-facing language is "Use this trip", "your trip" and "Based on {name}'s trip"; avoid copy, fork, clone, duplicate, source trip and attribution. This section calls the resulting trip a copy only for precision.
 
 - The copy is an independent, private Trip owned by the traveller who saved it. It is fully editable, can be prepared offline, runs in Trip Mode and can itself be shared. Later edits to the original never reach it, and revoking or deleting the original does not affect it.
 - Saving asks for a name (the original's by default) and a start date (the original's by default). Days keep their order and length, shifted to the new dates. Local clock times stay the same.
@@ -638,7 +638,7 @@ A signed-in traveller reading a shared link (Section 8.2) may **Save a copy** to
 - **Always credit.** A copy shows "Based on {name}'s trip" in its identity area, naming the trip's original creator; a copy of a copy still names the first creator. The name is recorded when the copy is saved, so the credit survives the original being deleted or its creator renaming. Without a display name, the credit reads "a Trove traveller". The credit cannot be removed and does not link anywhere.
 - Saving a copy requires server confirmation and is not queued offline. A failed save must not be presented as successful.
 
-Following another traveller's trip read-only, Shared With Me, collaborators, owner notifications about copies, and public discovery remain deferred. A future read-only saved itinerary must not run the user's personal Trip Mode directly; it must be copied into an owned trip first.
+Shared With Me, collaborators, owner notifications about copies or kept trips, and public discovery remain deferred. A trip kept in Finds (Section 8.4) never runs the traveller's Trip Mode directly; it must be used as their own trip first.
 
 ## 8.2 Read-Only Itinerary Links
 
@@ -652,14 +652,14 @@ The public projection contains only:
 - scheduled days' dates, names, and notes;
 - scheduled stops' names, addresses/custom location text, dayparts, local start/end times, durations, and notes, including scheduled Custom Places and label-only blocks.
 
-It excludes Saved and Trip Place collections, Unscheduled items, costs/budgets/Expenses, priority, completion/skip state, provider IDs and coordinates, Tasks, Reservations and their documents, Trip Info, Memories, Experience Ratings, private media, and account details. Shared notes and addresses may contain personal information; the owner must see what will be disclosed before enabling sharing, including their display name and that people with the link can save their own copy crediting them. While enabled, the link reflects subsequent edits to these shared fields.
+It excludes Saved and Trip Place collections, Unscheduled items, costs/budgets/Expenses, priority, completion/skip state, provider IDs and coordinates, Tasks, Reservations and their documents, Trip Info, Memories, Experience Ratings, private media, and account details. Shared notes and addresses may contain personal information; the owner must see what will be disclosed before enabling sharing, including their display name and that people with the link can keep it in their Finds or use it as their own trip crediting them. While enabled, the link reflects subsequent edits to these shared fields.
 
 Rules:
 
 - Enabling and disabling sharing require server confirmation and are not queued offline. A failed change must not be presented as successful.
-- After revocation, subsequent public reads must be denied, including through application/CDN caches. Private, revoked, missing, and deleted trips produce the same unavailable response. Revocation cannot recall a copy already viewed or saved by a recipient.
+- After revocation, subsequent public reads must be denied, including through application/CDN caches. Private, revoked, missing, and deleted trips produce the same unavailable response. Revocation cannot recall a trip a recipient already viewed or used as their own; a trip kept in Finds stops being readable (Section 8.4).
 - Public reads use only the allowlisted projection and permitted stored Place context; they cannot trigger billable provider calls or expose authenticated endpoints. Missing or expired provider detail degrades to available context.
-- The page is excluded from indexing and discovery. It offers no maps, Trip Mode, collaborator management, expiry, or recipient permissions in the current scope. Its one action beyond reading is Save a copy (Section 8.1).
+- The page is excluded from indexing and discovery. It offers no maps, Trip Mode, collaborator management, expiry, or recipient permissions in the current scope. Its actions beyond reading are Use this trip (Section 8.1) and Save to Finds (Section 8.4).
 - Private Custom Places remain owner-owned. Sharing a scheduled stop's name/address/notes exposes only that projection, not access to its underlying private Place record.
 
 ## 8.3 Traveller Profiles
@@ -674,6 +674,17 @@ Every traveller has a **public view** of their profile alongside their own priva
 - Public reads follow the same rules as Section 8.2: no caching between database and reader, no billable provider call, no editorial imagery lookup, rate limited, and excluded from indexing. The avatar and cover are served through short-lived signed links to the traveller's own stored photos.
 
 Following, messaging, traveller search, Home discovery and any other public profile field remain deferred.
+
+## 8.4 Keeping a Shared Trip in Finds
+
+A signed-in traveller reading another traveller's Public trip (Section 8.2) may **Save to Finds** to keep it for ideas, without making a trip of their own. Finds then shows it in a **Trips** section above their places and collections; opening one opens the trip's read-only link. The same action reads **In Finds** once kept and removes it when pressed again.
+
+- A kept trip is a live reference, never a copy. It shows the owner's current shared fields and only those the link shows: name, owner display name (or "a Trove traveller"), countries and dates. Finds lists nothing else about it.
+- It is listed only while the trip is Public. When its owner makes it Private or deletes it, it drops out of Finds without notice and reveals nothing about why; if it is made Public again it returns. Deleting the trip deletes the keep.
+- A traveller cannot keep their own trip. Keeping the same trip twice keeps it once.
+- Keeping and removing require server confirmation and are not queued offline. A failed change must not be presented as successful. A signed-out reader is sent to sign in and returns with the trip kept.
+- A kept trip cannot run in Trip Mode, be prepared offline or be edited. To travel with it, the traveller uses it as their own trip (Section 8.1).
+- Its owner is not told who kept it, and no count of keeps is shown anywhere.
 
 ---
 

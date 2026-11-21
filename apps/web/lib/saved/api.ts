@@ -194,6 +194,33 @@ export function fetchKnownPlaces() {
   return savedRequest<{ places: KnownPlace[] }>('/places/known');
 }
 
+/**
+ * Another traveller's Public trip kept in Finds to read for ideas (PRD 8.4). A
+ * live reference: it carries only what the trip's shared page shows, and drops
+ * out of the list once its owner makes it Private.
+ */
+export type SavedTrip = {
+  countries: string[];
+  endDate: string;
+  id: string;
+  name: string;
+  ownerName: string | null;
+  savedAt: string;
+  startDate: string;
+};
+
+export function fetchSavedTrips() {
+  return savedRequest<{ trips: SavedTrip[] }>('/saved/trips');
+}
+
+export function saveTripToFinds(tripId: string) {
+  return savedRequest<void>(`/saved/trips/${tripId}`, { method: 'PUT' });
+}
+
+export function removeTripFromFinds(tripId: string) {
+  return savedRequest<void>(`/saved/trips/${tripId}`, { method: 'DELETE' });
+}
+
 export function saveCanonicalPlace(placeId: string) {
   return savedRequest<{ savedPlace: SavedPlace }>('/saved', {
     body: JSON.stringify({ placeId }),

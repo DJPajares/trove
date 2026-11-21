@@ -42,7 +42,7 @@ export function copyCreditName(trip: PublicItinerary['trip']) {
 }
 
 /**
- * Save a copy of a shared trip (PRD 8.1).
+ * "Use this trip": make a shared trip your own (PRD 8.1).
  *
  * The one interactive part of the shared page, kept to its own small island so
  * the itinerary itself still ships no JavaScript. A signed-out reader is sent to

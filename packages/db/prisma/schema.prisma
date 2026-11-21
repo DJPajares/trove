@@ -382,6 +382,7 @@ model Profile {
   createdTrips                Trip[]                       @relation("TripCreator")
   tripRelations               TripUserRelationship[]
   savedPlaces                 SavedPlace[]
+  savedTrips                  SavedTrip[]
   savedCollections            SavedCollection[]
   collectionPlaces            SavedCollectionPlace[]
   taskTemplates               TaskTemplate[]
@@ -853,6 +854,7 @@ model Trip {
   referenceTimeZoneSourcePlace Place?                       @relation("TripTimeZoneSourcePlace", fields: [referenceTimeZoneSourcePlaceId], references: [id], onDelete: SetNull)
   sourceTrip                   Trip?                        @relation("TripSource", fields: [sourceTripId], references: [id], onDelete: SetNull)
   derivedTrips                 Trip[]                       @relation("TripSource")
+  keptBy                       SavedTrip[]
   storyCoverPhoto              MemoryPhoto?                 @relation("TripStoryCoverPhoto", fields: [storyCoverMemoryPhotoId], references: [id], onDelete: SetNull)
   editorialImageSet            EditorialImageSet?           @relation("TripEditorialImageSet", fields: [editorialImageSetId], references: [id], onDelete: SetNull)
   destinations                 TripDestination[]
@@ -1020,6 +1022,24 @@ model SavedPlace {
   @@unique([id, ownerId])
   @@index([placeId])
   @@map("saved_places")
+  @@schema("trove")
+}
+
+/// Another traveller's Public trip kept in Finds to read for ideas (PRD 8.4). A live
+/// reference, never a copy: it is listed only while the trip stays Public, so its
+/// owner making it Private stops it being read here too.
+model SavedTrip {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  ownerId   String   @map("owner_id") @db.Uuid
+  tripId    String   @map("trip_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  owner Profile @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  trip  Trip    @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, tripId])
+  @@index([tripId])
+  @@map("saved_trips")
   @@schema("trove")
 }
 

@@ -22,7 +22,11 @@ import {
   hasGoogleMapsConfiguration,
   loadGoogleMaps,
 } from '@/lib/maps/google-maps';
-import { type ItineraryMapPoint, viewportPoints } from '@/lib/maps/itinerary-map';
+import {
+  deviceFramesWithDay,
+  type ItineraryMapPoint,
+  viewportPoints,
+} from '@/lib/maps/itinerary-map';
 import { mapDayTint } from '@/lib/maps/map-day-tints';
 import { retainWhileSuspended } from '@/lib/maps/map-retention';
 import { useOtherPlacesVisible } from '@/lib/maps/other-places-visibility';
@@ -610,10 +614,17 @@ export function ItineraryPlanningMap({
           });
           advancedMarker.append(currentLocationContent());
           currentLocationMarkerRef.current = advancedMarker;
-          bounds.extend({ lat: currentLocation.latitude, lng: currentLocation.longitude });
         }
+        const deviceInFrame =
+          currentLocation !== null &&
+          deviceFramesWithDay(
+            currentLocation,
+            points.filter((point) => framing.has(point.id)),
+          );
+        if (deviceInFrame && currentLocation)
+          bounds.extend({ lat: currentLocation.latitude, lng: currentLocation.longitude });
 
-        const locationCount = framing.size + (currentLocation ? 1 : 0);
+        const locationCount = framing.size + (deviceInFrame ? 1 : 0);
         if (locationCount === 1 && routePaths.length === 0) {
           mapRef.current.setCenter(bounds.getCenter());
           mapRef.current.setZoom(14);

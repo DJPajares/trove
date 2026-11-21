@@ -12,6 +12,7 @@ import {
   resolveDailyBases,
 } from '@/lib/itinerary/day-sequence';
 import type { ScheduledPlaceUse } from '@/lib/itinerary/places';
+import { haversineMeters } from '@/lib/maps/haversine';
 
 export type ItineraryMapPoint = {
   /** Which end of the day a `base` point stands for. Absent on every other kind. */
@@ -78,6 +79,25 @@ export function decodeGooglePolyline(encoded: string): ItineraryMapLocation[] {
  * A day with nothing located yet falls back to everything, so the map never opens
  * on empty space.
  */
+/** How near the day the device must be before the map widens to show it too. */
+export const DEVICE_FRAMING_RADIUS_METERS = 50_000;
+
+/**
+ * Whether the device's position belongs in the map's opening frame. A traveller
+ * at home, or a country away, opening a day still ahead would otherwise get a
+ * frame stretched across both - the day's route shrunk to a dot. Their marker
+ * is still drawn; it just stops deciding where the map looks.
+ */
+export function deviceFramesWithDay(
+  device: ItineraryMapLocation,
+  dayPoints: readonly ItineraryMapLocation[],
+) {
+  return (
+    dayPoints.length === 0 ||
+    dayPoints.some((point) => haversineMeters(device, point) <= DEVICE_FRAMING_RADIUS_METERS)
+  );
+}
+
 export function viewportPoints(points: ItineraryMapPoint[]) {
   const ofTheDay = points.filter((point) => point.kind !== 'considered');
   return ofTheDay.length ? ofTheDay : points;

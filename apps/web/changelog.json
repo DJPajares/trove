@@ -1587,5 +1587,16 @@
         "See your own public profile from your profile page, just as others see it."
       ]
     }
+  },
+  {
+    "id": "trip-mode-map-next-stop",
+    "date": "2026-11-21",
+    "version": "1.42.0",
+    "summaries": {
+      "en": [
+        "The Trip Mode map gives you more of the map: your next stop, when to leave and directions sit in one card at the bottom.",
+        "Location, your stay, other places and routes now share one tidy column of buttons."
+      ]
+    }
   }
 ]

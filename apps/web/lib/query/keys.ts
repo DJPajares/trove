@@ -106,6 +106,12 @@ export const queryKeys = {
   profile: () => ['profile', PROFILE_CONTRACT_VERSION] as const,
   reservations: (tripId: string) => ['reservations', tripId] as const,
   savedPlaces: () => ['saved', PLACES_CONTRACT_VERSION] as const,
+  /**
+   * Kept trips sit outside the persisted 'saved' root on purpose: a trip its
+   * owner has made Private must stop showing, so this is read fresh, not
+   * replayed from disk.
+   */
+  savedTrips: () => ['saved-trips'] as const,
   knownPlaces: () => ['places', 'known', PLACES_CONTRACT_VERSION] as const,
   taskTemplates: () => ['task-templates'] as const,
   tasks: (tripId: string) => ['tasks', tripId] as const,

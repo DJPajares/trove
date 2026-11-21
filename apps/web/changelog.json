@@ -1639,5 +1639,16 @@
         "Opening a Memory from its third photo or later now shows that photo instead of a blank page."
       ]
     }
+  },
+  {
+    "id": "keep-trips-in-finds",
+    "date": "2026-11-21",
+    "version": "1.43.0",
+    "summaries": {
+      "en": [
+        "Found a trip you love? Save it to your Finds to read again for ideas.",
+        "“Save a copy” is now “Use this trip”: start your own trip from someone else’s plan."
+      ]
+    }
   }
 ]

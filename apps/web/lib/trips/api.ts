@@ -349,7 +349,7 @@ export async function updateTripExperienceRating(
  * see it and should not be able to ride along with an unrelated edit.
  */
 /**
- * Save a copy of a trip someone shared (PRD 8.1). Like sharing itself, this
+ * "Use this trip": make your own trip from one someone shared (PRD 8.1). Like sharing itself, this
  * is a direct write and never queued: a copy that has not reached the server
  * does not exist, and the traveller is told so rather than shown a trip.
  */

@@ -113,6 +113,7 @@ import * as Icons from '@/lib/icons';
 import { HomeSheet } from '@/components/home/home-front-door';
 import { CollectionCover } from '@/components/saved/collection-cover';
 import { FindsCover, FINDS_COVER_FRAME, type FindsCoverTown } from '@/components/saved/finds-cover';
+import { SavedTripsSection } from '@/components/saved/saved-trips-section';
 import { useTripCreation } from '@/components/trip-creation-provider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useEntrance, type EntranceClock } from '@/lib/page-entrance';
@@ -1076,6 +1077,10 @@ export function SavedPlacesManager({
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
+
+        {/* Kept trips stand apart from places, so they show even before the
+            first place is saved. */}
+        {collectionMode ? null : <SavedTripsSection />}
 
         {status === 'loading' ? (
           <PageState headingLevel={2} kind="loading" loadingShape="list" title={t('loading')} />

@@ -162,6 +162,8 @@ test('persists only successful queries from permitted roots', () => {
   expect(dehydrate(queryKeys.savedPlaces(), 'success')).toBe(true);
   expect(dehydrate(queryKeys.savedPlaces(), 'error')).toBe(false);
   expect(dehydrate(queryKeys.savedPlaces(), 'pending')).toBe(false);
+  // A kept trip its owner made Private must stop showing, so it is never replayed from disk.
+  expect(dehydrate(queryKeys.savedTrips(), 'success')).toBe(false);
   expect(dehydrate(queryKeys.itinerary('trip-1'), 'success')).toBe(false);
   expect(dehydrate(queryKeys.trip('trip-1'), 'success')).toBe(false);
 });

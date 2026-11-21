@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Suspense } from 'react';
 
+import { KeepTripInFinds } from '@/components/keep-trip-in-finds';
 import { SaveTripCopy } from '@/components/save-trip-copy';
 import { Button } from '@/components/ui/button';
 import { formatItineraryTimeRange } from '@/lib/itinerary/item-timing';
@@ -26,7 +27,8 @@ type PublicItineraryProps = {
  * restore, so there is nothing to be gained by making a reader ask twice.
  *
  * A server component. The itinerary has nothing to hydrate; the only JavaScript
- * is the small Save a copy island (`SaveTripCopy`).
+ * is two small islands: Use this trip (`SaveTripCopy`) and Save to Finds
+ * (`KeepTripInFinds`).
  */
 export async function PublicItinerary({
   isSignedIn,
@@ -106,8 +108,9 @@ export async function PublicItinerary({
         {/* Reads the query string, so it waits for the request rather than
             holding up the itinerary. */}
         <Suspense fallback={null}>
-          <div className="mt-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <SaveTripCopy isSignedIn={isSignedIn} trip={itinerary.trip} />
+            <KeepTripInFinds isSignedIn={isSignedIn} trip={itinerary.trip} />
           </div>
         </Suspense>
       </header>

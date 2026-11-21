@@ -58,10 +58,10 @@ const textOf = (markup: string) =>
     .replace(/&#x27;|&#39;/g, "'")
     .replace(/&quot;/g, '"');
 
-test('the owner learns their name is shown and credited on every copy before sharing', () => {
+test('the owner learns their name is shown and credited on every trip made from it before sharing', () => {
   const text = textOf(renderShare('private'));
   expect(text).toContain('Your display name, Ana.');
-  expect(text).toContain('Every copy says “Based on Ana’s trip”.');
+  expect(text).toContain('Every trip made from it says “Based on Ana’s trip”.');
 
   const unnamed = textOf(renderShare('private', { displayName: null }));
   expect(unnamed).toContain('a Trove traveller');
@@ -69,7 +69,7 @@ test('the owner learns their name is shown and credited on every copy before sha
 
   // Sharing a saved copy passes on the original creator's credit, not the sharer's.
   const copy = textOf(renderShare('private', { basedOn: { creatorName: 'Ben' } }));
-  expect(copy).toContain('Every copy says “Based on Ben’s trip”.');
+  expect(copy).toContain('Every trip made from it says “Based on Ben’s trip”.');
 });
 
 test('the private trip dialog discloses the complete public projection before enabling', () => {

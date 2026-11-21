@@ -8,6 +8,7 @@ import { NotificationSettings } from '@/components/notification-settings';
 import { OfflineStorageSettings } from '@/components/offline-storage-settings';
 import { ProfileAboutSettings } from '@/components/profile-about-settings';
 import { ProfileSettingsForm } from '@/components/profile-settings-form';
+import { ProfileVisibilitySettings } from '@/components/profile-visibility-settings';
 
 export default async function SettingsPage() {
   const t = await getTranslations('profile');
@@ -25,6 +26,7 @@ export default async function SettingsPage() {
         <div className="space-y-6">
           <ProfileSettingsForm locale={locale} />
           <ProfileAboutSettings />
+          <ProfileVisibilitySettings />
           <NotificationSettings />
           <OfflineStorageSettings />
           <PrivacySecuritySettings />

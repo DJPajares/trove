@@ -1650,5 +1650,17 @@
         "“Save a copy” is now “Use this trip”: start your own trip from someone else’s plan."
       ]
     }
+  },
+  {
+    "id": "public-profile-switch-and-map",
+    "date": "2026-11-21",
+    "version": "1.44.0",
+    "summaries": {
+      "en": [
+        "Choose whether other travellers can see your profile. It stays private until you switch it on in Settings.",
+        "Your public profile now shows a map of the countries from your Public trips.",
+        "Trips that were already Public can be added to your profile with one tap."
+      ]
+    }
   }
 ]

@@ -360,6 +360,8 @@ model Profile {
   /// One of their own Memory photos, chosen as the profile's cover.
   coverMemoryPhotoId          String?                 @map("cover_memory_photo_id") @db.Uuid
   homeCountryCode             String?                 @map("home_country_code") @db.Char(2)
+  /// Whether the traveller's public view (PRD 8.3) is open to others. Off until they switch it on.
+  isPublic                    Boolean                 @default(false) @map("is_public")
   /// Derived from `homeCountryCode` when it is saved, never sent by a client.
   /// A country that spans several zones resolves to the one most of it lives in.
   homeTimeZone                String?                 @map("home_time_zone")

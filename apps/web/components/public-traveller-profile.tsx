@@ -8,16 +8,23 @@ import type { CSSProperties } from 'react';
 import { HomeSheet } from '@/components/home/home-front-door';
 import { JourneyPrint } from '@/components/journey-prints';
 import {
+  CountryStamps,
   COVER_ACTION_CLASS,
   monthYear,
   ProfileCover,
   SECTION_TITLE,
   TravelGlance,
+  TravelMap,
 } from '@/components/profile/traveller-profile';
+import { UnlistedPublicTrips } from '@/components/profile/unlisted-public-trips';
 import { Button } from '@/components/ui/button';
 import { useCoverUnderHeader } from '@/hooks/use-cover-under-header';
 import type { TripMediaSource } from '@/lib/media/trip-media';
-import { publicTripDayCount, summarizePublicTravels } from '@/lib/profile/public-travel-summary';
+import {
+  publicTravelMap,
+  publicTripDayCount,
+  summarizePublicTravels,
+} from '@/lib/profile/public-travel-summary';
 import type { PublicTravellerProfile as PublicTravellerProfileData } from '@/lib/public-trip/api';
 import { profileInitials } from '@/lib/shell/floating-actions';
 import { namedCountries } from '@/lib/trips/countries';
@@ -58,6 +65,7 @@ export function PublicTravellerProfile({
 
   const { traveller, trips } = profile;
   const summary = summarizePublicTravels(trips, today);
+  const travelMap = publicTravelMap(trips, today);
   const home = traveller.homeCountryCode
     ? namedCountries([traveller.homeCountryCode], locale)[0]?.name
     : undefined;
@@ -106,6 +114,23 @@ export function PublicTravellerProfile({
             ]}
           />
         ) : null}
+
+        {/* Where they have been, from their listed Public trips' countries only. */}
+        {travelMap.places.length ? (
+          <section aria-labelledby="traveller-map" className="space-y-4">
+            <h2 className={SECTION_TITLE} id="traveller-map">
+              {t('mapTitle')}
+            </h2>
+            <TravelMap
+              homeCountryCode={traveller.homeCountryCode}
+              messages="publicTraveller.map"
+              places={travelMap.places}
+            />
+            <CountryStamps stamps={travelMap.stamps} />
+          </section>
+        ) : null}
+
+        {isOwner ? <UnlistedPublicTrips /> : null}
 
         <section aria-labelledby="traveller-trips" className="space-y-6">
           <h2 className={SECTION_TITLE} id="traveller-trips">

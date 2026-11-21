@@ -56,6 +56,9 @@ export type PublicTravellerProfile = {
  * provider. The only other call is to Trove's own Storage, to sign the avatar
  * and cover.
  *
+ * The view exists only while its traveller has switched their profile Public; until
+ * then it answers as a traveller who does not exist.
+ *
  * A trip is listed only when it is Public *and* stamped `publicListedAt`, which is
  * set when its owner chose Public under the current disclosure. Private trips are
  * filtered out in the query itself, so neither they nor their count ever reach
@@ -76,6 +79,7 @@ export async function readPublicTravellerProfile(
       displayName: true,
       homeCountryCode: true,
       id: true,
+      isPublic: true,
       ownedTrips: {
         where: { archivedAt: null, publicListedAt: { not: null }, visibility: 'PUBLIC' },
         select: { countries: true, endDate: true, id: true, name: true, startDate: true },
@@ -83,7 +87,8 @@ export async function readPublicTravellerProfile(
       },
     },
   });
-  if (!profile) throw new PublicTravellerNotFoundError();
+  // A private profile answers exactly as a missing one, so its existence is no tell.
+  if (!profile?.isPublic) throw new PublicTravellerNotFoundError();
 
   const storage = profile.avatarPath || profile.coverMemoryPhoto ? createStorage() : null;
   const [avatarUrl, coverUrl] = await Promise.all([

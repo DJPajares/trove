@@ -118,6 +118,17 @@
       "saved": "Saved",
       "error": "We couldn't save that. Try again."
     },
+    "visibility": {
+      "title": "Public profile",
+      "description": "Choose whether other travellers can open your profile.",
+      "label": "Let others see my profile",
+      "offDescription": "Off. Your profile is private, and your name on shared trips doesn’t open it.",
+      "onDescription": "On. Anyone with the link, or who opens your name on a shared trip, can see it.",
+      "offline": "Changing this needs a connection.",
+      "disclosure": "It shows your display name, photo, cover, bio and home country, the Public trips you list on it, and a map of the countries those trips visited. Your Private trips, Memories, ratings and settings are never shown.",
+      "preview": "See how others see it",
+      "error": "We couldn't change that. Try again."
+    },
     "eyebrow": "Your account",
     "title": "Settings",
     "description": "Set these once, and every new trip starts pointed the right way.",
@@ -4368,7 +4379,25 @@
     "anonymousName": "A Trove traveller",
     "tripsTitle": "Public trips",
     "empty": "No public trips to show yet.",
-    "emptyOwner": "Trips you make Public appear here. If one was already Public, switch it to Private and back to list it.",
+    "emptyOwner": "Trips you make Public appear here.",
+    "mapTitle": "Where they’ve been",
+    "map": {
+      "label": "World map with {count, plural, one {# country} other {# countries}} from their Public trips",
+      "visited": "Countries from their Public trips",
+      "home": "Home"
+    },
+    "unlisted": {
+      "title": "{count, plural, one {# Public trip isn’t on your profile yet} other {# Public trips aren’t on your profile yet}}",
+      "description": "{count, plural, one {It was} other {They were}} made Public before profiles showed trips. Showing one here lists its name, dates and countries, and adds its countries to your map. Only you see this.",
+      "action": "Show on my profile",
+      "listing": "Showing…",
+      "error": "We couldn't show that trip. Try again."
+    },
+    "privateOwner": {
+      "title": "Your profile is private",
+      "description": "Only you can see it right now. Turn on your public profile in Settings to let other travellers see your listed trips and the map of where you’ve been.",
+      "action": "Open settings"
+    },
     "ownerNotice": "This is how other travellers see your profile.",
     "ownerAction": "Back to your profile",
     "footerPrompt": "Planning a trip of your own?",

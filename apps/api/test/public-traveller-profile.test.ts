@@ -16,6 +16,7 @@ import {
 const TRAVELLER_ID = '44444444-4444-4444-8444-444444444444';
 const QUIET_TRAVELLER_ID = '55555555-5555-4555-8555-555555555555';
 const UNKNOWN_ID = '66666666-6666-4666-8666-666666666666';
+const PRIVATE_TRAVELLER_ID = '77777777-7777-4777-8777-777777777777';
 
 type TripRow = {
   archivedAt: Date | null;
@@ -55,6 +56,7 @@ const profiles = [
     displayName: '  Ana  ',
     homeCountryCode: 'PH',
     id: TRAVELLER_ID,
+    isPublic: true,
     // Never selected, so it must never be sent.
     travelStyles: ['Food first'],
   },
@@ -65,6 +67,17 @@ const profiles = [
     displayName: null,
     homeCountryCode: null,
     id: QUIET_TRAVELLER_ID,
+    isPublic: true,
+    travelStyles: [],
+  },
+  {
+    avatarPath: null,
+    bio: 'Keeps to themselves',
+    coverMemoryPhoto: null,
+    displayName: 'Private Pat',
+    homeCountryCode: 'SG',
+    id: PRIVATE_TRAVELLER_ID,
+    isPublic: false,
     travelStyles: [],
   },
 ];
@@ -263,4 +276,19 @@ test('every way of not finding a traveller looks the same', async () => {
   }
 
   await app.close();
+});
+
+test('a private profile answers exactly as a traveller who does not exist', async () => {
+  const privateError = await readPublicTravellerProfile(PRIVATE_TRAVELLER_ID, { storage }).catch(
+    (error: unknown) => error,
+  );
+  const unknownError = await readPublicTravellerProfile(UNKNOWN_ID, { storage }).catch(
+    (error: unknown) => error,
+  );
+
+  expect(privateError).toBeInstanceOf(PublicTravellerNotFoundError);
+  expect(unknownError).toBeInstanceOf(PublicTravellerNotFoundError);
+  expect(String(privateError)).toBe(String(unknownError));
+  // Nothing of theirs was signed on the way out.
+  expect(signed).toStrictEqual([]);
 });

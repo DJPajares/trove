@@ -16,7 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 
 import { journalSerif } from '@/components/memories/journal-font';
 import {
@@ -136,7 +136,12 @@ export function MomentViewer({
 }>) {
   const t = useTranslations('memories.journal.viewer');
   const readOnly = useTripReadOnly();
-  const trackRef = useRef<HTMLDivElement>(null);
+  // State, not a ref: the dialog's portal mounts its content a render after
+  // `open` turns true, so an effect keyed only on `open` ran while the track
+  // did not exist yet, never scrolled to the tapped photograph, and left the
+  // first slide in view while only the tapped one's neighbours were mounted -
+  // a blank page for any photograph past the second.
+  const [track, setTrack] = useState<HTMLDivElement | null>(null);
   const [active, setActive] = useState(initialPhotoIndex);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -150,15 +155,14 @@ export function MomentViewer({
     if (open) setActive(Math.min(initialPhotoIndex, Math.max(0, total - 1)));
   }, [initialPhotoIndex, open, total, memory?.id]);
 
-  // Open on the photograph that was tapped, without animating there.
+  // Open on the photograph that was tapped, without animating there - once the
+  // track exists to be scrolled.
   useLayoutEffect(() => {
-    const track = trackRef.current;
     if (!open || !track) return;
     track.scrollLeft = initialPhotoIndex * track.clientWidth;
-  }, [initialPhotoIndex, open, memory?.id]);
+  }, [initialPhotoIndex, open, memory?.id, track]);
 
   function goTo(index: number) {
-    const track = trackRef.current;
     const next = Math.max(0, Math.min(total - 1, index));
     setActive(next);
     if (!track) return;
@@ -240,7 +244,7 @@ export function MomentViewer({
                   const index = Math.round(track.scrollLeft / Math.max(track.clientWidth, 1));
                   if (index !== active && index >= 0 && index < total) setActive(index);
                 }}
-                ref={trackRef}
+                ref={setTrack}
                 role="group"
                 tabIndex={total > 1 ? 0 : -1}
               >

@@ -1683,5 +1683,13 @@
         "Trip Mode's Now stays on what's happening: tasks show up only when your current or next stop has some, without an Add task button in the way."
       ]
     }
+  },
+  {
+    "id": "trip-mode-now-no-empty-panel",
+    "date": "2026-11-22",
+    "version": "1.45.2",
+    "summaries": {
+      "en": ["Now no longer fills the screen with an empty panel once the day's plans are done."]
+    }
   }
 ]

@@ -1124,26 +1124,17 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
             </div>
           ) : null}
         </section>
-      ) : (
+      ) : readyContext.state === 'no_day' ? (
+        // A date with no trip day says so. Nothing left today says nothing: the
+        // stop on screen, the way back and the weather already tell the story,
+        // and Today is one tap away in the bottom navigation.
         <div className="space-y-4">
           <PageState
-            actions={
-              <Button
-                nativeButton={false}
-                render={<Link href={withPreviewHref(`/trips/${tripId}/mode/today`)} />}
-              >
-                {t('openToday')}
-              </Button>
-            }
             className="py-4"
-            description={
-              readyContext.state === 'no_day'
-                ? t('noDayDescription', { date })
-                : t('noNextDescription')
-            }
+            description={t('noDayDescription', { date })}
             headingLevel={2}
             icon={<Clock3 aria-hidden="true" />}
-            title={readyContext.state === 'no_day' ? t('noDayTitle') : t('noNextTitle')}
+            title={t('noDayTitle')}
           />
           {legBar ? (
             <div className={cn('rounded-[1.75rem] p-5 shadow-[var(--shadow-card)]', dock.surface)}>
@@ -1151,7 +1142,11 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
             </div>
           ) : null}
         </div>
-      )}
+      ) : legBar ? (
+        <div className={cn('rounded-[1.75rem] p-5 shadow-[var(--shadow-card)]', dock.surface)}>
+          {legBar}
+        </div>
+      ) : null}
 
       <div aria-live="polite" className="space-y-2">
         {feedback ? (

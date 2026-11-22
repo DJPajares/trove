@@ -1,4 +1,4 @@
-import type { Task, TaskContext } from '@/lib/tasks/api';
+import type { Task } from '@/lib/tasks/api';
 
 export type NowTaskGroup = {
   itemId: string;
@@ -80,15 +80,4 @@ export function tripTasks(tasks: readonly Task[]) {
 
 export function contextualTasks(tasks: readonly Task[]) {
   return sortTripModeTasks(tasks.filter((task) => task.context.kind !== 'trip'));
-}
-
-export function defaultTripModeTaskContext(input: {
-  currentItemId?: string | null;
-  dayId?: string | null;
-  nextItemId?: string | null;
-}): TaskContext {
-  const itemId = input.currentItemId ?? input.nextItemId;
-  if (itemId) return { itineraryItemId: itemId, kind: 'item' };
-  if (input.dayId) return { itineraryDayId: input.dayId, kind: 'day' };
-  return { kind: 'trip' };
 }

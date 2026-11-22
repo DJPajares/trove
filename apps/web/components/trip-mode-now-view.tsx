@@ -52,7 +52,7 @@ import { areaPhotoSubject, placeAreas } from '@/lib/media/day-header-photos';
 import { resolvePlaceMediaSource } from '@/lib/media/trip-media';
 import { cn } from '@/lib/utils';
 import type { Reservation } from '@/lib/reservations/api';
-import { defaultTripModeTaskContext, nowTaskGroups } from '@/lib/tasks/trip-mode';
+import { nowTaskGroups } from '@/lib/tasks/trip-mode';
 import {
   resolveItineraryItemPlaceName,
   resolvePlacePhotoName,
@@ -585,12 +585,11 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
     }
   }
 
+  // Now shows tasks rather than taking new ones; adding lives in Today and Trip.
   const openStopTasks = () =>
-    hereTaskCount
-      ? document
-          .getElementById('trip-mode-nearby-tasks')
-          ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      : currentItem && tripModeTasks.openCreate({ itineraryItemId: currentItem.id, kind: 'item' });
+    document
+      .getElementById('trip-mode-nearby-tasks')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   const currentName = currentItem ? itemName(currentItem, t('placeFallback')) : null;
   // Logged over Trip Mode, the same sheet Today opens, for the stop on screen
@@ -770,13 +769,14 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
                     {t('booking')}
                   </QuickAction>
                 ) : null}
-                <QuickAction
-                  disabled={tripModeTasks.status !== 'ready'}
-                  icon={<Icons.Tasks aria-hidden="true" className="size-5" />}
-                  onClick={openStopTasks}
-                >
-                  {hereTaskCount ? t('taskCount', { count: hereTaskCount }) : tasksT('add')}
-                </QuickAction>
+                {hereTaskCount ? (
+                  <QuickAction
+                    icon={<Icons.Tasks aria-hidden="true" className="size-5" />}
+                    onClick={openStopTasks}
+                  >
+                    {t('taskCount', { count: hereTaskCount })}
+                  </QuickAction>
+                ) : null}
                 <QuickAction
                   icon={<Camera aria-hidden="true" className="size-5" />}
                   label={memoryTranslations('quickAction')}
@@ -1252,36 +1252,21 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
       ) : null}
 
       {/* What the day offers doing, after the day has been described. A stop on
-          screen already carries its own task and capture buttons. */}
-      <div className="flex flex-wrap gap-2 pt-1">
-        <TripModeActionButton
-          disabled={tripModeTasks.status !== 'ready'}
-          onClick={() =>
-            tripModeTasks.openCreate(
-              defaultTripModeTaskContext({
-                currentItemId: currentItem?.id,
-                dayId: day?.id,
-                nextItemId: nextItem?.id,
-              }),
-            )
-          }
-        >
-          <Icons.Tasks aria-hidden="true" data-icon="inline-start" />
-          {tasksT('add')}
-        </TripModeActionButton>
-        {day && !currentItem && !dayComplete ? (
-          <TripModeActionButton onClick={() => setMemoryOpen(true)}>
-            <Icons.Memories aria-hidden="true" data-icon="inline-start" />
-            {memoryTranslations('quickAction')}
-          </TripModeActionButton>
-        ) : null}
-        {day && !currentItem ? (
+          screen already carries its own capture and expense buttons. */}
+      {day && !currentItem ? (
+        <div className="flex flex-wrap gap-2 pt-1">
+          {!dayComplete ? (
+            <TripModeActionButton onClick={() => setMemoryOpen(true)}>
+              <Icons.Memories aria-hidden="true" data-icon="inline-start" />
+              {memoryTranslations('quickAction')}
+            </TripModeActionButton>
+          ) : null}
           <TripModeActionButton onClick={() => logExpense()}>
             <Icons.Expenses aria-hidden="true" data-icon="inline-start" />
             {t('expense')}
           </TripModeActionButton>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1503,7 +1503,7 @@ Contextual Tasks in Now:
 - show separate **Here** and **Next** groups for tasks attached to the current and destination itinerary items,
 - show every relevant task and do not repeat one itinerary item when current and next resolve to the same stop,
 - keep open tasks prominent and completed tasks available in collapsed secondary content,
-- quick-add attaches to current stop, then next stop, then current day, then the trip.
+- show nothing when neither stop has tasks; Now offers no quick-add, and the current stop's task shortcut appears only when it has open tasks to jump to. Tasks are added from Today, Trip or the full Tasks screen.
 
 ### Today
 

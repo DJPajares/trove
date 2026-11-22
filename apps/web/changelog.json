@@ -1673,5 +1673,15 @@
         "Private trips and their memories never appear on it."
       ]
     }
+  },
+  {
+    "id": "trip-mode-now-tasks-without-add",
+    "date": "2026-11-22",
+    "version": "1.45.1",
+    "summaries": {
+      "en": [
+        "Trip Mode's Now stays on what's happening: tasks show up only when your current or next stop has some, without an Add task button in the way."
+      ]
+    }
   }
 ]

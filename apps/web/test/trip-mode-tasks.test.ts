@@ -2,7 +2,6 @@ import { expect, test } from 'vitest';
 
 import { taskContextForScope, taskContextDay, taskScope } from '@/lib/tasks/context';
 import {
-  defaultTripModeTaskContext,
   nowTaskGroups,
   replaceTripModeTask,
   sortTripModeTasks,
@@ -130,19 +129,4 @@ test('an offline queued completion updates the prepared task snapshot', () => {
   });
   expect(result.tasks[0]).toMatchObject({ completed: true });
   expect(result.tasks[0]?.completedAt).not.toBeNull();
-});
-
-test('Trip Mode quick-add defaults to current, next, day, then trip', () => {
-  expect(
-    defaultTripModeTaskContext({ currentItemId: 'airport', dayId: 'day-1', nextItemId: 'market' }),
-  ).toEqual({ itineraryItemId: 'airport', kind: 'item' });
-  expect(defaultTripModeTaskContext({ dayId: 'day-1', nextItemId: 'market' })).toEqual({
-    itineraryItemId: 'market',
-    kind: 'item',
-  });
-  expect(defaultTripModeTaskContext({ dayId: 'day-1' })).toEqual({
-    itineraryDayId: 'day-1',
-    kind: 'day',
-  });
-  expect(defaultTripModeTaskContext({})).toEqual({ kind: 'trip' });
 });

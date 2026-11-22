@@ -1264,8 +1264,6 @@
         "placeFallback": "Planned place",
         "noDayTitle": "No itinerary for today",
         "noDayDescription": "There is no itinerary planned for {date}.",
-        "noNextTitle": "You're clear for now",
-        "noNextDescription": "There are no remaining itinerary items for today.",
         "dayLine": "Day {number} · {name}",
         "stopProgress": "Stop {current} of {total}",
         "doneProgress": "{done} of {total} done",

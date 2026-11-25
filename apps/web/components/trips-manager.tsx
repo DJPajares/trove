@@ -74,9 +74,8 @@ function TripCreationIntent() {
  * the trip's own screens, where the traveller can see what they are changing.
  */
 /**
- * The library's entrance, kept for the tab's life: the prefetched loading
- * boundary and the page that replaces it are two mounts of this screen, and
- * they share one entrance. A later visit plays it again.
+ * The library's entrance, kept for the tab's life so any remount of this
+ * screen continues it rather than starting over. A later visit plays it again.
  */
 const libraryEntrance: EntranceClock = { startedAt: null };
 

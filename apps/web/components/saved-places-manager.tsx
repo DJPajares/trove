@@ -152,9 +152,8 @@ const subscribeNothing = () => () => {};
  * with every place action and sheet shared with Saved itself.
  */
 /**
- * The Finds entrance, kept for the tab's life: the route's loading boundary
- * renders this page too, so in production it mounts twice, and both mounts
- * share one entrance. A later visit plays it again.
+ * The Finds entrance, kept for the tab's life so any remount of this screen
+ * continues it rather than starting over. A later visit plays it again.
  */
 const findsEntrance: EntranceClock = { startedAt: null };
 /** A collection's own entrance; it replays on every visit, as Finds does. */

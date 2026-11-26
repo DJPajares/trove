@@ -222,6 +222,13 @@ export function AtlasDestinationGuideView({
               isSectionOpen={isSectionOpen}
               onOpenSection={openSection}
               onToggleSection={setSectionOpen}
+              pickContext={{
+                countryCode,
+                countryName: countryLabel,
+                destinationName: destination.name,
+                destinationSlug: destination.slug,
+                guideTitle: guide.title,
+              }}
               sections={sections}
             />
 

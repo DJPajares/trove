@@ -593,6 +593,13 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
                   isSectionOpen={isSectionOpen}
                   onOpenSection={openSection}
                   onToggleSection={setSectionOpen}
+                  pickContext={{
+                    countryCode,
+                    countryName: country.name,
+                    destinationName: country.name,
+                    destinationSlug: '',
+                    guideTitle: guide.data.title,
+                  }}
                   sections={sections}
                 />
 

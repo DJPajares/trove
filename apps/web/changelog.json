@@ -1752,5 +1752,15 @@
         "Explore iconic destinations and cities right from each country's Atlas page, then open full destination guides with sights, food, and local highlights."
       ]
     }
+  },
+  {
+    "id": "atlas-trip-picks",
+    "date": "2026-11-26",
+    "version": "1.49.0",
+    "summaries": {
+      "en": [
+        "Collect sights, dishes, and stays into Trip picks while reading Atlas, then turn them into a real Trove trip in one tap or hand them to Plan with AI."
+      ]
+    }
   }
 ]

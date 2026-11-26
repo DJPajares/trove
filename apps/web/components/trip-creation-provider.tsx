@@ -38,6 +38,8 @@ type TripCreationContextValue = {
   openCreateTrip: () => void;
   /** Opens the manual form with these countries filled in, as from an Atlas guide. */
   openCreateTripIn: (countries: readonly string[]) => void;
+  /** Opens Plan with AI prefilled with a brief, such as from Atlas Trip picks. */
+  openPlanWithAi: (prompt: string) => void;
 };
 
 type TripCreationProviderProps = {
@@ -51,6 +53,7 @@ const disabledTripCreationContext: TripCreationContextValue = {
   latestCreatedTrip: null,
   openCreateTrip: () => undefined,
   openCreateTripIn: () => undefined,
+  openPlanWithAi: () => undefined,
 };
 
 export function useTripCreation() {
@@ -72,7 +75,7 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
   const [takeoverPhase, setTakeoverPhase] = useState<'landing' | 'working' | null>(null);
   const briefCatalogue = useAiPlanningBriefCatalogue();
   const lifecycle = useAiPlanningLifecycle(enabled, briefCatalogue.split);
-  const { cancel, generating, operation, refreshRecovery, session } = lifecycle;
+  const { cancel, generating, operation, refreshRecovery, session, setPrompt } = lifecycle;
   const running = operation === 'starting' || operation === 'cancelling' || generating;
   // Whether the draft about to arrive is one this screen watched being built.
   // A `reviewing` session recovered on a cold load has nothing to hand off from.
@@ -151,15 +154,32 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
     setOpen(true);
     refreshRecovery();
   }, [refreshRecovery]);
+  const openPlanWithAi = useCallback(
+    (prompt: string) => {
+      setInitialCountries([]);
+      setPrompt(prompt);
+      setCreationMode('ai');
+      setOpen(true);
+      refreshRecovery();
+    },
+    [refreshRecovery, setPrompt],
+  );
   const forgetCreatedTrip = useCallback((tripId: string) => {
     setLatestCreatedTrip((current) => (current?.id === tripId ? null : current));
   }, []);
   const context = useMemo(
     () =>
       enabled
-        ? { forgetCreatedTrip, latestCreatedTrip, openCreateTrip, openCreateTripIn }
+        ? { forgetCreatedTrip, latestCreatedTrip, openCreateTrip, openCreateTripIn, openPlanWithAi }
         : disabledTripCreationContext,
-    [enabled, forgetCreatedTrip, latestCreatedTrip, openCreateTrip, openCreateTripIn],
+    [
+      enabled,
+      forgetCreatedTrip,
+      latestCreatedTrip,
+      openCreateTrip,
+      openCreateTripIn,
+      openPlanWithAi,
+    ],
   );
 
   function handleSaved(trip: Trip) {

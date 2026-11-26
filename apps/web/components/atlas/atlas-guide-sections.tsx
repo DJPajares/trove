@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import {
@@ -9,14 +9,34 @@ import {
   wikivoyageHistoryUrl,
   type AtlasBlock,
   type AtlasListing,
+  type AtlasListingKind,
   type AtlasSection,
 } from '@trove/types';
 
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollShadow } from '@/components/ui/scroll-shadow';
+import { useAtlasTripPicks } from '@/hooks/use-atlas-trip-picks';
 import { CARD_LIST_SECTIONS, extractListCards, type AtlasCardItem } from '@/lib/atlas/cards';
 import { readingMinutes } from '@/lib/atlas/format';
+import { ATLAS_MAX_TRIP_PICKS, atlasPickId, type AtlasTripPickInput } from '@/lib/atlas/picks';
 import { cn } from '@/lib/utils';
+
+export type AtlasPickContext = {
+  countryCode: string;
+  countryName: string;
+  destinationName: string;
+  destinationSlug: string;
+  guideTitle: string;
+};
+
+const PICKABLE_CARD_SECTION_KINDS: Partial<Record<string, AtlasListingKind>> = {
+  buy: 'buy',
+  do: 'do',
+  drink: 'drink',
+  eat: 'eat',
+  see: 'see',
+  sleep: 'sleep',
+};
 
 /** Practicality chapters that stand apart as tinted field notes. */
 const FIELD_NOTE_SECTIONS = new Set(['stay-safe', 'respect', 'stay-healthy']);
@@ -115,14 +135,19 @@ export function GuideChapters({
   isSectionOpen,
   onOpenSection,
   onToggleSection,
+  pickContext,
   sections,
 }: Readonly<{
   isSectionOpen: (id: string) => boolean;
   onOpenSection: (id: string) => void;
   onToggleSection: (id: string, open: boolean) => void;
+  pickContext?: AtlasPickContext;
   sections: readonly AtlasSection[];
 }>) {
   const g = useTranslations('atlas.guide');
+  const { picks, togglePick } = useAtlasTripPicks();
+  const pickedIds = new Set(picks.map((pick) => pick.id));
+  const atLimit = picks.length >= ATLAS_MAX_TRIP_PICKS;
 
   if (!sections.length) return null;
 
@@ -196,15 +221,68 @@ export function GuideChapters({
                     {groups.map((group, groupIndex) =>
                       group.kind === 'listings' ? (
                         <div className="grid gap-3 sm:grid-cols-2" key={`listings-${groupIndex}`}>
-                          {group.items.map((listing, listingIndex) => (
-                            <ListingCard key={listingIndex} listing={listing} />
-                          ))}
+                          {group.items.map((listing, listingIndex) => {
+                            const pickInput: AtlasTripPickInput | null = pickContext
+                              ? {
+                                  address: listing.address,
+                                  countryCode: pickContext.countryCode,
+                                  countryName: pickContext.countryName,
+                                  destinationName: pickContext.destinationName,
+                                  destinationSlug: pickContext.destinationSlug,
+                                  guideTitle: pickContext.guideTitle,
+                                  kind: listing.kind,
+                                  latitude: listing.latitude,
+                                  longitude: listing.longitude,
+                                  name: listing.name,
+                                }
+                              : null;
+                            const picked = pickInput
+                              ? pickedIds.has(atlasPickId(pickInput))
+                              : false;
+                            return (
+                              <ListingCard
+                                atLimit={atLimit}
+                                key={listingIndex}
+                                listing={listing}
+                                onTogglePick={pickInput ? () => togglePick(pickInput) : undefined}
+                                picked={picked}
+                              />
+                            );
+                          })}
                         </div>
                       ) : group.kind === 'cards' ? (
                         <div className="grid gap-3 sm:grid-cols-2" key={`cards-${groupIndex}`}>
-                          {group.items.map((item, itemIndex) => (
-                            <EntryCard item={item} key={itemIndex} label={group.label} />
-                          ))}
+                          {group.items.map((item, itemIndex) => {
+                            const sectionKind = PICKABLE_CARD_SECTION_KINDS[section.id];
+                            const pickInput: AtlasTripPickInput | null =
+                              pickContext && sectionKind
+                                ? {
+                                    address: null,
+                                    countryCode: pickContext.countryCode,
+                                    countryName: pickContext.countryName,
+                                    destinationName: pickContext.destinationName,
+                                    destinationSlug: pickContext.destinationSlug,
+                                    guideTitle: pickContext.guideTitle,
+                                    kind: sectionKind,
+                                    latitude: null,
+                                    longitude: null,
+                                    name: item.title,
+                                  }
+                                : null;
+                            const picked = pickInput
+                              ? pickedIds.has(atlasPickId(pickInput))
+                              : false;
+                            return (
+                              <EntryCard
+                                atLimit={atLimit}
+                                item={item}
+                                key={itemIndex}
+                                label={group.label}
+                                onTogglePick={pickInput ? () => togglePick(pickInput) : undefined}
+                                picked={picked}
+                              />
+                            );
+                          })}
                         </div>
                       ) : group.kind === 'phrases' ? (
                         <div className="grid gap-3 sm:grid-cols-2" key={`phrases-${groupIndex}`}>
@@ -263,7 +341,53 @@ export function GuideCreditFooter({
   );
 }
 
-function ListingCard({ listing }: Readonly<{ listing: AtlasListing }>) {
+function PickButton({
+  atLimit,
+  onClick,
+  picked,
+}: Readonly<{
+  atLimit: boolean;
+  onClick: () => void;
+  picked: boolean;
+}>) {
+  const p = useTranslations('atlas.picks');
+  const disabled = !picked && atLimit;
+  return (
+    <button
+      aria-pressed={picked}
+      className={cn(
+        'inline-flex h-8 shrink-0 items-center gap-1 rounded-full border px-3 text-xs font-semibold outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/40',
+        picked
+          ? 'border-brand bg-brand text-primary-foreground'
+          : 'border-border bg-background text-foreground hover:border-border-strong',
+        disabled && 'cursor-not-allowed opacity-50',
+      )}
+      disabled={disabled}
+      onClick={onClick}
+      title={disabled ? p('limitReached', { max: ATLAS_MAX_TRIP_PICKS }) : undefined}
+      type="button"
+    >
+      {picked ? (
+        <Check aria-hidden="true" className="size-3.5" />
+      ) : (
+        <Plus aria-hidden="true" className="size-3.5" />
+      )}
+      {picked ? p('added') : p('add')}
+    </button>
+  );
+}
+
+function ListingCard({
+  atLimit = false,
+  listing,
+  onTogglePick,
+  picked = false,
+}: Readonly<{
+  atLimit?: boolean;
+  listing: AtlasListing;
+  onTogglePick?: () => void;
+  picked?: boolean;
+}>) {
   const g = useTranslations('atlas.guide');
   return (
     <article className="flex flex-col justify-between rounded-[var(--radius-xl)] border border-border-subtle bg-card p-4">
@@ -279,26 +403,48 @@ function ListingCard({ listing }: Readonly<{ listing: AtlasListing }>) {
           <p className="mt-2 text-sm leading-relaxed text-foreground/85">{listing.content}</p>
         ) : null}
       </div>
-      {listing.address ? (
-        <p className="mt-3 border-t border-border-subtle pt-2.5 text-xs text-muted-foreground">
-          {listing.address}
-        </p>
+      {listing.address || onTogglePick ? (
+        <div className="mt-3 flex items-center justify-between gap-2 border-t border-border-subtle pt-2.5">
+          <p className="min-w-0 truncate text-xs text-muted-foreground">{listing.address ?? ''}</p>
+          {onTogglePick ? (
+            <PickButton atLimit={atLimit} onClick={onTogglePick} picked={picked} />
+          ) : null}
+        </div>
       ) : null}
     </article>
   );
 }
 
-function EntryCard({ item, label }: Readonly<{ item: AtlasCardItem; label: string }>) {
+function EntryCard({
+  atLimit = false,
+  item,
+  label,
+  onTogglePick,
+  picked = false,
+}: Readonly<{
+  atLimit?: boolean;
+  item: AtlasCardItem;
+  label: string;
+  onTogglePick?: () => void;
+  picked?: boolean;
+}>) {
   return (
-    <article className="flex flex-col rounded-[var(--radius-xl)] border border-border-subtle bg-card p-4">
-      <span className="self-start rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold text-secondary-foreground">
-        {label}
-      </span>
-      <h4 className="mt-2 font-journal text-[1.375rem] leading-snug font-normal text-foreground">
-        {item.title}
-      </h4>
-      {item.detail ? (
-        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{item.detail}</p>
+    <article className="flex flex-col justify-between rounded-[var(--radius-xl)] border border-border-subtle bg-card p-4">
+      <div>
+        <span className="self-start rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold text-secondary-foreground">
+          {label}
+        </span>
+        <h4 className="mt-2 font-journal text-[1.375rem] leading-snug font-normal text-foreground">
+          {item.title}
+        </h4>
+        {item.detail ? (
+          <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{item.detail}</p>
+        ) : null}
+      </div>
+      {onTogglePick ? (
+        <div className="mt-3 flex justify-end border-t border-border-subtle pt-2.5">
+          <PickButton atLimit={atLimit} onClick={onTogglePick} picked={picked} />
+        </div>
       ) : null}
     </article>
   );

@@ -14,7 +14,6 @@ import {
   type AtlasMonthRating,
   type AtlasSection,
 } from '@trove/types';
-import { ATLAS_INDEX } from '@trove/types/atlas-index';
 
 import { AtlasCover } from '@/components/atlas/atlas-cover';
 import { usePreferences } from '@/components/preferences-provider';
@@ -23,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAtlasIndex } from '@/hooks/use-atlas-index';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { atlasCountry } from '@/lib/atlas';
@@ -82,12 +82,20 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
   const { preferences, preferredCurrency } = usePreferences();
   const { openCreateTripIn } = useTripCreation();
   const hydrated = useHydrated();
-  const country = useMemo(() => atlasCountry(countryCode, locale), [countryCode, locale]);
+  const index = useAtlasIndex();
+  const country = useMemo(
+    () => (index.data ? atlasCountry(index.data.countries, countryCode, locale) : null),
+    [countryCode, index.data, locale],
+  );
   const subject = useMemo(
     () => ({ name: englishNames.of(countryCode) ?? countryCode }),
     [countryCode],
   );
-  const images = useEditorialImages(country ? [subject] : []);
+  // Asked while the country list loads, so the cover is ready with it; never
+  // for a code the list has turned out not to hold.
+  const images = useEditorialImages(
+    country || (index.isPending && /^[A-Z]{2}$/.test(countryCode)) ? [subject] : [],
+  );
   const editorial = editorialCoverImage(images.get(editorialSubjectKey(subject)), countryCode);
   const guide = useQuery({
     enabled: Boolean(country),
@@ -98,6 +106,37 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
   });
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1);
   const [openSections, setOpenSections] = useState<string[]>([]);
+
+  if (!country && index.isPending) {
+    return (
+      <div aria-busy="true" className="pb-16">
+        <AtlasCover
+          back={{ href: '/atlas', label: g('back') }}
+          kicker={'\u00a0'}
+          media={editorial ? resolveTripMediaSource({ editorial }) : null}
+          title={'\u00a0'}
+        />
+        <div className="mx-auto mt-8 flex w-full max-w-3xl flex-col gap-3">
+          <Skeleton className="h-20" />
+          <Skeleton className="h-48" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!country && index.isError) {
+    return (
+      <Empty className="mx-auto mt-24 max-w-md">
+        <EmptyHeader>
+          <EmptyTitle>{g('error')}</EmptyTitle>
+          <EmptyDescription>{g('errorDescription')}</EmptyDescription>
+        </EmptyHeader>
+        <Button onClick={() => void index.refetch()} type="button" variant="outline">
+          {g('tryAgain')}
+        </Button>
+      </Empty>
+    );
+  }
 
   if (!country) {
     return (
@@ -366,12 +405,9 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
                   title: guide.data.title,
                 })}
               </p>
-              <p className="mt-1">
-                {g('climateCredit', {
-                  from: ATLAS_INDEX.climateYears.from,
-                  to: ATLAS_INDEX.climateYears.to,
-                })}
-              </p>
+              {index.data?.climateYears ? (
+                <p className="mt-1">{g('climateCredit', index.data.climateYears)}</p>
+              ) : null}
             </footer>
           </>
         ) : null}

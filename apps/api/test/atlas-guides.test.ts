@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ATLAS_INDEX } from '@trove/types/atlas-index';
 
 import {
-  ATLAS_GUIDE_TTL_MS,
+  ATLAS_GUIDE_REFRESH_MS,
   getAtlasGuide,
   resetAtlasGuideFailures,
   type AtlasGuideStore,
 } from '../src/services/atlas-guides.js';
 import { getProviderCallTotal, resetProviderCallCounts } from '../src/services/provider-usage.js';
 
-const COUNTRY = ATLAS_INDEX.countries[0]!.countryCode;
+const COUNTRY = 'JP';
+const TITLE = 'Japan';
 const NOW = new Date('2026-11-26T00:00:00Z');
 
 function memoryStore(): AtlasGuideStore & { saved: Parameters<AtlasGuideStore['write']>[0][] } {
@@ -58,8 +58,8 @@ describe('getAtlasGuide', () => {
       calls += 1;
       return article(42);
     };
-    const first = await getAtlasGuide(COUNTRY, { fetcher, now: () => NOW, store });
-    const second = await getAtlasGuide(COUNTRY, { fetcher, now: () => NOW, store });
+    const first = await getAtlasGuide(COUNTRY, { title: TITLE, fetcher, now: () => NOW, store });
+    const second = await getAtlasGuide(COUNTRY, { title: TITLE, fetcher, now: () => NOW, store });
 
     expect(first).toMatchObject({
       lead: ['An intro.'],
@@ -72,12 +72,18 @@ describe('getAtlasGuide', () => {
     expect(getProviderCallTotal()).toBe(1);
   });
 
-  it('re-reads a copy older than 30 days, and keeps serving it when the source fails', async () => {
+  it('checks a month-old copy for a newer revision, and keeps the stored guide when the check fails', async () => {
     const store = memoryStore();
-    await getAtlasGuide(COUNTRY, { fetcher: async () => article(1), now: () => NOW, store });
-    const later = new Date(NOW.getTime() + ATLAS_GUIDE_TTL_MS + 1);
+    await getAtlasGuide(COUNTRY, {
+      title: TITLE,
+      fetcher: async () => article(1),
+      now: () => NOW,
+      store,
+    });
+    const later = new Date(NOW.getTime() + ATLAS_GUIDE_REFRESH_MS + 1);
 
     const refreshed = await getAtlasGuide(COUNTRY, {
+      title: TITLE,
       fetcher: async () => article(2),
       now: () => later,
       store,
@@ -85,8 +91,13 @@ describe('getAtlasGuide', () => {
     expect(refreshed?.revisionId).toBe(2);
 
     const failing = async () => new Response('busy', { status: 429 });
-    const evenLater = new Date(later.getTime() + ATLAS_GUIDE_TTL_MS + 1);
-    const stale = await getAtlasGuide(COUNTRY, { fetcher: failing, now: () => evenLater, store });
+    const evenLater = new Date(later.getTime() + ATLAS_GUIDE_REFRESH_MS + 1);
+    const stale = await getAtlasGuide(COUNTRY, {
+      title: TITLE,
+      fetcher: failing,
+      now: () => evenLater,
+      store,
+    });
     expect(stale?.revisionId).toBe(2);
   });
 
@@ -97,22 +108,31 @@ describe('getAtlasGuide', () => {
       calls += 1;
       return new Response('busy', { status: 429 });
     };
-    expect(await getAtlasGuide(COUNTRY, { fetcher: failing, now: () => NOW, store })).toBeNull();
-    expect(await getAtlasGuide(COUNTRY, { fetcher: failing, now: () => NOW, store })).toBeNull();
+    expect(
+      await getAtlasGuide(COUNTRY, { title: TITLE, fetcher: failing, now: () => NOW, store }),
+    ).toBeNull();
+    expect(
+      await getAtlasGuide(COUNTRY, { title: TITLE, fetcher: failing, now: () => NOW, store }),
+    ).toBeNull();
     expect(calls).toBe(1);
   });
 
-  it('has nothing to say about a country outside the index', async () => {
+  it('checks for a newer revision whatever the age when forced, as the sync does', async () => {
     const store = memoryStore();
-    let calls = 0;
-    const guide = await getAtlasGuide('QQ', {
-      fetcher: async () => {
-        calls += 1;
-        return article(1);
-      },
+    await getAtlasGuide(COUNTRY, {
+      fetcher: async () => article(1),
+      now: () => NOW,
       store,
+      title: TITLE,
     });
-    expect(guide).toBeNull();
-    expect(calls).toBe(0);
+    const forced = await getAtlasGuide(COUNTRY, {
+      fetcher: async () => article(2),
+      force: true,
+      now: () => NOW,
+      store,
+      title: TITLE,
+    });
+    expect(forced?.revisionId).toBe(2);
+    expect(store.saved).toHaveLength(2);
   });
 });

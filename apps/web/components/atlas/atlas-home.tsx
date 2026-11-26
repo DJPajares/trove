@@ -9,8 +9,11 @@ import { AtlasCover } from '@/components/atlas/atlas-cover';
 import { MediaFrame } from '@/components/media-frame';
 import { usePreferences } from '@/components/preferences-provider';
 import { SearchField } from '@/components/search-field';
+import { Button } from '@/components/ui/button';
 import { Chip, ChipGroup } from '@/components/ui/chip';
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { Tabs, TabsIndicator, TabsList, TabsPanel, TabsTab } from '@/components/ui/tabs';
+import { useAtlasIndex } from '@/hooks/use-atlas-index';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -26,7 +29,6 @@ import {
   type AtlasRegion,
 } from '@/lib/atlas';
 import { formatAtlasTemperature, formatMonthRuns, monthName } from '@/lib/atlas/format';
-import { ATLAS_INDEX } from '@trove/types/atlas-index';
 import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 
@@ -50,7 +52,13 @@ export function AtlasHome() {
   const { preferences } = usePreferences();
   // Names come from the browser's own ICU data, so they are not rendered on the server.
   const hydrated = useHydrated();
-  const countries = useMemo(() => (hydrated ? atlasCountries(locale) : []), [hydrated, locale]);
+  const index = useAtlasIndex();
+  const countries = useMemo(
+    () => (hydrated && index.data ? atlasCountries(index.data.countries, locale) : []),
+    [hydrated, index.data, locale],
+  );
+  const loading = !hydrated || index.isPending;
+  const unavailable = !loading && !index.data;
   const [query, setQuery] = useState('');
   const [region, setRegion] = useState<AtlasRegion | 'all'>('all');
   const [tab, setTab] = useState<'where' | 'when'>('where');
@@ -179,7 +187,17 @@ export function AtlasHome() {
                   </Chip>
                 ))}
               </ChipGroup>
-              {!hydrated ? (
+              {unavailable ? (
+                <Empty className="rounded-[var(--radius-xl)] border border-border-subtle">
+                  <EmptyHeader>
+                    <EmptyTitle>{t('unavailable')}</EmptyTitle>
+                    <EmptyDescription>{t('guide.errorDescription')}</EmptyDescription>
+                  </EmptyHeader>
+                  <Button onClick={() => void index.refetch()} type="button" variant="outline">
+                    {t('guide.tryAgain')}
+                  </Button>
+                </Empty>
+              ) : loading ? (
                 <div aria-hidden="true" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {Array.from({ length: 9 }, (_, index) => (
                     <Skeleton className="h-14" key={index} />
@@ -195,6 +213,7 @@ export function AtlasHome() {
 
           <TabsPanel className="mt-8" value="when">
             <MonthBrowser
+              climateYears={index.data?.climateYears ?? null}
               countries={
                 searching ? countries.filter((c) => matchesAtlasQuery(c, query)) : countries
               }
@@ -265,12 +284,14 @@ function CountryList({
 }
 
 function MonthBrowser({
+  climateYears,
   countries,
   locale,
   month,
   onMonthChange,
   temperature,
 }: Readonly<{
+  climateYears: { from: number; to: number } | null;
   countries: AtlasCountry[];
   locale: string;
   month: number;
@@ -310,12 +331,9 @@ function MonthBrowser({
             </Chip>
           ))}
         </ChipGroup>
-        <p className="mt-3 text-sm text-muted-foreground">
-          {t('patternNote', {
-            from: ATLAS_INDEX.climateYears.from,
-            to: ATLAS_INDEX.climateYears.to,
-          })}
-        </p>
+        {climateYears ? (
+          <p className="mt-3 text-sm text-muted-foreground">{t('patternNote', climateYears)}</p>
+        ) : null}
       </div>
 
       {[

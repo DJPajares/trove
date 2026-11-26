@@ -1,4 +1,4 @@
-import type { AtlasGuide } from '@trove/types';
+import type { AtlasGuide, AtlasIndex } from '@trove/types';
 
 import { authenticatedFetch, getProtectedSession } from '@/lib/auth/transport';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
@@ -14,17 +14,15 @@ export class AtlasApiError extends Error {
   }
 }
 
-/** One country's guide, adapted from Wikivoyage and stored by the API. */
-export async function fetchAtlasGuide(countryCode: string): Promise<AtlasGuide> {
+async function atlasRequest<T>(path: string): Promise<T> {
   const supabase = createBrowserSupabaseClient();
   if (!supabase) throw new AtlasApiError('supabase_not_configured', 500);
   const { data, error } = await getProtectedSession(supabase);
   if (error || !data.session) throw new AtlasApiError('not_authenticated', 401);
 
-  const response = await authenticatedFetch(
-    `${apiUrl}/atlas/guides/${encodeURIComponent(countryCode)}`,
-    { headers: { Authorization: `Bearer ${data.session.access_token}` } },
-  );
+  const response = await authenticatedFetch(`${apiUrl}${path}`, {
+    headers: { Authorization: `Bearer ${data.session.access_token}` },
+  });
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { code?: string };
     throw new AtlasApiError(
@@ -32,5 +30,18 @@ export async function fetchAtlasGuide(countryCode: string): Promise<AtlasGuide> 
       response.status,
     );
   }
-  return ((await response.json()) as { guide: AtlasGuide }).guide;
+  return response.json() as Promise<T>;
+}
+
+/** Every Atlas country with its typical conditions, from Trove's shared reference data. */
+export function fetchAtlasIndex(): Promise<AtlasIndex> {
+  return atlasRequest<AtlasIndex>('/atlas/countries');
+}
+
+/** One country's guide, adapted from Wikivoyage and stored by the API. */
+export async function fetchAtlasGuide(countryCode: string): Promise<AtlasGuide> {
+  const body = await atlasRequest<{ guide: AtlasGuide }>(
+    `/atlas/guides/${encodeURIComponent(countryCode)}`,
+  );
+  return body.guide;
 }

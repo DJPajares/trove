@@ -82,11 +82,10 @@ describe('bestForMonth', () => {
   });
 });
 
-describe('the bundled index', () => {
+describe('atlasCountries', () => {
   it('names every country in the reader’s locale and finds it ignoring accents', () => {
-    const countries = atlasCountries('en');
-    const japan = countries.find((c) => c.countryCode === 'JP');
-    expect(japan?.name).toBe('Japan');
+    const countries = atlasCountries([country('JP', []), country('CI', [])], 'en');
+    expect(countries.find((c) => c.countryCode === 'JP')?.name).toBe('Japan');
     const ivory = countries.find((c) => c.countryCode === 'CI');
     expect(ivory && matchesAtlasQuery(ivory, 'cote')).toBe(true);
   });

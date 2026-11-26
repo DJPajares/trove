@@ -1,21 +1,25 @@
 import { getPrismaClient } from '@trove/db';
 import type { AtlasGuide, AtlasSection } from '@trove/types';
-import { ATLAS_INDEX } from '@trove/types/atlas-index';
 
+import { getAtlasCountry } from './atlas-countries.js';
 import { parseWikivoyageArticle } from './atlas-wikitext.js';
 import { recordProviderCacheEvent, recordProviderCall } from './provider-usage.js';
 import { singleFlight } from './single-flight.js';
 
 /**
- * Atlas guides (PRD 40.6). A guide is read from Wikivoyage the first time any
- * traveller opens it, stored as plain-text sections, and shared: the licence
- * permits keeping open-licensed text, so a second reader costs nothing. It is
- * re-read once older than 30 days; when Wikivoyage cannot be reached, a stale
- * copy still serves, and a recent failure is remembered for a few minutes so a
- * refreshing reader does not become a stream of requests.
+ * Atlas guides (PRD 40.6): shared reference data, stored permanently.
+ *
+ * A guide is read from Wikivoyage once - by `atlas:sync`, or by the first
+ * traveller to open it - and kept as plain-text sections that every reader
+ * shares. The licence permits keeping open-licensed text, so nothing deletes
+ * it. Once a stored copy is a month old, the next reader triggers a check for
+ * a newer revision; a failed check leaves the stored guide exactly as it was,
+ * and a recent failure is remembered for a few minutes so a refreshing reader
+ * does not become a stream of requests.
  */
 const WIKIVOYAGE_API = 'https://en.wikivoyage.org/w/api.php';
-export const ATLAS_GUIDE_TTL_MS = 30 * 24 * 60 * 60 * 1_000;
+/** How old a stored guide may grow before a reader triggers a revision check. */
+export const ATLAS_GUIDE_REFRESH_MS = 30 * 24 * 60 * 60 * 1_000;
 const FAILURE_MEMORY_MS = 10 * 60 * 1_000;
 const REQUEST_TIMEOUT_MS = 10_000;
 /** A country article is tens of kilobytes; anything far larger is not one. */
@@ -38,6 +42,10 @@ export type AtlasGuideStore = {
 
 export type AtlasGuideOptions = {
   fetcher?: Fetcher;
+  /** Check Wikivoyage whatever the stored copy's age, as `atlas:sync` does. */
+  force?: boolean;
+  /** The country's Wikivoyage title; read from the stored countries when absent. */
+  title?: string;
   now?: () => Date;
   store?: AtlasGuideStore;
   /** Wikimedia asks automated clients for a name and contact address. */
@@ -54,8 +62,8 @@ function prismaStore(): AtlasGuideStore {
   const prisma = getPrismaClient();
   return {
     read: (countryCode) =>
-      prisma.atlasGuideSnapshot.findUnique({
-        where: { atlas_guide_snapshot_subject: { countryCode, language: 'en' } },
+      prisma.atlasGuide.findUnique({
+        where: { atlas_guide_subject: { countryCode, language: 'en' } },
       }),
     async write(guide) {
       const data = {
@@ -64,10 +72,10 @@ function prismaStore(): AtlasGuideStore {
         revisionId: guide.revisionId,
         title: guide.title,
       };
-      await prisma.atlasGuideSnapshot.upsert({
+      await prisma.atlasGuide.upsert({
         create: { ...data, countryCode: guide.countryCode, language: 'en' },
         update: data,
-        where: { atlas_guide_snapshot_subject: { countryCode: guide.countryCode, language: 'en' } },
+        where: { atlas_guide_subject: { countryCode: guide.countryCode, language: 'en' } },
       });
     },
   };
@@ -140,13 +148,17 @@ export async function getAtlasGuide(
   countryCode: string,
   options: AtlasGuideOptions = {},
 ): Promise<AtlasGuide | null> {
-  const entry = ATLAS_INDEX.countries.find((country) => country.countryCode === countryCode);
-  if (!entry) return null;
+  const title = options.title ?? (await getAtlasCountry(countryCode))?.wikivoyageTitle;
+  if (!title) return null;
   const now = options.now?.() ?? new Date();
   const store = options.store ?? prismaStore();
   const stored = await store.read(countryCode).catch(() => null);
   const storedGuide = stored ? toGuide(stored) : null;
-  if (storedGuide && now.getTime() - stored!.fetchedAt.getTime() < ATLAS_GUIDE_TTL_MS) {
+  if (
+    storedGuide &&
+    !options.force &&
+    now.getTime() - stored!.fetchedAt.getTime() < ATLAS_GUIDE_REFRESH_MS
+  ) {
     recordProviderCacheEvent({
       cache: 'atlas-guide',
       kind: 'cache_hit',
@@ -157,7 +169,7 @@ export async function getAtlasGuide(
     return storedGuide;
   }
   const failedAt = recentFailures.get(countryCode);
-  if (failedAt !== undefined && now.getTime() - failedAt < FAILURE_MEMORY_MS) {
+  if (!options.force && failedAt !== undefined && now.getTime() - failedAt < FAILURE_MEMORY_MS) {
     recordProviderCacheEvent({
       cache: 'atlas-guide',
       kind: 'negative_cache_hit',
@@ -170,7 +182,7 @@ export async function getAtlasGuide(
 
   return singleFlight(`atlas-guide:${countryCode}`, async () => {
     try {
-      const article = await fetchArticle(entry.wikivoyageTitle, options);
+      const article = await fetchArticle(title, options);
       const parsed = parseWikivoyageArticle(article.wikitext);
       const fresh = {
         content: parsed,

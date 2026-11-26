@@ -7,7 +7,7 @@
     "ai-planning:cleanup": "tsx scripts/cleanup-ai-planning-retention.ts",
     "ai-planning:reset-quota": "tsx scripts/reset-ai-planning-quota.ts",
     "ai:verify": "tsx scripts/verify-ai-generation.ts",
-    "atlas:index": "tsx scripts/build-atlas-index.ts",
+    "atlas:sync": "tsx scripts/sync-atlas.ts",
     "build": "../../node_modules/.bin/tsc --project tsconfig.build.json && node scripts/copy-geo-tz-data.mjs",
     "dev": "tsx watch --include '../../packages/types/dist/**/*.js' src/server.ts",
     "editorial-images:reconcile": "tsx scripts/reconcile-editorial-images.ts",

@@ -2,9 +2,9 @@
  * Atlas, the destination guide (PRD 40).
  *
  * Guide text is Wikivoyage's (CC BY-SA 4.0), adapted into Trove's own reading
- * layout as plain text: no source markup ever reaches a client. The country
- * index and its twelve-month patterns are built ahead of time and bundled, so
- * browsing never asks a provider anything.
+ * layout as plain text: no source markup ever reaches a client. Countries,
+ * their twelve-month patterns and their guides are shared reference data,
+ * stored permanently in Trove's database and served by the API.
  */
 
 export const ATLAS_REGIONS = ['africa', 'americas', 'asia', 'europe', 'oceania'] as const;
@@ -38,13 +38,21 @@ export type AtlasIndexEntry = {
   months: AtlasMonthClimate[] | null;
 };
 
+/** What `GET /atlas/countries` answers. */
 export type AtlasIndex = {
-  /** ISO date the index was built. */
-  builtAt: string;
-  /** The complete calendar years the patterns average. */
-  climateYears: { from: number; to: number };
+  /** The complete calendar years the patterns average, when any country has one. */
+  climateYears: { from: number; to: number } | null;
   countries: AtlasIndexEntry[];
 };
+
+/** One month's typical conditions as stored, before a rating is derived. */
+export type AtlasClimateNorm = Omit<AtlasMonthClimate, 'rating'>;
+
+/** Rates each month against the place's own driest month (see `atlasMonthRating`). */
+export function rateAtlasClimate(norms: readonly AtlasClimateNorm[]): AtlasMonthClimate[] {
+  const driest = Math.min(...norms.map((norm) => norm.wetDayShare));
+  return norms.map((norm) => ({ ...norm, rating: atlasMonthRating(norm, driest) }));
+}
 
 export const ATLAS_LISTING_KINDS = [
   'see',

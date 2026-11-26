@@ -4,23 +4,29 @@ import {
   type AtlasMonthClimate,
   type AtlasRegion,
 } from '@trove/types';
-import { ATLAS_INDEX } from '@trove/types/atlas-index';
 
 export type AtlasCountry = AtlasIndexEntry & { name: string };
 
 export { ATLAS_REGIONS, type AtlasRegion };
 
-/** Every country in the bundled index, named and sorted in the reader's locale. */
-export function atlasCountries(locale: string): AtlasCountry[] {
+/** Every Atlas country, named and sorted in the reader's locale. */
+export function atlasCountries(
+  entries: readonly AtlasIndexEntry[],
+  locale: string,
+): AtlasCountry[] {
   const names = new Intl.DisplayNames([locale], { type: 'region' });
   const collator = new Intl.Collator(locale, { sensitivity: 'base' });
-  return ATLAS_INDEX.countries
+  return entries
     .map((country) => ({ ...country, name: names.of(country.countryCode) ?? country.countryCode }))
     .sort((a, b) => collator.compare(a.name, b.name));
 }
 
-export function atlasCountry(countryCode: string, locale: string): AtlasCountry | null {
-  const entry = ATLAS_INDEX.countries.find((country) => country.countryCode === countryCode);
+export function atlasCountry(
+  entries: readonly AtlasIndexEntry[],
+  countryCode: string,
+  locale: string,
+): AtlasCountry | null {
+  const entry = entries.find((country) => country.countryCode === countryCode);
   if (!entry) return null;
   const names = new Intl.DisplayNames([locale], { type: 'region' });
   return { ...entry, name: names.of(entry.countryCode) ?? entry.countryCode };

@@ -1,36 +1,40 @@
 /**
- * Builds Atlas's bundled country index (PRD 40.6): each country's Wikivoyage
- * article title, the city its typical conditions are measured at, and twelve
- * months of typical conditions averaged over the last five complete years.
+ * Keeps Atlas's shared reference data in Trove's database (PRD 40.6).
  *
- *   pnpm --filter @trove/api atlas:index
+ *   pnpm --filter @trove/api atlas:sync            countries and their climate
+ *   pnpm --filter @trove/api atlas:sync --guides   ...and every country's guide
  *
- * Run it about once a year. It is the only thing that asks Wikivoyage or the
- * climate archive about every country; nothing at runtime does. Answers are
- * cached on disk (ATLAS_CACHE_DIR, default node_modules/.cache/atlas) so a run
- * stopped by a rate limit resumes where it left off, and a country with no
- * pattern yet is written with `months: null` rather than invented.
+ * Countries: each Wikivoyage article title, the city typical conditions are
+ * measured at, and twelve months of conditions averaged over the last five
+ * complete years, upserted into `atlas_countries`. Run it about once a year.
+ * Answers from Wikivoyage and the climate archive are cached on disk
+ * (ATLAS_CACHE_DIR, default node_modules/.cache/atlas), so a run stopped by a
+ * rate limit resumes where it left off; a country with no pattern yet is
+ * stored without one rather than with an invented one.
  *
- * Wikimedia asks automated clients to identify themselves: set
- * ATLAS_USER_AGENT to a name and contact address before running this.
+ * Guides (`--guides`): reads each country's article once and stores it in
+ * `atlas_guides`, so no reader waits on Wikivoyage. Guides already stored are
+ * kept; `--refresh` checks every one for a newer revision.
+ *
+ * Needs DATABASE_URL. Wikimedia asks automated clients to identify
+ * themselves: set ATLAS_USER_AGENT to a name and contact address first.
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import {
-  atlasMonthRating,
-  type AtlasIndex,
-  type AtlasIndexEntry,
-  type AtlasMonthClimate,
-} from '@trove/types';
+import { getPrismaClient } from '@trove/db';
+import type { AtlasClimateNorm } from '@trove/types';
 
+import { resetAtlasCountryMemory } from '../src/services/atlas-countries.js';
+import { getAtlasGuide } from '../src/services/atlas-guides.js';
 import { ATLAS_CITIES } from './atlas-cities.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const OUTPUT = path.resolve(here, '../../../packages/types/src/atlas-index.ts');
 const CACHE_DIR = process.env.ATLAS_CACHE_DIR ?? path.resolve(here, '../node_modules/.cache/atlas');
-const USER_AGENT = process.env.ATLAS_USER_AGENT ?? 'TroveAtlasIndex/1.0';
+const USER_AGENT = process.env.ATLAS_USER_AGENT ?? 'TroveAtlas/1.0';
+const WITH_GUIDES = process.argv.includes('--guides');
+const REFRESH_GUIDES = process.argv.includes('--refresh');
 const WIKIVOYAGE_API = 'https://en.wikivoyage.org/w/api.php';
 const ARCHIVE_URL = 'https://archive-api.open-meteo.com/v1/archive';
 const PAUSE_MS = 1_500;
@@ -39,8 +43,8 @@ type Sample = { max: number; min: number; precipitation: number };
 
 /**
  * The same five complete years and 1 mm wet-day threshold as Insights'
- * climate norms (services/climate-norms.ts), restated rather than imported so
- * this script runs without a database client.
+ * climate norms (services/climate-norms.ts), restated because that module
+ * works per cell-month rather than per year of daily data.
  */
 const CLIMATE_YEARS = 5;
 const WET_DAY_MM = 1;
@@ -139,7 +143,7 @@ async function climateFor(
   longitude: number,
   years: { from: number; to: number },
 ) {
-  return cached<AtlasMonthClimate[]>(`climate-${code}-${years.from}-${years.to}`, async () => {
+  return cached<AtlasClimateNorm[]>(`climate-${code}-${years.from}-${years.to}`, async () => {
     const url = new URL(ARCHIVE_URL);
     url.search = new URLSearchParams({
       daily: 'temperature_2m_max,temperature_2m_min,precipitation_sum',
@@ -170,11 +174,11 @@ async function climateFor(
       const month = Number(day.slice(5, 7));
       byMonth.set(month, [...(byMonth.get(month) ?? []), { max, min, precipitation }]);
     });
-    const months: AtlasMonthClimate[] = [];
+    const months: AtlasClimateNorm[] = [];
     for (let month = 1; month <= 12; month += 1) {
       const norm = summarizeClimate(byMonth.get(month) ?? []);
       if (!norm) return null;
-      months.push({ month, ...norm, rating: 'mixed' });
+      months.push({ month, ...norm });
     }
     return months;
   });
@@ -196,45 +200,52 @@ async function main() {
   }
 
   const years = climateYears(new Date());
-  const countries: AtlasIndexEntry[] = [];
+  const prisma = getPrismaClient();
   let withoutClimate = 0;
+  let written = 0;
   for (const code of codes) {
     const title = titles.get(code);
     if (!title) continue;
     const city = ATLAS_CITIES[code]!;
-    // Ratings are recomputed on every run, so a change to the rating rule never
-    // needs the climate archive asked again.
-    const norms = await climateFor(code, city.latitude, city.longitude, years);
-    const driest = norms ? Math.min(...norms.map((month) => month.wetDayShare)) : 0;
-    const months =
-      norms?.map((month) => ({ ...month, rating: atlasMonthRating(month, driest) })) ?? null;
-    if (!months) withoutClimate += 1;
-    countries.push({
+    const climate = await climateFor(code, city.latitude, city.longitude, years);
+    if (!climate) withoutClimate += 1;
+    const data = {
       climateCity: city.city,
-      countryCode: code,
       latitude: city.latitude,
       longitude: city.longitude,
-      months,
       region: city.region,
       wikivoyageTitle: title,
+      // A failed climate fetch never erases a pattern already stored.
+      ...(climate ? { climate, climateYearFrom: years.from, climateYearTo: years.to } : {}),
+    };
+    await prisma.atlasCountry.upsert({
+      create: { ...data, countryCode: code },
+      update: data,
+      where: { countryCode: code },
     });
-    process.stdout.write(`${code}${months ? '' : '?'} `);
+    written += 1;
+    process.stdout.write(`${code}${climate ? '' : '?'} `);
   }
+  console.log(`\n${written} countries stored, ${withoutClimate} still without a climate pattern.`);
+  resetAtlasCountryMemory();
 
-  const index: AtlasIndex = {
-    builtAt: new Date().toISOString().slice(0, 10),
-    climateYears: years,
-    countries,
-  };
-  await writeFile(
-    OUTPUT,
-    `// Generated by apps/api/scripts/build-atlas-index.ts. Do not edit by hand.\n` +
-      `import type { AtlasIndex } from './atlas.js';\n\n` +
-      `export const ATLAS_INDEX: AtlasIndex = ${JSON.stringify(index)};\n`,
-  );
-  console.log(
-    `\n${countries.length} countries written, ${withoutClimate} still without a climate pattern.`,
-  );
+  if (!WITH_GUIDES) return;
+  let guides = 0;
+  let missing = 0;
+  for (const code of codes) {
+    const title = titles.get(code);
+    if (!title) continue;
+    const guide = await getAtlasGuide(code, {
+      force: REFRESH_GUIDES,
+      title,
+      userAgent: USER_AGENT,
+    });
+    if (guide) guides += 1;
+    else missing += 1;
+    process.stdout.write(`${code}${guide ? '' : '?'} `);
+    await sleep(PAUSE_MS);
+  }
+  console.log(`\n${guides} guides stored, ${missing} could not be read this run.`);
 }
 
 await main();

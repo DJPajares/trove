@@ -30,6 +30,7 @@ import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { atlasCountry, greatMonthRuns } from '@/lib/atlas';
 import { fetchAtlasGuide } from '@/lib/atlas/api';
+import { CARD_LIST_SECTIONS, extractListCards, type AtlasCardItem } from '@/lib/atlas/cards';
 import {
   formatAtlasTemperature,
   formatCoordinates,
@@ -94,21 +95,48 @@ function chapterNumber(index: number) {
 }
 
 type BlockGroup =
-  { kind: 'listings'; items: AtlasListing[] } | { kind: 'block'; block: AtlasBlock };
+  | { kind: 'listings'; items: AtlasListing[] }
+  | { kind: 'cards'; items: AtlasCardItem[]; label: string }
+  | { kind: 'phrases'; items: AtlasCardItem[] }
+  | { kind: 'block'; block: AtlasBlock };
 
-/** Groups consecutive listing blocks so sights, restaurants and stays render as a 2-column grid. */
-function groupSectionBlocks(blocks: readonly AtlasBlock[]): BlockGroup[] {
+/**
+ * Groups consecutive listing blocks into 2-column grids and turns structured
+ * "Name — description" lists in highlight/food/region chapters into field-guide
+ * cards (or tap-to-reveal phrase cards in Talk).
+ */
+function groupSectionBlocks(section: AtlasSection): BlockGroup[] {
   const groups: BlockGroup[] = [];
-  for (const block of blocks) {
+  const cardEligible = CARD_LIST_SECTIONS.has(section.id);
+  const isTalk = section.id === 'talk';
+
+  for (const block of section.blocks) {
     if (block.type === 'listing') {
       const previous = groups.at(-1);
       if (previous?.kind === 'listings') previous.items.push(block.listing);
       else groups.push({ kind: 'listings', items: [block.listing] });
+    } else if (block.type === 'list' && (cardEligible || isTalk)) {
+      const cards = extractListCards(block.items);
+      if (cards) {
+        groups.push(
+          isTalk
+            ? { kind: 'phrases', items: cards }
+            : { kind: 'cards', items: cards, label: section.title },
+        );
+      } else {
+        groups.push({ kind: 'block', block });
+      }
     } else {
       groups.push({ kind: 'block', block });
     }
   }
   return groups;
+}
+
+function sectionHasCards(section: AtlasSection) {
+  return groupSectionBlocks(section).some(
+    (group) => group.kind === 'listings' || group.kind === 'cards' || group.kind === 'phrases',
+  );
 }
 
 /**
@@ -219,7 +247,9 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
         : t('noGreatMonths');
   const sections = guide.data?.sections ?? [];
   const firstSectionId = sections[0]?.id ?? null;
-  const isSectionOpen = (id: string) => sectionState[id] ?? id === firstSectionId;
+  const firstCardSectionId = sections.find((section) => sectionHasCards(section))?.id ?? null;
+  const isSectionOpen = (id: string) =>
+    sectionState[id] ?? (id === firstSectionId || id === firstCardSectionId);
   const setSectionOpen = (id: string, open: boolean) =>
     setSectionState((current) => ({ ...current, [id]: open }));
   const openSection = (id: string) => {
@@ -523,7 +553,7 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
                 <div className="space-y-8">
                   {sections.map((section, idx) => {
                     const isFieldNote = FIELD_NOTE_SECTIONS.has(section.id);
-                    const groups = groupSectionBlocks(section.blocks);
+                    const groups = groupSectionBlocks(section);
                     return (
                       <article
                         className={cn(
@@ -574,6 +604,24 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
                                   >
                                     {group.items.map((listing, listingIndex) => (
                                       <ListingCard key={listingIndex} listing={listing} />
+                                    ))}
+                                  </div>
+                                ) : group.kind === 'cards' ? (
+                                  <div
+                                    className="grid gap-3 sm:grid-cols-2"
+                                    key={`cards-${groupIndex}`}
+                                  >
+                                    {group.items.map((item, itemIndex) => (
+                                      <EntryCard item={item} key={itemIndex} label={group.label} />
+                                    ))}
+                                  </div>
+                                ) : group.kind === 'phrases' ? (
+                                  <div
+                                    className="grid gap-3 sm:grid-cols-2"
+                                    key={`phrases-${groupIndex}`}
+                                  >
+                                    {group.items.map((item, itemIndex) => (
+                                      <PhraseCard item={item} key={itemIndex} />
                                     ))}
                                   </div>
                                 ) : (
@@ -645,6 +693,50 @@ function ListingCard({ listing }: Readonly<{ listing: AtlasListing }>) {
         </p>
       ) : null}
     </article>
+  );
+}
+
+/** A structured Wikivoyage region, city, sight, or dish entry rendered as a field-guide card. */
+function EntryCard({ item, label }: Readonly<{ item: AtlasCardItem; label: string }>) {
+  return (
+    <article className="flex flex-col rounded-[var(--radius-xl)] border border-border-subtle bg-card p-4">
+      <span className="self-start rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold text-secondary-foreground">
+        {label}
+      </span>
+      <h4 className="mt-2 font-journal text-[1.375rem] leading-snug font-normal text-foreground">
+        {item.title}
+      </h4>
+      {item.detail ? (
+        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{item.detail}</p>
+      ) : null}
+    </article>
+  );
+}
+
+/** A Talk phrasebook entry that reveals the translation/pronunciation on tap (PRD 40.3). */
+function PhraseCard({ item }: Readonly<{ item: AtlasCardItem }>) {
+  const g = useTranslations('atlas.guide');
+  const [revealed, setRevealed] = useState(false);
+
+  return (
+    <button
+      aria-expanded={revealed}
+      className="flex flex-col rounded-[var(--radius-xl)] border border-border-subtle bg-card p-4 text-left outline-none transition-colors hover:border-border-strong focus-visible:ring-3 focus-visible:ring-ring/40"
+      onClick={() => setRevealed((open) => !open)}
+      type="button"
+    >
+      <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+        {revealed ? g('tapToHide') : g('tapToReveal')}
+      </span>
+      <span className="mt-1.5 font-journal text-[1.375rem] leading-snug font-normal text-foreground">
+        {item.title}
+      </span>
+      {revealed && item.detail ? (
+        <span className="mt-2.5 border-t border-border-subtle pt-2.5 text-sm font-medium leading-relaxed text-brand">
+          {item.detail}
+        </span>
+      ) : null}
+    </button>
   );
 }
 

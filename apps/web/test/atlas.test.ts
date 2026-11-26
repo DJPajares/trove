@@ -10,6 +10,7 @@ import {
   type AtlasCountry,
 } from '@/lib/atlas';
 import { formatMonthRuns, wetDaysInTen } from '@/lib/atlas/format';
+import { extractListCards, parseNamedListItem } from '@/lib/atlas/cards';
 
 function country(code: string, ratings: AtlasMonthClimate['rating'][]): AtlasCountry {
   return {
@@ -94,4 +95,35 @@ describe('atlasCountries', () => {
 it('describes rain without claiming more precision than a pattern has', () => {
   expect(wetDaysInTen(0.34)).toBe(3);
   expect(nextMonth(new Date(2026, 11, 5))).toBe(1);
+});
+
+describe('extractListCards', () => {
+  it('turns Wikivoyage "Name — description" lists into structured field-guide cards', () => {
+    expect(
+      extractListCards([
+        'Bangkok — Thailand’s bustling capital on the Chao Phraya.',
+        'Chiang Mai — Mountain cultural hub in the north.',
+      ]),
+    ).toEqual([
+      { detail: 'Thailand’s bustling capital on the Chao Phraya.', title: 'Bangkok' },
+      { detail: 'Mountain cultural hub in the north.', title: 'Chiang Mai' },
+    ]);
+  });
+
+  it('supports colon-separated dish lists without splitting sentences', () => {
+    expect(parseNamedListItem('Pad Thai: stir-fried rice noodles with tamarind')).toEqual({
+      detail: 'stir-fried rice noodles with tamarind',
+      title: 'Pad Thai',
+    });
+    expect(parseNamedListItem('Keep valuables close. Never leave bags unattended.')).toBeNull();
+  });
+
+  it('leaves ordinary prose bullet lists as plain bullets', () => {
+    expect(
+      extractListCards([
+        'Pack light breathable clothes for the lowlands.',
+        'Carry small bills for street markets and local buses.',
+      ]),
+    ).toBeNull();
+  });
 });

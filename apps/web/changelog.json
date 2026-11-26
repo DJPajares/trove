@@ -1732,5 +1732,15 @@
         "Browse the A–Z country list with twelve-month season strips to spot the best time to visit at a glance."
       ]
     }
+  },
+  {
+    "id": "atlas-chapter-cards-and-phrases",
+    "date": "2026-11-26",
+    "version": "1.47.1",
+    "summaries": {
+      "en": [
+        "Regions, cities, sights, and dishes inside Atlas country guides now display as scannable field-guide cards, and Talk phrases open with a tap."
+      ]
+    }
   }
 ]

@@ -11,6 +11,15 @@ import {
 } from '@/lib/atlas';
 import { formatMonthRuns, wetDaysInTen } from '@/lib/atlas/format';
 import { extractListCards, parseNamedListItem } from '@/lib/atlas/cards';
+import {
+  ATLAS_MAX_TRIP_PICKS,
+  addAtlasTripPick,
+  atlasPickCategory,
+  atlasTripAttribution,
+  buildAtlasAiPrompt,
+  groupAtlasTripPicks,
+  suggestAtlasTripDates,
+} from '@/lib/atlas/picks';
 
 function country(code: string, ratings: AtlasMonthClimate['rating'][]): AtlasCountry {
   return {
@@ -125,5 +134,64 @@ describe('extractListCards', () => {
         'Carry small bills for street markets and local buses.',
       ]),
     ).toBeNull();
+  });
+});
+
+describe('Atlas trip picks (PRD 40.4)', () => {
+  const samplePick = (index: number) => ({
+    address: null,
+    countryCode: 'PH',
+    countryName: 'Philippines',
+    destinationName: 'Bohol',
+    destinationSlug: 'bohol',
+    guideTitle: 'Bohol',
+    kind: 'see' as const,
+    latitude: 9.85,
+    longitude: 124.14,
+    name: `Spot ${index}`,
+  });
+
+  it('deduplicates picks and enforces the 24-pick tray limit', () => {
+    let picks = addAtlasTripPick([], samplePick(1)).picks;
+    const dup = addAtlasTripPick(picks, samplePick(1));
+    expect(dup.added).toBe(false);
+    expect(dup.reason).toBe('duplicate');
+
+    for (let i = 2; i <= ATLAS_MAX_TRIP_PICKS; i += 1) {
+      picks = addAtlasTripPick(picks, samplePick(i)).picks;
+    }
+    expect(picks).toHaveLength(ATLAS_MAX_TRIP_PICKS);
+
+    const overflow = addAtlasTripPick(picks, samplePick(25));
+    expect(overflow.added).toBe(false);
+    expect(overflow.reason).toBe('limit');
+  });
+
+  it('suggests the first Friday at least 14 days ahead in the next Great month', () => {
+    const months = Array.from({ length: 12 }, (_, idx) => ({
+      month: idx + 1,
+      rating: idx + 1 === 2 ? ('great' as const) : ('off' as const),
+      temperatureMaxC: 28,
+      temperatureMinC: 22,
+      wetDayShare: 0.1,
+    }));
+    const suggested = suggestAtlasTripDates(months, 6, new Date('2026-11-26T00:00:00Z'));
+    // First Friday in February 2027 is 2027-02-05.
+    expect(suggested.startDate).toBe('2027-02-05');
+    expect(suggested.days).toBe(3);
+    expect(suggested.endDate).toBe('2027-02-07');
+  });
+
+  it('maps listing kinds to Trove categories, groups picks, and formats attribution and AI prompt', () => {
+    expect(atlasPickCategory('eat')).toBe('food_and_drink');
+    expect(atlasPickCategory('sleep')).toBe('stay');
+    expect(atlasPickCategory('see')).toBe('things_to_do');
+
+    const picks = addAtlasTripPick([], samplePick(1)).picks;
+    expect(groupAtlasTripPicks(picks)).toHaveLength(1);
+    expect(atlasTripAttribution(picks)).toContain("Based on Wikivoyage's Bohol guide");
+    expect(
+      buildAtlasAiPrompt(picks, { days: 4, endDate: '2027-02-08', startDate: '2027-02-05' }),
+    ).toContain('Must-go places: Spot 1');
   });
 });

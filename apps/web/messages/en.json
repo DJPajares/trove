@@ -4673,6 +4673,24 @@
       "unavailable": "There’s no guide for this place yet.",
       "notFound": "Atlas doesn’t cover this place yet.",
       "backToAtlas": "Back to Atlas"
+    },
+    "picks": {
+      "add": "Trip pick",
+      "added": "In picks",
+      "limitReached": "You can keep up to {max} trip picks at once.",
+      "trayButton": "Trip picks",
+      "trayCount": "{count, plural, one {# pick} other {# picks}}",
+      "sheetTitle": "Trip picks",
+      "sheetDescription": "Kept on this device until you turn them into a trip. Never mixed with your Finds.",
+      "startDate": "Start date",
+      "days": "Days",
+      "makeTrip": "Make it a trip",
+      "creating": "Building your trip…",
+      "planWithAi": "Plan with AI",
+      "clearAll": "Clear all",
+      "remove": "Remove {name}",
+      "close": "Close",
+      "createError": "Couldn’t create the trip right now. Your picks are still here."
     }
   }
 }

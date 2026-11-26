@@ -721,6 +721,7 @@
     "countries": "Which countries?",
     "countriesPlaceholder": "Search countries",
     "countriesHint": "Pick every country this trip visits.",
+    "atlasPicksCarried": "{count, plural, one {Your Atlas pick comes along as a place to explore. Locate it on the map any time.} other {Your # Atlas picks come along as places to explore. Locate any of them on the map any time.}}",
     "visibilityLabel": "Who can see it",
     "visibilityPrivate": "Private",
     "visibilityPrivateHint": "Only you can see this trip.",

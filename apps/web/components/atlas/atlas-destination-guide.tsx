@@ -16,6 +16,7 @@ import {
 } from '@/components/atlas/atlas-guide-sections';
 import { HOME_SHEET_FRAME, HomeSheet } from '@/components/home/home-front-door';
 import { useTripCreation } from '@/components/trip-creation-provider';
+import { useAtlasTripPicks } from '@/hooks/use-atlas-trip-picks';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -46,6 +47,7 @@ export function AtlasDestinationGuideView({
   const g = useTranslations('atlas.guide');
   const locale = useLocale();
   const { openCreateTripIn } = useTripCreation();
+  const { picks, removePick } = useAtlasTripPicks();
   const hydrated = useHydrated();
   const index = useAtlasIndex();
   const country = useMemo(
@@ -169,13 +171,20 @@ export function AtlasDestinationGuideView({
           <Button
             className="h-11 bg-white px-6 text-sm font-semibold text-neutral-900 hover:bg-white/90"
             onClick={() => {
-              const dates = suggestAtlasTripDates(country.months, 9);
+              // This guide's picks come along as places (PRD 40.4); none, and the
+              // trip starts from the destination alone.
+              const guidePicks = picks.filter(
+                (pick) => pick.countryCode === countryCode && pick.destinationSlug === slug,
+              );
+              const dates = suggestAtlasTripDates(country.months, guidePicks.length || 9);
               openCreateTripIn({
+                atlasPicks: guidePicks,
                 countries: [countryCode],
                 description: `Based on Wikivoyage's ${guide.title} guide (CC BY-SA 4.0).`,
                 destinations: [{ name: destination.name }],
                 endDate: dates.endDate,
                 name: `${destination.name}, ${countryLabel}`,
+                onCreated: () => guidePicks.forEach((pick) => removePick(pick.id)),
                 startDate: dates.startDate,
               });
             }}

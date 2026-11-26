@@ -324,7 +324,11 @@ export function resolveProviderPlace(
   });
 }
 
-export function createCustomPlace(input: { name: string; note?: string | null }) {
+export function createCustomPlace(input: {
+  location?: { latitude: number; longitude: number } | null;
+  name: string;
+  note?: string | null;
+}) {
   return savedRequest<{ place: CanonicalPlace }>('/places/custom', {
     body: JSON.stringify(input),
     method: 'POST',

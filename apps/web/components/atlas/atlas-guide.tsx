@@ -23,6 +23,7 @@ import { HOME_SHEET_FRAME, HomeSheet } from '@/components/home/home-front-door';
 import { MediaFrame } from '@/components/media-frame';
 import { usePreferences } from '@/components/preferences-provider';
 import { useTripCreation } from '@/components/trip-creation-provider';
+import { useAtlasTripPicks } from '@/hooks/use-atlas-trip-picks';
 import { Button } from '@/components/ui/button';
 import { Chip, ChipGroup } from '@/components/ui/chip';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
@@ -90,6 +91,7 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
   const locale = useLocale();
   const { preferences, preferredCurrency } = usePreferences();
   const { openCreateTripIn } = useTripCreation();
+  const { picks, removePick } = useAtlasTripPicks();
   const hydrated = useHydrated();
   const index = useAtlasIndex();
   const country = useMemo(
@@ -239,14 +241,18 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
           <Button
             className="h-11 bg-white px-6 text-sm font-semibold text-neutral-900 hover:bg-white/90"
             onClick={() => {
-              const dates = suggestAtlasTripDates(country.months, 12);
+              // Every pick in this country comes along as a place (PRD 40.4).
+              const countryPicks = picks.filter((pick) => pick.countryCode === countryCode);
+              const dates = suggestAtlasTripDates(country.months, countryPicks.length || 12);
               openCreateTripIn({
+                atlasPicks: countryPicks,
                 countries: [countryCode],
                 description: guide.data
                   ? `Based on Wikivoyage's ${guide.data.title} guide (CC BY-SA 4.0).`
                   : undefined,
                 endDate: dates.endDate,
                 name: country.name,
+                onCreated: () => countryPicks.forEach((pick) => removePick(pick.id)),
                 startDate: dates.startDate,
               });
             }}

@@ -1825,5 +1825,16 @@
         "Buttons, fields, search, and tabs across Trove now share one softer, rounder shape, so every screen feels the same."
       ]
     }
+  },
+  {
+    "id": "atlas-plan-trip-brings-picks",
+    "date": "2026-11-26",
+    "version": "1.52.4",
+    "summaries": {
+      "en": [
+        "Planning a trip from an Atlas guide now brings your trip picks along as places to explore.",
+        "Pin any of them to the map later with Locate this place."
+      ]
+    }
   }
 ]

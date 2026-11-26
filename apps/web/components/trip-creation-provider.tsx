@@ -22,6 +22,7 @@ import { TripForm } from '@/components/trip-form';
 import { Sheet, SheetContent, SheetHeading } from '@/components/ui/sheet';
 import { useAiPlanningLifecycle } from '@/lib/ai-planning/use-lifecycle';
 import * as Icons from '@/lib/icons';
+import type { AtlasTripPick } from '@/lib/atlas/picks';
 import type { Trip } from '@/lib/trips/api';
 import { cn } from '@/lib/utils';
 
@@ -33,11 +34,15 @@ import { cn } from '@/lib/utils';
 const LANDING_HOLD_MS = 800;
 
 export type TripCreationPrefill = {
+  /** Atlas picks the new trip carries as Custom Places, added once it is created. */
+  atlasPicks?: readonly AtlasTripPick[];
   countries?: readonly string[];
   description?: string;
   destinations?: readonly { name: string }[];
   endDate?: string;
   name?: string;
+  /** Runs once the trip and its places exist, before the form closes. */
+  onCreated?: (trip: Trip) => void;
   startDate?: string;
 };
 

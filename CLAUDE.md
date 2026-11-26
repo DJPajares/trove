@@ -175,6 +175,8 @@ Example:
 
 Keep completion responses short.
 
+Whenever merging a PR requires a manual follow-up step from the user (such as running a Prisma migration, triggering a sync/workflow, or adding/updating an environment variable or secret), highlight it clearly in a **Post-merge action** section in the completion response.
+
 For chat-originated tasks without a Linear issue, briefly summarize the changes
 and validation. Include a PR link if one was created. Omit Linear task links and
 the Current/Next format; do not propose follow-up Linear tasks unless requested.

@@ -4596,6 +4596,7 @@
     "description": "Where to go, when to go, and what to eat when you get there.",
     "searchLabel": "Search Atlas",
     "searchPlaceholder": "Search countries",
+    "clearSearch": "Clear search",
     "browse": "Browse Atlas",
     "surpriseMe": "Surprise me",
     "tabs": {

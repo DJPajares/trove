@@ -9,7 +9,12 @@ import { addTripPlace, updateTripPlace } from '@/lib/trip-places/api';
  * bulk; the traveller connects any of them later with Locate, one explicit
  * lookup at a time. A pick that fails is skipped rather than failing the trip.
  */
-export async function addAtlasPicksToTrip(tripId: string, picks: readonly AtlasTripPick[]) {
+export async function addAtlasPicksToTrip(
+  tripId: string,
+  picks: readonly AtlasTripPick[],
+  /** Must Go for the traveller's own picks; Interested for the guide's suggestions. */
+  priority: 'interested' | 'must_go' = 'must_go',
+) {
   let added = 0;
   for (const pick of picks) {
     try {
@@ -21,7 +26,7 @@ export async function addAtlasPicksToTrip(tripId: string, picks: readonly AtlasT
       const { tripPlace } = await addTripPlace(tripId, place.id);
       await updateTripPlace(tripId, tripPlace.id, {
         categories: [atlasPickCategory(pick.kind)],
-        priority: 'must_go',
+        priority,
       }).catch(() => undefined);
       added += 1;
     } catch {

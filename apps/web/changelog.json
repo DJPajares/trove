@@ -1836,5 +1836,16 @@
         "Pin any of them to the map later with Locate this place."
       ]
     }
+  },
+  {
+    "id": "atlas-plan-trip-brings-guide-places",
+    "date": "2026-11-26",
+    "version": "1.53.0",
+    "summaries": {
+      "en": [
+        "Planning a trip from an Atlas guide now fills it with the guide's sights, activities and places to eat, ready to sort into your days.",
+        "Your own trip picks still lead as Must Go."
+      ]
+    }
   }
 ]

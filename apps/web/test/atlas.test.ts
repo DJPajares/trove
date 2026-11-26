@@ -1,4 +1,9 @@
-import { atlasMonthRating, type AtlasMonthClimate } from '@trove/types';
+import {
+  atlasMonthRating,
+  type AtlasListingKind,
+  type AtlasMonthClimate,
+  type AtlasSection,
+} from '@trove/types';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -10,6 +15,7 @@ import {
   type AtlasCountry,
 } from '@/lib/atlas';
 import { formatMonthRuns, wetDaysInTen } from '@/lib/atlas/format';
+import { atlasGuidePlaces } from '@/lib/atlas/picks';
 import { townAtlasGuide } from '@/lib/atlas/trip-guides';
 import { extractListCards, parseNamedListItem } from '@/lib/atlas/cards';
 import {
@@ -258,5 +264,62 @@ describe('townAtlasGuide', () => {
   it('never links a near miss', () => {
     expect(townAtlasGuide('Cebu', guides)).toBeNull();
     expect(townAtlasGuide('Bohol Sea', guides)).toBeNull();
+  });
+});
+
+describe('atlasGuidePlaces', () => {
+  const context = {
+    countryCode: 'PH',
+    countryName: 'Philippines',
+    destinationName: 'El Nido',
+    destinationSlug: 'el-nido',
+    guideTitle: 'El Nido',
+  };
+  const listing = (kind: AtlasListingKind, name: string) => ({
+    type: 'listing' as const,
+    listing: {
+      address: null,
+      alt: null,
+      content: null,
+      kind,
+      latitude: null,
+      longitude: null,
+      name,
+    },
+  });
+  const sections: AtlasSection[] = [
+    {
+      blocks: [listing('sleep', 'Hostel'), listing('eat', 'Trattoria')],
+      id: 'sleep',
+      title: 'Sleep',
+    },
+    {
+      blocks: [listing('see', 'Big Lagoon'), listing('do', 'Island hopping')],
+      id: 'see',
+      title: 'See',
+    },
+    {
+      blocks: [listing('drink', 'Bar'), listing('see', 'Big Lagoon')],
+      id: 'drink',
+      title: 'Drink',
+    },
+  ];
+
+  it('orders See, Do, Eat, Drink, skips Sleep and duplicates', () => {
+    expect(atlasGuidePlaces(sections, context).map((place) => place.name)).toEqual([
+      'Big Lagoon',
+      'Island hopping',
+      'Trattoria',
+      'Bar',
+    ]);
+  });
+
+  it('skips what the picks already carry and keeps the trip within 24 places', () => {
+    const [lagoon] = atlasGuidePlaces(sections, context);
+    expect(atlasGuidePlaces(sections, context, [lagoon!]).map((place) => place.name)).not.toContain(
+      'Big Lagoon',
+    );
+    const many = Array.from({ length: 23 }, (_, index) => ({ ...lagoon!, id: `pick-${index}` }));
+    expect(atlasGuidePlaces(sections, context, many)).toHaveLength(1);
   });
 });

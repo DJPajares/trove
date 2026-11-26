@@ -721,7 +721,7 @@
     "countries": "Which countries?",
     "countriesPlaceholder": "Search countries",
     "countriesHint": "Pick every country this trip visits.",
-    "atlasPicksCarried": "{count, plural, one {Your Atlas pick comes along as a place to explore. Locate it on the map any time.} other {Your # Atlas picks come along as places to explore. Locate any of them on the map any time.}}",
+    "atlasPlacesCarried": "{picks, plural, =0 {} one {Your Atlas pick comes along as Must Go} other {Your # Atlas picks come along as Must Go}}{picks, plural, =0 {{guide, plural, one {# place from the guide comes along to consider} other {# places from the guide come along to consider}}} other {{guide, plural, =0 {} one {, plus # place from the guide to consider} other {, plus # places from the guide to consider}}}}. {total, plural, one {Locate it on the map any time.} other {Locate any of them on the map any time.}}",
     "visibilityLabel": "Who can see it",
     "visibilityPrivate": "Private",
     "visibilityPrivateHint": "Only you can see this trip.",

@@ -2794,7 +2794,7 @@ Make it a trip turns guide content into a reviewable draft that becomes an ordin
 
 ### Routes
 
-- **From picks.** While reading, the traveller adds listings to **Trip picks**, a tray that spans guides and groups picks by destination. Picks stay on the device until used or cleared; they are not Saved Places and are not synced. A tray holds at most 24 picks, the real-place limit in Section 7.6.2. Making a trip from a guide with no picks uses that guide's destination only.
+- **From picks.** While reading, the traveller adds listings to **Trip picks**, a tray that spans guides and groups picks by destination. Picks stay on the device until used or cleared; they are not Saved Places and are not synced. A tray holds at most 24 picks, the real-place limit in Section 7.6.2.
 - **From an itinerary article.** A Wikivoyage itinerary article whose day structure Trove recognises offers **Use this itinerary**, preserving its days and stop order. When its structure is not recognised, its listings are offered as picks instead.
 - **With AI.** **Plan with AI** hands the destination and picks to AI-assisted trip creation (Section 7.6) as Must Go places. That route follows Section 7.6 entirely, including credits; the two routes above use no model call and no AI credit.
 
@@ -2825,7 +2825,7 @@ The draft is reviewed and applied exactly as in Section 7.6.4: immutable, scored
 - Stops do not copy guide prose into notes. A Trip Place made from a listing keeps a reference to it, so its details can show **From the guide** and open that listing in Atlas.
 - Apply clears the picks it used.
 
-**Plan a trip here** remains available as the lightest path: manual trip creation prefilled with the destination and the suggested dates.
+**Plan a trip here** remains available as the lightest path: manual trip creation prefilled with the destination and the suggested dates. It carries the guide's places without grounding them: that guide's picks become Must Go Custom Places, and the guide's own listings fill the rest of the 24-place limit as Interested Custom Places (See and Do first, then Eat and Drink, never Sleep). Each keeps the listing's name and coordinates where the guide gives them; no provider request runs, and the traveller connects any of them later with Locate (one explicit lookup each). Apply clears the picks it used.
 
 ## 40.5 Trips, Saved, Search, and Offline
 

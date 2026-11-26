@@ -1,4 +1,4 @@
-export type ProductionOperation = 'migrate' | 'reconcile';
+export type ProductionOperation = 'atlas' | 'migrate' | 'reconcile';
 
 function parseProductionUrl(value: string | undefined, name: 'DATABASE_URL' | 'DIRECT_URL') {
   if (!value?.trim()) throw new Error(`${name} is required in .env.production.`);
@@ -41,7 +41,7 @@ export function validateProductionEnvironment(
     throw new Error('DIRECT_URL must use a Supabase direct or session connection on port 5432.');
   }
 
-  if (operation === 'reconcile') {
+  if (operation === 'reconcile' || operation === 'atlas') {
     const runtime = parseProductionUrl(environment.DATABASE_URL, 'DATABASE_URL');
 
     if (!runtime.hostname.endsWith('.pooler.supabase.com') || runtime.port !== '6543') {
@@ -52,7 +52,13 @@ export function validateProductionEnvironment(
       throw new Error('DATABASE_URL must set pgbouncer=true.');
     }
 
-    if (options.activeRefresh && !environment.PEXELS_API_KEY?.trim()) {
+    if (operation === 'atlas' && !environment.ATLAS_USER_AGENT?.trim()) {
+      throw new Error(
+        'ATLAS_USER_AGENT is required in .env.production: Wikimedia throttles clients without one.',
+      );
+    }
+
+    if (operation === 'reconcile' && options.activeRefresh && !environment.PEXELS_API_KEY?.trim()) {
       throw new Error('PEXELS_API_KEY is required for an active production refresh.');
     }
   }

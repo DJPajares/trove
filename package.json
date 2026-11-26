@@ -25,6 +25,8 @@
     "db:validate-env": "pnpm --filter @trove/db db:validate-env",
     "editorial-images:reconcile": "pnpm --filter @trove/api editorial-images:reconcile",
     "editorial-images:reconcile:prod": "pnpm --filter @trove/api production:operation reconcile",
+    "atlas:sync": "pnpm --filter @trove/api atlas:sync",
+    "atlas:sync:prod": "pnpm --filter @trove/types --filter @trove/db build && pnpm --filter @trove/api production:operation atlas",
     "ai:reset-quota": "pnpm --filter @trove/api ai-planning:reset-quota"
   },
   "lint-staged": {

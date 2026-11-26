@@ -19,12 +19,13 @@ const PRODUCTION_ENVIRONMENT_KEYS = [
   'SHADOW_DATABASE_URL',
   'EDITORIAL_IMAGES_DISABLED',
   'EDITORIAL_IMAGE_HOURLY_BUDGET',
+  'ATLAS_USER_AGENT',
   'ENVIRONMENT',
 ] as const;
 
 function parseOperation(value: string | undefined): ProductionOperation {
-  if (value === 'migrate' || value === 'reconcile') return value;
-  throw new Error('Choose either the migrate or reconcile production operation.');
+  if (value === 'atlas' || value === 'migrate' || value === 'reconcile') return value;
+  throw new Error('Choose the atlas, migrate or reconcile production operation.');
 }
 
 function loadProductionEnvironment() {
@@ -57,7 +58,12 @@ async function run() {
     operation === 'migrate'
       ? ['migrate', 'deploy', ...argumentsForOperation]
       : [
-          resolve(repositoryRoot, 'apps/api/scripts/reconcile-editorial-images.ts'),
+          resolve(
+            repositoryRoot,
+            operation === 'atlas'
+              ? 'apps/api/scripts/sync-atlas.ts'
+              : 'apps/api/scripts/reconcile-editorial-images.ts',
+          ),
           ...argumentsForOperation,
         ];
   const cwd = operation === 'migrate' ? resolve(repositoryRoot, 'packages/db') : repositoryRoot;

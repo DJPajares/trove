@@ -6,7 +6,9 @@
  *
  * Countries: each Wikivoyage article title, the city typical conditions are
  * measured at, and twelve months of conditions averaged over the last five
- * complete years, upserted into `atlas_countries`. Run it about once a year.
+ * complete years, upserted into `atlas_countries`. Conditions already stored
+ * for the current five years are reused, so the climate archive is asked only
+ * once a new year completes. Run it about once a year.
  * Answers from Wikivoyage and the climate archive are cached on disk
  * (ATLAS_CACHE_DIR, default node_modules/.cache/atlas), so a run stopped by a
  * rate limit resumes where it left off; a country with no pattern yet is
@@ -27,7 +29,8 @@ import { getPrismaClient } from '@trove/db';
 import type { AtlasClimateNorm } from '@trove/types';
 
 import { resetAtlasCountryMemory } from '../src/services/atlas-countries.js';
-import { getAtlasGuide } from '../src/services/atlas-guides.js';
+import { getAtlasGuide, resetAtlasGuideFailures } from '../src/services/atlas-guides.js';
+import { getProviderCallTotal } from '../src/services/provider-usage.js';
 import { ATLAS_CITIES } from './atlas-cities.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -38,6 +41,9 @@ const REFRESH_GUIDES = process.argv.includes('--refresh');
 const WIKIVOYAGE_API = 'https://en.wikivoyage.org/w/api.php';
 const ARCHIVE_URL = 'https://archive-api.open-meteo.com/v1/archive';
 const PAUSE_MS = 1_500;
+/** Whole articles are heavier than title lookups: one every few seconds. */
+const GUIDE_PAUSE_MS = 5_000;
+const GUIDE_RETRY_WAITS_MS = [30_000, 60_000, 120_000, 240_000];
 
 type Sample = { max: number; min: number; precipitation: number };
 
@@ -201,13 +207,23 @@ async function main() {
 
   const years = climateYears(new Date());
   const prisma = getPrismaClient();
+  // Conditions already stored for the same five years are kept as they are,
+  // so a run after the seed migration asks the climate archive nothing.
+  const stored = new Map(
+    (await prisma.atlasCountry.findMany()).map((row) => [row.countryCode, row]),
+  );
   let withoutClimate = 0;
   let written = 0;
   for (const code of codes) {
     const title = titles.get(code);
     if (!title) continue;
     const city = ATLAS_CITIES[code]!;
-    const climate = await climateFor(code, city.latitude, city.longitude, years);
+    const existing = stored.get(code);
+    const current =
+      existing?.climate && existing.climateYearTo === years.to
+        ? (existing.climate as AtlasClimateNorm[])
+        : null;
+    const climate = current ?? (await climateFor(code, city.latitude, city.longitude, years));
     if (!climate) withoutClimate += 1;
     const data = {
       climateCity: city.city,
@@ -235,15 +251,23 @@ async function main() {
   for (const code of codes) {
     const title = titles.get(code);
     if (!title) continue;
-    const guide = await getAtlasGuide(code, {
-      force: REFRESH_GUIDES,
-      title,
-      userAgent: USER_AGENT,
-    });
+    // Wikimedia answers a burst of whole-article requests with 429, so each
+    // country is retried after a growing wait rather than skipped.
+    let guide = null;
+    const callsBefore = getProviderCallTotal();
+    for (let attempt = 0; attempt <= GUIDE_RETRY_WAITS_MS.length; attempt += 1) {
+      resetAtlasGuideFailures();
+      guide = await getAtlasGuide(code, { force: REFRESH_GUIDES, title, userAgent: USER_AGENT });
+      if (guide || attempt === GUIDE_RETRY_WAITS_MS.length) break;
+      const wait = GUIDE_RETRY_WAITS_MS[attempt]!;
+      process.stdout.write(`(${code}: waiting ${wait / 1_000}s) `);
+      await sleep(wait);
+    }
     if (guide) guides += 1;
     else missing += 1;
     process.stdout.write(`${code}${guide ? '' : '?'} `);
-    await sleep(PAUSE_MS);
+    // A guide already stored asked Wikivoyage nothing, so needs no pause.
+    if (getProviderCallTotal() > callsBefore) await sleep(GUIDE_PAUSE_MS);
   }
   console.log(`\n${guides} guides stored, ${missing} could not be read this run.`);
 }

@@ -8,11 +8,12 @@ import {
   Trees,
   Utensils,
   Waves,
+  X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ATLAS_LICENCE, wikivoyageArticleUrl } from '@trove/types';
 
 import { AtlasCover } from '@/components/atlas/atlas-cover';
@@ -64,6 +65,26 @@ function countrySubject(country: AtlasCountry) {
   return { name: englishNames.of(country.countryCode) ?? country.name };
 }
 
+/** Whether a sticky element has reached its docked offset: one rect read per scroll event. */
+function useDocked(element: HTMLElement | null) {
+  const [docked, setDocked] = useState(false);
+  useEffect(() => {
+    if (!element) return;
+    const update = () => {
+      const offset = Number.parseFloat(getComputedStyle(element).top) || 0;
+      setDocked(element.getBoundingClientRect().top <= offset + 0.5);
+    };
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, [element]);
+  return docked;
+}
+
 /**
  * Atlas's front page (PRD 40.2): a cover, search, Surprise me, and three ways
  * in — Where, When, and What. Everything here reads the bundled index, so
@@ -84,6 +105,9 @@ export function AtlasHome() {
   const loading = !hydrated || index.isPending;
   const unavailable = !loading && !index.data;
   const [query, setQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [controls, setControls] = useState<HTMLDivElement | null>(null);
+  const docked = useDocked(controls);
   const [region, setRegion] = useState<AtlasRegion | 'all'>('all');
   const [tab, setTab] = useState<'where' | 'when' | 'what'>('where');
   const [theme, setTheme] = useState<AtlasTheme>('food');
@@ -127,31 +151,58 @@ export function AtlasHome() {
       />
 
       <HomeSheet>
-        <div className="flex flex-col gap-8">
-          <div className="flex flex-wrap items-center gap-3">
-            <SearchField
-              label={t('searchLabel')}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t('searchPlaceholder')}
-              value={query}
-              wrapperClassName="min-w-0 flex-1 sm:max-w-xl"
-            />
-            <Button
-              className="shrink-0"
-              disabled={!countries.length}
-              onClick={() => {
-                const picked = pickSurpriseCountry(countries);
-                if (picked) router.push(`/atlas/${picked.countryCode}`);
-              }}
-              type="button"
-              variant="outline"
-            >
-              <Shuffle aria-hidden="true" className="size-4" />
-              {t('surpriseMe')}
-            </Button>
-          </div>
+        <Tabs onValueChange={(value) => setTab(value as 'where' | 'when' | 'what')} value={tab}>
+          {/* Search is the way in, so it leads the sheet and docks with the
+              three ways to browse: a long A–Z list never scrolls it away. */}
+          <div
+            className="sticky top-[var(--safe-top)] z-20 -mx-[var(--gutter-inline-start)] flex flex-col gap-3 border-b border-transparent bg-background/95 px-[var(--gutter-inline-start)] pt-3 pb-2 backdrop-blur transition-[border-color] duration-[var(--motion-standard)] data-docked:border-border-subtle motion-reduce:transition-none md:top-[var(--header-height)]"
+            data-docked={docked || undefined}
+            data-slot="atlas-controls"
+            ref={setControls}
+          >
+            <div className="flex items-center gap-2 sm:max-w-2xl">
+              <div className="relative min-w-0 flex-1">
+                <SearchField
+                  className="h-12 rounded-full border-border-subtle bg-card pr-12 pl-11 text-base shadow-[var(--shadow-card)] md:text-base [&::-webkit-search-cancel-button]:hidden"
+                  label={t('searchLabel')}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={t('searchPlaceholder')}
+                  ref={searchRef}
+                  value={query}
+                  wrapperClassName="[&>svg]:left-4 [&>svg]:size-[1.125rem]"
+                />
+                {query ? (
+                  <Button
+                    aria-label={t('clearSearch')}
+                    className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded-full text-muted-foreground"
+                    onClick={() => {
+                      setQuery('');
+                      searchRef.current?.focus();
+                    }}
+                    size="icon"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <X aria-hidden="true" />
+                  </Button>
+                ) : null}
+              </div>
+              <Button
+                className="size-12 shrink-0 rounded-full bg-card px-0 shadow-[var(--shadow-card)] sm:w-auto sm:px-5"
+                disabled={!countries.length}
+                onClick={() => {
+                  const picked = pickSurpriseCountry(countries);
+                  if (picked) router.push(`/atlas/${picked.countryCode}`);
+                }}
+                title={t('surpriseMe')}
+                type="button"
+                variant="outline"
+              >
+                <Shuffle aria-hidden="true" className="size-[1.125rem]" />
+                <span className="sr-only sm:not-sr-only">{t('surpriseMe')}</span>
+              </Button>
+            </div>
 
-          <Tabs onValueChange={(value) => setTab(value as 'where' | 'when' | 'what')} value={tab}>
             <TabsList aria-label={t('browse')} className="w-full max-w-sm">
               <TabsTab className="flex-1" value="where">
                 {t('tabs.where')}
@@ -164,130 +215,128 @@ export function AtlasHome() {
               </TabsTab>
               <TabsIndicator />
             </TabsList>
+          </div>
 
-            <TabsPanel className="mt-8 flex flex-col gap-10" value="where">
-              {!searching && featured.length ? (
-                <section aria-labelledby="atlas-featured">
-                  <h2
-                    className="font-journal text-[2rem] leading-none font-normal"
-                    id="atlas-featured"
-                  >
-                    {t('greatIn', { month: monthName(upcoming, locale) })}
-                  </h2>
-                  <p className="mt-2 text-sm text-muted-foreground">{t('greatInDescription')}</p>
-                  <ScrollShadow
-                    className="interaction-scrollbar -mx-[var(--gutter-inline-start)] mt-4 flex snap-x scroll-px-[var(--gutter-inline-start)] gap-3 px-[var(--gutter-inline-start)] pb-2"
-                    orientation="horizontal"
-                    render={<ul />}
-                  >
-                    {featured.map((country) => {
-                      const climate = monthClimate(country, upcoming);
-                      return (
-                        <li className="w-56 shrink-0 snap-start" key={country.countryCode}>
-                          <Link
-                            className="group flex h-full flex-col overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-card outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
-                            href={`/atlas/${country.countryCode}`}
-                          >
-                            <MediaFrame
-                              alt=""
-                              className="aspect-[4/3] w-full rounded-none"
-                              dataSlot="atlas-featured-media"
-                              sizes="14rem"
-                              source={resolveTripMediaSource({ editorial: photoFor(country) })}
-                              variant="card"
-                            />
-                            <span className="flex flex-col gap-0.5 px-3.5 pt-3 pb-3.5">
-                              <span className="font-journal text-2xl leading-tight">
-                                {country.name}
-                              </span>
-                              {climate ? (
-                                <span className="text-sm text-muted-foreground tabular-nums">
-                                  {t('typicalTemps', {
-                                    high: temperature(climate.temperatureMaxC),
-                                    low: temperature(climate.temperatureMinC),
-                                  })}
-                                  {' · '}
-                                  {country.climateCity}
-                                </span>
-                              ) : null}
-                            </span>
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ScrollShadow>
-                </section>
-              ) : null}
-
-              <section aria-labelledby="atlas-world" className="flex flex-col gap-4">
-                <h2 className="font-journal text-[2rem] leading-none font-normal" id="atlas-world">
-                  {t('browseWorld')}
-                </h2>
-                <ChipGroup
-                  aria-label={t('regionFilter')}
-                  onValueChange={(value) =>
-                    setRegion((value[0] as AtlasRegion | undefined) ?? 'all')
-                  }
-                  value={[region]}
+          <TabsPanel className="mt-8 flex flex-col gap-10" value="where">
+            {!searching && featured.length ? (
+              <section aria-labelledby="atlas-featured">
+                <h2
+                  className="font-journal text-[2rem] leading-none font-normal"
+                  id="atlas-featured"
                 >
-                  <Chip className="min-h-9 px-3.5 text-sm" value="all">
-                    {t('regions.all')}
-                  </Chip>
-                  {ATLAS_REGIONS.map((option) => (
-                    <Chip className="min-h-9 px-3.5 text-sm" key={option} value={option}>
-                      {t(`regions.${option}`)}
-                    </Chip>
-                  ))}
-                </ChipGroup>
-                {unavailable ? (
-                  <Empty className="rounded-[var(--radius-xl)] border border-border-subtle">
-                    <EmptyHeader>
-                      <EmptyTitle>{t('unavailable')}</EmptyTitle>
-                      <EmptyDescription>{t('guide.errorDescription')}</EmptyDescription>
-                    </EmptyHeader>
-                    <Button onClick={() => void index.refetch()} type="button" variant="outline">
-                      {t('guide.tryAgain')}
-                    </Button>
-                  </Empty>
-                ) : loading ? (
-                  <div aria-hidden="true" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {Array.from({ length: 9 }, (_, index) => (
-                      <Skeleton className="h-14" key={index} />
-                    ))}
-                  </div>
-                ) : filtered.length ? (
-                  <CountryList countries={filtered} locale={locale} />
-                ) : (
-                  <p className="text-muted-foreground">{t('noMatches', { query: query.trim() })}</p>
-                )}
+                  {t('greatIn', { month: monthName(upcoming, locale) })}
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground">{t('greatInDescription')}</p>
+                <ScrollShadow
+                  className="interaction-scrollbar -mx-[var(--gutter-inline-start)] mt-4 flex snap-x scroll-px-[var(--gutter-inline-start)] gap-3 px-[var(--gutter-inline-start)] pb-2"
+                  orientation="horizontal"
+                  render={<ul />}
+                >
+                  {featured.map((country) => {
+                    const climate = monthClimate(country, upcoming);
+                    return (
+                      <li className="w-56 shrink-0 snap-start" key={country.countryCode}>
+                        <Link
+                          className="group flex h-full flex-col overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-card outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+                          href={`/atlas/${country.countryCode}`}
+                        >
+                          <MediaFrame
+                            alt=""
+                            className="aspect-[4/3] w-full rounded-none"
+                            dataSlot="atlas-featured-media"
+                            sizes="14rem"
+                            source={resolveTripMediaSource({ editorial: photoFor(country) })}
+                            variant="card"
+                          />
+                          <span className="flex flex-col gap-0.5 px-3.5 pt-3 pb-3.5">
+                            <span className="font-journal text-2xl leading-tight">
+                              {country.name}
+                            </span>
+                            {climate ? (
+                              <span className="text-sm text-muted-foreground tabular-nums">
+                                {t('typicalTemps', {
+                                  high: temperature(climate.temperatureMaxC),
+                                  low: temperature(climate.temperatureMinC),
+                                })}
+                                {' · '}
+                                {country.climateCity}
+                              </span>
+                            ) : null}
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ScrollShadow>
               </section>
-            </TabsPanel>
+            ) : null}
 
-            <TabsPanel className="mt-8" value="when">
-              <MonthBrowser
-                climateYears={index.data?.climateYears ?? null}
-                countries={
-                  searching ? countries.filter((c) => matchesAtlasQuery(c, query)) : countries
-                }
-                locale={locale}
-                month={month}
-                onMonthChange={setMonth}
-                temperature={temperature}
-              />
-            </TabsPanel>
+            <section aria-labelledby="atlas-world" className="flex flex-col gap-4">
+              <h2 className="font-journal text-[2rem] leading-none font-normal" id="atlas-world">
+                {t('browseWorld')}
+              </h2>
+              <ChipGroup
+                aria-label={t('regionFilter')}
+                onValueChange={(value) => setRegion((value[0] as AtlasRegion | undefined) ?? 'all')}
+                value={[region]}
+              >
+                <Chip className="min-h-9 px-3.5 text-sm" value="all">
+                  {t('regions.all')}
+                </Chip>
+                {ATLAS_REGIONS.map((option) => (
+                  <Chip className="min-h-9 px-3.5 text-sm" key={option} value={option}>
+                    {t(`regions.${option}`)}
+                  </Chip>
+                ))}
+              </ChipGroup>
+              {unavailable ? (
+                <Empty className="rounded-[var(--radius-xl)] border border-border-subtle">
+                  <EmptyHeader>
+                    <EmptyTitle>{t('unavailable')}</EmptyTitle>
+                    <EmptyDescription>{t('guide.errorDescription')}</EmptyDescription>
+                  </EmptyHeader>
+                  <Button onClick={() => void index.refetch()} type="button" variant="outline">
+                    {t('guide.tryAgain')}
+                  </Button>
+                </Empty>
+              ) : loading ? (
+                <div aria-hidden="true" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {Array.from({ length: 9 }, (_, index) => (
+                    <Skeleton className="h-14" key={index} />
+                  ))}
+                </div>
+              ) : filtered.length ? (
+                <CountryList countries={filtered} locale={locale} />
+              ) : (
+                <p className="text-muted-foreground">{t('noMatches', { query: query.trim() })}</p>
+              )}
+            </section>
+          </TabsPanel>
 
-            <TabsPanel className="mt-8" value="what">
-              <ThemeBrowser
-                active={tab === 'what'}
-                countries={countries}
-                locale={locale}
-                onThemeChange={setTheme}
-                query={query}
-                theme={theme}
-              />
-            </TabsPanel>
-          </Tabs>
-        </div>
+          <TabsPanel className="mt-8" value="when">
+            <MonthBrowser
+              climateYears={index.data?.climateYears ?? null}
+              countries={
+                searching ? countries.filter((c) => matchesAtlasQuery(c, query)) : countries
+              }
+              locale={locale}
+              month={month}
+              onMonthChange={setMonth}
+              temperature={temperature}
+            />
+          </TabsPanel>
+
+          <TabsPanel className="mt-8" value="what">
+            <ThemeBrowser
+              active={tab === 'what'}
+              countries={countries}
+              locale={locale}
+              onThemeChange={setTheme}
+              query={query}
+              theme={theme}
+            />
+          </TabsPanel>
+        </Tabs>
       </HomeSheet>
     </section>
   );

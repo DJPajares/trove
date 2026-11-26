@@ -1805,5 +1805,15 @@
         "Search now shows matching Atlas guides after your own trips and places."
       ]
     }
+  },
+  {
+    "id": "atlas-search-stays-in-reach",
+    "date": "2026-11-26",
+    "version": "1.52.1",
+    "summaries": {
+      "en": [
+        "Atlas search is easier to spot and stays at the top of the screen as you browse, with a quick way to clear it."
+      ]
+    }
   }
 ]

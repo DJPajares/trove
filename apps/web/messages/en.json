@@ -4623,7 +4623,11 @@
     "guide": {
       "back": "Atlas",
       "kicker": "Country guide · {region}",
-      "atAGlance": "At a glance",
+      "atAGlance": "Essential facts",
+      "inThisGuide": "In this guide",
+      "climatePattern": "Climate pattern",
+      "bestStretch": "Best stretch",
+      "chapterMeta": "Chapter {number} · {readingTime}",
       "currency": "Currency",
       "convert": "Convert",
       "timeZone": "Time zone",

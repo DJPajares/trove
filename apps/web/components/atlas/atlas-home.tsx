@@ -245,6 +245,13 @@ export function AtlasHome() {
   );
 }
 
+const SPARKLINE_COLOR = {
+  good: 'h-2.5 bg-[oklch(0.72_0.06_112)]',
+  great: 'h-3.5 bg-[oklch(0.455_0.07_115)]',
+  mixed: 'h-2 bg-[oklch(0.83_0.05_55)]',
+  off: 'h-1.5 bg-[oklch(0.88_0.015_78)]',
+} as const;
+
 function CountryList({
   countries,
   locale,
@@ -269,12 +276,19 @@ function CountryList({
               return (
                 <li key={country.countryCode}>
                   <Link
-                    className="flex min-h-14 items-center gap-3 rounded-[var(--radius-sm)] py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+                    className="group flex min-h-14 items-center gap-3 rounded-[var(--radius-sm)] py-2.5 outline-none transition-colors hover:text-brand focus-visible:ring-3 focus-visible:ring-ring/40"
                     href={`/atlas/${country.countryCode}`}
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">{country.name}</span>
-                      <span className="block truncate text-sm text-muted-foreground">
+                      <span className="flex items-baseline gap-2">
+                        <span className="shrink-0 font-mono text-[0.6875rem] tracking-wider text-muted-foreground">
+                          {country.countryCode}
+                        </span>
+                        <span className="truncate font-journal text-[1.375rem] leading-tight text-foreground transition-colors group-hover:text-brand">
+                          {country.name}
+                        </span>
+                      </span>
+                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                         {!country.months
                           ? t('noPattern')
                           : runs[0]?.length === 12
@@ -284,10 +298,21 @@ function CountryList({
                               : t('noGreatMonths')}
                       </span>
                     </span>
-                    <ChevronRight
-                      aria-hidden="true"
-                      className="size-4 shrink-0 text-muted-foreground"
-                    />
+                    {country.months ? (
+                      <span aria-hidden="true" className="flex h-4 shrink-0 items-end gap-[2px]">
+                        {country.months.map((entry) => (
+                          <span
+                            className={`w-[3px] rounded-full ${SPARKLINE_COLOR[entry.rating]}`}
+                            key={entry.month}
+                          />
+                        ))}
+                      </span>
+                    ) : (
+                      <ChevronRight
+                        aria-hidden="true"
+                        className="size-4 shrink-0 text-muted-foreground"
+                      />
+                    )}
                   </Link>
                 </li>
               );

@@ -1721,5 +1721,16 @@
         "Atlas now opens with the same curved cover photo and smooth entrance as Home and Trips."
       ]
     }
+  },
+  {
+    "id": "atlas-encyclopedia-spread",
+    "date": "2026-11-26",
+    "version": "1.47.0",
+    "summaries": {
+      "en": [
+        "Country guides in Atlas now read like a travel encyclopedia, with a sticky chapter index, essential facts dossier, and field-guide listing cards.",
+        "Browse the A–Z country list with twelve-month season strips to spot the best time to visit at a glance."
+      ]
+    }
   }
 ]

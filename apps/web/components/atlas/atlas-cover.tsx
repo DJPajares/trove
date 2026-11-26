@@ -23,6 +23,7 @@ export function AtlasCover({
   children,
   description,
   enter = true,
+  folio,
   kicker,
   media,
   title,
@@ -32,6 +33,8 @@ export function AtlasCover({
   description?: string;
   /** The page's entrance, already decided for this mount. */
   enter?: boolean;
+  /** Compact mono folio shown at the cover's top end (e.g. code and coordinates). */
+  folio?: string;
   kicker: string;
   media: TripMediaSource | null;
   title: string;
@@ -72,6 +75,12 @@ export function AtlasCover({
           <ChevronLeft aria-hidden="true" className="size-4" />
           {back.label}
         </Link>
+      ) : null}
+
+      {folio ? (
+        <p className="pointer-events-none absolute end-[var(--gutter-inline-end)] top-[calc(var(--safe-top)+1.25rem)] z-20 hidden font-mono text-xs tracking-wider text-white/75 uppercase tabular-nums sm:block md:top-[calc(var(--safe-top)+var(--header-height)+1.5rem)]">
+          {folio}
+        </p>
       ) : null}
 
       <div className={MEASURE}>

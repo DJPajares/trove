@@ -312,6 +312,40 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
                     <dd className="text-right font-medium">{bestStretchSummary}</dd>
                   </div>
                 ) : null}
+                {country.quickFacts?.languages.length ? (
+                  <div className="flex items-baseline justify-between gap-3 py-2.5">
+                    <dt className="shrink-0 text-muted-foreground">{g('languages')}</dt>
+                    <dd className="text-right font-medium">
+                      {new Intl.ListFormat(locale, { style: 'short', type: 'unit' }).format(
+                        country.quickFacts.languages,
+                      )}
+                    </dd>
+                  </div>
+                ) : null}
+                {country.quickFacts?.plugTypes.length ? (
+                  <div className="flex items-baseline justify-between gap-3 py-2.5">
+                    <dt className="shrink-0 text-muted-foreground">{g('plugTypes')}</dt>
+                    <dd className="text-right font-medium">
+                      {country.quickFacts.plugTypes.join(', ')}
+                    </dd>
+                  </div>
+                ) : null}
+                {country.quickFacts?.drivingSide ? (
+                  <div className="flex items-baseline justify-between gap-3 py-2.5">
+                    <dt className="shrink-0 text-muted-foreground">{g('drivingSide')}</dt>
+                    <dd className="text-right font-medium">
+                      {country.quickFacts.drivingSide === 'left'
+                        ? g('drivingSideLeft')
+                        : g('drivingSideRight')}
+                    </dd>
+                  </div>
+                ) : null}
+                {country.quickFacts?.nationalDish ? (
+                  <div className="flex items-baseline justify-between gap-3 py-2.5">
+                    <dt className="shrink-0 text-muted-foreground">{g('nationalDish')}</dt>
+                    <dd className="text-right font-medium">{country.quickFacts.nationalDish}</dd>
+                  </div>
+                ) : null}
               </dl>
             </section>
 
@@ -605,6 +639,7 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
 
                 <GuideCreditFooter
                   climateYears={index.data?.climateYears ?? null}
+                  hasQuickFacts={Boolean(country.quickFacts)}
                   title={guide.data.title}
                 />
               </>

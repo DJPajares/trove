@@ -5,6 +5,7 @@ import {
   type AtlasClimateNorm,
   type AtlasIndex,
   type AtlasIndexEntry,
+  type AtlasQuickFacts,
   type AtlasRegion,
 } from '@trove/types';
 
@@ -24,6 +25,7 @@ export type AtlasCountryRow = {
   countryCode: string;
   latitude: { toNumber(): number } | number;
   longitude: { toNumber(): number } | number;
+  quickFacts?: unknown;
   region: string;
   wikivoyageTitle: string;
 };
@@ -63,6 +65,31 @@ function isNorms(value: unknown): value is AtlasClimateNorm[] {
   );
 }
 
+function parseQuickFacts(value: unknown): AtlasQuickFacts | null {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as Partial<AtlasQuickFacts>;
+  const languages = Array.isArray(candidate.languages)
+    ? candidate.languages.filter(
+        (item): item is string => typeof item === 'string' && item.length > 0,
+      )
+    : [];
+  const plugTypes = Array.isArray(candidate.plugTypes)
+    ? candidate.plugTypes.filter(
+        (item): item is string => typeof item === 'string' && item.length > 0,
+      )
+    : [];
+  const drivingSide =
+    candidate.drivingSide === 'left' || candidate.drivingSide === 'right'
+      ? candidate.drivingSide
+      : null;
+  const nationalDish =
+    typeof candidate.nationalDish === 'string' && candidate.nationalDish.length > 0
+      ? candidate.nationalDish
+      : null;
+  if (!languages.length && !plugTypes.length && !drivingSide && !nationalDish) return null;
+  return { drivingSide, languages, nationalDish, plugTypes };
+}
+
 export function toAtlasIndex(rows: readonly AtlasCountryRow[]): AtlasIndex {
   let climateYears: AtlasIndex['climateYears'] = null;
   const countries = rows.flatMap((row): AtlasIndexEntry[] => {
@@ -71,6 +98,7 @@ export function toAtlasIndex(rows: readonly AtlasCountryRow[]): AtlasIndex {
     if (months && row.climateYearFrom && row.climateYearTo && !climateYears) {
       climateYears = { from: row.climateYearFrom, to: row.climateYearTo };
     }
+    const quickFacts = parseQuickFacts(row.quickFacts);
     return [
       {
         climateCity: row.climateCity,
@@ -78,6 +106,7 @@ export function toAtlasIndex(rows: readonly AtlasCountryRow[]): AtlasIndex {
         latitude: toNumber(row.latitude),
         longitude: toNumber(row.longitude),
         months,
+        ...(quickFacts ? { quickFacts } : {}),
         region: row.region as AtlasRegion,
         wikivoyageTitle: row.wikivoyageTitle,
       },

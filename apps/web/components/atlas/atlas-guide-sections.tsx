@@ -307,9 +307,11 @@ export function GuideChapters({
 
 export function GuideCreditFooter({
   climateYears,
+  hasQuickFacts = false,
   title,
 }: Readonly<{
   climateYears?: { from: number; to: number } | null;
+  hasQuickFacts?: boolean;
   title: string;
 }>) {
   const g = useTranslations('atlas.guide');
@@ -337,6 +339,7 @@ export function GuideCreditFooter({
         })}
       </p>
       {climateYears ? <p className="mt-1">{g('climateCredit', climateYears)}</p> : null}
+      {hasQuickFacts ? <p className="mt-1">{g('wikidataCredit')}</p> : null}
     </footer>
   );
 }

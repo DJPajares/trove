@@ -678,6 +678,8 @@ model AtlasCountry {
   climate         Json?
   climateYearFrom Int?         @map("climate_year_from") @db.SmallInt
   climateYearTo   Int?         @map("climate_year_to") @db.SmallInt
+  /// Optional CC0 Wikidata quick facts `{ languages, plugTypes, drivingSide, nationalDish }`.
+  quickFacts      Json?        @map("quick_facts")
   updatedAt       DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
   guides          AtlasGuide[]
 

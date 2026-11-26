@@ -24,6 +24,16 @@ export type AtlasMonthClimate = {
   rating: AtlasMonthRating;
 };
 
+export type AtlasDrivingSide = 'left' | 'right';
+
+/** CC0 quick facts from Wikidata, synced once per country during `atlas:sync` (PRD 40.3). */
+export type AtlasQuickFacts = {
+  drivingSide: AtlasDrivingSide | null;
+  languages: string[];
+  nationalDish: string | null;
+  plugTypes: string[];
+};
+
 export type AtlasIndexEntry = {
   /** ISO 3166-1 alpha-2. Names come from `Intl.DisplayNames` in the reader's locale. */
   countryCode: string;
@@ -36,6 +46,8 @@ export type AtlasIndexEntry = {
   longitude: number;
   /** Twelve months, January first, or null where no pattern could be built. */
   months: AtlasMonthClimate[] | null;
+  /** Optional CC0 quick facts from Wikidata (languages, plug type, driving side, national dish). */
+  quickFacts?: AtlasQuickFacts | null;
 };
 
 /** What `GET /atlas/countries` answers. */

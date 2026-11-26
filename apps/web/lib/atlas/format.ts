@@ -36,3 +36,10 @@ export function formatMonthRuns(runs: readonly number[][], locale: string) {
 export function readingMinutes(words: number) {
   return Math.max(1, Math.round(words / 220));
 }
+
+/** "4.71°N 74.07°W": compact field-guide coordinates for a destination folio. */
+export function formatCoordinates(latitude: number, longitude: number) {
+  const lat = `${Math.abs(latitude).toFixed(2)}°${latitude >= 0 ? 'N' : 'S'}`;
+  const lng = `${Math.abs(longitude).toFixed(2)}°${longitude >= 0 ? 'E' : 'W'}`;
+  return `${lat} ${lng}`;
+}

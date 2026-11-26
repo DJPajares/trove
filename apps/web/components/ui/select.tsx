@@ -91,7 +91,7 @@ function SelectItem({ children, className, ...props }: SelectPrimitive.Item.Prop
       data-slot="select-item"
       {...props}
     >
-      <SelectPrimitive.ItemText className="min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere]">
+      <SelectPrimitive.ItemText className="min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere] [&>svg]:me-2 [&>svg]:inline-block [&>svg]:size-4 [&>svg]:align-[-0.1875em]">
         {children}
       </SelectPrimitive.ItemText>
       <SelectPrimitive.ItemIndicator

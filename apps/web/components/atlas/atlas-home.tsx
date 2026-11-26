@@ -574,8 +574,12 @@ function ThemeBrowser({
           {ATLAS_THEMES.map((option) => {
             const Icon = THEME_ICONS[option];
             return (
-              <Chip className="min-h-10 gap-1.5 px-3.5 text-sm" key={option} value={option}>
-                <Icon aria-hidden="true" className="size-3.5" />
+              <Chip
+                className="min-h-9 px-3.5 text-sm"
+                icon={<Icon aria-hidden="true" />}
+                key={option}
+                value={option}
+              >
                 {t(`themes.${option}.label`)}
               </Chip>
             );

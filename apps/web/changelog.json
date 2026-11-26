@@ -1857,5 +1857,13 @@
         "On phones, the bottom bar and its create button now sit softly raised above the page."
       ]
     }
+  },
+  {
+    "id": "atlas-theme-chips-tidy",
+    "date": "2026-11-26",
+    "version": "1.53.2",
+    "summaries": {
+      "en": ["Atlas theme filters show their icons neatly beside each name."]
+    }
   }
 ]

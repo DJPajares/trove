@@ -1,4 +1,5 @@
 import { authenticatedFetch } from '@/lib/auth/transport';
+import type { TrovePlaceCategory } from '@/lib/place-categories';
 import type { TripPlanningPreferences } from '@trove/types';
 import type { DayNoteResolution, TripShrinkImpact } from '@trove/types';
 import { createBrowserSupabaseClient, getBrowserSession } from '@/lib/supabase/client';
@@ -124,6 +125,19 @@ export type TripInput = {
   startingLocation?: string | null;
   /** Saved with the rest of the trip, so a refused save publishes nothing. */
   visibility?: 'private' | 'public';
+  /**
+   * Places a new trip carries from the start, created with it in one request
+   * (create only). Custom Places: nothing is matched to a provider.
+   */
+  places?: TripCreatePlace[];
+};
+
+export type TripCreatePlace = {
+  category?: Exclude<TrovePlaceCategory, 'other'>;
+  latitude?: number | null;
+  longitude?: number | null;
+  name: string;
+  priority?: 'interested' | 'maybe' | 'must_go';
 };
 
 export class TripApiError extends Error {

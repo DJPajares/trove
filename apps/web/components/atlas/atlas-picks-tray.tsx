@@ -21,11 +21,11 @@ import {
   atlasTripAttribution,
   buildAtlasAiPrompt,
   groupAtlasTripPicks,
+  atlasTripPlaces,
   suggestAtlasTripDates,
 } from '@/lib/atlas/picks';
 import { deviceTimeZone } from '@/lib/itinerary/api';
 import { queryKeys } from '@/lib/query/keys';
-import { addAtlasPicksToTrip } from '@/lib/atlas/trip-from-picks';
 import { createTrip } from '@/lib/trips/api';
 
 /**
@@ -98,11 +98,10 @@ export function AtlasPicksTray() {
         endDate,
         name: tripName,
         partySize: 1,
+        places: atlasTripPlaces(picks),
         planningReadiness: 'in_progress',
         startDate,
       });
-
-      await addAtlasPicksToTrip(trip.id, picks);
 
       clearPicks();
       setOpen(false);

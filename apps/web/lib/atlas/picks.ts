@@ -1,6 +1,7 @@
 import type { AtlasListingKind, AtlasMonthClimate, AtlasSection } from '@trove/types';
 
 import type { TrovePlaceCategory } from '@/lib/place-categories';
+import type { TripCreatePlace } from '@/lib/trips/api';
 
 /** Matches PRD 40.4 and the AI planner's 24-place real-place cap. */
 export const ATLAS_MAX_TRIP_PICKS = 24;
@@ -281,4 +282,28 @@ export function atlasGuidePlaces(
     }
   }
   return places;
+}
+
+/**
+ * Picks (Must Go) and a guide's own listings (Interested) as the places a new
+ * trip carries (PRD 40.4): names, categories and the guide's coordinates only.
+ */
+export function atlasTripPlaces(
+  picks: readonly AtlasTripPick[],
+  guidePlaces: readonly AtlasTripPick[] = [],
+): TripCreatePlace[] {
+  const place = (pick: AtlasTripPick, priority: 'interested' | 'must_go'): TripCreatePlace => {
+    const category = atlasPickCategory(pick.kind);
+    return {
+      ...(category === 'other' ? {} : { category }),
+      latitude: pick.latitude,
+      longitude: pick.longitude,
+      name: pick.name,
+      priority,
+    };
+  };
+  return [
+    ...picks.map((pick) => place(pick, 'must_go')),
+    ...guidePlaces.map((pick) => place(pick, 'interested')),
+  ].slice(0, ATLAS_MAX_TRIP_PICKS);
 }

@@ -1,4 +1,5 @@
 import { relinkExpensesToDays } from './expenses.js';
+import { createTripPlacesInTransaction, type TripCreatePlace } from './trip-create-places.js';
 import { tripStayInclude } from './day-stay.js';
 import { refreshDayDefaultTimeZone } from './itineraries.js';
 import {
@@ -66,9 +67,11 @@ export type TripCreate = {
   startingLocation?: string | null;
   /** Who can read the trip: private, or public through its read-only link (PRD 8.2). */
   visibility?: 'private' | 'public';
+  /** Places the new trip carries from the start, created in the same transaction. */
+  places?: TripCreatePlace[];
 };
 
-export type TripUpdate = Partial<TripCreate> & {
+export type TripUpdate = Partial<Omit<TripCreate, 'places'>> & {
   confirmDateShrink?: boolean;
   shrinkRevision?: string;
   noteResolutions?: DayNoteResolution[];
@@ -687,6 +690,10 @@ export async function createTrip(userId: string, accessToken: string, input: Tri
         tripId: trip.id,
       })),
     });
+
+    if (input.places?.length) {
+      await createTripPlacesInTransaction(transaction, userId, trip.id, input.places);
+    }
 
     return trip.id;
   });

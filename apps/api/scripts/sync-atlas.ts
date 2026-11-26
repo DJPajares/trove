@@ -30,6 +30,7 @@ import type { AtlasClimateNorm } from '@trove/types';
 
 import { resetAtlasCountryMemory } from '../src/services/atlas-countries.js';
 import { getAtlasGuide, resetAtlasGuideFailures } from '../src/services/atlas-guides.js';
+import { fetchWikidataQuickFacts } from '../src/services/atlas-wikidata.js';
 import { getProviderCallTotal } from '../src/services/provider-usage.js';
 import { ATLAS_CITIES } from './atlas-cities.js';
 
@@ -255,6 +256,8 @@ async function main() {
   }
 
   const years = climateYears(new Date());
+  const quickFactsByCode =
+    (await cached('wikidata-quick-facts', () => fetchWikidataQuickFacts(USER_AGENT))) ?? {};
   const prisma = getPrismaClient();
   // Conditions already stored for the same five years are kept as they are,
   // so a run after the seed migration asks the climate archive nothing.
@@ -274,6 +277,7 @@ async function main() {
         : null;
     const climate = current ?? (await climateFor(code, city.latitude, city.longitude, years));
     if (!climate) withoutClimate += 1;
+    const quickFacts = quickFactsByCode[code];
     const data = {
       climateCity: city.city,
       latitude: city.latitude,
@@ -282,6 +286,7 @@ async function main() {
       wikivoyageTitle: title,
       // A failed climate fetch never erases a pattern already stored.
       ...(climate ? { climate, climateYearFrom: years.from, climateYearTo: years.to } : {}),
+      ...(quickFacts ? { quickFacts } : {}),
     };
     await prisma.atlasCountry.upsert({
       create: { ...data, countryCode: code },

@@ -1762,5 +1762,15 @@
         "Collect sights, dishes, and stays into Trip picks while reading Atlas, then turn them into a real Trove trip in one tap or hand them to Plan with AI."
       ]
     }
+  },
+  {
+    "id": "atlas-wikidata-quick-facts",
+    "date": "2026-11-26",
+    "version": "1.50.0",
+    "summaries": {
+      "en": [
+        "Atlas country guides now show languages, plug types, driving side, and national dishes in Essential facts."
+      ]
+    }
   }
 ]

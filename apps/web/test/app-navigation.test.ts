@@ -4,18 +4,29 @@ import {
   isImmersiveTripPath,
   isNavigationPathActive,
   isToolsPath,
+  mobileNavigationDestinations,
   primaryNavigationDestinations,
   toolNavigationDestinations,
 } from '../lib/navigation.ts';
 
-test('global navigation keeps its four stable destinations around the create action', () => {
+test('the header carries all five destinations, with Atlas between Trips and Saved', () => {
   expect(primaryNavigationDestinations.map(({ href }) => href)).toEqual([
     '/',
     '/trips',
+    '/atlas',
     '/saved',
     '/tools',
   ]);
-  expect(primaryNavigationDestinations.map(({ column }) => column)).toEqual([
+});
+
+test('the phone bar keeps four destinations around the create action and leaves Tools out', () => {
+  expect(mobileNavigationDestinations.map(({ href }) => href)).toEqual([
+    '/',
+    '/trips',
+    '/atlas',
+    '/saved',
+  ]);
+  expect(mobileNavigationDestinations.map(({ column }) => column)).toEqual([
     'col-start-1',
     'col-start-2',
     'col-start-4',

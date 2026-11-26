@@ -12,6 +12,7 @@
     "skipToContent": "Skip to content",
     "home": "Home",
     "trips": "Trips",
+    "atlas": "Atlas",
     "saved": "Finds",
     "tools": "Kit",
     "quickActions": "Quick actions",
@@ -4574,5 +4575,85 @@
       "body": "{advice, select, indoor {Rain falls on about {wetDays} in 10 days. Keep outdoor plans flexible.} heat {Rain falls on about {wetDays} in 10 days. Plan outdoor time for mornings and evenings.} cold {Rain falls on about {wetDays} in 10 days. Pack warm layers.} other {Rain falls on about {wetDays} in 10 days.}}"
     },
     "opensSource": "(opens {source}, new tab)"
+  },
+  "atlas": {
+    "title": "Atlas",
+    "kicker": "Your guide to the world",
+    "description": "Where to go, when to go, and what to eat when you get there.",
+    "searchLabel": "Search Atlas",
+    "searchPlaceholder": "Search countries",
+    "browse": "Browse Atlas",
+    "tabs": {
+      "where": "Where",
+      "when": "When"
+    },
+    "greatIn": "Great in {month}",
+    "greatInDescription": "Typically at their best next month.",
+    "browseWorld": "Browse the world",
+    "regionFilter": "Region",
+    "regions": {
+      "all": "All",
+      "africa": "Africa",
+      "americas": "Americas",
+      "asia": "Asia",
+      "europe": "Europe",
+      "oceania": "Oceania"
+    },
+    "noMatches": "No countries match “{query}”.",
+    "bestMonths": "Best in {months}",
+    "noGreatMonths": "No standout month",
+    "greatAllYear": "Great all year round",
+    "noPattern": "Guide only",
+    "whereToGoIn": "Where to go in",
+    "chooseMonth": "Choose a month",
+    "atTheirBest": "At their best",
+    "alsoGood": "Also good",
+    "nothingGreat": "Nowhere in Atlas is typically great this month.",
+    "countryCount": "{count, plural, one {# place} other {# places}}",
+    "typicalTemps": "{high} / {low}",
+    "wetDays": "Rain on about {count} in 10 days",
+    "patternNote": "Typical conditions from {from} to {to}. Patterns from past years, not a forecast.",
+    "rating": {
+      "great": "Great",
+      "good": "Good",
+      "mixed": "Mixed",
+      "off": "Off-season"
+    },
+    "guide": {
+      "back": "Atlas",
+      "kicker": "Country guide · {region}",
+      "atAGlance": "At a glance",
+      "currency": "Currency",
+      "convert": "Convert",
+      "timeZone": "Time zone",
+      "measuredIn": "Typical weather in",
+      "bestTime": "Best time to go",
+      "bestTimeIn": "Typical conditions in {city}",
+      "months": "Months",
+      "monthLabel": "{month}: {rating}",
+      "monthDetail": "Typically {high} by day and {low} at night. Rain on about {wet} in 10 days.",
+      "sections": "Guide sections",
+      "readingTime": "{minutes, plural, one {# min read} other {# min read}}",
+      "planTrip": "Plan a trip here",
+      "listing": {
+        "see": "See",
+        "do": "Do",
+        "buy": "Buy",
+        "eat": "Eat",
+        "drink": "Drink",
+        "sleep": "Sleep",
+        "go": "Getting there",
+        "listing": "Listing"
+      },
+      "credit": "Adapted from <article>Wikivoyage’s {title} guide</article> by its <authors>authors</authors>, under <licence>{licenceName}</licence>.",
+      "climateCredit": "Typical conditions from Open-Meteo, {from} to {to}.",
+      "loading": "Opening the guide…",
+      "error": "This guide can’t be opened right now",
+      "errorDescription": "Check your connection and try again.",
+      "tryAgain": "Try again",
+      "unavailable": "There’s no guide for this place yet.",
+      "notFound": "Atlas doesn’t cover this place yet.",
+      "backToAtlas": "Back to Atlas"
+    }
   }
 }

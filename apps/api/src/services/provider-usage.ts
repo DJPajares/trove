@@ -12,6 +12,7 @@ import { createHash } from 'node:crypto';
 export const PROVIDER_CALL_SOURCES = [
   'ai-planner',
   'ai-planner-review',
+  'atlas',
   'currency',
   'editorial-image-reconciliation',
   'editorial-images',
@@ -75,11 +76,14 @@ export type ProviderExpectedSku =
   | 'place-details-photos'
   | 'routes-compute-routes-essentials'
   | 'weather-archive-free'
-  | 'weather-forecast-free';
+  | 'weather-forecast-free'
+  /** Wikivoyage is free; Wikimedia throttles unidentified clients instead. */
+  | 'wikivoyage-free';
 
 type ProviderEventBase = {
   operation:
     | 'computeRoute'
+    | 'getArticle'
     | 'getClimate'
     | 'getDetails'
     | 'getForecast'
@@ -87,7 +91,7 @@ type ProviderEventBase = {
     | 'getRates'
     | 'search'
     | 'textSearch';
-  provider: 'big_data_cloud' | 'frankfurter' | 'google' | 'open_meteo' | 'pexels';
+  provider: 'big_data_cloud' | 'frankfurter' | 'google' | 'open_meteo' | 'pexels' | 'wikivoyage';
   source: ProviderCallSource;
 };
 
@@ -105,7 +109,8 @@ export type ProviderCall = ProviderEventBase & {
     | '/v1/search'
     | '/v1/forecast'
     | '/v1/archive'
-    | '/data/reverse-geocode-client';
+    | '/data/reverse-geocode-client'
+    | '/w/api.php';
   expectedSku: ProviderExpectedSku;
   includePolyline?: boolean;
   kind: 'outbound';
@@ -115,6 +120,7 @@ export type ProviderCall = ProviderEventBase & {
 
 export type ProviderCacheEvent = ProviderEventBase & {
   cache:
+    | 'atlas-guide'
     | 'climate-norm'
     | 'currency'
     | 'editorial-image'

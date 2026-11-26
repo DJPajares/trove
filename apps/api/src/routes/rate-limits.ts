@@ -29,3 +29,9 @@ export const PUBLIC_SHARE_RATE_LIMIT = perMinute(60);
  * saves more than a handful by hand; the ceiling is for a client stuck retrying.
  */
 export const TRIP_COPY_RATE_LIMIT = perMinute(10);
+
+/**
+ * An Atlas guide. Usually a database read; on a miss, one Wikivoyage request
+ * that every later reader shares.
+ */
+export const ATLAS_GUIDE_RATE_LIMIT = perMinute(60);

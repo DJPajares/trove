@@ -2779,7 +2779,7 @@ Every guide uses one layout, top to bottom:
 
 1. **Cover** — editorial photograph, the destination's name in the editorial serif, and one line from its introduction.
 2. **At a glance** — quick-fact chips: currency, languages, plug type, side of the road, time zone and, where known, national dish. The currency chip opens the Currency tool.
-3. **Best time to go** — a twelve-month strip labelled Great, Good, Mixed, or Off-season. Choosing a month shows its typical high and low, its share of wet days, and holidays in it, all hedged as typical. The label comes from the same seasonal-fit evaluation Plan Score uses (Section 29.1), so a guide and a trip's score never disagree about a month.
+3. **Best time to go** — a twelve-month strip labelled Great, Good, Mixed, or Off-season. Choosing a month shows its typical high and low, its share of wet days, and holidays in it, all hedged as typical. The label is built from the same typical conditions Insights and seasonal fit read (Section 29.7), judging rain against the place's own driest month so a tropical dry season reads as one; heat, cool and cold count on their own.
 4. **Sections** — Wikivoyage's own order (Understand, Talk, Get in, Get around, See, Do, Eat, Drink, Sleep, Stay safe, Respect, Connect), omitting empty ones. A sticky row of section chips jumps between them. Sections start collapsed and show a reading-time estimate.
 5. **Listings** — See, Do, Eat, Drink, and Sleep entries render as cards. Each card offers **Add to trip picks** and, from its menu, **Save** (Section 40.5).
 6. **Eat** leads with dish cards; **Talk** renders its phrasebook as tap-to-reveal cards.

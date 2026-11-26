@@ -6,6 +6,7 @@ import { getWebOrigins } from './environment.js';
 import { setAiGenerationTelemetrySink } from './services/ai-generation-telemetry.js';
 import { setAiPlanningTelemetrySink } from './services/ai-planning-telemetry.js';
 import { setProviderUsageSink } from './services/provider-usage.js';
+import { registerAtlasRoutes } from './routes/atlas.js';
 import { registerAuthenticationRoutes } from './routes/auth.js';
 import { registerAiPlanningSessionRoutes } from './routes/ai-planning-sessions.js';
 import { registerAdminEntitlementRoutes } from './routes/admin-entitlements.js';
@@ -165,6 +166,7 @@ export function buildApp() {
   void app.register(async (instance) => {
     await instance.register(rateLimit, { global: false });
 
+    registerAtlasRoutes(instance);
     registerAuthenticationRoutes(instance);
     registerAiPlanningSessionRoutes(instance);
     registerAdminEntitlementRoutes(instance);

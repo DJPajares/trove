@@ -12,6 +12,10 @@
     "./countries": {
       "types": "./src/countries.ts",
       "import": "./dist/countries.js"
+    },
+    "./atlas-index": {
+      "types": "./src/atlas-index.ts",
+      "import": "./dist/atlas-index.js"
     }
   },
   "scripts": {

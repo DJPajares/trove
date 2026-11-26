@@ -5,7 +5,15 @@ import { getSafeRedirectPath, isSensitiveAuthUrl } from '@/lib/auth/redirect';
 import { AUTH_RESPONSE_HEADERS } from '@/lib/auth/http';
 import { getSupabaseEnvironment } from '@/lib/supabase/environment';
 
-const protectedPathnames = ['/expenses', '/profile', '/saved', '/settings', '/tools', '/trips'];
+const protectedPathnames = [
+  '/atlas',
+  '/expenses',
+  '/profile',
+  '/saved',
+  '/settings',
+  '/tools',
+  '/trips',
+];
 const authPathnames = ['/sign-in', '/sign-up'];
 
 function isProtectedPath(pathname: string) {

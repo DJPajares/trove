@@ -1699,5 +1699,17 @@
     "summaries": {
       "en": ["Trips and Finds now open smoothly, without the screen flickering or loading twice."]
     }
+  },
+  {
+    "id": "atlas-destination-guide",
+    "date": "2026-11-26",
+    "version": "1.46.0",
+    "summaries": {
+      "en": [
+        "Meet Atlas: browse the world by country or by month, and see when each place is typically at its best.",
+        "Open a country guide for the essentials, then plan a trip there in one tap.",
+        "Kit now lives in the menu at the top of your phone screen, making room for Atlas in the bar."
+      ]
+    }
   }
 ]

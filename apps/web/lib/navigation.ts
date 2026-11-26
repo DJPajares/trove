@@ -1,9 +1,23 @@
+/**
+ * The global destinations, in header order.
+ *
+ * The phone bar has room for four around the create action, so Tools leaves it
+ * there and is reached from the floating button instead (PRD 4.5). `column` is
+ * the destination's cell in that bar; `null` keeps it out of the bar.
+ */
 export const primaryNavigationDestinations = [
   { column: 'col-start-1', href: '/', key: 'home' },
   { column: 'col-start-2', href: '/trips', key: 'trips' },
-  { column: 'col-start-4', href: '/saved', key: 'saved' },
-  { column: 'col-start-5', href: '/tools', key: 'tools' },
+  { column: 'col-start-4', href: '/atlas', key: 'atlas' },
+  { column: 'col-start-5', href: '/saved', key: 'saved' },
+  { column: null, href: '/tools', key: 'tools' },
 ] as const;
+
+/** The destinations the phone's bottom bar carries. */
+export const mobileNavigationDestinations = primaryNavigationDestinations.filter(
+  (destination): destination is Extract<typeof destination, { column: string }> =>
+    destination.column !== null,
+);
 
 export const toolNavigationDestinations = [
   { href: '/tools/currency', key: 'currency' },

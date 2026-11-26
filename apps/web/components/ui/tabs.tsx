@@ -10,7 +10,7 @@ function Tabs({ ...props }: TabsPrimitive.Root.Props) {
 const tabsListVariants = cva('inline-flex items-center', {
   variants: {
     variant: {
-      segmented: 'relative gap-1 rounded-[var(--radius-md)] bg-muted/30 p-1',
+      segmented: 'relative gap-1 rounded-full bg-muted/30 p-1',
       underline: 'relative gap-4 border-b border-border',
     },
   },
@@ -33,7 +33,7 @@ function TabsList({
 }
 
 const tabsTabVariants = cva(
-  "relative z-10 inline-flex shrink-0 items-center justify-center gap-1.5 rounded-[var(--radius-sm)] text-sm font-medium whitespace-nowrap outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "relative z-10 inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full text-sm font-medium whitespace-nowrap outline-none transition-colors duration-[var(--motion-standard)] focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -70,7 +70,7 @@ const tabsIndicatorVariants = cva(
     variants: {
       variant: {
         segmented:
-          'top-[var(--active-tab-top)] left-[var(--active-tab-left)] h-[var(--active-tab-height)] w-[var(--active-tab-width)] rounded-[var(--radius-sm)] bg-secondary shadow-[var(--shadow-control)]',
+          'top-[var(--active-tab-top)] left-[var(--active-tab-left)] h-[var(--active-tab-height)] w-[var(--active-tab-width)] rounded-full bg-secondary shadow-[var(--shadow-control)]',
         underline:
           'bottom-0 left-[var(--active-tab-left)] h-0.5 w-[var(--active-tab-width)] rounded-full bg-brand',
       },

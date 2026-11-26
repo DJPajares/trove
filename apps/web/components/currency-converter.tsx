@@ -452,7 +452,7 @@ function CurrencyButton({
   return (
     <Button
       aria-label={label}
-      className="-ml-1.5 h-auto min-h-11 max-w-full gap-2.5 rounded-[var(--radius-md)] py-1 pr-2.5 pl-1.5 text-base font-semibold"
+      className="-ml-1.5 h-auto min-h-11 max-w-full gap-2.5 py-1 pr-2.5 pl-1.5 text-base font-semibold"
       onClick={onClick}
       type="button"
       variant="ghost"

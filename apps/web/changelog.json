@@ -1815,5 +1815,15 @@
         "Atlas search is easier to spot and stays at the top of the screen as you browse, with a quick way to clear it."
       ]
     }
+  },
+  {
+    "id": "rounder-buttons-and-search",
+    "date": "2026-11-26",
+    "version": "1.52.2",
+    "summaries": {
+      "en": [
+        "Buttons, search fields, and tabs across Trove now share one softer, rounder shape, so actions are easier to spot and tap."
+      ]
+    }
   }
 ]

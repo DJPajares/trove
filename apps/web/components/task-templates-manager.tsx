@@ -405,7 +405,7 @@ function TemplateCard({
       <div className="p-3">
         <Button
           aria-label={t('addNamedToTrip', { name: template.name })}
-          className="h-11 w-full rounded-[var(--radius-lg)]"
+          className="h-11 w-full"
           onClick={onAdd}
           variant="secondary"
         >

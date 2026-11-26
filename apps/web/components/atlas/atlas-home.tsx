@@ -13,6 +13,7 @@ import { SearchField } from '@/components/search-field';
 import { Button } from '@/components/ui/button';
 import { Chip, ChipGroup } from '@/components/ui/chip';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 import { Tabs, TabsIndicator, TabsList, TabsPanel, TabsTab } from '@/components/ui/tabs';
 import { useAtlasIndex } from '@/hooks/use-atlas-index';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
@@ -137,7 +138,11 @@ export function AtlasHome() {
                     {t('greatIn', { month: monthName(upcoming, locale) })}
                   </h2>
                   <p className="mt-2 text-sm text-muted-foreground">{t('greatInDescription')}</p>
-                  <ul className="interaction-scrollbar -mx-[var(--gutter-inline-start)] mt-4 flex snap-x gap-3 overflow-x-auto px-[var(--gutter-inline-start)] pb-2">
+                  <ScrollShadow
+                    className="interaction-scrollbar -mx-[var(--gutter-inline-start)] mt-4 flex snap-x scroll-px-[var(--gutter-inline-start)] gap-3 px-[var(--gutter-inline-start)] pb-2"
+                    orientation="horizontal"
+                    render={<ul />}
+                  >
                     {featured.map((country) => {
                       const climate = monthClimate(country, upcoming);
                       return (
@@ -173,7 +178,7 @@ export function AtlasHome() {
                         </li>
                       );
                     })}
-                  </ul>
+                  </ScrollShadow>
                 </section>
               ) : null}
 

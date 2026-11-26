@@ -54,11 +54,16 @@ function Chip<Value extends string>({
       {...props}
     >
       {icon ? (
-        <span className="size-3 shrink-0 [--icon-stroke:var(--icon-stroke-compact)] [&_svg]:size-3">
+        <span className="inline-flex shrink-0 [--icon-stroke:var(--icon-stroke-compact)] [&_svg]:size-[1em]">
           {icon}
         </span>
       ) : null}
-      <span className="max-w-40 truncate">{children}</span>
+      {/* The base stylesheet makes every svg a block, so an icon passed as a
+          child would break onto its own line above the label. Pass it as
+          `icon`; this keeps a stray one inline rather than stacked. */}
+      <span className="max-w-40 truncate [&>svg]:me-1.5 [&>svg]:inline-block [&>svg]:size-[1em] [&>svg]:align-[-0.125em]">
+        {children}
+      </span>
       {count !== undefined ? <span className="tabular-nums opacity-60">{count}</span> : null}
     </TogglePrimitive>
   );

@@ -26,7 +26,7 @@ import { useHydrated } from '@/hooks/use-hydrated';
 import { atlasCountry } from '@/lib/atlas';
 import { fetchAtlasDestinationGuide } from '@/lib/atlas/api';
 import { readingMinutes } from '@/lib/atlas/format';
-import { suggestAtlasTripDates } from '@/lib/atlas/picks';
+import { atlasGuidePlaces, suggestAtlasTripDates } from '@/lib/atlas/picks';
 import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import { useEntrance, type EntranceClock } from '@/lib/page-entrance';
@@ -171,13 +171,24 @@ export function AtlasDestinationGuideView({
           <Button
             className="h-11 bg-white px-6 text-sm font-semibold text-neutral-900 hover:bg-white/90"
             onClick={() => {
-              // This guide's picks come along as places (PRD 40.4); none, and the
-              // trip starts from the destination alone.
+              // This guide's picks come along as Must Go places, and its own
+              // listings fill the rest as Interested (PRD 40.4). No Google call.
               const guidePicks = picks.filter(
                 (pick) => pick.countryCode === countryCode && pick.destinationSlug === slug,
               );
               const dates = suggestAtlasTripDates(country.months, guidePicks.length || 9);
               openCreateTripIn({
+                atlasGuidePlaces: atlasGuidePlaces(
+                  sections,
+                  {
+                    countryCode,
+                    countryName: countryLabel,
+                    destinationName: destination.name,
+                    destinationSlug: destination.slug,
+                    guideTitle: guide.title,
+                  },
+                  guidePicks,
+                ),
                 atlasPicks: guidePicks,
                 countries: [countryCode],
                 description: `Based on Wikivoyage's ${guide.title} guide (CC BY-SA 4.0).`,

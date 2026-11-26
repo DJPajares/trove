@@ -1,4 +1,4 @@
-import type { AtlasListingKind, AtlasMonthClimate } from '@trove/types';
+import type { AtlasListingKind, AtlasMonthClimate, AtlasSection } from '@trove/types';
 
 import type { TrovePlaceCategory } from '@/lib/place-categories';
 
@@ -237,4 +237,48 @@ export function buildAtlasAiPrompt(
     .join(' and ');
   const mustGo = picks.map((pick) => pick.name).join(', ');
   return `Plan a ${dates.days}-day trip to ${destinations} from ${dates.startDate} to ${dates.endDate}. Must-go places: ${mustGo}.`;
+}
+
+/** What a guide offers first when a trip is made from it without picks: sights and things to do, then food. */
+const GUIDE_PLACE_KINDS: readonly AtlasListingKind[] = ['see', 'do', 'eat', 'drink'];
+
+/**
+ * The guide's own listings a new trip carries alongside the traveller's picks
+ * (PRD 40.4): See and Do first, then Eat and Drink, in the guide's order, never
+ * Sleep. Picks already carried are skipped, and the whole trip stays within
+ * the 24-place limit. Read from the stored guide only: no provider request.
+ */
+export function atlasGuidePlaces(
+  sections: readonly AtlasSection[],
+  context: Pick<
+    AtlasTripPick,
+    'countryCode' | 'countryName' | 'destinationName' | 'destinationSlug' | 'guideTitle'
+  >,
+  picks: readonly AtlasTripPick[] = [],
+): AtlasTripPick[] {
+  const taken = new Set(picks.map((pick) => pick.id));
+  const room = Math.max(0, ATLAS_MAX_TRIP_PICKS - picks.length);
+  const listings = sections.flatMap((section) =>
+    section.blocks.flatMap((block) => (block.type === 'listing' ? [block.listing] : [])),
+  );
+  const places: AtlasTripPick[] = [];
+  for (const kind of GUIDE_PLACE_KINDS) {
+    for (const listing of listings) {
+      if (places.length >= room) return places;
+      if (listing.kind !== kind || !listing.name.trim()) continue;
+      const input: AtlasTripPickInput = {
+        ...context,
+        address: listing.address,
+        kind: listing.kind,
+        latitude: listing.latitude,
+        longitude: listing.longitude,
+        name: listing.name.trim(),
+      };
+      const id = atlasPickId(input);
+      if (taken.has(id)) continue;
+      taken.add(id);
+      places.push({ ...input, addedAt: 0, id });
+    }
+  }
+  return places;
 }

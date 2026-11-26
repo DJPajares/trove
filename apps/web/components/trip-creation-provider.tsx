@@ -34,7 +34,9 @@ import { cn } from '@/lib/utils';
 const LANDING_HOLD_MS = 800;
 
 export type TripCreationPrefill = {
-  /** Atlas picks the new trip carries as Custom Places, added once it is created. */
+  /** The guide's own listings the trip also carries, as Interested Custom Places. */
+  atlasGuidePlaces?: readonly AtlasTripPick[];
+  /** Atlas picks the new trip carries as Must Go Custom Places, added once it is created. */
   atlasPicks?: readonly AtlasTripPick[];
   countries?: readonly string[];
   description?: string;

@@ -42,7 +42,7 @@ import {
   readingMinutes,
   wetDaysInTen,
 } from '@/lib/atlas/format';
-import { suggestAtlasTripDates } from '@/lib/atlas/picks';
+import { atlasGuidePlaces, suggestAtlasTripDates } from '@/lib/atlas/picks';
 import { currencyForCountry } from '@/lib/currency/country-currency';
 import { currencyPairHref } from '@/lib/currency/recent-pairs';
 import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
@@ -241,10 +241,24 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
           <Button
             className="h-11 bg-white px-6 text-sm font-semibold text-neutral-900 hover:bg-white/90"
             onClick={() => {
-              // Every pick in this country comes along as a place (PRD 40.4).
+              // Every pick in this country comes along as a Must Go place, and the
+              // guide's own listings fill the rest as Interested (PRD 40.4).
               const countryPicks = picks.filter((pick) => pick.countryCode === countryCode);
               const dates = suggestAtlasTripDates(country.months, countryPicks.length || 12);
               openCreateTripIn({
+                atlasGuidePlaces: guide.data
+                  ? atlasGuidePlaces(
+                      sections,
+                      {
+                        countryCode,
+                        countryName: country.name,
+                        destinationName: country.name,
+                        destinationSlug: '',
+                        guideTitle: guide.data.title,
+                      },
+                      countryPicks,
+                    )
+                  : undefined,
                 atlasPicks: countryPicks,
                 countries: [countryCode],
                 description: guide.data

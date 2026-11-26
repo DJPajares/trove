@@ -293,6 +293,9 @@ export function TripForm({
     if (!trip && initialPrefill?.atlasPicks?.length) {
       await addAtlasPicksToTrip(result.trip.id, initialPrefill.atlasPicks);
     }
+    if (!trip && initialPrefill?.atlasGuidePlaces?.length) {
+      await addAtlasPicksToTrip(result.trip.id, initialPrefill.atlasGuidePlaces, 'interested');
+    }
     if (!trip) initialPrefill?.onCreated?.(result.trip);
     onSaved(result.trip);
   }
@@ -576,10 +579,17 @@ export function TripForm({
               />
               <FieldDescription id="trip-countries-hint">{t('countriesHint')}</FieldDescription>
             </Field>
-            {!trip && initialPrefill?.atlasPicks?.length ? (
+            {!trip &&
+            (initialPrefill?.atlasPicks?.length || initialPrefill?.atlasGuidePlaces?.length) ? (
               <p className="flex items-start gap-2 text-sm text-muted-foreground">
                 <Icons.Places aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-brand" />
-                {t('atlasPicksCarried', { count: initialPrefill.atlasPicks.length })}
+                {t('atlasPlacesCarried', {
+                  guide: initialPrefill.atlasGuidePlaces?.length ?? 0,
+                  picks: initialPrefill.atlasPicks?.length ?? 0,
+                  total:
+                    (initialPrefill.atlasPicks?.length ?? 0) +
+                    (initialPrefill.atlasGuidePlaces?.length ?? 0),
+                })}
               </p>
             ) : null}
             {visibilityField}

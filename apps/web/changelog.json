@@ -1783,5 +1783,15 @@
         "Pressing Enter or Search on mobile now dismisses the keyboard right away so you can see search results."
       ]
     }
+  },
+  {
+    "id": "atlas-what-themes-and-surprise-me",
+    "date": "2026-11-26",
+    "version": "1.51.0",
+    "summaries": {
+      "en": [
+        "Browse Atlas by theme under the new What tab—Food, Nature, Cities, Coast, and Festivals—or tap Surprise me to open a random guide."
+      ]
+    }
   }
 ]

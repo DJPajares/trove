@@ -4583,9 +4583,41 @@
     "searchLabel": "Search Atlas",
     "searchPlaceholder": "Search countries",
     "browse": "Browse Atlas",
+    "surpriseMe": "Surprise me",
     "tabs": {
       "where": "Where",
-      "when": "When"
+      "when": "When",
+      "what": "What"
+    },
+    "browseByTheme": "Explore by theme",
+    "chooseTheme": "Choose a theme",
+    "themeTopicCredit": "Guides from Wikivoyage (<licence>{licenceName}</licence>). Explore <topic>{topicName}</topic> on Wikivoyage.",
+    "themes": {
+      "food": {
+        "label": "Food",
+        "title": "For the table",
+        "description": "Street markets, regional kitchens, and places worth travelling to eat."
+      },
+      "nature": {
+        "label": "Nature",
+        "title": "Wild landscapes",
+        "description": "National parks, mountain trails, and wide-open terrain."
+      },
+      "cities": {
+        "label": "Cities",
+        "title": "Great cities",
+        "description": "Neighbourhoods, museums, transit, and late-night streets."
+      },
+      "coast": {
+        "label": "Coast",
+        "title": "Islands & coast",
+        "description": "Beaches, coves, reefs, and sea-facing towns."
+      },
+      "festivals": {
+        "label": "Festivals",
+        "title": "Festivals & seasons",
+        "description": "Countries with rich calendar traditions, parades, and seasonal gatherings."
+      }
     },
     "greatIn": "Great in {month}",
     "greatInDescription": "Typically at their best next month.",

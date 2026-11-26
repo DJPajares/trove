@@ -1,9 +1,19 @@
 'use client';
 
-import { ChevronRight } from 'lucide-react';
+import {
+  Building2,
+  ChevronRight,
+  PartyPopper,
+  Shuffle,
+  Trees,
+  Utensils,
+  Waves,
+} from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
+import { ATLAS_LICENCE, wikivoyageArticleUrl } from '@trove/types';
 
 import { AtlasCover } from '@/components/atlas/atlas-cover';
 import { HomeSheet } from '@/components/home/home-front-door';
@@ -31,6 +41,13 @@ import {
   type AtlasRegion,
 } from '@/lib/atlas';
 import { formatAtlasTemperature, formatMonthRuns, monthName } from '@/lib/atlas/format';
+import {
+  ATLAS_THEMES,
+  ATLAS_THEME_DEFINITIONS,
+  countriesForTheme,
+  pickSurpriseCountry,
+  type AtlasTheme,
+} from '@/lib/atlas/themes';
 import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import { useEntrance, type EntranceClock } from '@/lib/page-entrance';
@@ -48,13 +65,14 @@ function countrySubject(country: AtlasCountry) {
 }
 
 /**
- * Atlas's front page (PRD 40.2): a cover, search, and two ways in, Where and
- * When. Everything here reads the bundled index, so browsing makes no request
- * except for the photographs of the few countries featured this month.
+ * Atlas's front page (PRD 40.2): a cover, search, Surprise me, and three ways
+ * in — Where, When, and What. Everything here reads the bundled index, so
+ * browsing makes no request except for the photographs of visible cards.
  */
 export function AtlasHome() {
   const t = useTranslations('atlas');
   const locale = useLocale();
+  const router = useRouter();
   const { preferences } = usePreferences();
   // Names come from the browser's own ICU data, so they are not rendered on the server.
   const hydrated = useHydrated();
@@ -67,7 +85,8 @@ export function AtlasHome() {
   const unavailable = !loading && !index.data;
   const [query, setQuery] = useState('');
   const [region, setRegion] = useState<AtlasRegion | 'all'>('all');
-  const [tab, setTab] = useState<'where' | 'when'>('where');
+  const [tab, setTab] = useState<'where' | 'when' | 'what'>('where');
+  const [theme, setTheme] = useState<AtlasTheme>('food');
 
   const today = new Date();
   const upcoming = nextMonth(today);
@@ -109,21 +128,39 @@ export function AtlasHome() {
 
       <HomeSheet>
         <div className="flex flex-col gap-8">
-          <SearchField
-            label={t('searchLabel')}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={t('searchPlaceholder')}
-            value={query}
-            wrapperClassName="max-w-xl"
-          />
+          <div className="flex flex-wrap items-center gap-3">
+            <SearchField
+              label={t('searchLabel')}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t('searchPlaceholder')}
+              value={query}
+              wrapperClassName="min-w-0 flex-1 sm:max-w-xl"
+            />
+            <Button
+              className="shrink-0"
+              disabled={!countries.length}
+              onClick={() => {
+                const picked = pickSurpriseCountry(countries);
+                if (picked) router.push(`/atlas/${picked.countryCode}`);
+              }}
+              type="button"
+              variant="outline"
+            >
+              <Shuffle aria-hidden="true" className="size-4" />
+              {t('surpriseMe')}
+            </Button>
+          </div>
 
-          <Tabs onValueChange={(value) => setTab(value as 'where' | 'when')} value={tab}>
-            <TabsList aria-label={t('browse')} className="w-full max-w-xs">
+          <Tabs onValueChange={(value) => setTab(value as 'where' | 'when' | 'what')} value={tab}>
+            <TabsList aria-label={t('browse')} className="w-full max-w-sm">
               <TabsTab className="flex-1" value="where">
                 {t('tabs.where')}
               </TabsTab>
               <TabsTab className="flex-1" value="when">
                 {t('tabs.when')}
+              </TabsTab>
+              <TabsTab className="flex-1" value="what">
+                {t('tabs.what')}
               </TabsTab>
               <TabsIndicator />
             </TabsList>
@@ -236,6 +273,17 @@ export function AtlasHome() {
                 month={month}
                 onMonthChange={setMonth}
                 temperature={temperature}
+              />
+            </TabsPanel>
+
+            <TabsPanel className="mt-8" value="what">
+              <ThemeBrowser
+                active={tab === 'what'}
+                countries={countries}
+                locale={locale}
+                onThemeChange={setTheme}
+                query={query}
+                theme={theme}
               />
             </TabsPanel>
           </Tabs>
@@ -425,6 +473,159 @@ function MonthBrowser({
           ) : null}
         </section>
       ))}
+    </div>
+  );
+}
+
+const THEME_ICONS: Record<AtlasTheme, typeof Utensils> = {
+  cities: Building2,
+  coast: Waves,
+  festivals: PartyPopper,
+  food: Utensils,
+  nature: Trees,
+};
+
+const THEME_PHOTO_LIMIT = 12;
+
+function ThemeBrowser({
+  active,
+  countries,
+  locale,
+  onThemeChange,
+  query,
+  theme,
+}: Readonly<{
+  active: boolean;
+  countries: AtlasCountry[];
+  locale: string;
+  onThemeChange: (theme: AtlasTheme) => void;
+  query: string;
+  theme: AtlasTheme;
+}>) {
+  const t = useTranslations('atlas');
+  const definition = ATLAS_THEME_DEFINITIONS[theme];
+  const themed = useMemo(() => countriesForTheme(countries, theme), [countries, theme]);
+  const searching = query.trim().length > 0;
+  const visible = useMemo(
+    () => (searching ? themed.filter((country) => matchesAtlasQuery(country, query)) : themed),
+    [query, searching, themed],
+  );
+  const photoSubjects = useMemo(
+    () => (active ? visible.slice(0, THEME_PHOTO_LIMIT).map(countrySubject) : []),
+    [active, visible],
+  );
+  const images = useEditorialImages(photoSubjects);
+  const photoFor = (country: AtlasCountry) =>
+    editorialCoverImage(
+      images.get(editorialSubjectKey(countrySubject(country))),
+      country.countryCode,
+    );
+
+  return (
+    <div className="flex flex-col gap-8">
+      <div>
+        <p className="text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+          {t('browseByTheme')}
+        </p>
+        <h2 className="mt-1 font-journal text-[clamp(2.5rem,8vw,3.75rem)] leading-none font-normal text-accent-strong">
+          {t(`themes.${theme}.title`)}
+        </h2>
+        <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+          {t(`themes.${theme}.description`)}
+        </p>
+        <ChipGroup
+          aria-label={t('chooseTheme')}
+          className="mt-4"
+          onValueChange={(value) => {
+            const picked = value[0] as AtlasTheme | undefined;
+            if (picked) onThemeChange(picked);
+          }}
+          value={[theme]}
+        >
+          {ATLAS_THEMES.map((option) => {
+            const Icon = THEME_ICONS[option];
+            return (
+              <Chip className="min-h-10 gap-1.5 px-3.5 text-sm" key={option} value={option}>
+                <Icon aria-hidden="true" className="size-3.5" />
+                {t(`themes.${option}.label`)}
+              </Chip>
+            );
+          })}
+        </ChipGroup>
+      </div>
+
+      {visible.length ? (
+        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {visible.map((country) => {
+            const runs = greatMonthRuns(country);
+            const subtitle =
+              theme === 'food' && country.quickFacts?.nationalDish
+                ? country.quickFacts.nationalDish
+                : runs[0]?.length === 12
+                  ? t('greatAllYear')
+                  : runs.length
+                    ? t('bestMonths', { months: formatMonthRuns(runs, locale) })
+                    : t(`regions.${country.region}`);
+            return (
+              <li key={country.countryCode}>
+                <Link
+                  className="group flex h-full flex-col overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-card outline-none transition-colors hover:border-border focus-visible:ring-3 focus-visible:ring-ring/40"
+                  href={`/atlas/${country.countryCode}`}
+                >
+                  <MediaFrame
+                    alt=""
+                    className="aspect-[4/3] w-full rounded-none"
+                    dataSlot="atlas-theme-media"
+                    sizes="(min-width: 1024px) 20rem, (min-width: 640px) 50vw, 100vw"
+                    source={resolveTripMediaSource({ editorial: photoFor(country) })}
+                    variant="card"
+                  />
+                  <span className="flex flex-col gap-0.5 px-4 pt-3 pb-3.5">
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className="truncate font-journal text-2xl leading-tight text-foreground transition-colors group-hover:text-brand">
+                        {country.name}
+                      </span>
+                      <span className="shrink-0 font-mono text-[0.6875rem] tracking-wider text-muted-foreground">
+                        {country.countryCode}
+                      </span>
+                    </span>
+                    <span className="truncate text-sm text-muted-foreground">{subtitle}</span>
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      ) : searching ? (
+        <p className="text-muted-foreground">{t('noMatches', { query: query.trim() })}</p>
+      ) : null}
+
+      <p className="text-xs text-muted-foreground">
+        {t.rich('themeTopicCredit', {
+          licence: (chunks) => (
+            <a
+              className="underline underline-offset-2 hover:text-foreground"
+              href={ATLAS_LICENCE.url}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {chunks}
+            </a>
+          ),
+          licenceName: ATLAS_LICENCE.name,
+          topic: (chunks) => (
+            <a
+              className="underline underline-offset-2 hover:text-foreground"
+              href={wikivoyageArticleUrl(definition.wikivoyageTopic)}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {chunks}
+            </a>
+          ),
+          topicName: definition.wikivoyageTopic,
+        })}
+      </p>
     </div>
   );
 }

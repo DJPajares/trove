@@ -1,6 +1,7 @@
 import type { AtlasGuide, AtlasIndex, AtlasLinkedDestination } from '@trove/types';
 
 import { authenticatedFetch, getProtectedSession } from '@/lib/auth/transport';
+import type { SavedPlace } from '@/lib/saved/api';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
@@ -14,14 +15,18 @@ export class AtlasApiError extends Error {
   }
 }
 
-async function atlasRequest<T>(path: string): Promise<T> {
+async function atlasRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const supabase = createBrowserSupabaseClient();
   if (!supabase) throw new AtlasApiError('supabase_not_configured', 500);
   const { data, error } = await getProtectedSession(supabase);
   if (error || !data.session) throw new AtlasApiError('not_authenticated', 401);
 
   const response = await authenticatedFetch(`${apiUrl}${path}`, {
-    headers: { Authorization: `Bearer ${data.session.access_token}` },
+    ...init,
+    headers: {
+      Authorization: `Bearer ${data.session.access_token}`,
+      ...(init?.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+    },
   });
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { code?: string };
@@ -53,5 +58,25 @@ export async function fetchAtlasDestinationGuide(
 ): Promise<{ destination: AtlasLinkedDestination; guide: AtlasGuide }> {
   return atlasRequest<{ destination: AtlasLinkedDestination; guide: AtlasGuide }>(
     `/atlas/guides/${encodeURIComponent(countryCode)}/${encodeURIComponent(slug)}`,
+  );
+}
+
+export type AtlasListingSaveRequest = {
+  countryCode: string;
+  destinationName: string;
+  languageCode?: string;
+  latitude: number | null;
+  longitude: number | null;
+  name: string;
+};
+
+/**
+ * Keeps one guide listing in Finds (PRD 40.5). The API resolves it on demand
+ * like any explicit selection; one it cannot place becomes a Custom Place.
+ */
+export function saveAtlasListing(listing: AtlasListingSaveRequest) {
+  return atlasRequest<{ resolution: 'custom' | 'verified'; savedPlace: SavedPlace }>(
+    '/atlas/listings/save',
+    { body: JSON.stringify(listing), method: 'POST' },
   );
 }

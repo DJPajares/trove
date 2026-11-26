@@ -1,6 +1,6 @@
 'use client';
 
-import { BedDouble, CalendarDays, ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { BedDouble, BookOpen, CalendarDays, ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, type ReactNode } from 'react';
@@ -30,6 +30,8 @@ import {
   ItemTitle,
 } from '@/components/ui/item';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useTripAtlasGuides } from '@/hooks/use-trip-atlas-guides';
+import type { TripAtlasGuide } from '@/lib/atlas/trip-guides';
 import { fetchExpenses } from '@/lib/expenses/api';
 import { dayTown } from '@/lib/itinerary/day-place';
 import { queryKeys } from '@/lib/query/keys';
@@ -669,11 +671,76 @@ export function TripModeTripView({ tripId }: Readonly<{ tripId: string }>) {
             </div>
           </EditorialSection>
 
+          <TripAtlasGuides
+            countries={trip.countries}
+            towns={[
+              ...itinerary.days.map((day) => dayTown(day, itinerary.tripPlaces)),
+              ...trip.destinations.map((destination) => destination.name),
+            ]}
+          />
+
           {/* Preparing the device is housekeeping, not travelling: it closes the
               page rather than opening it, and stays folded until asked. */}
           <OfflineReadyStatus tripId={tripId} variant="compact" />
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * The Atlas guides for where this trip goes (PRD 40.5): its countries, then
+ * each town on its days or named destination that Atlas has a guide for. Links only; Atlas never joins
+ * the trip's own tools.
+ */
+function TripAtlasGuides({
+  countries,
+  towns,
+}: Readonly<{ countries: string[] | undefined; towns: ReadonlyArray<string | null | undefined> }>) {
+  const t = useTranslations('tripMode.views.trip');
+  const atlas = useTripAtlasGuides(countries);
+  const seen = new Set<string>();
+  const guides: TripAtlasGuide[] = [];
+  for (const town of towns) {
+    const guide = town ? atlas.guideForTown(town) : null;
+    if (guide && !seen.has(guide.href)) {
+      seen.add(guide.href);
+      guides.push(guide);
+    }
+  }
+  const all = [...atlas.countries, ...guides];
+  if (!all.length) return null;
+
+  return (
+    <EditorialSection
+      density="compact"
+      description={t('guidesDescription')}
+      headingId="trip-mode-guides-heading"
+      headingLevel={3}
+      title={t('guides')}
+    >
+      <ul className="divide-y divide-border-subtle border-y border-border-subtle">
+        {all.map((guide) => (
+          <li key={guide.href}>
+            <Link
+              className="group flex min-h-12 items-center gap-3 py-2.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+              href={guide.href}
+            >
+              <BookOpen aria-hidden="true" className="size-5 shrink-0 text-brand" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-semibold text-foreground">{guide.name}</span>
+                <span className="block text-[length:var(--text-metadata)] text-muted-foreground">
+                  {t(guide.kind === 'country' ? 'countryGuide' : 'destinationGuide')}
+                </span>
+              </span>
+              <ChevronRight
+                aria-hidden="true"
+                className="size-4 shrink-0 text-text-subtle transition-transform duration-[var(--motion-standard)] group-hover:translate-x-0.5 motion-reduce:transition-none"
+              />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </EditorialSection>
   );
 }

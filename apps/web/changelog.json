@@ -1793,5 +1793,17 @@
         "Browse Atlas by theme under the new What tab—Food, Nature, Cities, Coast, and Festivals—or tap Surprise me to open a random guide."
       ]
     }
+  },
+  {
+    "id": "atlas-save-finds-trip-guides-search",
+    "date": "2026-11-26",
+    "version": "1.52.0",
+    "summaries": {
+      "en": [
+        "Save any place from an Atlas guide to your Finds from its card menu.",
+        "Your trips and Trip Mode now link to the Atlas guides for where you're going.",
+        "Search now shows matching Atlas guides after your own trips and places."
+      ]
+    }
   }
 ]

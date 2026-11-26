@@ -1,5 +1,7 @@
 import { getPrismaClient } from '@trove/db';
 
+import { getAtlasEnvironment } from '../environment.js';
+import { searchAtlasGuides, type AtlasSearchResult } from './atlas-search.js';
 import type { PlacesService, PlaceSuggestion } from './places.js';
 import { formatDateOnly } from './trip-rules.js';
 
@@ -566,12 +568,22 @@ async function resolveOwnedProviderResults(
   return { external: external.slice(0, 5), owned };
 }
 
+/** Atlas guides are secondary results; a failure or the kill switch leaves them out. */
+async function searchAtlas(input: string): Promise<AtlasSearchResult[]> {
+  if (!getAtlasEnvironment()) return [];
+  try {
+    return await searchAtlasGuides(input);
+  } catch {
+    return [];
+  }
+}
+
 export async function searchTrove(
   userId: string,
   input: string,
   options: { includePlaces?: boolean; placesService?: PlacesService | null } = {},
 ) {
-  const owned = await searchOwnedContent(userId, input);
+  const [owned, atlas] = await Promise.all([searchOwnedContent(userId, input), searchAtlas(input)]);
   const initialGroups = groupResults(owned);
   const visibleLocalResultCount = initialGroups.reduce(
     (total, group) => total + group.results.length,
@@ -607,6 +619,7 @@ export async function searchTrove(
   }
 
   return {
+    atlas,
     canSearchPlaces,
     external,
     groups: options.includePlaces ? groupResults(owned) : initialGroups,

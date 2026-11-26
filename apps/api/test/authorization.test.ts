@@ -268,7 +268,13 @@ test('global search only reads rows owned by the searching user', async () => {
   expect(results.groups, 'no owned rows means no results').toStrictEqual([]);
   expect(recorded.length > 0, 'search must query the database').toBeTruthy();
 
-  const unscoped = recorded.filter((query) => !isScopedToUser(query.args.where, INTRUDER_ID));
+  // Atlas guides are shared reference data (PRD 40.6), not any traveller's rows.
+  const sharedAtlasRead = (query: RecordedQuery) =>
+    query.model === 'atlasCountry' ||
+    (query.model === '$raw' && JSON.stringify(query.args.raw).includes('atlas_guides'));
+  const unscoped = recorded.filter(
+    (query) => !sharedAtlasRead(query) && !isScopedToUser(query.args.where, INTRUDER_ID),
+  );
   expect(
     unscoped.map((query) => `${query.model}.${query.method}`),
     'every search query must be scoped to the searching user',

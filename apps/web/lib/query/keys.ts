@@ -28,7 +28,7 @@ export const queryKeys = {
   aiPlanningRecovery: () => ['ai-planning', 'recovery'] as const,
   aiPlanningSession: (sessionId: string) => ['ai-planning', 'session', sessionId] as const,
   /** One country's Atlas guide. Kept on the device so an opened guide reads offline. */
-  atlasGuide: (countryCode: string) => ['atlas', 'guide', countryCode] as const,
+  atlasGuide: (countryCode: string) => ['atlas', 'guide', 'v2', countryCode] as const,
   /** One destination sub-guide inside a country (e.g. Bohol, Siargao). */
   atlasDestinationGuide: (countryCode: string, slug: string) =>
     ['atlas', 'guide', countryCode, slug] as const,

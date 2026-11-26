@@ -196,4 +196,56 @@ describe('getAtlasGuide', () => {
     }
     expect(calls).toBe(2);
   });
+
+  it('automatically refreshes a legacy country guide stored without destinations', async () => {
+    const store = memoryStore();
+    await store.write({
+      content: {
+        lead: ['Old lead.'],
+        sections: [{ blocks: [], id: 'understand', title: 'Understand' }],
+      },
+      countryCode: 'PH',
+      fetchedAt: NOW,
+      revisionId: 1n,
+      slug: '',
+      title: 'Philippines',
+    });
+
+    let calls = 0;
+    const fetcher = async () => {
+      calls += 1;
+      return new Response(
+        JSON.stringify({
+          query: {
+            pages: [
+              {
+                revisions: [
+                  {
+                    revid: 2,
+                    slots: {
+                      main: {
+                        content:
+                          'Archipelago.\n\n==Other destinations==\n* [[Bohol]] — Hills.\n\n==Understand==\nIslands.\n',
+                      },
+                    },
+                  },
+                ],
+                title: 'Philippines',
+              },
+            ],
+          },
+        }),
+        { status: 200 },
+      );
+    };
+
+    const upgraded = await getAtlasGuide('PH', {
+      fetcher,
+      now: () => NOW,
+      store,
+      title: 'Philippines',
+    });
+    expect(calls).toBe(1);
+    expect(upgraded?.destinations?.map((d) => d.slug)).toEqual(['bohol']);
+  });
 });

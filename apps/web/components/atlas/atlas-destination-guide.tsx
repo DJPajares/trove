@@ -25,6 +25,7 @@ import { useHydrated } from '@/hooks/use-hydrated';
 import { atlasCountry } from '@/lib/atlas';
 import { fetchAtlasDestinationGuide } from '@/lib/atlas/api';
 import { readingMinutes } from '@/lib/atlas/format';
+import { suggestAtlasTripDates } from '@/lib/atlas/picks';
 import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import { useEntrance, type EntranceClock } from '@/lib/page-entrance';
@@ -167,7 +168,17 @@ export function AtlasDestinationGuideView({
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <Button
             className="h-11 rounded-full bg-white px-6 text-sm font-semibold text-neutral-900 hover:bg-white/90"
-            onClick={() => openCreateTripIn([countryCode])}
+            onClick={() => {
+              const dates = suggestAtlasTripDates(country.months, 9);
+              openCreateTripIn({
+                countries: [countryCode],
+                description: `Based on Wikivoyage's ${guide.title} guide (CC BY-SA 4.0).`,
+                destinations: [{ name: destination.name }],
+                endDate: dates.endDate,
+                name: `${destination.name}, ${countryLabel}`,
+                startDate: dates.startDate,
+              });
+            }}
             type="button"
           >
             {g('planTripTo', { place: destination.name })}

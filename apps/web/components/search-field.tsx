@@ -14,8 +14,10 @@ type SearchFieldProps = Omit<React.ComponentProps<typeof Input>, 'type'> & {
 
 export function SearchField({
   className,
+  enterKeyHint = 'search',
   id,
   label,
+  onKeyDown,
   wrapperClassName,
   ...props
 }: Readonly<SearchFieldProps>) {
@@ -31,7 +33,20 @@ export function SearchField({
         aria-hidden="true"
         className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
       />
-      <Input className={cn('pr-4 pl-10', className)} id={inputId} type="search" {...props} />
+      <Input
+        className={cn('pr-4 pl-10', className)}
+        enterKeyHint={enterKeyHint}
+        id={inputId}
+        onKeyDown={(event) => {
+          onKeyDown?.(event);
+          if (!event.defaultPrevented && event.key === 'Enter') {
+            event.preventDefault();
+            event.currentTarget.blur();
+          }
+        }}
+        type="search"
+        {...props}
+      />
     </div>
   );
 }

@@ -82,3 +82,17 @@ test('a Pexels key is required only when production reconciliation actively refr
     validateProductionEnvironment(noProvider, 'reconcile', { activeRefresh: true }),
   ).toThrow('PEXELS_API_KEY');
 });
+
+test('an Atlas sync needs the runtime pooler and an identified Wikimedia client', () => {
+  const atlas = { ...production, ATLAS_USER_AGENT: 'TroveAtlas/1.0 (ops@example.com)' };
+  expect(validateProductionEnvironment(atlas, 'atlas')).toStrictEqual({
+    host: 'aws-0-region.pooler.supabase.com',
+  });
+  expect(() => validateProductionEnvironment(production, 'atlas')).toThrow('ATLAS_USER_AGENT');
+  expect(() =>
+    validateProductionEnvironment(
+      { ...atlas, DATABASE_URL: atlas.DATABASE_URL.replace(':6543/', ':5432/') },
+      'atlas',
+    ),
+  ).toThrow('transaction pooler');
+});

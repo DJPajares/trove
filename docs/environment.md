@@ -209,9 +209,10 @@ decorative editorial imagery, not Google Places data. Use
 
 Atlas (PRD 40) keeps its countries and guides permanently in the database as
 shared reference data. The migration seeds every country with its typical
-conditions; `pnpm --filter @trove/api atlas:sync` refreshes them about once a
-year, and `atlas:sync --guides` stores every country's guide so no reader waits
-on Wikivoyage (guides not yet stored are read on first open). Set
+conditions; `pnpm atlas:sync` (local) or `pnpm atlas:sync:prod` refreshes them
+about once a year, and adding `-- --guides` stores every country's guide so no
+reader waits on Wikivoyage (guides not yet stored are read on first open). See
+the [Atlas deployment steps](../ops/vercel/README.md#atlas). Set
 `ATLAS_USER_AGENT` to a client name with a contact address: Wikimedia throttles
 clients that do not identify themselves. `ATLAS_DISABLED=1` stops guide text
 without affecting the country list.

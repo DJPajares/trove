@@ -189,3 +189,43 @@ pnpm editorial-images:reconcile -- --help
 Use `--category`, `--place-id`, `--cursor`, or `--all` to narrow or resume a run.
 Production reconciliation loads `.env.production`; active refresh also requires
 `PEXELS_API_KEY` in that file.
+
+## Atlas
+
+Atlas (PRD 40) keeps its countries and guides permanently in the database.
+Deploying it takes three steps, in this order.
+
+1. **Set `ATLAS_USER_AGENT` on `trove-api`.** In Vercel, open the `trove-api`
+   project, then Settings, then Environment Variables, and add
+   `ATLAS_USER_AGENT` for Production. The value names Trove to Wikimedia and
+   gives a way to reach you, for example
+   `TroveAtlas/1.0 (https://your-domain.example; you@example.com)`. It is not a
+   secret; Wikimedia throttles clients without one, and throttled guides show a
+   "try again" message until they can be read. For local development, put the
+   same line in the root `.env`.
+2. **Apply the migration** from your terminal, as for any release:
+   `pnpm db:migrate:prod` (see the [database guide](../../packages/db/README.md#workflow)).
+   It creates `atlas_countries` and `atlas_guides` and stores all 200 countries
+   with their typical conditions, so Atlas works as soon as the API deploys.
+3. **Optional: store every guide up front.** Without this, each guide is read
+   from Wikivoyage the first time anyone opens it, then kept. To fill them all
+   at once, add `ATLAS_USER_AGENT` to the root `.env.production` (the same file
+   `db:migrate:prod` reads) and run from the repository root:
+
+   ```bash
+   pnpm atlas:sync:prod -- --guides
+   ```
+
+   It checks that `.env.production` targets production, makes about 200
+   paced Wikivoyage requests (around ten minutes), and prints a code per
+   country, `?` marking any it could not read this time. Run it again to fill
+   those in; stored guides are skipped. Add `--refresh` to check every stored
+   guide for a newer revision.
+
+Run `pnpm atlas:sync -- --guides` (without `:prod`) to do the same against the
+database in your root `.env`, such as a local or development database that has
+had `pnpm db:migrate:deploy`. Once a year, `pnpm atlas:sync:prod` without
+`--guides` refreshes the countries' typical conditions with the latest
+complete year. `ATLAS_DISABLED=1` on `trove-api` stops guide text without
+affecting the country list.
+

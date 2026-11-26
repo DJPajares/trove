@@ -20,6 +20,7 @@ import {
   groupAtlasTripPicks,
   suggestAtlasTripDates,
 } from '@/lib/atlas/picks';
+import { ATLAS_THEMES, countriesForTheme, pickSurpriseCountry } from '@/lib/atlas/themes';
 
 function country(code: string, ratings: AtlasMonthClimate['rating'][]): AtlasCountry {
   return {
@@ -193,5 +194,22 @@ describe('Atlas trip picks (PRD 40.4)', () => {
     expect(
       buildAtlasAiPrompt(picks, { days: 4, endDate: '2027-02-08', startDate: '2027-02-05' }),
     ).toContain('Must-go places: Spot 1');
+  });
+});
+
+describe('Atlas themes and Surprise me (PRD 40.2)', () => {
+  it('resolves curated theme countries against the loaded index in curated order', () => {
+    const sample = [country('PH', []), country('JP', []), country('IT', []), country('ZZ', [])];
+    const food = countriesForTheme(sample, 'food');
+    expect(food.map((entry) => entry.countryCode)).toEqual(['JP', 'IT', 'PH']);
+    expect(ATLAS_THEMES).toEqual(['food', 'nature', 'cities', 'coast', 'festivals']);
+  });
+
+  it('picks a valid country for Surprise me and returns null when empty', () => {
+    expect(pickSurpriseCountry([])).toBeNull();
+    const sample = [country('JP', []), country('PH', []), country('IS', [])];
+    expect(pickSurpriseCountry(sample, () => 0)?.countryCode).toBe('JP');
+    expect(pickSurpriseCountry(sample, () => 0.5)?.countryCode).toBe('PH');
+    expect(pickSurpriseCountry(sample, () => 1)?.countryCode).toBe('IS');
   });
 });

@@ -38,6 +38,12 @@ const buttonVariants = cva(
           "size-7 [--icon-stroke:var(--icon-stroke-compact)] [&_svg:not([class*='size-'])]:size-3",
         'icon-sm': 'size-9',
         'icon-lg': 'size-11',
+        /**
+         * An icon circle on phones and a labelled button from `sm` up. Wrap the
+         * label in `<span data-label>`: it stays the accessible name when hidden.
+         */
+        adaptive:
+          'size-11 p-0 sm:h-11 sm:w-auto sm:gap-2 sm:px-5 sm:has-data-[icon=inline-end]:pr-4 sm:has-data-[icon=inline-start]:pl-4 max-sm:[&_[data-label]]:sr-only',
       },
     },
     defaultVariants: {

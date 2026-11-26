@@ -10,6 +10,7 @@ import { COVER_BLEED, COVER_HEIGHT, MEASURE, SCRIM } from '@/components/saved/fi
 import { useCoverUnderHeader } from '@/hooks/use-cover-under-header';
 import { dayHeaderFallback } from '@/lib/media/day-header-fallback';
 import type { TripMediaSource } from '@/lib/media/trip-media';
+import { pageEntrance } from '@/lib/page-entrance';
 import { cn } from '@/lib/utils';
 
 /**
@@ -21,6 +22,7 @@ export function AtlasCover({
   back,
   children,
   description,
+  enter = true,
   kicker,
   media,
   title,
@@ -28,6 +30,8 @@ export function AtlasCover({
   back?: { href: string; label: string };
   children?: ReactNode;
   description?: string;
+  /** The page's entrance, already decided for this mount. */
+  enter?: boolean;
   kicker: string;
   media: TripMediaSource | null;
   title: string;
@@ -46,7 +50,10 @@ export function AtlasCover({
     >
       <MediaFrame
         alt=""
-        className="absolute inset-0 -z-20 h-full w-full rounded-none"
+        className={cn(
+          'absolute inset-0 -z-20 h-full w-full rounded-none',
+          enter && pageEntrance.media,
+        )}
         dataSlot="atlas-cover-media"
         photographicPlaceholder={media ? undefined : dayHeaderFallback.preview}
         preload
@@ -68,7 +75,12 @@ export function AtlasCover({
       ) : null}
 
       <div className={MEASURE}>
-        <div className="mx-auto w-full max-w-5xl pt-[calc(var(--safe-top)+5rem)] pb-14 md:pt-[calc(var(--safe-top)+var(--header-height)+3rem)] md:pb-20">
+        <div
+          className={cn(
+            'mx-auto w-full max-w-5xl pt-[calc(var(--safe-top)+5rem)] pb-16 md:pt-[calc(var(--safe-top)+var(--header-height)+3rem)] md:pb-24',
+            enter && pageEntrance.rise,
+          )}
+        >
           <p className="text-[0.6875rem] font-semibold tracking-[0.14em] text-white/80 uppercase">
             {kicker}
           </p>

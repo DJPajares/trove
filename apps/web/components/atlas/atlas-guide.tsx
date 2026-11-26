@@ -41,6 +41,7 @@ import {
   readingMinutes,
   wetDaysInTen,
 } from '@/lib/atlas/format';
+import { suggestAtlasTripDates } from '@/lib/atlas/picks';
 import { currencyForCountry } from '@/lib/currency/country-currency';
 import { currencyPairHref } from '@/lib/currency/recent-pairs';
 import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
@@ -237,7 +238,18 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <Button
             className="h-11 rounded-full bg-white px-6 text-sm font-semibold text-neutral-900 hover:bg-white/90"
-            onClick={() => openCreateTripIn([countryCode])}
+            onClick={() => {
+              const dates = suggestAtlasTripDates(country.months, 12);
+              openCreateTripIn({
+                countries: [countryCode],
+                description: guide.data
+                  ? `Based on Wikivoyage's ${guide.data.title} guide (CC BY-SA 4.0).`
+                  : undefined,
+                endDate: dates.endDate,
+                name: country.name,
+                startDate: dates.startDate,
+              });
+            }}
             type="button"
           >
             {g('planTrip')}

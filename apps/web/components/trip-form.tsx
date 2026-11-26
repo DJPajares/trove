@@ -57,6 +57,7 @@ import {
   uploadTripCover,
 } from '@/lib/trips/api';
 import { cn } from '@/lib/utils';
+import type { TripCreationPrefill } from '@/components/trip-creation-provider';
 import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 type TripFormProps = {
@@ -68,6 +69,8 @@ type TripFormProps = {
   alternative?: { icon?: ReactNode; label: string; onClick: () => void };
   /** Countries a new trip starts with, such as the guide it was started from. */
   initialCountries?: readonly string[];
+  /** Rich prefill template (name, countries, destinations, suggested dates, attribution). */
+  initialPrefill?: TripCreationPrefill;
   onCancel: () => void;
   onDelete?: () => void;
   onSaved: (trip: Trip) => void;
@@ -100,19 +103,23 @@ function getToday() {
   return new Date(now.getTime() - offset).toISOString().slice(0, 10);
 }
 
-function createInitialForm(trip: Trip | null, initialCountries?: readonly string[]): FormState {
+function createInitialForm(
+  trip: Trip | null,
+  initialCountries?: readonly string[],
+  initialPrefill?: TripCreationPrefill,
+): FormState {
   const today = getToday();
 
   return {
     planningPreferences: readTripPlanningPreferences(trip?.planningPreferences),
-    countries: trip?.countries ?? [...(initialCountries ?? [])],
+    countries: trip?.countries ?? [...(initialPrefill?.countries ?? initialCountries ?? [])],
     coverPhotoPath: trip?.coverPhotoPath ?? null,
-    description: trip?.description ?? '',
-    endDate: trip?.endDate ?? today,
-    name: trip?.name ?? '',
+    description: trip?.description ?? initialPrefill?.description ?? '',
+    endDate: trip?.endDate ?? initialPrefill?.endDate ?? today,
+    name: trip?.name ?? initialPrefill?.name ?? '',
     partySize: String(trip?.partySize ?? 1),
     planningReadiness: trip?.planningReadiness ?? 'in_progress',
-    startDate: trip?.startDate ?? today,
+    startDate: trip?.startDate ?? initialPrefill?.startDate ?? today,
     visibility: trip?.visibility ?? 'private',
   };
 }
@@ -120,6 +127,7 @@ function createInitialForm(trip: Trip | null, initialCountries?: readonly string
 export function TripForm({
   alternative,
   initialCountries,
+  initialPrefill,
   onCancel,
   onDelete,
   onSaved,
@@ -128,14 +136,16 @@ export function TripForm({
   const queryClient = useQueryClient();
   const t = useTranslations('trips');
   const preferencesT = useTranslations('planningPreferences');
-  const [form, setForm] = useState(() => createInitialForm(trip, initialCountries));
+  const [form, setForm] = useState(() => createInitialForm(trip, initialCountries, initialPrefill));
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(trip?.coverPhotoUrl ?? null);
   const [error, setError] = useState<string | null>(null);
   const [dateError, setDateError] = useState<string | null>(null);
   // A trip that already carries optional detail opens showing it: a traveller
   // must never have to go looking for what they set themselves.
-  const [detailsOpen, setDetailsOpen] = useState(() => hasOptionalTripDetails(trip));
+  const [detailsOpen, setDetailsOpen] = useState(
+    () => hasOptionalTripDetails(trip) || Boolean(initialPrefill?.description),
+  );
   const [pendingDetailsFocus, setPendingDetailsFocus] = useState(false);
   const [status, setStatus] = useState<'idle' | 'saving'>('idle');
   /** Set before React can re-render, so a second tap has something to hit. */
@@ -242,6 +252,9 @@ export function TripForm({
       countries: form.countries,
       coverPhotoPath,
       description: form.description.trim() || null,
+      ...(!trip && initialPrefill?.destinations?.length
+        ? { destinations: [...initialPrefill.destinations] }
+        : {}),
       ...tripTimeZoneInput(trip, form.countries, deviceTimeZone),
       endDate: form.endDate,
       name: form.name.trim(),

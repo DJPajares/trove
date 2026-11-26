@@ -1772,5 +1772,16 @@
         "Atlas country guides now show languages, plug types, driving side, and national dishes in Essential facts."
       ]
     }
+  },
+  {
+    "id": "atlas-plan-trip-prefill-and-search",
+    "date": "2026-11-26",
+    "version": "1.50.1",
+    "summaries": {
+      "en": [
+        "Starting a trip from an Atlas guide now prefills the title, destination, best-season dates, and guide note so you can save in one tap.",
+        "Pressing Enter or Search on mobile now dismisses the keyboard right away so you can see search results."
+      ]
+    }
   }
 ]

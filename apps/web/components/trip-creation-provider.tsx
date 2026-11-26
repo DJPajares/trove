@@ -32,12 +32,21 @@ import { cn } from '@/lib/utils';
  */
 const LANDING_HOLD_MS = 800;
 
+export type TripCreationPrefill = {
+  countries?: readonly string[];
+  description?: string;
+  destinations?: readonly { name: string }[];
+  endDate?: string;
+  name?: string;
+  startDate?: string;
+};
+
 type TripCreationContextValue = {
   forgetCreatedTrip: (tripId: string) => void;
   latestCreatedTrip: Trip | null;
   openCreateTrip: () => void;
-  /** Opens the manual form with these countries filled in, as from an Atlas guide. */
-  openCreateTripIn: (countries: readonly string[]) => void;
+  /** Opens the manual form prefilled with countries, name, dates, and destination (e.g. from Atlas). */
+  openCreateTripIn: (countriesOrPrefill: readonly string[] | TripCreationPrefill) => void;
   /** Opens Plan with AI prefilled with a brief, such as from Atlas Trip picks. */
   openPlanWithAi: (prompt: string) => void;
 };
@@ -70,7 +79,7 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
   const reducedMotion = useReducedMotion();
   const [open, setOpen] = useState(false);
   const [creationMode, setCreationMode] = useState<'ai' | 'manual'>('ai');
-  const [initialCountries, setInitialCountries] = useState<readonly string[]>([]);
+  const [initialPrefill, setInitialPrefill] = useState<TripCreationPrefill | null>(null);
   const [latestCreatedTrip, setLatestCreatedTrip] = useState<Trip | null>(null);
   const [takeoverPhase, setTakeoverPhase] = useState<'landing' | 'working' | null>(null);
   const briefCatalogue = useAiPlanningBriefCatalogue();
@@ -143,20 +152,27 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
     return () => window.clearTimeout(timer);
   }, [reducedMotion, router, session?.id, session?.status]);
 
-  const openCreateTripIn = useCallback((countries: readonly string[]) => {
-    setInitialCountries(countries);
-    setCreationMode('manual');
-    setOpen(true);
-  }, []);
+  const openCreateTripIn = useCallback(
+    (countriesOrPrefill: readonly string[] | TripCreationPrefill) => {
+      setInitialPrefill(
+        Array.isArray(countriesOrPrefill)
+          ? { countries: countriesOrPrefill as readonly string[] }
+          : (countriesOrPrefill as TripCreationPrefill),
+      );
+      setCreationMode('manual');
+      setOpen(true);
+    },
+    [],
+  );
   const openCreateTrip = useCallback(() => {
-    setInitialCountries([]);
+    setInitialPrefill(null);
     setCreationMode('ai');
     setOpen(true);
     refreshRecovery();
   }, [refreshRecovery]);
   const openPlanWithAi = useCallback(
     (prompt: string) => {
-      setInitialCountries([]);
+      setInitialPrefill(null);
       setPrompt(prompt);
       setCreationMode('ai');
       setOpen(true);
@@ -185,6 +201,9 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
   function handleSaved(trip: Trip) {
     setLatestCreatedTrip(trip);
     setOpen(false);
+    if (pathnameRef.current.startsWith('/atlas')) {
+      router.push(`/trips/${trip.id}`);
+    }
   }
 
   return (
@@ -229,8 +248,13 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
                         : t('aiPlanning.planWithAi'),
                       onClick: () => setCreationMode('ai'),
                     }}
-                    initialCountries={initialCountries}
-                    key={initialCountries.join(',')}
+                    initialPrefill={initialPrefill ?? undefined}
+                    key={[
+                      initialPrefill?.countries?.join(',') ?? '',
+                      initialPrefill?.name ?? '',
+                      initialPrefill?.startDate ?? '',
+                      initialPrefill?.endDate ?? '',
+                    ].join('|')}
                     onCancel={() => setOpen(false)}
                     onSaved={handleSaved}
                     trip={null}

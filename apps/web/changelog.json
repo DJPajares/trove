@@ -1865,5 +1865,13 @@
     "summaries": {
       "en": ["Atlas theme filters show their icons neatly beside each name."]
     }
+  },
+  {
+    "id": "atlas-trips-open-faster",
+    "date": "2026-11-26",
+    "version": "1.53.3",
+    "summaries": {
+      "en": ["Trips planned from Atlas now open in a moment, with every place already in them."]
+    }
   }
 ]

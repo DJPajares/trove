@@ -1,8 +1,9 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { timeZoneForCountry } from '@trove/types/countries';
 import { z } from 'zod';
-import { tripPlanningPreferencesSchema } from '@trove/types';
+import { placeCategorySchema, tripPlanningPreferencesSchema } from '@trove/types';
 
+import { TRIP_CREATE_PLACE_LIMIT } from '../services/trip-create-places.js';
 import { getTripOverview } from '../services/trip-overview.js';
 import { isValidIanaTimeZone } from '../services/trip-rules.js';
 import { getBearerToken } from '../services/request-auth.js';
@@ -82,7 +83,22 @@ const tripFields = {
   // Chosen with the rest of the trip; Share remains the dedicated control.
   visibility: z.enum(['private', 'public']).optional(),
 } as const;
-const tripCreateSchema = z.object(tripFields).strict();
+/** A place the new trip carries, e.g. from an Atlas guide. Never matched to a provider. */
+const tripCreatePlaceSchema = z
+  .object({
+    category: placeCategorySchema.exclude(['other']).optional(),
+    latitude: z.number().min(-90).max(90).nullable().optional(),
+    longitude: z.number().min(-180).max(180).nullable().optional(),
+    name: z.string().trim().min(1).max(200),
+    priority: z.enum(['must_go', 'interested', 'maybe']).optional(),
+  })
+  .strict();
+const tripCreateSchema = z
+  .object({
+    ...tripFields,
+    places: z.array(tripCreatePlaceSchema).max(TRIP_CREATE_PLACE_LIMIT).optional(),
+  })
+  .strict();
 const tripUpdateSchema = z
   .object({
     planningPreferences: tripFields.planningPreferences,

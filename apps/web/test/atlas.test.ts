@@ -15,7 +15,7 @@ import {
   type AtlasCountry,
 } from '@/lib/atlas';
 import { formatMonthRuns, wetDaysInTen } from '@/lib/atlas/format';
-import { atlasGuidePlaces } from '@/lib/atlas/picks';
+import { atlasGuidePlaces, atlasTripPlaces } from '@/lib/atlas/picks';
 import { townAtlasGuide } from '@/lib/atlas/trip-guides';
 import { extractListCards, parseNamedListItem } from '@/lib/atlas/cards';
 import {
@@ -321,5 +321,46 @@ describe('atlasGuidePlaces', () => {
     );
     const many = Array.from({ length: 23 }, (_, index) => ({ ...lagoon!, id: `pick-${index}` }));
     expect(atlasGuidePlaces(sections, context, many)).toHaveLength(1);
+  });
+});
+
+describe('atlasTripPlaces', () => {
+  const pick = (name: string, kind: AtlasListingKind = 'do') => ({
+    addedAt: 0,
+    address: null,
+    countryCode: 'PH',
+    countryName: 'Philippines',
+    destinationName: 'El Nido',
+    destinationSlug: 'el-nido',
+    guideTitle: 'El Nido',
+    id: name,
+    kind,
+    latitude: null,
+    longitude: null,
+    name,
+  });
+
+  it('puts picks first as Must Go and the guide’s places after as Interested', () => {
+    expect(atlasTripPlaces([pick('Pick')], [pick('Cafe', 'eat')])).toEqual([
+      {
+        category: 'things_to_do',
+        latitude: null,
+        longitude: null,
+        name: 'Pick',
+        priority: 'must_go',
+      },
+      {
+        category: 'food_and_drink',
+        latitude: null,
+        longitude: null,
+        name: 'Cafe',
+        priority: 'interested',
+      },
+    ]);
+  });
+
+  it('never sends more than 24 places', () => {
+    const many = Array.from({ length: 30 }, (_, index) => pick(`P${index}`));
+    expect(atlasTripPlaces(many.slice(0, 10), many.slice(10))).toHaveLength(24);
   });
 });

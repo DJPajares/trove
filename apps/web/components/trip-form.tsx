@@ -56,7 +56,7 @@ import {
   type TripInput,
   uploadTripCover,
 } from '@/lib/trips/api';
-import { addAtlasPicksToTrip } from '@/lib/atlas/trip-from-picks';
+import { atlasTripPlaces } from '@/lib/atlas/picks';
 import * as Icons from '@/lib/icons';
 import { cn } from '@/lib/utils';
 import type { TripCreationPrefill } from '@/components/trip-creation-provider';
@@ -257,6 +257,15 @@ export function TripForm({
       ...(!trip && initialPrefill?.destinations?.length
         ? { destinations: [...initialPrefill.destinations] }
         : {}),
+      // Atlas picks and guide places arrive with the trip in the same request.
+      ...(!trip && (initialPrefill?.atlasPicks?.length || initialPrefill?.atlasGuidePlaces?.length)
+        ? {
+            places: atlasTripPlaces(
+              initialPrefill.atlasPicks ?? [],
+              initialPrefill.atlasGuidePlaces ?? [],
+            ),
+          }
+        : {}),
       ...tripTimeZoneInput(trip, form.countries, deviceTimeZone),
       endDate: form.endDate,
       name: form.name.trim(),
@@ -290,12 +299,6 @@ export function TripForm({
       removeTripQueries(queryClient, result.trip.id, TRIP_DATE_QUERY_ROOTS);
     }
     setPendingShrink(null);
-    if (!trip && initialPrefill?.atlasPicks?.length) {
-      await addAtlasPicksToTrip(result.trip.id, initialPrefill.atlasPicks);
-    }
-    if (!trip && initialPrefill?.atlasGuidePlaces?.length) {
-      await addAtlasPicksToTrip(result.trip.id, initialPrefill.atlasGuidePlaces, 'interested');
-    }
     if (!trip) initialPrefill?.onCreated?.(result.trip);
     onSaved(result.trip);
   }

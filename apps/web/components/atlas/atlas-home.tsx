@@ -172,18 +172,18 @@ export function AtlasHome() {
               />
               {/* A phone keeps the field wide: the shuffle icon carries the action there. */}
               <Button
-                className="max-sm:size-11 max-sm:p-0"
                 disabled={!countries.length}
                 onClick={() => {
                   const picked = pickSurpriseCountry(countries);
                   if (picked) router.push(`/atlas/${picked.countryCode}`);
                 }}
                 title={t('surpriseMe')}
+                size="adaptive"
                 type="button"
                 variant="outline"
               >
                 <Shuffle aria-hidden="true" data-icon="inline-start" />
-                <span className="max-sm:sr-only">{t('surpriseMe')}</span>
+                <span data-label>{t('surpriseMe')}</span>
               </Button>
             </div>
 

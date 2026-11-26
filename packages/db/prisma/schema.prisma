@@ -662,6 +662,50 @@ model ClimateNormSnapshot {
   @@schema("trove")
 }
 
+/// One country in Atlas (PRD 40): shared reference data, not any traveller's.
+/// Rows are kept permanently and refreshed by `pnpm --filter @trove/api
+/// atlas:sync` about once a year. `climate` holds twelve months of typical
+/// conditions; the month ratings are derived from it when served, so a change
+/// to the rating rule never needs the data rewritten.
+model AtlasCountry {
+  countryCode     String       @id @map("country_code") @db.VarChar(2)
+  region          String       @db.VarChar(16)
+  wikivoyageTitle String       @map("wikivoyage_title")
+  climateCity     String       @map("climate_city")
+  latitude        Decimal      @db.Decimal(9, 6)
+  longitude       Decimal      @db.Decimal(9, 6)
+  /// `[{ month, temperatureMaxC, temperatureMinC, wetDayShare }]`, January first.
+  climate         Json?
+  climateYearFrom Int?         @map("climate_year_from") @db.SmallInt
+  climateYearTo   Int?         @map("climate_year_to") @db.SmallInt
+  updatedAt       DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  guides          AtlasGuide[]
+
+  @@map("atlas_countries")
+  @@schema("trove")
+}
+
+/// A country's guide, adapted from Wikivoyage into plain-text sections and
+/// kept permanently as shared data. `fetchedAt` dates the copy: once it is a
+/// month old the next reader triggers a check for a newer revision, and a
+/// failed check leaves the stored guide exactly as it was.
+model AtlasGuide {
+  id          String       @id @default(uuid(7)) @db.Uuid
+  countryCode String       @map("country_code") @db.VarChar(2)
+  language    String       @default("en") @db.VarChar(8)
+  title       String
+  revisionId  BigInt       @map("revision_id")
+  /// `{ lead, sections }` in the shape of `AtlasGuide`, already plain text.
+  content     Json
+  fetchedAt   DateTime     @default(now()) @map("fetched_at") @db.Timestamptz(3)
+  country     AtlasCountry @relation(fields: [countryCode], references: [countryCode], onDelete: Cascade)
+
+  @@unique([countryCode, language], name: "atlas_guide_subject")
+  @@index([fetchedAt])
+  @@map("atlas_guides")
+  @@schema("trove")
+}
+
 /// One day's exchange rates from Frankfurter, always expressed against EUR.
 ///
 /// Frankfurter republishes once per working day, so asking it per conversion

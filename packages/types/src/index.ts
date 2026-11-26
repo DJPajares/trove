@@ -14,3 +14,4 @@ export * from './itinerary-movement.js';
 export * from './health.js';
 export * from './stays.js';
 export * from './place-categories.js';
+export * from './atlas.js';

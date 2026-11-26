@@ -5,6 +5,7 @@ import {
   FLOATING_ACTION_STAGGER_S,
   floatingActionDelay,
   floatingActionOrder,
+  mobileOnlyFloatingActions,
   profileInitials,
   searchStandsAlone,
 } from '@/lib/shell/floating-actions';
@@ -14,14 +15,24 @@ describe('floating action stack order', () => {
     expect(floatingActionOrder[0]).toBe('search');
   });
 
-  it('follows with notifications and appearance, then account at the bottom', () => {
-    expect(floatingActionOrder).toEqual(['search', 'notifications', 'appearance', 'account']);
+  it('follows with Tools, notifications and appearance, then account at the bottom', () => {
+    expect(floatingActionOrder).toEqual([
+      'search',
+      'tools',
+      'notifications',
+      'appearance',
+      'account',
+    ]);
+  });
+
+  it('carries Tools on phones only, where the bottom bar has no room for it', () => {
+    expect([...mobileOnlyFloatingActions]).toEqual(['tools']);
   });
 });
 
 describe('searchStandsAlone', () => {
   it('gives search its own button on the main destinations', () => {
-    for (const path of ['/', '/trips', '/saved', '/tools']) {
+    for (const path of ['/', '/trips', '/atlas', '/saved', '/tools']) {
       expect(searchStandsAlone(path), path).toBe(true);
     }
   });

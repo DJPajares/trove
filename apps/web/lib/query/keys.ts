@@ -27,6 +27,10 @@ export const queryKeys = {
   aiPlanningAvailability: () => ['ai-planning', 'availability'] as const,
   aiPlanningRecovery: () => ['ai-planning', 'recovery'] as const,
   aiPlanningSession: (sessionId: string) => ['ai-planning', 'session', sessionId] as const,
+  /** One country's Atlas guide. Kept on the device so an opened guide reads offline. */
+  atlasGuide: (countryCode: string) => ['atlas', 'guide', countryCode] as const,
+  /** Every Atlas country and its typical conditions, kept on the device for offline browsing. */
+  atlasIndex: () => ['atlas', 'countries'] as const,
   currencies: () => ['currency', 'list'] as const,
   currencyRate: (base: string, quote: string) => ['currency', 'rate', base, quote] as const,
 
@@ -207,6 +211,8 @@ export const PROVIDER_BILLABLE_QUERY_ROOTS = new Set([
  * snapshot-owned roots are deliberately absent from this set.
  */
 export const PERSISTED_QUERY_ROOTS = new Set([
+  // Opened Atlas guides stay readable offline (PRD 40.5).
+  'atlas',
   'currency',
   'editorial-images',
   'itinerary-day-routes',

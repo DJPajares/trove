@@ -386,3 +386,22 @@ export function getEditorialImagesEnvironment(
 
   return { hourlyBudget, pexelsApiKey };
 }
+
+export type AtlasEnvironment = {
+  /** Sent to Wikimedia, which asks automated clients for a name and contact. */
+  userAgent: string;
+};
+
+/**
+ * Atlas reads guides from Wikivoyage (PRD 40). `ATLAS_DISABLED` is the global
+ * kill switch: guide text stops being served, while the bundled country index,
+ * Trips and anything already made from a guide carry on.
+ */
+export function getAtlasEnvironment(
+  environment: Record<string, string | undefined> = process.env,
+): AtlasEnvironment | null {
+  const disabled = environment.ATLAS_DISABLED?.trim().toLowerCase();
+  if (disabled === '1' || disabled === 'true') return null;
+
+  return { userAgent: environment.ATLAS_USER_AGENT?.trim() || 'TroveAtlas/1.0' };
+}

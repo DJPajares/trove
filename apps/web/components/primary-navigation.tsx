@@ -15,6 +15,7 @@ import { motionEase } from '@/lib/motion';
 import {
   isImmersiveTripPath,
   isPrimaryDestinationActive,
+  mobileNavigationDestinations,
   primaryNavigationDestinations,
 } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
@@ -34,7 +35,7 @@ type NavigationItem = {
    * class from a value it only sees at runtime. Column three is left empty for
    * the create action. Ignored by the desktop variant.
    */
-  column: string;
+  column: string | null;
   href: string;
   icon: ComponentType<{ className?: string }>;
   label: string;
@@ -129,13 +130,23 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
   const t = useTranslations('navigation');
   const { openCreateTrip } = useTripCreation();
   const primaryAction = usePrimaryAction();
-  const icons = { home: Icons.Home, saved: Icons.Saved, tools: Icons.Tools, trips: Icons.Trips };
-  const items: NavigationItem[] = primaryNavigationDestinations.map(({ column, href, key }) => ({
+  const icons = {
+    atlas: Icons.Atlas,
+    home: Icons.Home,
+    saved: Icons.Saved,
+    tools: Icons.Tools,
+    trips: Icons.Trips,
+  };
+  const toItem = ({
+    column,
+    href,
+    key,
+  }: (typeof primaryNavigationDestinations)[number]): NavigationItem => ({
     column,
     href,
     icon: icons[key],
     label: t(key),
-  }));
+  });
 
   // Trip Mode and the Memories journal own the bottom of the screen while a
   // traveller is in them. The desktop rail stays: there is no thumb zone to
@@ -143,8 +154,16 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
   if (variant === 'mobile' && isImmersiveTripPath(pathname)) return null;
 
   if (variant === 'desktop') {
-    return <DesktopNavigation items={items} label={t('primary')} pathname={pathname} />;
+    return (
+      <DesktopNavigation
+        items={primaryNavigationDestinations.map(toItem)}
+        label={t('primary')}
+        pathname={pathname}
+      />
+    );
   }
+
+  const items = mobileNavigationDestinations.map(toItem);
 
   return (
     // The bar itself only sizes and positions. Its surface is a separate masked
@@ -172,7 +191,7 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
               const active = isPrimaryDestinationActive(pathname, href);
 
               return (
-                <li className={column} key={href}>
+                <li className={column ?? undefined} key={href}>
                   <Link
                     aria-current={active ? 'page' : undefined}
                     className={cn(

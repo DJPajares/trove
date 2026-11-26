@@ -55,6 +55,8 @@ Set these in `trove-api` for Preview and Production:
 - `GOOGLE_PROVIDERS_DISABLED`, `PLAN_SCORE_DISABLED`, and
   `EDITORIAL_IMAGES_DISABLED` — independent provider/feature kill switches.
 - `EDITORIAL_IMAGE_HOURLY_BUDGET` — optional editorial-provider request ceiling.
+- `ATLAS_USER_AGENT` — the name and contact address Atlas sends to Wikimedia,
+  which throttles unidentified clients. `ATLAS_DISABLED` stops guide text.
 - `ADMIN_CREDENTIALS` — optional scoped operator credential registry; leave unset
   to keep admin operations disabled. See the
   [entitlement runbook](../../docs/ai/entitlements-runbook.md).

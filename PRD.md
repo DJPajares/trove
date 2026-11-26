@@ -2779,7 +2779,7 @@ Every guide uses one layout, top to bottom:
 
 1. **Cover** — editorial photograph, the destination's name in the editorial serif, and one line from its introduction.
 2. **At a glance** — quick-fact chips: currency, languages, plug type, side of the road, time zone and, where known, national dish. The currency chip opens the Currency tool.
-3. **Best time to go** — a twelve-month strip labelled Great, Good, Mixed, or Off-season. Choosing a month shows its typical high and low, its share of wet days, and holidays in it, all hedged as typical. The label comes from the same seasonal-fit evaluation Plan Score uses (Section 29.1), so a guide and a trip's score never disagree about a month.
+3. **Best time to go** — a twelve-month strip labelled Great, Good, Mixed, or Off-season. Choosing a month shows its typical high and low, its share of wet days, and holidays in it, all hedged as typical. The label is built from the same typical conditions Insights and seasonal fit read (Section 29.7), judging rain against the place's own driest month so a tropical dry season reads as one; heat, cool and cold count on their own.
 4. **Sections** — Wikivoyage's own order (Understand, Talk, Get in, Get around, See, Do, Eat, Drink, Sleep, Stay safe, Respect, Connect), omitting empty ones. A sticky row of section chips jumps between them. Sections start collapsed and show a reading-time estimate.
 5. **Listings** — See, Do, Eat, Drink, and Sleep entries render as cards. Each card offers **Add to trip picks** and, from its menu, **Save** (Section 40.5).
 6. **Eat** leads with dish cards; **Talk** renders its phrasebook as tap-to-reveal cards.
@@ -2834,10 +2834,12 @@ The draft is reviewed and applied exactly as in Section 7.6.4: immutable, scored
 - **Search.** Guides appear as secondary results (Section 16.3).
 - **Offline.** Preparing a trip offline (Section 28) also stores its destinations' guide text, quick facts, best-time strip, and phrasebook. Guides are enrichment: their absence or staleness never prevents Ready, and their photographs fall back as Section 4.8 describes. Atlas pages already opened on the device remain readable offline while their stored copy is kept.
 
-## 40.6 Cost, Caching, and Freshness
+## 40.6 Storage, Cost, and Freshness
 
-- A guide is fetched the first time any traveller opens it, stored as a dated, sanitised snapshot with its source revision, shared across travellers (the licence permits this), and refreshed once older than 30 days. A fresh snapshot is read from Trove's database and never re-fetches.
-- Atlas's index — subjects, country codes, coordinates, and the twelve-month best-time patterns for its listed destinations — is built ahead of time and bundled, refreshed at least yearly. Browsing never fetches per row: no climate, guide, or Google request runs because a list rendered.
+Atlas's countries, typical conditions and guides are shared reference data, not any traveller's. They are stored permanently in Trove's database and are never deleted for being old.
+
+- **Countries.** Each country's Wikivoyage title, the city its conditions are measured at, and twelve months of typical conditions over the last five complete years live in the database, seeded with the release and refreshed about once a year by a sync job. Month ratings are derived from the stored conditions when served, so a change to the rating rule never needs the data rewritten. Clients keep a copy for offline browsing. Browsing never fetches per row: no climate, guide, or Google request runs because a list rendered.
+- **Guides.** A guide is read from Wikivoyage once, by the sync job or by the first traveller to open it, and stored as sanitised plain-text sections with its source revision, shared across travellers (the licence permits this). Once a stored guide is a month old, the next reader triggers a check for a newer revision; a failed check leaves the stored guide exactly as it was.
 - Browse grids resolve editorial photographs only for visible cards, through the existing editorial-image budget and caches, falling back to the branded artwork.
 - Google requests happen only on a traveller's explicit Save or Make it a trip, inside the budgets above.
 - Requests to Wikimedia identify Trove with a generic client name and contact, never a traveller's details.

@@ -29,3 +29,12 @@ export const PUBLIC_SHARE_RATE_LIMIT = perMinute(60);
  * saves more than a handful by hand; the ceiling is for a client stuck retrying.
  */
 export const TRIP_COPY_RATE_LIMIT = perMinute(10);
+
+/**
+ * An Atlas guide. Usually a database read; when a country has no stored guide
+ * yet, one Wikivoyage request that every later reader shares.
+ */
+export const ATLAS_GUIDE_RATE_LIMIT = perMinute(60);
+
+/** The Atlas country list: one database read shared by everyone, held in memory. */
+export const ATLAS_INDEX_RATE_LIMIT = perMinute(60);

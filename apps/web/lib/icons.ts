@@ -26,6 +26,7 @@ import type { TripSection } from '@/lib/trips/navigation';
 
 // Global navigation
 export {
+  Earth as Atlas,
   PocketKnife as Tools,
   Bookmark as Saved,
   House as Home,

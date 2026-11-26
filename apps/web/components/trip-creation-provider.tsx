@@ -36,6 +36,8 @@ type TripCreationContextValue = {
   forgetCreatedTrip: (tripId: string) => void;
   latestCreatedTrip: Trip | null;
   openCreateTrip: () => void;
+  /** Opens the manual form with these countries filled in, as from an Atlas guide. */
+  openCreateTripIn: (countries: readonly string[]) => void;
 };
 
 type TripCreationProviderProps = {
@@ -48,6 +50,7 @@ const disabledTripCreationContext: TripCreationContextValue = {
   forgetCreatedTrip: () => undefined,
   latestCreatedTrip: null,
   openCreateTrip: () => undefined,
+  openCreateTripIn: () => undefined,
 };
 
 export function useTripCreation() {
@@ -64,6 +67,7 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
   const reducedMotion = useReducedMotion();
   const [open, setOpen] = useState(false);
   const [creationMode, setCreationMode] = useState<'ai' | 'manual'>('ai');
+  const [initialCountries, setInitialCountries] = useState<readonly string[]>([]);
   const [latestCreatedTrip, setLatestCreatedTrip] = useState<Trip | null>(null);
   const [takeoverPhase, setTakeoverPhase] = useState<'landing' | 'working' | null>(null);
   const briefCatalogue = useAiPlanningBriefCatalogue();
@@ -136,7 +140,13 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
     return () => window.clearTimeout(timer);
   }, [reducedMotion, router, session?.id, session?.status]);
 
+  const openCreateTripIn = useCallback((countries: readonly string[]) => {
+    setInitialCountries(countries);
+    setCreationMode('manual');
+    setOpen(true);
+  }, []);
   const openCreateTrip = useCallback(() => {
+    setInitialCountries([]);
     setCreationMode('ai');
     setOpen(true);
     refreshRecovery();
@@ -147,9 +157,9 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
   const context = useMemo(
     () =>
       enabled
-        ? { forgetCreatedTrip, latestCreatedTrip, openCreateTrip }
+        ? { forgetCreatedTrip, latestCreatedTrip, openCreateTrip, openCreateTripIn }
         : disabledTripCreationContext,
-    [enabled, forgetCreatedTrip, latestCreatedTrip, openCreateTrip],
+    [enabled, forgetCreatedTrip, latestCreatedTrip, openCreateTrip, openCreateTripIn],
   );
 
   function handleSaved(trip: Trip) {
@@ -199,6 +209,8 @@ export function TripCreationProvider({ children, enabled }: Readonly<TripCreatio
                         : t('aiPlanning.planWithAi'),
                       onClick: () => setCreationMode('ai'),
                     }}
+                    initialCountries={initialCountries}
+                    key={initialCountries.join(',')}
                     onCancel={() => setOpen(false)}
                     onSaved={handleSaved}
                     trip={null}

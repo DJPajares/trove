@@ -66,6 +66,8 @@ type TripFormProps = {
    * the sheet's own close button still dismisses it.
    */
   alternative?: { icon?: ReactNode; label: string; onClick: () => void };
+  /** Countries a new trip starts with, such as the guide it was started from. */
+  initialCountries?: readonly string[];
   onCancel: () => void;
   onDelete?: () => void;
   onSaved: (trip: Trip) => void;
@@ -98,12 +100,12 @@ function getToday() {
   return new Date(now.getTime() - offset).toISOString().slice(0, 10);
 }
 
-function createInitialForm(trip: Trip | null): FormState {
+function createInitialForm(trip: Trip | null, initialCountries?: readonly string[]): FormState {
   const today = getToday();
 
   return {
     planningPreferences: readTripPlanningPreferences(trip?.planningPreferences),
-    countries: trip?.countries ?? [],
+    countries: trip?.countries ?? [...(initialCountries ?? [])],
     coverPhotoPath: trip?.coverPhotoPath ?? null,
     description: trip?.description ?? '',
     endDate: trip?.endDate ?? today,
@@ -115,11 +117,18 @@ function createInitialForm(trip: Trip | null): FormState {
   };
 }
 
-export function TripForm({ alternative, onCancel, onDelete, onSaved, trip }: TripFormProps) {
+export function TripForm({
+  alternative,
+  initialCountries,
+  onCancel,
+  onDelete,
+  onSaved,
+  trip,
+}: TripFormProps) {
   const queryClient = useQueryClient();
   const t = useTranslations('trips');
   const preferencesT = useTranslations('planningPreferences');
-  const [form, setForm] = useState(() => createInitialForm(trip));
+  const [form, setForm] = useState(() => createInitialForm(trip, initialCountries));
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(trip?.coverPhotoUrl ?? null);
   const [error, setError] = useState<string | null>(null);

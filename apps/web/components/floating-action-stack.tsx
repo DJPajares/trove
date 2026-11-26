@@ -3,6 +3,7 @@
 import { Menu, Search, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -17,11 +18,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useCollapsingHeader } from '@/hooks/use-collapsing-header';
 import { cn } from '@/lib/utils';
+import * as Icons from '@/lib/icons';
+import { isToolsPath } from '@/lib/navigation';
 import { navigationTransition } from '@/lib/motion';
 import {
   floatingActionDelay,
   floatingActionOrder,
   floatingActionTriggerClass,
+  mobileOnlyFloatingActions,
   profileInitials,
   searchStandsAlone,
 } from '@/lib/shell/floating-actions';
@@ -163,6 +167,23 @@ export function FloatingActionStack() {
         <Search aria-hidden="true" className="size-5" />
       </Button>
     ),
+    // A destination rather than a control, so it is a link. Phones only: wider
+    // screens carry Tools in the header.
+    tools: (
+      <Link
+        aria-current={isToolsPath(pathname) ? 'page' : undefined}
+        aria-label={t('tools')}
+        className={cn(
+          'inline-flex size-11 items-center justify-center border text-foreground',
+          floatingActionTriggerClass,
+        )}
+        data-translucent-surface
+        href="/tools"
+        onClick={collapse}
+      >
+        <Icons.Tools aria-hidden="true" className="size-5" />
+      </Link>
+    ),
     account: <AccountMenu onNavigate={collapse} triggerVariant="floating" />,
     appearance: <AppearanceToggle onToggle={collapseAndRestoreFocus} triggerVariant="floating" />,
     notifications: <NotificationCenter onNavigate={collapse} triggerVariant="floating" />,
@@ -296,6 +317,7 @@ export function FloatingActionStack() {
               {stackOrder.map((action, index) => (
                 <motion.div
                   animate={{ opacity: 1, scale: 1, y: 0 }}
+                  className={mobileOnlyFloatingActions.has(action) ? 'md:hidden' : undefined}
                   exit={{
                     opacity: 0,
                     scale: 0.85,

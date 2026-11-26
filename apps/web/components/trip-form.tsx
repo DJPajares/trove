@@ -56,6 +56,8 @@ import {
   type TripInput,
   uploadTripCover,
 } from '@/lib/trips/api';
+import { addAtlasPicksToTrip } from '@/lib/atlas/trip-from-picks';
+import * as Icons from '@/lib/icons';
 import { cn } from '@/lib/utils';
 import type { TripCreationPrefill } from '@/components/trip-creation-provider';
 import { ScrollShadow } from '@/components/ui/scroll-shadow';
@@ -288,6 +290,10 @@ export function TripForm({
       removeTripQueries(queryClient, result.trip.id, TRIP_DATE_QUERY_ROOTS);
     }
     setPendingShrink(null);
+    if (!trip && initialPrefill?.atlasPicks?.length) {
+      await addAtlasPicksToTrip(result.trip.id, initialPrefill.atlasPicks);
+    }
+    if (!trip) initialPrefill?.onCreated?.(result.trip);
     onSaved(result.trip);
   }
 
@@ -570,6 +576,12 @@ export function TripForm({
               />
               <FieldDescription id="trip-countries-hint">{t('countriesHint')}</FieldDescription>
             </Field>
+            {!trip && initialPrefill?.atlasPicks?.length ? (
+              <p className="flex items-start gap-2 text-sm text-muted-foreground">
+                <Icons.Places aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-brand" />
+                {t('atlasPicksCarried', { count: initialPrefill.atlasPicks.length })}
+              </p>
+            ) : null}
             {visibilityField}
           </section>
 

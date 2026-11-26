@@ -18,7 +18,6 @@ import * as Icons from '@/lib/icons';
 import {
   addIsoDays,
   ATLAS_MAX_TRIP_PICKS,
-  atlasPickCategory,
   atlasTripAttribution,
   buildAtlasAiPrompt,
   groupAtlasTripPicks,
@@ -26,8 +25,7 @@ import {
 } from '@/lib/atlas/picks';
 import { deviceTimeZone } from '@/lib/itinerary/api';
 import { queryKeys } from '@/lib/query/keys';
-import { createCustomPlace, updateCustomPlace } from '@/lib/saved/api';
-import { addTripPlace, updateTripPlace } from '@/lib/trip-places/api';
+import { addAtlasPicksToTrip } from '@/lib/atlas/trip-from-picks';
 import { createTrip } from '@/lib/trips/api';
 
 /**
@@ -104,20 +102,7 @@ export function AtlasPicksTray() {
         startDate,
       });
 
-      // Add every pick as a Custom Place + Trip Place (0 Google calls, never touching Saved).
-      for (const pick of picks) {
-        const { place } = await createCustomPlace({ name: pick.name });
-        if (pick.latitude !== null && pick.longitude !== null) {
-          await updateCustomPlace(place.id, {
-            location: { latitude: pick.latitude, longitude: pick.longitude },
-          }).catch(() => undefined);
-        }
-        const { tripPlace } = await addTripPlace(trip.id, place.id);
-        await updateTripPlace(trip.id, tripPlace.id, {
-          categories: [atlasPickCategory(pick.kind)],
-          priority: 'must_go',
-        }).catch(() => undefined);
-      }
+      await addAtlasPicksToTrip(trip.id, picks);
 
       clearPicks();
       setOpen(false);

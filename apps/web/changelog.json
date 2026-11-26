@@ -1847,5 +1847,15 @@
         "Your own trip picks still lead as Must Go."
       ]
     }
+  },
+  {
+    "id": "raised-mobile-bottom-bar",
+    "date": "2026-11-26",
+    "version": "1.53.1",
+    "summaries": {
+      "en": [
+        "On phones, the bottom bar and its create button now sit softly raised above the page."
+      ]
+    }
   }
 ]

@@ -172,6 +172,13 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
     // wrapper for the same reason: `inset-0` resolves against the padding box
     // while the mask resolves against the border box, and the two must agree.
     <div className="fixed inset-x-0 bottom-0 z-[var(--layer-sticky)] h-[calc(var(--bottom-bar-height)+var(--safe-bottom))] md:hidden">
+      {/* The bar's shadow is cast by a copy of the hairline: a filter on its
+          wrapper follows the masked silhouette, notch and all. The wrapper
+          never holds the surface, because a filtered ancestor would cut the
+          surface's backdrop blur off from the page behind it. */}
+      <span aria-hidden="true" className="nav-bar-shadow">
+        <span className="nav-notch-edge absolute top-[calc(var(--nav-bar-shadow-reach)-1px)] right-0 bottom-0 left-0 bg-border-subtle" />
+      </span>
       {/* The hairline is its own layer, cut to the same silhouette grown by 1px,
           because a `border-top` can only draw the flat part and would die at the
           shoulders where the curve begins. */}
@@ -181,7 +188,7 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
       />
       <span
         aria-hidden="true"
-        className="nav-notch-surface absolute inset-0 z-0 bg-background/96 backdrop-blur supports-[backdrop-filter]:bg-background/90"
+        className="nav-notch-surface absolute inset-0 z-0 bg-background/96 bg-[image:linear-gradient(to_bottom,var(--nav-bar-highlight),transparent_1.25rem)] backdrop-blur supports-[backdrop-filter]:bg-background/90"
         data-translucent-surface
       />
       <div className="relative z-10 mx-auto h-full max-w-xl px-[max(0.5rem,var(--safe-left),var(--safe-right))] pt-2 pb-[var(--safe-bottom)]">

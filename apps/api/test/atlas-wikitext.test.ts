@@ -94,6 +94,71 @@ describe('parseWikivoyageArticle', () => {
   it('drops sections that only point elsewhere', () => {
     expect(parsed.sections.map((section) => section.id)).toEqual(['regions', 'understand', 'see']);
   });
+
+  it('extracts linked destinations from Regions, Cities, and Other destinations and trims country boilerplate in country mode', () => {
+    const countryArticle = `An island nation.
+
+==Regions==
+{{Regionlist
+| region1name=[[Visayas]]
+| region1description=Central islands.
+}}
+
+==Cities==
+* [[Manila]] — Capital city.
+* {{city| name=[[Cebu City|Cebu]] | content=Historic port. }}
+
+==Other destinations==
+* [[Bohol]] — Chocolate Hills and tarsiers.
+* [[Siargao]] — Surf island.
+
+==Understand==
+Rich maritime history.
+
+==Sleep==
+Generic country sleep boilerplate.
+`;
+    const country = parseWikivoyageArticle(countryArticle, { mode: 'country' });
+    expect(country.destinations).toEqual([
+      {
+        kind: 'region',
+        name: 'Visayas',
+        slug: 'visayas',
+        summary: 'Central islands.',
+        wikivoyageTitle: 'Visayas',
+      },
+      {
+        kind: 'city',
+        name: 'Manila',
+        slug: 'manila',
+        summary: 'Capital city.',
+        wikivoyageTitle: 'Manila',
+      },
+      {
+        kind: 'city',
+        name: 'Cebu',
+        slug: 'cebu-city',
+        summary: 'Historic port.',
+        wikivoyageTitle: 'Cebu City',
+      },
+      {
+        kind: 'destination',
+        name: 'Bohol',
+        slug: 'bohol',
+        summary: 'Chocolate Hills and tarsiers.',
+        wikivoyageTitle: 'Bohol',
+      },
+      {
+        kind: 'destination',
+        name: 'Siargao',
+        slug: 'siargao',
+        summary: 'Surf island.',
+        wikivoyageTitle: 'Siargao',
+      },
+    ]);
+    // Option A: Cities, Other destinations, and generic country-level Sleep are trimmed.
+    expect(country.sections.map((s) => s.id)).toEqual(['regions', 'understand']);
+  });
 });
 
 it('drops an image whose caption runs over several lines', () => {

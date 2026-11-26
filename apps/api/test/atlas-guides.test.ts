@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   ATLAS_GUIDE_REFRESH_MS,
+  getAtlasDestinationGuide,
   getAtlasGuide,
   resetAtlasGuideFailures,
   type AtlasGuideStore,
@@ -15,7 +16,8 @@ const NOW = new Date('2026-11-26T00:00:00Z');
 function memoryStore(): AtlasGuideStore & { saved: Parameters<AtlasGuideStore['write']>[0][] } {
   const saved: Parameters<AtlasGuideStore['write']>[0][] = [];
   return {
-    read: async (countryCode) => saved.findLast((g) => g.countryCode === countryCode) ?? null,
+    read: async (countryCode, slug = '') =>
+      saved.findLast((g) => g.countryCode === countryCode && g.slug === slug) ?? null,
     saved,
     write: async (guide) => {
       saved.push(guide);
@@ -134,5 +136,64 @@ describe('getAtlasGuide', () => {
     });
     expect(forced?.revisionId).toBe(2);
     expect(store.saved).toHaveLength(2);
+  });
+
+  it('resolves linked destination sub-guides and rejects unknown slugs without calling Wikivoyage', async () => {
+    const store = memoryStore();
+    let calls = 0;
+    const fetcher = async (input: string | URL) => {
+      calls += 1;
+      const url = String(input);
+      const isBohol = url.includes('titles=Bohol');
+      return new Response(
+        JSON.stringify({
+          query: {
+            pages: [
+              {
+                revisions: [
+                  {
+                    revid: isBohol ? 99 : 10,
+                    slots: {
+                      main: {
+                        content: isBohol
+                          ? 'Limestone hills.\n\n==See==\n* {{see| name=Chocolate Hills | content=Over 1,200 hills. }}\n'
+                          : 'An archipelago.\n\n==Other destinations==\n* [[Bohol]] — Chocolate Hills.\n\n==Understand==\nIsland nation.\n',
+                      },
+                    },
+                  },
+                ],
+                title: isBohol ? 'Bohol' : 'Philippines',
+              },
+            ],
+          },
+        }),
+        { status: 200 },
+      );
+    };
+
+    const unknown = await getAtlasDestinationGuide('PH', 'not-a-real-place', {
+      fetcher,
+      now: () => NOW,
+      store,
+      title: 'Philippines',
+    });
+    expect(unknown).toBe('unknown');
+    expect(calls).toBe(1); // Only the country guide was fetched.
+
+    const bohol = await getAtlasDestinationGuide('PH', 'bohol', {
+      fetcher,
+      now: () => NOW,
+      store,
+      title: 'Philippines',
+    });
+    expect(bohol).not.toBe('unknown');
+    expect(bohol).not.toBeNull();
+    if (bohol && bohol !== 'unknown') {
+      expect(bohol.destination.slug).toBe('bohol');
+      expect(bohol.guide.slug).toBe('bohol');
+      expect(bohol.guide.title).toBe('Bohol');
+      expect(bohol.guide.sections[0]?.id).toBe('see');
+    }
+    expect(calls).toBe(2);
   });
 });

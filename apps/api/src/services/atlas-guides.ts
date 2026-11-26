@@ -1,5 +1,5 @@
 import { getPrismaClient } from '@trove/db';
-import type { AtlasGuide, AtlasSection } from '@trove/types';
+import type { AtlasGuide, AtlasLinkedDestination, AtlasSection } from '@trove/types';
 
 import { getAtlasCountry } from './atlas-countries.js';
 import { parseWikivoyageArticle } from './atlas-wikitext.js';
@@ -32,11 +32,12 @@ type StoredGuide = {
   countryCode: string;
   fetchedAt: Date;
   revisionId: bigint;
+  slug: string;
   title: string;
 };
 
 export type AtlasGuideStore = {
-  read(countryCode: string): Promise<StoredGuide | null>;
+  read(countryCode: string, slug?: string): Promise<StoredGuide | null>;
   write(guide: StoredGuide): Promise<void>;
 };
 
@@ -44,7 +45,9 @@ export type AtlasGuideOptions = {
   fetcher?: Fetcher;
   /** Check Wikivoyage whatever the stored copy's age, as `atlas:sync` does. */
   force?: boolean;
-  /** The country's Wikivoyage title; read from the stored countries when absent. */
+  /** Destination slug inside the country; omit or `''` for the country root guide. */
+  slug?: string;
+  /** The Wikivoyage title; read from the stored countries when absent for country root guides. */
   title?: string;
   now?: () => Date;
   store?: AtlasGuideStore;
@@ -61,9 +64,9 @@ export function resetAtlasGuideFailures() {
 function prismaStore(): AtlasGuideStore {
   const prisma = getPrismaClient();
   return {
-    read: (countryCode) =>
+    read: (countryCode, slug = '') =>
       prisma.atlasGuide.findUnique({
-        where: { atlas_guide_subject: { countryCode, language: 'en' } },
+        where: { atlas_guide_subject: { countryCode, language: 'en', slug } },
       }),
     async write(guide) {
       const data = {
@@ -73,23 +76,33 @@ function prismaStore(): AtlasGuideStore {
         title: guide.title,
       };
       await prisma.atlasGuide.upsert({
-        create: { ...data, countryCode: guide.countryCode, language: 'en' },
+        create: { ...data, countryCode: guide.countryCode, language: 'en', slug: guide.slug },
         update: data,
-        where: { atlas_guide_subject: { countryCode: guide.countryCode, language: 'en' } },
+        where: {
+          atlas_guide_subject: { countryCode: guide.countryCode, language: 'en', slug: guide.slug },
+        },
       });
     },
   };
 }
 
 function toGuide(stored: StoredGuide): AtlasGuide | null {
-  const content = stored.content as { lead?: unknown; sections?: unknown } | null;
+  const content = stored.content as {
+    destinations?: unknown;
+    lead?: unknown;
+    sections?: unknown;
+  } | null;
   if (!content || !Array.isArray(content.lead) || !Array.isArray(content.sections)) return null;
   return {
     countryCode: stored.countryCode,
+    ...(Array.isArray(content.destinations)
+      ? { destinations: content.destinations as AtlasLinkedDestination[] }
+      : {}),
     fetchedAt: stored.fetchedAt.toISOString(),
     lead: content.lead as string[],
     revisionId: Number(stored.revisionId),
     sections: content.sections as AtlasSection[],
+    ...(stored.slug ? { slug: stored.slug } : {}),
     title: stored.title,
   };
 }
@@ -148,11 +161,14 @@ export async function getAtlasGuide(
   countryCode: string,
   options: AtlasGuideOptions = {},
 ): Promise<AtlasGuide | null> {
-  const title = options.title ?? (await getAtlasCountry(countryCode))?.wikivoyageTitle;
+  const slug = options.slug ?? '';
+  const title =
+    options.title ?? (slug ? undefined : (await getAtlasCountry(countryCode))?.wikivoyageTitle);
   if (!title) return null;
+  const cacheKey = slug ? `${countryCode}:${slug}` : countryCode;
   const now = options.now?.() ?? new Date();
   const store = options.store ?? prismaStore();
-  const stored = await store.read(countryCode).catch(() => null);
+  const stored = await store.read(countryCode, slug).catch(() => null);
   const storedGuide = stored ? toGuide(stored) : null;
   if (
     storedGuide &&
@@ -168,7 +184,7 @@ export async function getAtlasGuide(
     });
     return storedGuide;
   }
-  const failedAt = recentFailures.get(countryCode);
+  const failedAt = recentFailures.get(cacheKey);
   if (!options.force && failedAt !== undefined && now.getTime() - failedAt < FAILURE_MEMORY_MS) {
     recordProviderCacheEvent({
       cache: 'atlas-guide',
@@ -180,23 +196,53 @@ export async function getAtlasGuide(
     return storedGuide;
   }
 
-  return singleFlight(`atlas-guide:${countryCode}`, async () => {
+  return singleFlight(`atlas-guide:${cacheKey}`, async () => {
     try {
       const article = await fetchArticle(title, options);
-      const parsed = parseWikivoyageArticle(article.wikitext);
-      const fresh = {
+      const parsed = parseWikivoyageArticle(article.wikitext, {
+        mode: slug ? 'destination' : 'country',
+      });
+      const fresh: StoredGuide = {
         content: parsed,
         countryCode,
         fetchedAt: now,
         revisionId: BigInt(article.revisionId),
+        slug,
         title: article.title,
       };
       await store.write(fresh).catch(() => undefined);
-      recentFailures.delete(countryCode);
+      recentFailures.delete(cacheKey);
       return toGuide(fresh);
     } catch {
-      recentFailures.set(countryCode, now.getTime());
+      recentFailures.set(cacheKey, now.getTime());
       return storedGuide;
     }
   });
+}
+
+/**
+ * Fetches one destination sub-guide (e.g. Bohol, Siargao) inside a country.
+ * Only slugs linked from the parent country guide are resolved, so arbitrary
+ * URLs never trigger outbound Wikivoyage requests.
+ */
+export async function getAtlasDestinationGuide(
+  countryCode: string,
+  slug: string,
+  options: Omit<AtlasGuideOptions, 'slug'> = {},
+): Promise<{ destination: AtlasLinkedDestination; guide: AtlasGuide } | 'unknown' | null> {
+  const countryGuide = await getAtlasGuide(countryCode, {
+    ...options,
+    force: false,
+    slug: '',
+  });
+  const destination = countryGuide?.destinations?.find((entry) => entry.slug === slug);
+  if (!destination) return 'unknown';
+
+  const guide = await getAtlasGuide(countryCode, {
+    ...options,
+    slug: destination.slug,
+    title: destination.wikivoyageTitle,
+  });
+  if (!guide) return null;
+  return { destination, guide };
 }

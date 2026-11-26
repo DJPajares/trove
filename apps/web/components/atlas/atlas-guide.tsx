@@ -1,27 +1,30 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import {
-  ATLAS_LICENCE,
   COUNTRY_TIME_ZONES,
-  wikivoyageArticleUrl,
-  wikivoyageHistoryUrl,
-  type AtlasBlock,
-  type AtlasListing,
+  type AtlasLinkedDestination,
   type AtlasMonthRating,
-  type AtlasSection,
 } from '@trove/types';
 
 import { AtlasCover } from '@/components/atlas/atlas-cover';
+import {
+  chapterNumber,
+  GuideChapters,
+  GuideCreditFooter,
+  GuideLead,
+  sectionHasCards,
+  sectionWords,
+} from '@/components/atlas/atlas-guide-sections';
 import { HOME_SHEET_FRAME, HomeSheet } from '@/components/home/home-front-door';
+import { MediaFrame } from '@/components/media-frame';
 import { usePreferences } from '@/components/preferences-provider';
 import { useTripCreation } from '@/components/trip-creation-provider';
 import { Button } from '@/components/ui/button';
-import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Chip, ChipGroup } from '@/components/ui/chip';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { ScrollShadow } from '@/components/ui/scroll-shadow';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -30,7 +33,6 @@ import { useEditorialImages } from '@/hooks/use-editorial-images';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { atlasCountry, greatMonthRuns } from '@/lib/atlas';
 import { fetchAtlasGuide } from '@/lib/atlas/api';
-import { CARD_LIST_SECTIONS, extractListCards, type AtlasCardItem } from '@/lib/atlas/cards';
 import {
   formatAtlasTemperature,
   formatCoordinates,
@@ -65,9 +67,7 @@ const RATING_PILL: Record<AtlasMonthRating, string> = {
   off: 'bg-muted text-muted-foreground',
 };
 
-/** Practicality chapters that stand apart as tinted field notes. */
-const FIELD_NOTE_SECTIONS = new Set(['stay-safe', 'respect', 'stay-healthy']);
-
+const MAX_EXPLORE_CARDS = 12;
 const englishNames = new Intl.DisplayNames(['en'], { type: 'region' });
 
 function utcOffset(timeZone: string, locale: string) {
@@ -77,73 +77,11 @@ function utcOffset(timeZone: string, locale: string) {
   return part?.value ?? timeZone;
 }
 
-function sectionWords(section: AtlasSection) {
-  const text = section.blocks
-    .map((block) =>
-      block.type === 'list'
-        ? block.items.join(' ')
-        : block.type === 'listing'
-          ? `${block.listing.name} ${block.listing.content ?? ''}`
-          : block.text,
-    )
-    .join(' ');
-  return text.split(/\s+/).filter(Boolean).length;
-}
-
-function chapterNumber(index: number) {
-  return String(index + 1).padStart(2, '0');
-}
-
-type BlockGroup =
-  | { kind: 'listings'; items: AtlasListing[] }
-  | { kind: 'cards'; items: AtlasCardItem[]; label: string }
-  | { kind: 'phrases'; items: AtlasCardItem[] }
-  | { kind: 'block'; block: AtlasBlock };
-
 /**
- * Groups consecutive listing blocks into 2-column grids and turns structured
- * "Name — description" lists in highlight/food/region chapters into field-guide
- * cards (or tap-to-reveal phrase cards in Talk).
- */
-function groupSectionBlocks(section: AtlasSection): BlockGroup[] {
-  const groups: BlockGroup[] = [];
-  const cardEligible = CARD_LIST_SECTIONS.has(section.id);
-  const isTalk = section.id === 'talk';
-
-  for (const block of section.blocks) {
-    if (block.type === 'listing') {
-      const previous = groups.at(-1);
-      if (previous?.kind === 'listings') previous.items.push(block.listing);
-      else groups.push({ kind: 'listings', items: [block.listing] });
-    } else if (block.type === 'list' && (cardEligible || isTalk)) {
-      const cards = extractListCards(block.items);
-      if (cards) {
-        groups.push(
-          isTalk
-            ? { kind: 'phrases', items: cards }
-            : { kind: 'cards', items: cards, label: section.title },
-        );
-      } else {
-        groups.push({ kind: 'block', block });
-      }
-    } else {
-      groups.push({ kind: 'block', block });
-    }
-  }
-  return groups;
-}
-
-function sectionHasCards(section: AtlasSection) {
-  return groupSectionBlocks(section).some(
-    (group) => group.kind === 'listings' || group.kind === 'cards' || group.kind === 'phrases',
-  );
-}
-
-/**
- * One country's guide (PRD 40.3): an editorial encyclopedia spread. The cover,
- * essential facts dossier, and typical twelve-month pattern render at once from
- * the bundled index; the Wikivoyage chapters follow from the API, with the
- * opening chapter open by default, and an opened guide stays readable offline.
+ * One country's guide (PRD 40.3): a curated Option A editorial gateway spread.
+ * The cover, essential facts dossier, and typical twelve-month pattern render at
+ * once from the bundled index; Places to Explore and the curated country chapters
+ * follow from the API and stay readable offline.
  */
 export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }>) {
   const t = useTranslations('atlas');
@@ -157,16 +95,8 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
     () => (index.data ? atlasCountry(index.data.countries, countryCode, locale) : null),
     [countryCode, index.data, locale],
   );
-  const subject = useMemo(
-    () => ({ name: englishNames.of(countryCode) ?? countryCode }),
-    [countryCode],
-  );
-  // Asked while the country list loads, so the cover is ready with it; never
-  // for a code the list has turned out not to hold.
-  const images = useEditorialImages(
-    country || (index.isPending && /^[A-Z]{2}$/.test(countryCode)) ? [subject] : [],
-  );
-  const editorial = editorialCoverImage(images.get(editorialSubjectKey(subject)), countryCode);
+  const englishCountry = englishNames.of(countryCode) ?? countryCode;
+  const subject = useMemo(() => ({ name: englishCountry }), [englishCountry]);
   const guide = useQuery({
     enabled: Boolean(country),
     queryFn: () => fetchAtlasGuide(countryCode),
@@ -174,8 +104,29 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
     retry: 1,
     staleTime: 24 * 60 * 60 * 1_000,
   });
+
+  // Iconic destinations first, then cities; regions stay in the Regions chapter.
+  const exploreDestinations = useMemo(() => {
+    const all = guide.data?.destinations ?? [];
+    const highlights = all.filter((d) => d.kind === 'destination');
+    const cities = all.filter((d) => d.kind === 'city');
+    return [...highlights, ...cities].slice(0, MAX_EXPLORE_CARDS);
+  }, [guide.data?.destinations]);
+
+  // One editorial-image request for the cover + visible Places to Explore cards.
+  const imageSubjects = useMemo(() => {
+    if (!country && !(index.isPending && /^[A-Z]{2}$/.test(countryCode))) return [];
+    return [
+      subject,
+      ...exploreDestinations.map((dest) => ({ name: `${dest.name}, ${englishCountry}` })),
+    ];
+  }, [country, countryCode, englishCountry, exploreDestinations, index.isPending, subject]);
+  const images = useEditorialImages(imageSubjects);
+  const editorial = editorialCoverImage(images.get(editorialSubjectKey(subject)), countryCode);
+
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1);
-  // Explicit user overrides per section id; the first chapter starts open by default.
+  const [placeFilter, setPlaceFilter] = useState<'all' | 'destination' | 'city'>('all');
+  // Explicit user overrides per section id; the first chapter & first card chapter start open.
   const [sectionState, setSectionState] = useState<Record<string, boolean>>({});
   const entrance = useEntrance(guideEntrance, { ready: Boolean(country), replay: true });
 
@@ -190,7 +141,7 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
           title={'\u00a0'}
         />
         <div className={HOME_SHEET_FRAME}>
-          <div className="grid gap-10 lg:grid-cols-[16rem_minmax(0,1fr)]">
+          <div className="grid gap-10 lg:grid-cols-[15.5rem_minmax(0,1fr)]">
             <Skeleton className="h-48 rounded-[var(--radius-xl)]" />
             <div className="flex flex-col gap-4">
               <Skeleton className="h-24" />
@@ -258,6 +209,20 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
       document.getElementById(`atlas-section-${id}`)?.scrollIntoView({ block: 'start' }),
     );
   };
+
+  const hasBothKinds =
+    exploreDestinations.some((d) => d.kind === 'destination') &&
+    exploreDestinations.some((d) => d.kind === 'city');
+  const visibleDestinations =
+    placeFilter === 'all'
+      ? exploreDestinations
+      : exploreDestinations.filter((d) => d.kind === placeFilter);
+
+  const photoForDestination = (dest: AtlasLinkedDestination) =>
+    editorialCoverImage(
+      images.get(editorialSubjectKey({ name: `${dest.name}, ${englishCountry}` })),
+      `${countryCode}-${dest.slug}`,
+    );
 
   return (
     <div className="mx-auto w-full max-w-5xl pb-16" style={entrance.style}>
@@ -350,12 +315,28 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
               </dl>
             </section>
 
-            {sections.length || country.months ? (
+            {sections.length || country.months || exploreDestinations.length ? (
               <nav aria-label={g('sections')} className="hidden lg:block">
                 <p className="mb-2 text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">
                   {g('inThisGuide')}
                 </p>
                 <ol className="space-y-0.5 text-sm">
+                  {exploreDestinations.length ? (
+                    <li>
+                      <a
+                        className="flex items-baseline justify-between gap-2 rounded-[var(--radius-md)] px-2.5 py-1.5 text-foreground/85 outline-none transition-colors hover:bg-card hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+                        href="#atlas-places"
+                      >
+                        <span className="truncate">
+                          <span className="me-2 font-mono text-xs text-muted-foreground">00</span>
+                          {g('placesToExplore')}
+                        </span>
+                        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                          {exploreDestinations.length}
+                        </span>
+                      </a>
+                    </li>
+                  ) : null}
                   {country.months ? (
                     <li>
                       <a
@@ -363,7 +344,9 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
                         href="#atlas-best-time"
                       >
                         <span className="truncate">
-                          <span className="me-2 font-mono text-xs text-muted-foreground">00</span>
+                          <span className="me-2 font-mono text-xs text-muted-foreground">
+                            {exploreDestinations.length ? '·' : '00'}
+                          </span>
                           {g('bestTime')}
                         </span>
                       </a>
@@ -397,6 +380,85 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
           <div className="min-w-0 max-w-3xl space-y-10">
             {guide.data?.lead.length ? <GuideLead paragraphs={guide.data.lead} /> : null}
 
+            {/* 00: Places to Explore — photographic destination sub-guides */}
+            {exploreDestinations.length ? (
+              <section aria-labelledby="atlas-places" className="scroll-mt-24 space-y-4">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <p className="font-mono text-xs tracking-wider text-muted-foreground uppercase">
+                      00 · {g('destinationGuides')}
+                    </p>
+                    <h2
+                      className="mt-0.5 font-journal text-[2rem] leading-tight font-normal sm:text-[2.25rem]"
+                      id="atlas-places"
+                    >
+                      {g('placesToExplore')}
+                    </h2>
+                  </div>
+                  {hasBothKinds ? (
+                    <ChipGroup
+                      aria-label={g('placesToExplore')}
+                      onValueChange={(value) =>
+                        setPlaceFilter((value[0] as 'all' | 'destination' | 'city') ?? 'all')
+                      }
+                      value={[placeFilter]}
+                    >
+                      <Chip className="min-h-8 px-3 text-xs" value="all">
+                        {g('placesAll')}
+                      </Chip>
+                      <Chip className="min-h-8 px-3 text-xs" value="destination">
+                        {g('placesIconic')}
+                      </Chip>
+                      <Chip className="min-h-8 px-3 text-xs" value="city">
+                        {g('placesCities')}
+                      </Chip>
+                    </ChipGroup>
+                  ) : null}
+                </div>
+
+                <ScrollShadow
+                  className="interaction-scrollbar -mx-[var(--gutter-inline-start)] flex snap-x scroll-px-[var(--gutter-inline-start)] gap-3 px-[var(--gutter-inline-start)] pb-2"
+                  orientation="horizontal"
+                  render={<ul />}
+                >
+                  {visibleDestinations.map((dest) => (
+                    <li className="w-60 shrink-0 snap-start" key={dest.slug}>
+                      <Link
+                        className="group flex h-full flex-col overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-card outline-none transition-colors hover:border-border-strong focus-visible:ring-3 focus-visible:ring-ring/40"
+                        href={`/atlas/${countryCode}/${dest.slug}`}
+                      >
+                        <div className="relative aspect-[16/10] w-full overflow-hidden bg-surface-media">
+                          <MediaFrame
+                            alt=""
+                            className="h-full w-full rounded-none"
+                            dataSlot="atlas-destination-media"
+                            sizes="15rem"
+                            source={resolveTripMediaSource({
+                              editorial: photoForDestination(dest),
+                            })}
+                            variant="card"
+                          />
+                          <span className="absolute start-2.5 top-2.5 rounded-full bg-black/45 px-2.5 py-0.5 text-[0.6875rem] font-semibold text-white backdrop-blur-sm">
+                            {dest.kind === 'city' ? g('kindCity') : g('kindDestination')}
+                          </span>
+                        </div>
+                        <span className="flex flex-1 flex-col gap-1 px-3.5 pt-3 pb-3.5">
+                          <span className="font-journal text-[1.375rem] leading-tight text-foreground transition-colors group-hover:text-brand">
+                            {dest.name}
+                          </span>
+                          {dest.summary ? (
+                            <span className="line-clamp-3 text-xs leading-relaxed text-muted-foreground">
+                              {dest.summary}
+                            </span>
+                          ) : null}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ScrollShadow>
+              </section>
+            ) : null}
+
             {country.months ? (
               <section
                 aria-labelledby="atlas-best-time"
@@ -405,7 +467,7 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
                 <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border-subtle pb-4">
                   <div>
                     <p className="font-mono text-xs tracking-wider text-muted-foreground uppercase">
-                      00 · {g('climatePattern')}
+                      {g('climatePattern')}
                     </p>
                     <h2
                       className="mt-0.5 font-journal text-3xl leading-none font-normal"
@@ -527,265 +589,22 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
               </Empty>
             ) : guide.data ? (
               <>
-                {sections.length ? (
-                  <ScrollShadow
-                    aria-label={g('sections')}
-                    className="interaction-scrollbar sticky top-[calc(var(--safe-top)+0.5rem)] z-10 -mx-[var(--gutter-inline-start)] flex gap-2 bg-background/95 px-[var(--gutter-inline-start)] py-2 backdrop-blur md:top-[calc(var(--header-height)+0.5rem)] lg:hidden"
-                    orientation="horizontal"
-                    render={<nav />}
-                  >
-                    {sections.map((section, idx) => (
-                      <button
-                        className="min-h-10 shrink-0 rounded-full border border-border bg-card px-3.5 text-sm font-medium outline-none hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40"
-                        key={section.id}
-                        onClick={() => openSection(section.id)}
-                        type="button"
-                      >
-                        <span className="me-1.5 font-mono text-xs text-muted-foreground">
-                          {chapterNumber(idx)}
-                        </span>
-                        {section.title}
-                      </button>
-                    ))}
-                  </ScrollShadow>
-                ) : null}
+                <GuideChapters
+                  isSectionOpen={isSectionOpen}
+                  onOpenSection={openSection}
+                  onToggleSection={setSectionOpen}
+                  sections={sections}
+                />
 
-                <div className="space-y-8">
-                  {sections.map((section, idx) => {
-                    const isFieldNote = FIELD_NOTE_SECTIONS.has(section.id);
-                    const groups = groupSectionBlocks(section);
-                    return (
-                      <article
-                        className={cn(
-                          'scroll-mt-24 pt-6',
-                          idx === 0
-                            ? 'border-t-2 border-foreground/75'
-                            : 'border-t border-border-subtle',
-                        )}
-                        id={`atlas-section-${section.id}`}
-                        key={section.id}
-                      >
-                        <Collapsible
-                          onOpenChange={(open) => setSectionOpen(section.id, open)}
-                          open={isSectionOpen(section.id)}
-                        >
-                          <CollapsibleTrigger className="group flex w-full items-center justify-between gap-4 text-left text-foreground hover:text-foreground">
-                            <span className="flex flex-col gap-0.5">
-                              <span className="font-mono text-xs tracking-wider text-muted-foreground uppercase">
-                                {g('chapterMeta', {
-                                  number: chapterNumber(idx),
-                                  readingTime: g('readingTime', {
-                                    minutes: readingMinutes(sectionWords(section)),
-                                  }),
-                                })}
-                              </span>
-                              <span className="font-journal text-[2rem] leading-tight font-normal sm:text-[2.25rem]">
-                                {section.title}
-                              </span>
-                            </span>
-                            <ChevronDown
-                              aria-hidden="true"
-                              className="size-5 shrink-0 text-muted-foreground transition-transform duration-[var(--motion-standard)] group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
-                            />
-                          </CollapsibleTrigger>
-                          <CollapsiblePanel>
-                            <div
-                              className={cn(
-                                'mt-5 flex flex-col gap-4',
-                                isFieldNote &&
-                                  'rounded-[var(--radius-xl)] border border-border-subtle border-s-2 border-s-accent-strong bg-card p-5',
-                              )}
-                            >
-                              {groups.map((group, groupIndex) =>
-                                group.kind === 'listings' ? (
-                                  <div
-                                    className="grid gap-3 sm:grid-cols-2"
-                                    key={`listings-${groupIndex}`}
-                                  >
-                                    {group.items.map((listing, listingIndex) => (
-                                      <ListingCard key={listingIndex} listing={listing} />
-                                    ))}
-                                  </div>
-                                ) : group.kind === 'cards' ? (
-                                  <div
-                                    className="grid gap-3 sm:grid-cols-2"
-                                    key={`cards-${groupIndex}`}
-                                  >
-                                    {group.items.map((item, itemIndex) => (
-                                      <EntryCard item={item} key={itemIndex} label={group.label} />
-                                    ))}
-                                  </div>
-                                ) : group.kind === 'phrases' ? (
-                                  <div
-                                    className="grid gap-3 sm:grid-cols-2"
-                                    key={`phrases-${groupIndex}`}
-                                  >
-                                    {group.items.map((item, itemIndex) => (
-                                      <PhraseCard item={item} key={itemIndex} />
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <GuideBlock block={group.block} key={`block-${groupIndex}`} />
-                                ),
-                              )}
-                            </div>
-                          </CollapsiblePanel>
-                        </Collapsible>
-                      </article>
-                    );
-                  })}
-                </div>
-
-                <footer className="border-t border-border-subtle pt-5 text-sm leading-relaxed text-muted-foreground">
-                  <p>
-                    {g.rich('credit', {
-                      article: (chunks) => (
-                        <a className="underline" href={wikivoyageArticleUrl(guide.data.title)}>
-                          {chunks}
-                        </a>
-                      ),
-                      authors: (chunks) => (
-                        <a className="underline" href={wikivoyageHistoryUrl(guide.data.title)}>
-                          {chunks}
-                        </a>
-                      ),
-                      licence: (chunks) => (
-                        <a className="underline" href={ATLAS_LICENCE.url}>
-                          {chunks}
-                        </a>
-                      ),
-                      licenceName: ATLAS_LICENCE.name,
-                      title: guide.data.title,
-                    })}
-                  </p>
-                  {index.data?.climateYears ? (
-                    <p className="mt-1">{g('climateCredit', index.data.climateYears)}</p>
-                  ) : null}
-                </footer>
+                <GuideCreditFooter
+                  climateYears={index.data?.climateYears ?? null}
+                  title={guide.data.title}
+                />
               </>
             ) : null}
           </div>
         </div>
       </HomeSheet>
-    </div>
-  );
-}
-
-function ListingCard({ listing }: Readonly<{ listing: AtlasListing }>) {
-  const g = useTranslations('atlas.guide');
-  return (
-    <article className="flex flex-col justify-between rounded-[var(--radius-xl)] border border-border-subtle bg-card p-4">
-      <div>
-        <span className="inline-flex rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold text-secondary-foreground">
-          {g(`listing.${listing.kind}`)}
-        </span>
-        <h4 className="mt-2 font-journal text-[1.375rem] leading-snug font-normal text-foreground">
-          {listing.name}
-        </h4>
-        {listing.alt ? <p className="mt-0.5 text-sm text-muted-foreground">{listing.alt}</p> : null}
-        {listing.content ? (
-          <p className="mt-2 text-sm leading-relaxed text-foreground/85">{listing.content}</p>
-        ) : null}
-      </div>
-      {listing.address ? (
-        <p className="mt-3 border-t border-border-subtle pt-2.5 text-xs text-muted-foreground">
-          {listing.address}
-        </p>
-      ) : null}
-    </article>
-  );
-}
-
-/** A structured Wikivoyage region, city, sight, or dish entry rendered as a field-guide card. */
-function EntryCard({ item, label }: Readonly<{ item: AtlasCardItem; label: string }>) {
-  return (
-    <article className="flex flex-col rounded-[var(--radius-xl)] border border-border-subtle bg-card p-4">
-      <span className="self-start rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold text-secondary-foreground">
-        {label}
-      </span>
-      <h4 className="mt-2 font-journal text-[1.375rem] leading-snug font-normal text-foreground">
-        {item.title}
-      </h4>
-      {item.detail ? (
-        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{item.detail}</p>
-      ) : null}
-    </article>
-  );
-}
-
-/** A Talk phrasebook entry that reveals the translation/pronunciation on tap (PRD 40.3). */
-function PhraseCard({ item }: Readonly<{ item: AtlasCardItem }>) {
-  const g = useTranslations('atlas.guide');
-  const [revealed, setRevealed] = useState(false);
-
-  return (
-    <button
-      aria-expanded={revealed}
-      className="flex flex-col rounded-[var(--radius-xl)] border border-border-subtle bg-card p-4 text-left outline-none transition-colors hover:border-border-strong focus-visible:ring-3 focus-visible:ring-ring/40"
-      onClick={() => setRevealed((open) => !open)}
-      type="button"
-    >
-      <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
-        {revealed ? g('tapToHide') : g('tapToReveal')}
-      </span>
-      <span className="mt-1.5 font-journal text-[1.375rem] leading-snug font-normal text-foreground">
-        {item.title}
-      </span>
-      {revealed && item.detail ? (
-        <span className="mt-2.5 border-t border-border-subtle pt-2.5 text-sm font-medium leading-relaxed text-brand">
-          {item.detail}
-        </span>
-      ) : null}
-    </button>
-  );
-}
-
-function GuideBlock({ block }: Readonly<{ block: AtlasBlock }>) {
-  switch (block.type) {
-    case 'heading':
-      return (
-        <h3 className="pt-2 text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-          {block.text}
-        </h3>
-      );
-    case 'paragraph':
-      return <p className="text-base leading-[1.7] text-foreground/90">{block.text}</p>;
-    case 'list':
-      return (
-        <ul className="flex list-disc flex-col gap-1.5 ps-5 text-base leading-[1.65] text-foreground/90 marker:text-muted-foreground">
-          {block.items.map((item, index) => (
-            <li key={index}>{item}</li>
-          ))}
-        </ul>
-      );
-    case 'listing':
-      return <ListingCard listing={block.listing} />;
-  }
-}
-
-/** The opening sentence set large in the journal serif; the rest with an editorial drop cap. */
-function GuideLead({ paragraphs }: Readonly<{ paragraphs: string[] }>) {
-  const [first = '', ...rest] = paragraphs.slice(0, 3);
-  const end = first.search(/[.!?](\s|$)/);
-  const opening = end > 0 ? first.slice(0, end + 1) : first;
-  const remainder = [first.slice(opening.length).trim(), ...rest].filter(Boolean);
-  return (
-    <div className="flex flex-col gap-4">
-      <p className="font-journal text-[1.625rem] leading-snug text-foreground italic sm:text-[1.875rem]">
-        {opening}
-      </p>
-      {remainder.map((paragraph, index) => (
-        <p
-          className={cn(
-            'text-base leading-[1.75] text-muted-foreground',
-            index === 0 &&
-              'first-letter:float-left first-letter:me-2 first-letter:pt-1 first-letter:font-journal first-letter:text-[3rem] first-letter:leading-[0.82] first-letter:text-foreground',
-          )}
-          key={index}
-        >
-          {paragraph}
-        </p>
-      ))}
     </div>
   );
 }

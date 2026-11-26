@@ -1,4 +1,4 @@
-import type { AtlasGuide, AtlasIndex } from '@trove/types';
+import type { AtlasGuide, AtlasIndex, AtlasLinkedDestination } from '@trove/types';
 
 import { authenticatedFetch, getProtectedSession } from '@/lib/auth/transport';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
@@ -44,4 +44,14 @@ export async function fetchAtlasGuide(countryCode: string): Promise<AtlasGuide> 
     `/atlas/guides/${encodeURIComponent(countryCode)}`,
   );
   return body.guide;
+}
+
+/** One destination sub-guide inside a country (e.g. Bohol, Siargao). */
+export async function fetchAtlasDestinationGuide(
+  countryCode: string,
+  slug: string,
+): Promise<{ destination: AtlasLinkedDestination; guide: AtlasGuide }> {
+  return atlasRequest<{ destination: AtlasLinkedDestination; guide: AtlasGuide }>(
+    `/atlas/guides/${encodeURIComponent(countryCode)}/${encodeURIComponent(slug)}`,
+  );
 }

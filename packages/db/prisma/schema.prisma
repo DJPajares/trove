@@ -692,15 +692,17 @@ model AtlasCountry {
 model AtlasGuide {
   id          String       @id @default(uuid(7)) @db.Uuid
   countryCode String       @map("country_code") @db.VarChar(2)
+  /// Empty string for the country root guide; URL slug for destination sub-guides.
+  slug        String       @default("") @db.VarChar(120)
   language    String       @default("en") @db.VarChar(8)
   title       String
   revisionId  BigInt       @map("revision_id")
-  /// `{ lead, sections }` in the shape of `AtlasGuide`, already plain text.
+  /// `{ lead, sections, destinations }` in the shape of `AtlasGuide`, already plain text.
   content     Json
   fetchedAt   DateTime     @default(now()) @map("fetched_at") @db.Timestamptz(3)
   country     AtlasCountry @relation(fields: [countryCode], references: [countryCode], onDelete: Cascade)
 
-  @@unique([countryCode, language], name: "atlas_guide_subject")
+  @@unique([countryCode, slug, language], name: "atlas_guide_subject")
   @@index([fetchedAt])
   @@map("atlas_guides")
   @@schema("trove")

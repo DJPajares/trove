@@ -29,6 +29,9 @@ export const queryKeys = {
   aiPlanningSession: (sessionId: string) => ['ai-planning', 'session', sessionId] as const,
   /** One country's Atlas guide. Kept on the device so an opened guide reads offline. */
   atlasGuide: (countryCode: string) => ['atlas', 'guide', countryCode] as const,
+  /** One destination sub-guide inside a country (e.g. Bohol, Siargao). */
+  atlasDestinationGuide: (countryCode: string, slug: string) =>
+    ['atlas', 'guide', countryCode, slug] as const,
   /** Every Atlas country and its typical conditions, kept on the device for offline browsing. */
   atlasIndex: () => ['atlas', 'countries'] as const,
   currencies: () => ['currency', 'list'] as const,

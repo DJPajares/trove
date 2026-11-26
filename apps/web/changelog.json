@@ -1742,5 +1742,15 @@
         "Regions, cities, sights, and dishes inside Atlas country guides now display as scannable field-guide cards, and Talk phrases open with a tap."
       ]
     }
+  },
+  {
+    "id": "atlas-destination-subguides",
+    "date": "2026-11-26",
+    "version": "1.48.0",
+    "summaries": {
+      "en": [
+        "Explore iconic destinations and cities right from each country's Atlas page, then open full destination guides with sights, food, and local highlights."
+      ]
+    }
   }
 ]

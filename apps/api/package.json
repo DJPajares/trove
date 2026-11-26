@@ -19,13 +19,13 @@
     "typecheck": "../../node_modules/.bin/tsc --noEmit --project tsconfig.json"
   },
   "dependencies": {
-    "@ai-sdk/google-vertex": "5.0.144",
+    "@ai-sdk/google-vertex": "5.0.146",
     "@fastify/cors": "11.4.3",
     "@fastify/rate-limit": "^11.3.0",
     "@supabase/supabase-js": "^2.119.2",
     "@trove/db": "workspace:*",
     "@trove/types": "workspace:*",
-    "ai": "7.0.179",
+    "ai": "7.0.181",
     "countries-and-timezones": "^3.11.0",
     "date-holidays": "^3.39.2",
     "dotenv": "^18.0.10",
@@ -36,7 +36,7 @@
   },
   "devDependencies": {
     "@trove/config": "workspace:*",
-    "@types/node": "^26.6.6",
+    "@types/node": "^26.6.10",
     "@types/web-push": "^3.6.4",
     "tsx": "^4.23.15"
   }

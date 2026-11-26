@@ -170,9 +170,14 @@ export async function getAtlasGuide(
   const store = options.store ?? prismaStore();
   const stored = await store.read(countryCode, slug).catch(() => null);
   const storedGuide = stored ? toGuide(stored) : null;
+  // Country root guides stored before destination extraction lack `destinations`;
+  // refresh them automatically once so Places to Explore appears without a manual sync.
+  const needsDestinationUpgrade =
+    !slug && storedGuide !== null && !Array.isArray(storedGuide.destinations);
   if (
     storedGuide &&
     !options.force &&
+    !needsDestinationUpgrade &&
     now.getTime() - stored!.fetchedAt.getTime() < ATLAS_GUIDE_REFRESH_MS
   ) {
     recordProviderCacheEvent({

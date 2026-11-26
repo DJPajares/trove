@@ -1,7 +1,8 @@
 'use client';
 
 import type { TripOverviewData } from '@trove/types';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
 
@@ -11,6 +12,7 @@ import { useTripPlacesDrawer } from '@/components/trip-places-provider';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useEditorialImageResolution } from '@/hooks/use-editorial-images';
+import { useTripAtlasGuides } from '@/hooks/use-trip-atlas-guides';
 import * as Icons from '@/lib/icons';
 import {
   editorialSubjectKey,
@@ -93,6 +95,25 @@ function StopThumbnail({
   );
 }
 
+/** A town's Atlas guide, where one exists: a quiet link beside its days. */
+function TownGuideLink({
+  guide,
+  town,
+}: Readonly<{ guide: { href: string } | null; town: string }>) {
+  const t = useTranslations('trips.hub');
+  if (!guide) return null;
+  return (
+    <Link
+      aria-label={t('townGuide', { town })}
+      className="grid size-11 shrink-0 place-items-center rounded-full text-brand outline-none hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40"
+      href={guide.href}
+      title={t('townGuide', { town })}
+    >
+      <BookOpen aria-hidden="true" className="size-[1.125rem]" />
+    </Link>
+  );
+}
+
 function StopMarker({
   current,
   stage,
@@ -146,6 +167,8 @@ export function TripHubJourney({
     ? stops.map((stop) => subject(stop.town))
     : destinations.map((destination) => subject(destination.title));
   const { images, status } = useEditorialImageResolution(subjects);
+  // Atlas stays out of the trip's tabs (PRD 40.5): its guides are links here.
+  const atlas = useTripAtlasGuides(trip.countries);
   const pending = status === 'pending';
   const focusDayId = stage === 'remember' ? null : (overview?.day?.id ?? null);
   const totalDays = days.length;
@@ -262,6 +285,7 @@ export function TripHubJourney({
                       <StopMarker current={current} stage={stage} stop={stop} />
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
+                      <TownGuideLink guide={atlas.guideForTown(stop.town)} town={stop.town} />
                       <CollapsibleTrigger
                         aria-label={t('showDays', { town: stop.town })}
                         className="group grid size-11 place-items-center rounded-full hover:bg-surface-hover"
@@ -334,17 +358,41 @@ export function TripHubJourney({
                   )}
                 </div>
                 <div className={cn('min-w-0 pt-2.5', !last && 'pb-5')}>
-                  <p className="text-[1.0625rem] leading-snug font-semibold break-words">
-                    {destination.title}
-                  </p>
-                  {destination.region ? (
-                    <p className="mt-0.5 text-sm text-muted-foreground">{destination.region}</p>
-                  ) : null}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[1.0625rem] leading-snug font-semibold break-words">
+                        {destination.title}
+                      </p>
+                      {destination.region ? (
+                        <p className="mt-0.5 text-sm text-muted-foreground">{destination.region}</p>
+                      ) : null}
+                    </div>
+                    <TownGuideLink
+                      guide={atlas.guideForTown(destination.title)}
+                      town={destination.title}
+                    />
+                  </div>
                 </div>
               </li>
             );
           })}
         </ol>
+      ) : null}
+
+      {atlas.countries.length ? (
+        <ul aria-label={t('guidesLabel')} className="mt-4 flex flex-wrap gap-2">
+          {atlas.countries.map((guide) => (
+            <li key={guide.countryCode}>
+              <Link
+                className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border bg-card px-3.5 text-sm font-semibold outline-none transition-colors duration-[var(--motion-standard)] hover:bg-surface-hover focus-visible:ring-3 focus-visible:ring-ring/40 motion-reduce:transition-none"
+                href={guide.href}
+              >
+                <BookOpen aria-hidden="true" className="size-4 text-brand" />
+                {t('countryGuide', { country: guide.name })}
+              </Link>
+            </li>
+          ))}
+        </ul>
       ) : null}
 
       <button

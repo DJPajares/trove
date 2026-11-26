@@ -1,7 +1,9 @@
 'use client';
 
-import { Check, ChevronDown, Plus } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useQueryClient } from '@tanstack/react-query';
+import { Check, ChevronDown, Ellipsis, Plus } from 'lucide-react';
+import Link from 'next/link';
+import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
 import {
   ATLAS_LICENCE,
@@ -13,12 +15,23 @@ import {
   type AtlasSection,
 } from '@trove/types';
 
+import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ScrollShadow } from '@/components/ui/scroll-shadow';
 import { useAtlasTripPicks } from '@/hooks/use-atlas-trip-picks';
+import { saveAtlasListing } from '@/lib/atlas/api';
+import type { SavedPlacesResponse } from '@/lib/saved/api';
 import { CARD_LIST_SECTIONS, extractListCards, type AtlasCardItem } from '@/lib/atlas/cards';
 import { readingMinutes } from '@/lib/atlas/format';
 import { ATLAS_MAX_TRIP_PICKS, atlasPickId, type AtlasTripPickInput } from '@/lib/atlas/picks';
+import * as Icons from '@/lib/icons';
+import { queryKeys } from '@/lib/query/keys';
 import { cn } from '@/lib/utils';
 
 export type AtlasPickContext = {
@@ -244,6 +257,7 @@ export function GuideChapters({
                                 atLimit={atLimit}
                                 key={listingIndex}
                                 listing={listing}
+                                saveInput={pickInput}
                                 onTogglePick={pickInput ? () => togglePick(pickInput) : undefined}
                                 picked={picked}
                               />
@@ -278,6 +292,7 @@ export function GuideChapters({
                                 item={item}
                                 key={itemIndex}
                                 label={group.label}
+                                saveInput={pickInput}
                                 onTogglePick={pickInput ? () => togglePick(pickInput) : undefined}
                                 picked={picked}
                               />
@@ -385,13 +400,16 @@ function ListingCard({
   listing,
   onTogglePick,
   picked = false,
+  saveInput = null,
 }: Readonly<{
   atLimit?: boolean;
   listing: AtlasListing;
   onTogglePick?: () => void;
   picked?: boolean;
+  saveInput?: AtlasTripPickInput | null;
 }>) {
   const g = useTranslations('atlas.guide');
+  const save = useListingSave(saveInput);
   return (
     <article className="flex flex-col justify-between rounded-[var(--radius-xl)] border border-border-subtle bg-card p-4">
       <div>
@@ -406,14 +424,18 @@ function ListingCard({
           <p className="mt-2 text-sm leading-relaxed text-foreground/85">{listing.content}</p>
         ) : null}
       </div>
-      {listing.address || onTogglePick ? (
+      {listing.address || onTogglePick || save ? (
         <div className="mt-3 flex items-center justify-between gap-2 border-t border-border-subtle pt-2.5">
           <p className="min-w-0 truncate text-xs text-muted-foreground">{listing.address ?? ''}</p>
-          {onTogglePick ? (
-            <PickButton atLimit={atLimit} onClick={onTogglePick} picked={picked} />
-          ) : null}
+          <div className="flex shrink-0 items-center gap-1">
+            {onTogglePick ? (
+              <PickButton atLimit={atLimit} onClick={onTogglePick} picked={picked} />
+            ) : null}
+            {save ? <ListingMenu name={listing.name} save={save} /> : null}
+          </div>
         </div>
       ) : null}
+      {save ? <ListingSaveStatus save={save} /> : null}
     </article>
   );
 }
@@ -424,13 +446,16 @@ function EntryCard({
   label,
   onTogglePick,
   picked = false,
+  saveInput = null,
 }: Readonly<{
   atLimit?: boolean;
   item: AtlasCardItem;
   label: string;
   onTogglePick?: () => void;
   picked?: boolean;
+  saveInput?: AtlasTripPickInput | null;
 }>) {
+  const save = useListingSave(saveInput);
   return (
     <article className="flex flex-col justify-between rounded-[var(--radius-xl)] border border-border-subtle bg-card p-4">
       <div>
@@ -444,12 +469,119 @@ function EntryCard({
           <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{item.detail}</p>
         ) : null}
       </div>
-      {onTogglePick ? (
-        <div className="mt-3 flex justify-end border-t border-border-subtle pt-2.5">
-          <PickButton atLimit={atLimit} onClick={onTogglePick} picked={picked} />
+      {onTogglePick || save ? (
+        <div className="mt-3 flex justify-end gap-1 border-t border-border-subtle pt-2.5">
+          {onTogglePick ? (
+            <PickButton atLimit={atLimit} onClick={onTogglePick} picked={picked} />
+          ) : null}
+          {save ? <ListingMenu name={item.title} save={save} /> : null}
         </div>
       ) : null}
+      {save ? <ListingSaveStatus save={save} /> : null}
     </article>
+  );
+}
+
+type ListingSave = ReturnType<typeof useListingSave>;
+
+/**
+ * Save on a listing (PRD 40.5): one explicit request that resolves this
+ * listing alone into an ordinary Saved Place. Independent of trip picks.
+ */
+function useListingSave(input: AtlasTripPickInput | null) {
+  const locale = useLocale();
+  const queryClient = useQueryClient();
+  const [state, setState] = useState<'failed' | 'idle' | 'pending' | 'saved'>('idle');
+  if (!input) return null;
+
+  async function save(listing: AtlasTripPickInput) {
+    setState('pending');
+    try {
+      const { savedPlace } = await saveAtlasListing({
+        countryCode: listing.countryCode,
+        destinationName: listing.destinationName,
+        languageCode: locale,
+        latitude: listing.latitude,
+        longitude: listing.longitude,
+        name: listing.name,
+      });
+      setState('saved');
+      // Trove never refetches on mount, so the new Find goes straight into the
+      // shared cache, as every other Save does.
+      queryClient.setQueryData(
+        queryKeys.savedPlaces(),
+        (current: SavedPlacesResponse | undefined) =>
+          current
+            ? {
+                ...current,
+                savedPlaces: [
+                  savedPlace,
+                  ...current.savedPlaces.filter((entry) => entry.id !== savedPlace.id),
+                ],
+              }
+            : current,
+      );
+    } catch {
+      setState('failed');
+    }
+  }
+
+  return {
+    failed: state === 'failed',
+    pending: state === 'pending',
+    save: () => void save(input),
+    saved: state === 'saved',
+  };
+}
+
+function ListingMenu({ name, save }: Readonly<{ name: string; save: NonNullable<ListingSave> }>) {
+  const g = useTranslations('atlas.guide');
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            aria-label={g('listingActions', { name })}
+            className="rounded-full text-muted-foreground"
+            size="icon-sm"
+            type="button"
+            variant="ghost"
+          />
+        }
+      >
+        <Ellipsis aria-hidden="true" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-48">
+        <DropdownMenuItem disabled={save.pending || save.saved} onClick={save.save}>
+          <Icons.Saved aria-hidden="true" />
+          {save.saved ? g('savedToFinds') : save.pending ? g('savingToFinds') : g('saveToFinds')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function ListingSaveStatus({ save }: Readonly<{ save: NonNullable<ListingSave> }>) {
+  const g = useTranslations('atlas.guide');
+  return (
+    <p aria-live="polite" className="text-xs" role="status">
+      {save.pending ? (
+        <span className="mt-2 block text-muted-foreground">{g('savingToFinds')}</span>
+      ) : save.saved ? (
+        <span className="mt-2 flex items-center gap-1.5 text-muted-foreground">
+          <Check aria-hidden="true" className="size-3.5 text-brand" />
+          {g('savedToFinds')}
+          <Link
+            className="font-semibold text-brand underline-offset-2 hover:underline"
+            href="/saved"
+          >
+            {g('viewInFinds')}
+          </Link>
+        </span>
+      ) : save.failed ? (
+        <span className="mt-2 block text-destructive">{g('saveFailed')}</span>
+      ) : null}
+    </p>
   );
 }
 

@@ -969,6 +969,9 @@
       "dayRange": "Days {first}–{last} · {dates}",
       "showDays": "Days in {town}",
       "youAreHere": "You’re here",
+      "townGuide": "Read the {town} guide in Atlas",
+      "countryGuide": "{country} guide",
+      "guidesLabel": "Atlas guides for this trip",
       "daysOpen": "{count, plural, one {# day open} other {# days open}}",
       "todayShort": "Today",
       "plannedStops": "{count, plural, one {# stop} other {# stops}}",
@@ -1516,6 +1519,10 @@
         "itemNote": "Itinerary note",
         "tripTools": "Trip tools",
         "tripToolsDescription": "Open the trip details that are useful away from the planning workspace.",
+        "guides": "Guides",
+        "guidesDescription": "Read up on where this trip goes, in Atlas.",
+        "countryGuide": "Country guide",
+        "destinationGuide": "Destination guide",
         "tools": {
           "itinerary": "Itinerary",
           "itineraryDescription": "Days, notes, and the wider plan",
@@ -3888,7 +3895,14 @@
     "lookUpGoogle": "Look up “{query}” on Google",
     "lookUpGoogleHint": "New places, beyond what you've kept",
     "googleNotSaved": "Not in your finds yet",
-    "keyHints": "↑ ↓ to move · ↵ to open · esc to close"
+    "keyHints": "↑ ↓ to move · ↵ to open · esc to close",
+    "atlasTitle": "Atlas guides",
+    "atlasKinds": {
+      "country": "Country guide",
+      "destination": "Destination guide",
+      "city": "City guide",
+      "region": "Region guide"
+    }
   },
   "offline": {
     "eyebrow": "Offline",
@@ -4711,7 +4725,13 @@
       "tryAgain": "Try again",
       "unavailable": "There’s no guide for this place yet.",
       "notFound": "Atlas doesn’t cover this place yet.",
-      "backToAtlas": "Back to Atlas"
+      "backToAtlas": "Back to Atlas",
+      "listingActions": "More for {name}",
+      "saveToFinds": "Save to Finds",
+      "savingToFinds": "Saving…",
+      "savedToFinds": "Saved to Finds",
+      "viewInFinds": "View in Finds",
+      "saveFailed": "Couldn’t save this place right now. Try again."
     },
     "picks": {
       "add": "Trip pick",

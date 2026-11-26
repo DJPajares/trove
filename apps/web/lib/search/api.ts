@@ -16,7 +16,18 @@ export type TroveSearchResult = {
   trip: { id: string; name: string } | null;
 };
 
+/** An Atlas guide matched by name: always secondary to the traveller's own Trove. */
+export type AtlasSearchResult = {
+  countryCode: string;
+  href: string;
+  kind: 'city' | 'country' | 'destination' | 'region';
+  name: string;
+  slug: string;
+};
+
 export type SearchResponse = {
+  /** Optional so a response from an older API still renders. */
+  atlas?: AtlasSearchResult[];
   canSearchPlaces: boolean;
   external: {
     results: Array<{

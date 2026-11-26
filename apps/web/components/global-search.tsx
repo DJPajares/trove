@@ -1,9 +1,18 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { CircleAlert, Clock3, ExternalLink, FileText, Info, Search, X } from 'lucide-react';
+import {
+  BookOpen,
+  CircleAlert,
+  Clock3,
+  ExternalLink,
+  FileText,
+  Info,
+  Search,
+  X,
+} from 'lucide-react';
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   useCallback,
   useEffect,
@@ -197,6 +206,7 @@ export function GlobalSearch({
   open: openProp,
 }: Readonly<GlobalSearchProps> = {}) {
   const t = useTranslations('globalSearch');
+  const locale = useLocale();
   const controlled = openProp !== undefined;
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = controlled ? openProp : uncontrolledOpen;
@@ -342,6 +352,9 @@ export function GlobalSearch({
       }))
       .filter((group) => group.results.length) ?? [];
   const showResults = (status === 'ready' || status === 'places') && response;
+  // Guides follow the traveller's own results and never count toward them (PRD 16.3).
+  const atlasResults = scope === 'all' ? (response?.atlas ?? []) : [];
+  const regionNames = new Intl.DisplayNames([locale], { type: 'region' });
   const canAskGoogle = Boolean(
     showResults && response.canSearchPlaces && response.external.status === 'not_requested',
   );
@@ -583,6 +596,40 @@ export function GlobalSearch({
                 </div>
               ) : null}
 
+              {atlasResults.length ? (
+                <Group id="search-group-atlas" label={t('atlasTitle')}>
+                  {atlasResults.map((guide) => {
+                    const country = regionNames.of(guide.countryCode) ?? guide.countryCode;
+                    const name = guide.kind === 'country' ? country : guide.name;
+                    const meta =
+                      guide.kind === 'country'
+                        ? t('atlasKinds.country')
+                        : `${t(`atlasKinds.${guide.kind}`)} · ${country}`;
+                    return (
+                      <li key={guide.href}>
+                        <Link
+                          className={rowClass}
+                          data-search-item
+                          href={guide.href}
+                          onClick={openResult}
+                        >
+                          <Tile tone="bg-surface-tint text-brand">
+                            <BookOpen />
+                          </Tile>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-semibold">
+                              <Highlighted query={trimmedQuery} text={name} />
+                            </span>
+                            <span className="block truncate text-sm text-muted-foreground">
+                              {meta}
+                            </span>
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </Group>
+              ) : null}
               {response.external.status === 'ok' ? (
                 <Group
                   action={

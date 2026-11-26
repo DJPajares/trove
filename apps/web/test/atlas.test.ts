@@ -10,6 +10,7 @@ import {
   type AtlasCountry,
 } from '@/lib/atlas';
 import { formatMonthRuns, wetDaysInTen } from '@/lib/atlas/format';
+import { townAtlasGuide } from '@/lib/atlas/trip-guides';
 import { extractListCards, parseNamedListItem } from '@/lib/atlas/cards';
 import {
   ATLAS_MAX_TRIP_PICKS,
@@ -211,5 +212,51 @@ describe('Atlas themes and Surprise me (PRD 40.2)', () => {
     expect(pickSurpriseCountry(sample, () => 0)?.countryCode).toBe('JP');
     expect(pickSurpriseCountry(sample, () => 0.5)?.countryCode).toBe('PH');
     expect(pickSurpriseCountry(sample, () => 1)?.countryCode).toBe('IS');
+  });
+});
+
+describe('townAtlasGuide', () => {
+  const guides = [
+    {
+      countryCode: 'PH',
+      destinations: [
+        {
+          kind: 'destination' as const,
+          name: 'Bohol',
+          slug: 'bohol',
+          summary: null,
+          wikivoyageTitle: 'Bohol',
+        },
+        {
+          kind: 'city' as const,
+          name: 'Cebu City',
+          slug: 'cebu-city',
+          summary: null,
+          wikivoyageTitle: 'Cebu City',
+        },
+        {
+          kind: 'region' as const,
+          name: 'Visayas',
+          slug: 'visayas',
+          summary: null,
+          wikivoyageTitle: 'Visayas',
+        },
+      ],
+    },
+  ];
+
+  it('links a town to the destination guide of the same name', () => {
+    expect(townAtlasGuide('Bohol, Philippines', guides)).toEqual({
+      countryCode: 'PH',
+      href: '/atlas/PH/bohol',
+      kind: 'destination',
+      name: 'Bohol',
+    });
+    expect(townAtlasGuide('cebu city', guides)?.href).toBe('/atlas/PH/cebu-city');
+  });
+
+  it('never links a near miss', () => {
+    expect(townAtlasGuide('Cebu', guides)).toBeNull();
+    expect(townAtlasGuide('Bohol Sea', guides)).toBeNull();
   });
 });

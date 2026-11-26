@@ -4,10 +4,11 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 /**
- * Trove's shape rule: actions, search and selection are pills (Button,
- * SearchField, Chip, segmented Tabs);
- * form fields (Input, Textarea, Select) keep the radius-md rounded rectangle.
- * Override the shape at a call site only for a deliberate exception.
+ * Trove's shape rule: every control shares one curve. Single-line controls
+ * (Button, Input, SearchField, Select, Combobox, Chip, segmented Tabs) are
+ * pills; multi-line ones (Textarea, wrapping chips) use `rounded-control`,
+ * the same 22px corner as a 44px pill. Surfaces (cards, menus, sheets) keep
+ * the radius scale. Override a control's shape only for a deliberate exception.
  */
 const buttonVariants = cva(
   "group/button inline-flex shrink-0 items-center justify-center rounded-full border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-[color,background-color,border-color,box-shadow,transform] duration-[var(--motion-standard)] ease-[var(--ease-standard)] outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",

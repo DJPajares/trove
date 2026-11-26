@@ -85,7 +85,7 @@ export function CountryMultiCombobox({
     >
       <ComboboxChips
         className={cn(
-          'min-h-11 w-full rounded-[var(--radius-md)] bg-field py-1.5 shadow-[var(--shadow-control)] transition-[color,background-color,border-color,box-shadow] duration-[var(--motion-standard)] hover:border-border-strong has-disabled:pointer-events-none has-disabled:cursor-not-allowed has-disabled:bg-muted has-disabled:opacity-60',
+          'min-h-11 w-full rounded-control bg-field py-1.5 shadow-[var(--shadow-control)] transition-[color,background-color,border-color,box-shadow] duration-[var(--motion-standard)] hover:border-border-strong has-disabled:pointer-events-none has-disabled:cursor-not-allowed has-disabled:bg-muted has-disabled:opacity-60',
           className,
         )}
         ref={anchor}

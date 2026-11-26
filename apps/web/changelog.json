@@ -1711,5 +1711,15 @@
         "Kit now lives in the menu at the top of your phone screen, making room for Atlas in the bar."
       ]
     }
+  },
+  {
+    "id": "atlas-cover-sheet-motion",
+    "date": "2026-11-26",
+    "version": "1.46.1",
+    "summaries": {
+      "en": [
+        "Atlas now opens with the same curved cover photo and smooth entrance as Home and Trips."
+      ]
+    }
   }
 ]

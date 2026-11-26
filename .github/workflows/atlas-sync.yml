@@ -1,0 +1,109 @@
+name: Atlas sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Sync mode (destinations = Tier-1 countries + sub-guides, guides = all countries, countries = climate index only)
+        required: true
+        default: destinations
+        type: choice
+        options:
+          - destinations
+          - guides
+          - countries
+      only:
+        description: Optional comma-separated ISO country codes (e.g. PH,JP)
+        required: false
+        default: ''
+        type: string
+      refresh:
+        description: Force re-check Wikivoyage revisions regardless of stored age
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    # 03:00 UTC on the 1st of every month: keeps Tier-1 destination guides warm
+    # and rolls the five-year Open-Meteo climate archive each January.
+    - cron: '0 3 1 * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: atlas-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync Atlas reference data
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Restore Atlas disk cache
+        uses: actions/cache@v4
+        with:
+          path: apps/api/node_modules/.cache/atlas
+          key: atlas-sync-cache-${{ github.run_id }}
+          restore-keys: |
+            atlas-sync-cache-
+
+      - name: Run Atlas sync
+        env:
+          ATLAS_MODE: ${{ github.event_name == 'schedule' && 'destinations' || inputs.mode }}
+          ATLAS_ONLY: ${{ inputs.only }}
+          ATLAS_REFRESH: ${{ inputs.refresh }}
+          ATLAS_USER_AGENT: ${{ secrets.ATLAS_USER_AGENT }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DATABASE_URL}" ]; then
+            echo "DATABASE_URL secret is not configured in the production environment." >&2
+            exit 1
+          fi
+
+          args=()
+          case "${ATLAS_MODE}" in
+            destinations) args+=(--destinations) ;;
+            guides) args+=(--guides) ;;
+            countries) ;;
+            *)
+              echo "Unknown mode: ${ATLAS_MODE}" >&2
+              exit 1
+              ;;
+          esac
+
+          if [ "${ATLAS_REFRESH}" = "true" ]; then
+            args+=(--refresh)
+          fi
+
+          trimmed_only="${ATLAS_ONLY// /}"
+          if [ -n "${trimmed_only}" ]; then
+            if [[ ! "${trimmed_only}" =~ ^[A-Za-z]{2}(,[A-Za-z]{2})*$ ]]; then
+              echo "Invalid 'only' country list: ${trimmed_only}" >&2
+              exit 1
+            fi
+            args+=("--only=${trimmed_only}")
+          fi
+
+          pnpm --filter @trove/api atlas:sync "${args[@]}"

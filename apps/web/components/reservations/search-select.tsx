@@ -58,7 +58,6 @@ export function SearchSelect({
       <ComboboxInput
         aria-describedby={describedBy}
         aria-label={label}
-        className="h-11 w-full min-w-0 rounded-full border border-input bg-field text-base shadow-[var(--shadow-control)] outline-none placeholder:text-muted-foreground hover:border-border-strong focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 md:text-sm"
         clearLabel={t('clear', { label })}
         id={id}
         placeholder={placeholder}
@@ -70,7 +69,7 @@ export function SearchSelect({
         <ComboboxList>
           {(option: SearchSelectOption) => (
             <ComboboxItem
-              className="min-h-11 flex-col items-start justify-center gap-0 rounded-[var(--radius-sm)] py-2 pr-9 pl-3"
+              className="min-h-11 flex-col items-start justify-center gap-0"
               key={option.value}
               value={option}
             >

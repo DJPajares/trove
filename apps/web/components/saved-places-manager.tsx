@@ -938,7 +938,7 @@ export function SavedPlacesManager({
           render={
             <Button
               aria-label={t('moreActions', { name: getPlaceName(savedPlace) })}
-              className="rounded-full bg-score-media-background/75 text-score-media-foreground backdrop-blur-sm hover:bg-score-media-background hover:text-score-media-foreground"
+              className="bg-score-media-background/75 text-score-media-foreground backdrop-blur-sm hover:bg-score-media-background hover:text-score-media-foreground"
               size="icon-sm"
               type="button"
               variant="ghost"
@@ -996,7 +996,7 @@ export function SavedPlacesManager({
             <>
               <Button
                 aria-haspopup="dialog"
-                className="rounded-full bg-white text-neutral-900 hover:bg-white/90"
+                className="bg-white text-neutral-900 hover:bg-white/90"
                 onClick={() => openPlacesSheet()}
                 size="lg"
                 type="button"
@@ -1008,7 +1008,7 @@ export function SavedPlacesManager({
                 <DropdownMenuTrigger
                   render={
                     <Button
-                      className="rounded-full border-white/25 bg-black/25 text-white backdrop-blur-md hover:bg-black/40 hover:text-white focus-visible:ring-white/70"
+                      className="border-white/25 bg-black/25 text-white backdrop-blur-md hover:bg-black/40 hover:text-white focus-visible:ring-white/70"
                       size="lg"
                       type="button"
                       variant="outline"
@@ -1180,7 +1180,6 @@ export function SavedPlacesManager({
                   </h2>
                   {collections.length ? (
                     <Button
-                      className="rounded-full"
                       onClick={() => openCollectionEditor('create')}
                       size="sm"
                       variant="outline"
@@ -1264,7 +1263,7 @@ export function SavedPlacesManager({
                         {t('collectionsIntroDescription')}
                       </p>
                     </div>
-                    <Button className="rounded-full" onClick={() => openCollectionEditor('create')}>
+                    <Button onClick={() => openCollectionEditor('create')}>
                       <FolderPlus aria-hidden="true" data-icon="inline-start" />
                       {t('createFirstCollection')}
                     </Button>
@@ -1422,7 +1421,6 @@ export function SavedPlacesManager({
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button
-                    className="rounded-full"
                     onClick={() => {
                       setUnsaveError(null);
                       setSavedPlaceToUnsave(rediscover);
@@ -1431,7 +1429,7 @@ export function SavedPlacesManager({
                   >
                     {t('rediscover.letGo')}
                   </Button>
-                  <Button className="rounded-full" onClick={() => keepRediscovered(rediscover.id)}>
+                  <Button onClick={() => keepRediscovered(rediscover.id)}>
                     {t('rediscover.keep')}
                   </Button>
                 </div>

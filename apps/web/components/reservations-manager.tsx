@@ -224,7 +224,7 @@ export function ReservationsManager({ tripId }: Readonly<{ tripId: string }>) {
           <div className="flex flex-wrap justify-center gap-2">
             {QUICK_START.map((type) => (
               <Button
-                className="h-11 rounded-full pr-4 pl-1.5"
+                className="h-11 pr-4 pl-1.5"
                 key={type}
                 disabled={readOnly}
                 onClick={() => openCreate(type)}

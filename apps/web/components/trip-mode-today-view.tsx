@@ -1027,7 +1027,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
 
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         <Button
-                          className="h-9 rounded-full px-3.5 font-normal shadow-none"
+                          className="h-9 px-3.5 font-normal shadow-none"
                           onClick={() => openMemoryFor(item.id)}
                           variant="outline"
                         >
@@ -1035,7 +1035,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                           {memoryTranslations('quickAction')}
                         </Button>
                         <Button
-                          className="h-9 rounded-full px-3.5 font-normal shadow-none"
+                          className="h-9 px-3.5 font-normal shadow-none"
                           onClick={() => logExpense(item.id)}
                           variant="outline"
                         >

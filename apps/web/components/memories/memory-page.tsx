@@ -84,7 +84,7 @@ export function MemoryPage({
       <Button
         aria-pressed={highlight}
         className={cn(
-          'rounded-full',
+          '',
           highlight &&
             'border-accent-strong/40 bg-accent-strong/10 text-accent-strong hover:bg-accent-strong/15 hover:text-accent-strong',
         )}

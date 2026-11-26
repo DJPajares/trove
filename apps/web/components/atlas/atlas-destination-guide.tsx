@@ -167,7 +167,7 @@ export function AtlasDestinationGuideView({
       >
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <Button
-            className="h-11 rounded-full bg-white px-6 text-sm font-semibold text-neutral-900 hover:bg-white/90"
+            className="h-11 bg-white px-6 text-sm font-semibold text-neutral-900 hover:bg-white/90"
             onClick={() => {
               const dates = suggestAtlasTripDates(country.months, 9);
               openCreateTripIn({

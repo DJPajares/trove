@@ -393,7 +393,7 @@ export function LibraryCover({
                 ).map(([key, target, Icon]) => (
                   <Button
                     aria-label={t(key)}
-                    className="rounded-full border-white/20 bg-black/30 text-white backdrop-blur-md hover:bg-black/45 hover:text-white focus-visible:ring-white/70 rtl:rotate-180"
+                    className="border-white/20 bg-black/30 text-white backdrop-blur-md hover:bg-black/45 hover:text-white focus-visible:ring-white/70 rtl:rotate-180"
                     disabled={target < 0 || target >= count}
                     key={key}
                     onClick={() => go(target)}

@@ -272,13 +272,13 @@ export function AiPlanningComposer({
               </Button>
             ) : null}
             {exhausted || unavailable ? (
-              <Button className="h-12 flex-1 rounded-full" onClick={onCreateManually} type="button">
+              <Button className="h-12 flex-1" onClick={onCreateManually} type="button">
                 {t('createManually')}
               </Button>
             ) : (
               <>
                 <Button
-                  className="h-12 rounded-full px-5"
+                  className="h-12 px-5"
                   disabled={busy}
                   onClick={onCreateManually}
                   type="button"
@@ -286,7 +286,7 @@ export function AiPlanningComposer({
                 >
                   {t('createManually')}
                 </Button>
-                <Button className="h-12 flex-1 rounded-full" disabled={!canGenerate} type="submit">
+                <Button className="h-12 flex-1" disabled={!canGenerate} type="submit">
                   <Icons.Ai aria-hidden="true" data-icon="inline-start" />
                   {operation === 'starting'
                     ? t('starting')

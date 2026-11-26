@@ -397,7 +397,7 @@ export function GlobalSearch({
             {query ? (
               <Button
                 aria-label={t('clear')}
-                className="shrink-0 rounded-full text-muted-foreground"
+                className="shrink-0 text-muted-foreground"
                 onClick={() => {
                   setQuery('');
                   inputRef.current?.focus();
@@ -438,7 +438,7 @@ export function GlobalSearch({
               .map((key) => (
                 <Button
                   aria-pressed={scope === key}
-                  className="h-9 shrink-0 rounded-full px-3.5 text-[0.8125rem] tabular-nums shadow-none"
+                  className="h-9 shrink-0 px-3.5 text-[0.8125rem] tabular-nums shadow-none"
                   key={key}
                   onClick={() => setScope(key)}
                   size="sm"

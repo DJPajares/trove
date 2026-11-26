@@ -256,7 +256,7 @@ export function CurrencyConverter() {
               {amount ? (
                 <Button
                   aria-label={t('clearAmount')}
-                  className="shrink-0 rounded-full text-muted-foreground"
+                  className="shrink-0 text-muted-foreground"
                   onClick={() => {
                     // Blur first: a touch tap on a button does not always take
                     // focus from the field, and a focused field keeps its text.
@@ -280,7 +280,7 @@ export function CurrencyConverter() {
                 upper half released off it and never swapped. */}
             <Button
               aria-label={t('swap')}
-              className="absolute -top-5.5 right-5 size-11 rounded-full bg-card text-brand sm:right-7"
+              className="absolute -top-5.5 right-5 size-11 bg-card text-brand sm:right-7"
               disabled={!source || !target}
               onClick={() => {
                 setSource(target);
@@ -365,7 +365,7 @@ export function CurrencyConverter() {
                     <Button
                       aria-label={t('usePair', { source: pair.source, target: pair.target })}
                       aria-pressed={active}
-                      className="h-10 max-w-full rounded-full px-3.5 tabular-nums"
+                      className="h-10 max-w-full px-3.5 tabular-nums"
                       key={`${pair.source}-${pair.target}`}
                       onClick={() => {
                         setSource(pair.source);

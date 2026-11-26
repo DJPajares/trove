@@ -80,7 +80,7 @@ export function LandingHero() {
 
           <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2">
             <Button
-              className="rounded-full bg-white px-6 text-neutral-900 hover:bg-white/90 focus-visible:ring-white/70"
+              className="bg-white px-6 text-neutral-900 hover:bg-white/90 focus-visible:ring-white/70"
               nativeButton={false}
               render={<Link href="/sign-up" />}
               size="lg"

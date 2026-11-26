@@ -731,7 +731,7 @@ function EditorForm({
                               return (
                                 <Button
                                   aria-pressed={on}
-                                  className="h-9 rounded-full px-3 text-[0.8125rem] shadow-none"
+                                  className="h-9 px-3 text-[0.8125rem] shadow-none"
                                   key={day.id}
                                   onClick={() => {
                                     setNightsChosen(true);

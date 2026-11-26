@@ -520,7 +520,7 @@ export function TripModeMapView({
                   {nextDirections ? (
                     <Button
                       aria-label={nowT('directionsTo', { name: itemName(nextItem) })}
-                      className="size-12 shrink-0 rounded-full"
+                      className="size-12 shrink-0"
                       nativeButton={false}
                       render={<a href={nextDirections} rel="noreferrer" target="_blank" />}
                       size="icon"

@@ -196,7 +196,7 @@ export function FindsCover({
                   </p>
                   <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-3">
                     <Button
-                      className="rounded-full bg-white text-neutral-900 hover:bg-white/90"
+                      className="bg-white text-neutral-900 hover:bg-white/90"
                       onClick={onPlanTrip}
                       size="lg"
                     >
@@ -251,7 +251,7 @@ export function FindsCover({
                 ).map(([key, target, Icon]) => (
                   <Button
                     aria-label={t(key)}
-                    className="rounded-full border-white/20 bg-black/30 text-white backdrop-blur-md hover:bg-black/45 hover:text-white focus-visible:ring-white/70 rtl:rotate-180"
+                    className="border-white/20 bg-black/30 text-white backdrop-blur-md hover:bg-black/45 hover:text-white focus-visible:ring-white/70 rtl:rotate-180"
                     disabled={target < 0 || target >= towns.length}
                     key={key}
                     onClick={() => go(target)}

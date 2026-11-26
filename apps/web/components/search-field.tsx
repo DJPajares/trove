@@ -35,7 +35,7 @@ export function SearchField({
       />
       <Input
         // Search is a pill, like every action (see Button); form fields stay rounded rectangles.
-        className={cn('rounded-full pr-4 pl-10.5', className)}
+        className={cn('pr-4 pl-10.5', className)}
         enterKeyHint={enterKeyHint}
         id={inputId}
         onKeyDown={(event) => {

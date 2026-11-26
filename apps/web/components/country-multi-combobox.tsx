@@ -83,13 +83,7 @@ export function CountryMultiCombobox({
       onValueChange={(countries: Country[]) => onValueChange(countries.map((item) => item.code))}
       value={selected}
     >
-      <ComboboxChips
-        className={cn(
-          'min-h-11 w-full rounded-control bg-field py-1.5 shadow-[var(--shadow-control)] transition-[color,background-color,border-color,box-shadow] duration-[var(--motion-standard)] hover:border-border-strong has-disabled:pointer-events-none has-disabled:cursor-not-allowed has-disabled:bg-muted has-disabled:opacity-60',
-          className,
-        )}
-        ref={anchor}
-      >
+      <ComboboxChips className={cn('w-full', className)} ref={anchor}>
         {selected.map((country) => (
           // No value prop: Base UI matches a chip to the selection by its index
           // in the composite list, so the chips must simply be rendered in the
@@ -112,11 +106,7 @@ export function CountryMultiCombobox({
         <ComboboxEmpty>{t('empty')}</ComboboxEmpty>
         <ComboboxList>
           {(item: Country) => (
-            <ComboboxItem
-              className="relative flex min-h-10 w-full cursor-default items-center gap-3 rounded-[var(--radius-sm)] py-2 pr-9 pl-3 text-sm outline-none select-none data-highlighted:bg-secondary data-highlighted:text-secondary-foreground"
-              key={item.code}
-              value={item}
-            >
+            <ComboboxItem key={item.code} value={item}>
               <span aria-hidden="true">{item.flag}</span>
               {item.name}
             </ComboboxItem>

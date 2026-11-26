@@ -140,7 +140,7 @@ export function JournalDock({
         {onContents ? (
           <Button
             aria-label={title ? t('contentsAt', { day: title }) : t('contents')}
-            className="max-w-[min(26rem,50vw)] min-w-0 rounded-full md:px-4"
+            className="max-w-[min(26rem,50vw)] min-w-0 md:px-4"
             onClick={onContents}
             size="default"
             type="button"
@@ -153,7 +153,7 @@ export function JournalDock({
             </span>
           </Button>
         ) : null}
-        <Button className="rounded-full px-5" disabled={readOnly} onClick={onAdd} type="button">
+        <Button className="px-5" disabled={readOnly} onClick={onAdd} type="button">
           <Plus aria-hidden="true" data-icon="inline-start" />
           {t('addMemory')}
         </Button>
@@ -200,7 +200,7 @@ export function JournalHeadActions({
         hasCover={hasCover}
         onChooseCover={onChooseCover}
       />
-      <Button className="rounded-full" disabled={readOnly} onClick={onAdd} size="sm" type="button">
+      <Button disabled={readOnly} onClick={onAdd} size="sm" type="button">
         <Plus aria-hidden="true" data-icon="inline-start" />
         {t('addMemory')}
       </Button>

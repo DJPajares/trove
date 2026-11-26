@@ -189,10 +189,7 @@ export function ItineraryTripMap({
                 icon={
                   <span
                     aria-hidden="true"
-                    className={cn(
-                      'mx-auto mt-px block size-2.5 rounded-full',
-                      mapDayTint(index).dot,
-                    )}
+                    className={cn('mx-auto mt-px block size-2.5', mapDayTint(index).dot)}
                   />
                 }
                 key={day.id}

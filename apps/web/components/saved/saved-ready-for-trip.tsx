@@ -120,7 +120,7 @@ export function SavedReadyForTrip({
 
       {added ? (
         <Button
-          className="h-11 rounded-full border-score-media-foreground/25 bg-transparent text-score-media-foreground hover:bg-score-media-foreground/10 hover:text-score-media-foreground"
+          className="h-11 border-score-media-foreground/25 bg-transparent text-score-media-foreground hover:bg-score-media-foreground/10 hover:text-score-media-foreground"
           nativeButton={false}
           render={<Link href={`/trips/${trip.id}/itinerary?places=1`} />}
           variant="outline"
@@ -131,7 +131,7 @@ export function SavedReadyForTrip({
         <Collapsible className="space-y-3">
           <div className="flex flex-wrap gap-2">
             <Button
-              className="h-11 flex-1 rounded-full bg-score-media-brand text-score-media-background hover:bg-score-media-brand/90"
+              className="h-11 flex-1 bg-score-media-brand text-score-media-background hover:bg-score-media-brand/90"
               disabled={busy !== null}
               onClick={() => void add('all', candidates)}
               type="button"
@@ -153,7 +153,7 @@ export function SavedReadyForTrip({
                   <span className="min-w-0 truncate text-sm">{nameOf(entry)}</span>
                   <Button
                     aria-label={t('addOne', { name: nameOf(entry), trip: trip.name })}
-                    className="rounded-full text-score-media-foreground hover:bg-score-media-foreground/10 hover:text-score-media-foreground"
+                    className="text-score-media-foreground hover:bg-score-media-foreground/10 hover:text-score-media-foreground"
                     disabled={busy !== null}
                     onClick={() => void add(entry.id, [entry])}
                     size="icon"

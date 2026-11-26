@@ -444,11 +444,7 @@ function MonthBrowser({
           value={[String(month)]}
         >
           {MONTHS.map((option) => (
-            <Chip
-              className="min-h-11 justify-center rounded-[var(--radius-md)] text-sm"
-              key={option}
-              value={String(option)}
-            >
+            <Chip className="min-h-11 justify-center text-sm" key={option} value={String(option)}>
               {monthName(option, locale, 'short')}
             </Chip>
           ))}

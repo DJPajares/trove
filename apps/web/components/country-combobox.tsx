@@ -5,7 +5,6 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, type ComponentProps } from 'react';
 
 import { useCountries, type Country } from '@/hooks/use-countries';
-import { cn } from '@/lib/utils';
 import {
   Combobox,
   ComboboxContent,
@@ -69,10 +68,7 @@ export function CountryCombobox({
         aria-invalid={ariaInvalid}
         aria-label={ariaLabel}
         aria-required={required}
-        className={cn(
-          'h-11 w-full min-w-0 rounded-full border border-input bg-field py-2 text-base shadow-[var(--shadow-control)] transition-[color,background-color,border-color,box-shadow] duration-[var(--motion-standard)] outline-none placeholder:text-muted-foreground hover:border-border-strong focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-60 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm',
-          className,
-        )}
+        className={className}
         clearLabel={t('clear', { label: ariaLabel })}
         id={id}
         placeholder={placeholder}
@@ -84,11 +80,7 @@ export function CountryCombobox({
         <ComboboxEmpty>{t('empty')}</ComboboxEmpty>
         <ComboboxList>
           {(item) => (
-            <ComboboxItem
-              className="relative flex min-h-10 w-full cursor-default items-center gap-3 rounded-[var(--radius-sm)] py-2 pr-9 pl-3 text-sm outline-none select-none data-highlighted:bg-secondary data-highlighted:text-secondary-foreground"
-              key={item.code}
-              value={item}
-            >
+            <ComboboxItem key={item.code} value={item}>
               <span aria-hidden="true">{item.flag}</span>
               {item.name}
             </ComboboxItem>

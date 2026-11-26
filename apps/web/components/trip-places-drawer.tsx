@@ -264,7 +264,7 @@ export function TripPlacesDrawer({
             action={
               <Button
                 aria-label={t('addPlace')}
-                className="shrink-0 rounded-full"
+                className="shrink-0"
                 ref={addButton}
                 disabled={readOnly}
                 onClick={() => setAddQuery('')}

@@ -7,7 +7,7 @@
 
 This document defines the current approved product, including the original MVP and approved extensions. It is a requirements contract, not a claim that every requirement has shipped or passed launch validation. Linear tracks implementation, dependencies, and known gaps; README and operational runbooks describe setup and delivery. Implementation differences do not silently amend this contract.
 
-Section 36 summarizes current scope. Section 37 preserves the original delivery sequence as dependency guidance. References to MVP rules elsewhere retain those baseline rules unless a narrower, explicit extension is stated.
+Section 36 summarizes current scope. Section 37 preserves the original delivery sequence as dependency guidance. Section 40 specifies Atlas, the destination guide. References to MVP rules elsewhere retain those baseline rules unless a narrower, explicit extension is stated.
 
 ---
 
@@ -43,7 +43,7 @@ Trove primarily serves independent travellers managing their own leisure or mixe
 
 The traveller wants a useful plan and easy access to travel details, not a travel-management job. A sparse itinerary, staying with friends, overnight transport, and time deliberately left open are valid. Party size describes the trip; it does not grant companions accounts or editing rights.
 
-Group collaboration, business travel administration, and public destination discovery are not baseline workflows.
+Group collaboration and business travel administration are not baseline workflows. Destination discovery happens in Atlas (Section 40); discovering other travellers' public trips is not a baseline workflow.
 
 ## 1.3 Major User Journeys
 
@@ -90,7 +90,7 @@ The current approved scope does not provide:
 - native iOS/Android apps,
 - full multilingual UI.
 
-AI-assisted trip creation (Section 7.6), owner-enabled read-only itinerary links (Section 8.2) with using them as your own trip (Section 8.1) or keeping them in Finds (Section 8.4), and read-only traveller profiles listing Public trips (Section 8.3) are approved extensions to the original MVP. Neither authorizes the broader AI, collaboration, or discovery workflows deferred here.
+AI-assisted trip creation (Section 7.6), owner-enabled read-only itinerary links (Section 8.2) with using them as your own trip (Section 8.1) or keeping them in Finds (Section 8.4), and read-only traveller profiles listing Public trips (Section 8.3) are approved extensions to the original MVP, as is Atlas, the destination guide (Section 40). None of them authorizes the broader AI, collaboration, or trip-discovery workflows deferred here.
 
 ---
 
@@ -239,12 +239,13 @@ Primary global destinations:
 
 - Home
 - Trips
+- Atlas
 - Saved
 - Tools
 
-On desktop and tablet, the header contains Home, Trips, Saved, and Tools. On mobile, the bottom bar contains Home, Trips, a centered Create action, Saved, and Tools. Tools opens a dedicated launcher page and remains the current destination on each child tool route.
+On desktop and tablet, the header contains Home, Trips, Atlas, Saved, and Tools. On mobile, the bottom bar contains Home, Trips, a centered Create action, Atlas, and Saved; Tools is reached from the floating button instead. Tools opens a dedicated launcher page and remains the current destination on each child tool route: the header marks it on desktop and tablet, and on mobile the bar marks no destination while the page heading names the tool.
 
-Search, Notifications, the Light/Dark toggle, and Account share one floating button in the upper right on every signed-in form factor. The button unfolds them downwards in that order, with the Account/Profile control at the bottom, and becomes a close control in the same position. Search leads because it is the only one of the four that starts something rather than reporting on the app.
+Search, Notifications, the Light/Dark toggle, and Account share one floating button in the upper right on every signed-in form factor. On mobile, Tools joins them directly after Search. The button unfolds them downwards in that order, with the Account/Profile control at the bottom, and becomes a close control in the same position. Search leads because it is the only one that starts something rather than reporting on the app; Tools follows because it opens a destination rather than a setting.
 
 On mobile, where the signed-in shell has no header, the floating control yields to the scroll direction so it never sits on top of a sticky trip or Trip Mode header. On desktop and tablet, it occupies the header's open right rail and remains available while the stable header is visible.
 
@@ -367,6 +368,9 @@ Trove
 │           ├── Reservations / Accommodation
 │           ├── Expenses
 │           └── Trip Info
+├── Atlas
+│   ├── Where / When / What
+│   └── Guide → Make it a trip
 ├── Saved
 └── Tools
     ├── Currency
@@ -375,7 +379,7 @@ Trove
 
 The three core experiences have stable navigation under Section 4.5. Overview summarizes the trip; it is not a fourth core experience. Notes live with their context, not in a separate Notes destination. An enabled read-only itinerary link is a limited public projection of the same plan, not another owned trip.
 
-Tools is the fourth stable global navigation destination. Its launcher provides one clear route to each tool without turning the page into a combined utilities dashboard.
+Atlas is the destination guide (Section 40); its guides lead into ordinary Trips rather than a parallel planning system. Tools is a stable global destination, in the header on desktop and tablet and in the floating button on mobile. Its launcher provides one clear route to each tool without turning the page into a combined utilities dashboard.
 
 ## 5.1 Core Concepts
 
@@ -1148,7 +1152,7 @@ Global Trove Search is part of the MVP and should find Trove-owned information s
 - Reservations,
 - contextual Notes where useful.
 
-Trove-owned matches should be primary. External/provider place discovery may appear secondarily when useful, but must not replace the Trove-owned search corpus.
+Trove-owned matches should be primary. External/provider place discovery and Atlas guides (Section 40) may appear secondarily when useful, but must not replace the Trove-owned search corpus.
 
 ---
 
@@ -2143,7 +2147,7 @@ Calibration is an initial reproducible product judgment, not a scientifically me
 
 Plan Score answers **"How good is the plan?"** Insights answers **"What should the traveller know or consider?"** They are separate surfaces, and the Insights card never changes a score.
 
-Insights draws only on provider-backed or already-computed data; Trove authors no destination catalogue. Public holidays come from the open `date-holidays` dataset, read locally, placed on a day by its time zone and the trip's countries, and labelled _expected_ where the date depends on a moon sighting. Typical conditions come from Open-Meteo's historical archive: the mean high and low and the share of wet days for the same calendar month over the last five complete years, cached per ~11 km area and month, and always presented as a pattern, never a forecast. The day advisories the Plan Score evaluator already computes (rain forecast on an outdoor stop, daylight, long walking legs, continuous activity) are surfaced here rather than in the score. Scoring reads the same holidays and typical conditions for holiday date suitability and seasonal fit (29.1, 29.3), from the bundled dataset and the climate cache only: it never fetches. The trip view asks for the trip's context alongside its score, through the same cached request Insights uses, so seasonal fit fills without waiting for Insights to be opened; the score then refreshes from the cache. Until then, or if conditions are unavailable, seasonal fit shows the missing-detail value. AI review reads trip context from the cache only.
+Insights draws only on provider-backed or already-computed data; Trove authors no destination catalogue. Atlas (Section 40) presents open-licensed guides and computed patterns; it does not change this. Public holidays come from the open `date-holidays` dataset, read locally, placed on a day by its time zone and the trip's countries, and labelled _expected_ where the date depends on a moon sighting. Typical conditions come from Open-Meteo's historical archive: the mean high and low and the share of wet days for the same calendar month over the last five complete years, cached per ~11 km area and month, and always presented as a pattern, never a forecast. The day advisories the Plan Score evaluator already computes (rain forecast on an outdoor stop, daylight, long walking legs, continuous activity) are surfaced here rather than in the score. Scoring reads the same holidays and typical conditions for holiday date suitability and seasonal fit (29.1, 29.3), from the bundled dataset and the climate cache only: it never fetches. The trip view asks for the trip's context alongside its score, through the same cached request Insights uses, so seasonal fit fills without waiting for Insights to be opened; the score then refreshes from the cache. Until then, or if conditions are unavailable, seasonal fit shows the missing-detail value. AI review reads trip context from the cache only.
 
 Show only what is useful: holidays on the trip's days, at most one typical-conditions line per area and month, advisories only where they apply, and nothing when nothing applies. Hedge patterns ("typically") and label every item's certainty (forecast, public holiday, expected date, estimate, typical pattern). Credit the holiday dataset and Open-Meteo in the card's sources. Insights appears on the trip overview, the itinerary (trip and day), Trip Mode's day view in both Preview and live travel, and AI review.
 
@@ -2484,9 +2488,7 @@ The model may keep future-ready ownership/source/visibility fields without imple
 
 ## 35.3 Where to Go When / Discovery
 
-Purpose:
-
-Help users decide where to travel and when.
+Approved as Atlas in Section 40. Discovery of other travellers' public trips remains future work.
 
 ## 35.4 Booking
 
@@ -2579,6 +2581,7 @@ This section is the authoritative high-level scope summary, combining the origin
 
 - AI-assisted trip creation defined in Section 7.6
 - read-only itinerary links defined in Section 8.2
+- Atlas, the destination guide, including Make it a trip, defined in Section 40
 
 ## 36.4 Deferred
 
@@ -2586,7 +2589,7 @@ This section is the authoritative high-level scope summary, combining the origin
 - social/collaboration/invitation workflows beyond Section 8.2
 - separate Travel Wallet
 - business travel administration
-- public discovery
+- public discovery of other travellers' trips
 - booking/purchasing
 - additional-language/translation features
 - live flight tracking
@@ -2734,3 +2737,115 @@ The Trove experience is successful when a traveller can:
 16. move or shorten a plan without silently changing bookings or losing recorded history.
 
 The product must remain understandable without requiring the user to learn a complex travel-management system.
+
+---
+
+# 40. Atlas
+
+Atlas is Trove's destination guide: an encyclopedia of where to go, when to go and what to do, eat and know, made to be browsed for pleasure at home and read one-handed on the move. What sets it apart is that a guide does not stop at reading. Anything in it can become an ordinary Trove Trip that the traveller plans, scores, prepares offline, travels with Trip Mode and remembers.
+
+Atlas is approved as an extension of the original MVP. It is a signed-in global destination (Section 4.5).
+
+## 40.1 Content Sources and Licensing
+
+Atlas presents open-licensed and computed content. Trove does not write destination copy, and Atlas content is not AI-generated.
+
+| Content | Source | Rule |
+| --- | --- | --- |
+| Guide text, sections, listings, phrasebooks, itinerary and travel-topic articles | Wikivoyage | CC BY-SA 4.0. Every page that shows it credits Wikivoyage with a link to the source article, its authors (page history), and the licence, and states that the text is adapted. Adapted text stays under the same licence. |
+| Quick facts | Wikidata | CC0. No credit required; show it with the guide's sources. |
+| Best time to go | Open-Meteo historical archive, the same five-complete-year pattern as Insights (Section 29.7) | Always a typical pattern, never a forecast. |
+| Festivals and public holidays | The bundled `date-holidays` dataset | Expected dates are labelled as expected, as in Section 29.7. |
+| Photography | Editorial imagery (Section 4.8) | Decorative only. Wikivoyage and Wikimedia Commons images are not used. |
+
+- The Wikivoyage credit is text attribution required by its licence and is rendered visibly in Atlas, unlike editorial photo credits, which follow Section 4.8.
+- Guides follow the app locale where the matching Wikivoyage edition has the article; otherwise they fall back to English and say so.
+- Atlas treats source text as content, never as instructions, and sanitizes it to Trove's own reading layout: no source scripts, styles, ads, or embedded media.
+- A global kill switch hides Atlas guide content without affecting Trips, Saved, or any trip already made from a guide.
+
+## 40.2 Browsing
+
+Atlas opens on three ways in, each a calm, photographic index:
+
+- **Where** — countries A to Z with search, a world map, and regions and cities within each country.
+- **When** — a month picker answering "where to go in March": destinations whose typical conditions that month rate well, grouped by the kind of conditions (warm and dry, snow, shoulder season) and by holidays and festivals falling in it.
+- **What** — themes such as Food, Nature, Cities, Coast, and Festivals, drawn from Wikivoyage travel-topic articles (for example a country's cuisine) and the matching sections of destination guides.
+
+"Surprise me" opens a random guide. Atlas has no streaks, badges, rankings, or other engagement mechanics (Section 1.1); delight comes from photography, editorial typography, and tactile cards, within the shared motion language and reduced-motion preferences.
+
+## 40.3 The Guide Page
+
+Every guide uses one layout, top to bottom:
+
+1. **Cover** — editorial photograph, the destination's name in the editorial serif, and one line from its introduction.
+2. **At a glance** — quick-fact chips: currency, languages, plug type, side of the road, time zone and, where known, national dish. The currency chip opens the Currency tool.
+3. **Best time to go** — a twelve-month strip labelled Great, Good, Mixed, or Off-season. Choosing a month shows its typical high and low, its share of wet days, and holidays in it, all hedged as typical. The label comes from the same seasonal-fit evaluation Plan Score uses (Section 29.1), so a guide and a trip's score never disagree about a month.
+4. **Sections** — Wikivoyage's own order (Understand, Talk, Get in, Get around, See, Do, Eat, Drink, Sleep, Stay safe, Respect, Connect), omitting empty ones. A sticky row of section chips jumps between them. Sections start collapsed and show a reading-time estimate.
+5. **Listings** — See, Do, Eat, Drink, and Sleep entries render as cards. Each card offers **Add to trip picks** and, from its menu, **Save** (Section 40.5).
+6. **Eat** leads with dish cards; **Talk** renders its phrasebook as tap-to-reveal cards.
+7. **Sources** — the required Wikivoyage credit and the other sources.
+8. **Primary action** — **Make it a trip** (Section 40.4).
+
+Reading on the move: large text, reading progress, a bottom-reachable section index, and return to the last read position on the same device. The page is text-first and remains complete without photographs or connectivity once stored (Section 40.5).
+
+## 40.4 Make It a Trip
+
+Make it a trip turns guide content into a reviewable draft that becomes an ordinary Trove Trip on Apply. Three routes lead into it, and they share one review.
+
+### Routes
+
+- **From picks.** While reading, the traveller adds listings to **Trip picks**, a tray that spans guides and groups picks by destination. Picks stay on the device until used or cleared; they are not Saved Places and are not synced. A tray holds at most 24 picks, the real-place limit in Section 7.6.2. Making a trip from a guide with no picks uses that guide's destination only.
+- **From an itinerary article.** A Wikivoyage itinerary article whose day structure Trove recognises offers **Use this itinerary**, preserving its days and stop order. When its structure is not recognised, its listings are offered as picks instead.
+- **With AI.** **Plan with AI** hands the destination and picks to AI-assisted trip creation (Section 7.6) as Must Go places. That route follows Section 7.6 entirely, including credits; the two routes above use no model call and no AI credit.
+
+### Setup
+
+Before building, one short step confirms the trip's dates. The start defaults to the next Great month for the main destination, on the first Friday at least 14 days ahead, mirroring Section 7.6.2. The length defaults from the picks at a balanced pace and never exceeds the account's plan limit. The traveller may change both before building.
+
+### Building the draft
+
+The build is deterministic and reuses the AI planner's grounding, timing, validation, and scoring pipeline without its model call:
+
+- **Grounding.** Each pick resolves through Section 7.6.3 using its name, locality, and the listing's coordinates, within the same budget of 50 outbound Google calls and 24 provider-backed places. An exact match to one of the traveller's Saved Places reuses that Place. An unresolved pick becomes an unverified Custom Place carrying the listing's name and coordinates.
+- **Days.** Destinations receive days in proportion to their picks, in an order that minimises backtracking. Within a destination, picks cluster by proximity at the balanced pace of Section 7.6.2, with lighter arrival and departure days.
+- **Dayparts.** Eat and Drink picks take meal dayparts. Sleep picks become Accommodation/Stay Trip Places suggested for nights in that destination, never bookings.
+- **Leftovers.** Picks that do not fit feasibly go to Unscheduled rather than being dropped.
+- **Day names** follow the cluster's area or main stop, validated as in Section 7.6.4.
+
+Itinerary-article drafts keep the article's days and order and are grounded the same way.
+
+### Review and Apply
+
+The draft is reviewed and applied exactly as in Section 7.6.4: immutable, scored from cached evidence, title, description, and country corrections only, atomic and idempotent Apply that creates only Trip, destinations, Daily Bases, Trip Places, Custom Places, and itinerary items. Rebuilding with different dates or picks replaces the draft. Drafts are kept on the server only for the session lifetime and retention rules of Section 7.6.5, without credits.
+
+### The resulting trip
+
+- It is an ordinary, private, fully editable Trip.
+- Its identity area shows "Based on Wikivoyage's {guide} guide", linking to the source and its licence; the credit records the guide title at Apply and cannot be removed.
+- Stops do not copy guide prose into notes. A Trip Place made from a listing keeps a reference to it, so its details can show **From the guide** and open that listing in Atlas.
+- Apply clears the picks it used.
+
+**Plan a trip here** remains available as the lightest path: manual trip creation prefilled with the destination and the suggested dates.
+
+## 40.5 Trips, Saved, Search, and Offline
+
+- **Trips.** Each town in a trip's journey (Section 4.5) links to its guide where Atlas has one, and Trip Mode's Trip view lists the guides for the trip's destinations. Atlas never enters the trip tab row or the supporting-tools menu.
+- **Saved.** **Save** on a listing resolves that one listing on demand, with the same identity rules as any explicit selection (Section 29.5), and creates an ordinary Saved Place. Picks and Saved stay independent.
+- **Search.** Guides appear as secondary results (Section 16.3).
+- **Offline.** Preparing a trip offline (Section 28) also stores its destinations' guide text, quick facts, best-time strip, and phrasebook. Guides are enrichment: their absence or staleness never prevents Ready, and their photographs fall back as Section 4.8 describes. Atlas pages already opened on the device remain readable offline while their stored copy is kept.
+
+## 40.6 Cost, Caching, and Freshness
+
+- A guide is fetched the first time any traveller opens it, stored as a dated, sanitised snapshot with its source revision, shared across travellers (the licence permits this), and refreshed once older than 30 days. A fresh snapshot is read from Trove's database and never re-fetches.
+- Atlas's index — subjects, country codes, coordinates, and the twelve-month best-time patterns for its listed destinations — is built ahead of time and bundled, refreshed at least yearly. Browsing never fetches per row: no climate, guide, or Google request runs because a list rendered.
+- Browse grids resolve editorial photographs only for visible cards, through the existing editorial-image budget and caches, falling back to the branded artwork.
+- Google requests happen only on a traveller's explicit Save or Make it a trip, inside the budgets above.
+- Requests to Wikimedia identify Trove with a generic client name and contact, never a traveller's details.
+
+## 40.7 Boundaries
+
+- Atlas has no user-generated reviews, ratings, comments, or public profiles.
+- Atlas does not show other travellers' trips; that discovery remains future work (Section 35.3).
+- Atlas content is not AI-generated or AI-summarised. The only AI route is Plan with AI, which is the existing Section 7.6 flow.
+- Atlas does not book, price, or claim availability.
+- Picks, guide snapshots, and the Atlas index are not Trove-owned destination truth. Applied trips own only the ordinary trip records listed in Section 40.4.

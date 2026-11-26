@@ -542,7 +542,7 @@ function ListingMenu({ name, save }: Readonly<{ name: string; save: NonNullable<
         render={
           <Button
             aria-label={g('listingActions', { name })}
-            className="rounded-full text-muted-foreground"
+            className="text-muted-foreground"
             size="icon-sm"
             type="button"
             variant="ghost"

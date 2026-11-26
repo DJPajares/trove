@@ -112,7 +112,7 @@ export function TripChrome({
             <div className="flex items-center justify-between gap-2 border-b border-border-subtle">
               <TripTabs lifecycle="planning" startDate="" tripId={tripId} />
               <div className="flex shrink-0 items-center gap-1">
-                <Button className="rounded-full" disabled size="sm" variant="outline">
+                <Button disabled size="sm" variant="outline">
                   {t('tripTools')}
                 </Button>
                 <Button aria-label={t('tripActions')} disabled size="icon" variant="ghost">

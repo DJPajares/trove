@@ -62,7 +62,7 @@ export function DayMenu({
       <DropdownMenuTrigger
         aria-label={t('daySettings')}
         title={t('daySettings')}
-        className="inline-flex h-8 items-center gap-1.5 rounded-full border border-score-media-foreground/20 bg-score-media-background px-3 text-sm font-semibold text-score-media-foreground outline-none transition-colors duration-[var(--motion-standard)] hover:border-score-media-foreground/40 focus-visible:ring-2 focus-visible:ring-score-media-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-score-media-background motion-reduce:transition-none"
+        className="inline-flex h-8 items-center gap-1.5 border border-score-media-foreground/20 bg-score-media-background px-3 text-sm font-semibold text-score-media-foreground outline-none transition-colors duration-[var(--motion-standard)] hover:border-score-media-foreground/40 focus-visible:ring-2 focus-visible:ring-score-media-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-score-media-background motion-reduce:transition-none"
       >
         <SlidersHorizontal aria-hidden="true" className="size-3.5" />
       </DropdownMenuTrigger>

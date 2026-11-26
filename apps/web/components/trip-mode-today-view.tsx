@@ -979,7 +979,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                           <>
                             <Button
                               aria-label={t('completeItem', { name })}
-                              className="h-11 rounded-[var(--radius-lg)] border-transparent bg-secondary px-1 text-[0.8125rem] font-semibold text-secondary-foreground hover:bg-secondary/80"
+                              className="h-11 border-transparent bg-secondary px-1 text-[0.8125rem] font-semibold text-secondary-foreground hover:bg-secondary/80"
                               disabled={busy}
                               onClick={() => void changeStatus(item, 'completed')}
                               variant="ghost"
@@ -987,7 +987,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                               {t('done')}
                             </Button>
                             <Button
-                              className="h-11 rounded-[var(--radius-lg)] bg-muted px-1 text-[0.8125rem] font-semibold text-foreground hover:bg-surface-hover"
+                              className="h-11 bg-muted px-1 text-[0.8125rem] font-semibold text-foreground hover:bg-surface-hover"
                               disabled={busy}
                               onClick={() => void changeStatus(item, 'skipped')}
                               variant="ghost"
@@ -997,7 +997,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                           </>
                         ) : (
                           <Button
-                            className="col-span-2 h-11 rounded-[var(--radius-lg)] bg-muted px-1 text-[0.8125rem] font-semibold text-foreground hover:bg-surface-hover"
+                            className="col-span-2 h-11 bg-muted px-1 text-[0.8125rem] font-semibold text-foreground hover:bg-surface-hover"
                             disabled={busy}
                             onClick={() => void changeStatus(item, 'upcoming')}
                             variant="ghost"
@@ -1008,7 +1008,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                         )}
                         {directions ? (
                           <Button
-                            className="h-11 rounded-[var(--radius-lg)] bg-muted px-1 text-[0.8125rem] font-semibold text-foreground hover:bg-surface-hover"
+                            className="h-11 bg-muted px-1 text-[0.8125rem] font-semibold text-foreground hover:bg-surface-hover"
                             nativeButton={false}
                             render={
                               <a
@@ -1027,7 +1027,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
 
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         <Button
-                          className="h-9 rounded-full px-3.5 font-normal shadow-none"
+                          className="h-9 px-3.5 font-normal shadow-none"
                           onClick={() => openMemoryFor(item.id)}
                           variant="outline"
                         >
@@ -1035,7 +1035,7 @@ export function TripModeTodayView({ tripId }: Readonly<{ tripId: string }>) {
                           {memoryTranslations('quickAction')}
                         </Button>
                         <Button
-                          className="h-9 rounded-full px-3.5 font-normal shadow-none"
+                          className="h-9 px-3.5 font-normal shadow-none"
                           onClick={() => logExpense(item.id)}
                           variant="outline"
                         >

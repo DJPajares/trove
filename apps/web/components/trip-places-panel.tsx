@@ -518,7 +518,7 @@ export function TripPlacesPanel({
                         : t('addPlaceToDay', { name, number: day.number })
                     }
                     className={cn(
-                      'rounded-full',
+                      '',
                       onThisDay
                         ? 'text-brand hover:bg-transparent hover:text-brand'
                         : facts.hours?.closed && 'bg-transparent text-muted-foreground',

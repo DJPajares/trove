@@ -471,19 +471,13 @@ export function OnboardingFlow({
 
         <footer className="grid gap-1 pt-2">
           {stage === 'setup' ? (
-            <Button
-              className="rounded-full"
-              disabled={saving}
-              form={SETUP_FORM}
-              size="lg"
-              type="submit"
-            >
+            <Button disabled={saving} form={SETUP_FORM} size="lg" type="submit">
               {primaryLabel}
             </Button>
           ) : (
             <Button
               className={cn(
-                'rounded-full',
+                '',
                 cover && 'bg-white text-neutral-900 hover:bg-white/90 focus-visible:ring-white/70',
               )}
               onClick={stage === 'ready' ? () => enter(!replay) : advance}

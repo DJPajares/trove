@@ -319,7 +319,6 @@ export function PlaceField({
             <ComboboxInput
               autoComplete="off"
               autoFocus={!hasIdentity || pickerOpen}
-              className="h-11 w-full min-w-0 rounded-[var(--radius-md)] border border-input bg-field py-2 text-base shadow-[var(--shadow-control)] md:text-sm"
               clearLabel={t('clearPlaceQuery')}
               id="stop-editor-place"
               placeholder={t('placeOrPlanPlaceholder')}
@@ -337,7 +336,7 @@ export function PlaceField({
                 {(option: PlaceOption) => (
                   <ComboboxItem
                     className={cn(
-                      'min-h-12 gap-3 px-3 py-2 pr-9',
+                      'min-h-12',
                       option.kind === 'provider' && 'bg-muted/25',
                       option.kind === 'trip_place' &&
                         option.usageLabel &&

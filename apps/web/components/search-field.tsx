@@ -31,10 +31,11 @@ export function SearchField({
       </Label>
       <Search
         aria-hidden="true"
-        className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
+        className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-muted-foreground"
       />
       <Input
-        className={cn('pr-4 pl-10', className)}
+        // Search is a pill, like every action (see Button); form fields stay rounded rectangles.
+        className={cn('pr-4 pl-10.5', className)}
         enterKeyHint={enterKeyHint}
         id={inputId}
         onKeyDown={(event) => {

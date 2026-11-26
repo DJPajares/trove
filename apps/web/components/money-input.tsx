@@ -150,7 +150,7 @@ export function MoneyInput({
         <div className="absolute inset-y-0 end-1 flex items-center">
           <Button
             aria-label={clearLabel}
-            className="rounded-full text-muted-foreground"
+            className="text-muted-foreground"
             onClick={() => {
               // Blur first: a touch tap on a button does not always take focus
               // from the field, and a focused field keeps showing its text.

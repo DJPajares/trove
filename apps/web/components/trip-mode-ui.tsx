@@ -21,7 +21,7 @@ export function TripModeActionButton({ className, ...props }: ComponentProps<typ
   return (
     <Button
       className={cn(
-        'h-11 gap-2 rounded-full border-transparent bg-muted px-4 text-sm font-semibold text-foreground shadow-none hover:bg-surface-hover hover:text-foreground has-data-[icon=inline-start]:pl-3.5',
+        'h-11 gap-2 border-transparent bg-muted px-4 text-sm font-semibold text-foreground shadow-none hover:bg-surface-hover hover:text-foreground has-data-[icon=inline-start]:pl-3.5',
         className,
       )}
       variant="ghost"

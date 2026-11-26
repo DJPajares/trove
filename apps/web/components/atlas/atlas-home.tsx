@@ -8,12 +8,11 @@ import {
   Trees,
   Utensils,
   Waves,
-  X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ATLAS_LICENCE, wikivoyageArticleUrl } from '@trove/types';
 
 import { AtlasCover } from '@/components/atlas/atlas-cover';
@@ -52,6 +51,7 @@ import {
 import { editorialCoverImage, editorialSubjectKey } from '@/lib/media/editorial-images';
 import { resolveTripMediaSource } from '@/lib/media/trip-media';
 import { useEntrance, type EntranceClock } from '@/lib/page-entrance';
+import { cn } from '@/lib/utils';
 
 const FEATURED_COUNT = 8;
 const MONTHS = Array.from({ length: 12 }, (_, index) => index + 1);
@@ -64,6 +64,9 @@ const englishNames = new Intl.DisplayNames(['en'], { type: 'region' });
 function countrySubject(country: AtlasCountry) {
   return { name: englishNames.of(country.countryCode) ?? country.name };
 }
+
+/** The sheet's own section rhythm (HOME_SHEET_FRAME), from the docked controls to each panel. */
+const PANEL_RHYTHM = 'mt-10 sm:mt-12';
 
 /** Whether a sticky element has reached its docked offset: one rect read per scroll event. */
 function useDocked(element: HTMLElement | null) {
@@ -105,7 +108,6 @@ export function AtlasHome() {
   const loading = !hydrated || index.isPending;
   const unavailable = !loading && !index.data;
   const [query, setQuery] = useState('');
-  const searchRef = useRef<HTMLInputElement>(null);
   const [controls, setControls] = useState<HTMLDivElement | null>(null);
   const docked = useDocked(controls);
   const [region, setRegion] = useState<AtlasRegion | 'all'>('all');
@@ -138,7 +140,7 @@ export function AtlasHome() {
   const entrance = useEntrance(atlasEntrance, { ready: true, replay: true });
 
   return (
-    <section className="mx-auto w-full max-w-5xl pb-16" style={entrance.style}>
+    <section className="mx-auto w-full max-w-5xl" style={entrance.style}>
       <AtlasCover
         description={t('description')}
         enter={entrance.enter}
@@ -155,40 +157,22 @@ export function AtlasHome() {
           {/* Search is the way in, so it leads the sheet and docks with the
               three ways to browse: a long A–Z list never scrolls it away. */}
           <div
-            className="sticky top-[var(--safe-top)] z-20 -mx-[var(--gutter-inline-start)] flex flex-col gap-3 border-b border-transparent bg-background/95 px-[var(--gutter-inline-start)] pt-3 pb-2 backdrop-blur transition-[border-color] duration-[var(--motion-standard)] data-docked:border-border-subtle motion-reduce:transition-none md:top-[var(--header-height)]"
+            className="sticky top-[var(--safe-top)] z-20 -mx-[var(--gutter-inline-start)] flex flex-col gap-3 border-b border-transparent -my-2 bg-background/95 px-[var(--gutter-inline-start)] py-2 backdrop-blur transition-[border-color] duration-[var(--motion-standard)] data-docked:border-border-subtle motion-reduce:transition-none md:top-[var(--header-height)]"
             data-docked={docked || undefined}
             data-slot="atlas-controls"
             ref={setControls}
           >
-            <div className="flex items-center gap-2 sm:max-w-2xl">
-              <div className="relative min-w-0 flex-1">
-                <SearchField
-                  className="h-12 rounded-full border-border-subtle bg-card pr-12 pl-11 text-base shadow-[var(--shadow-card)] md:text-base [&::-webkit-search-cancel-button]:hidden"
-                  label={t('searchLabel')}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder={t('searchPlaceholder')}
-                  ref={searchRef}
-                  value={query}
-                  wrapperClassName="[&>svg]:left-4 [&>svg]:size-[1.125rem]"
-                />
-                {query ? (
-                  <Button
-                    aria-label={t('clearSearch')}
-                    className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded-full text-muted-foreground"
-                    onClick={() => {
-                      setQuery('');
-                      searchRef.current?.focus();
-                    }}
-                    size="icon"
-                    type="button"
-                    variant="ghost"
-                  >
-                    <X aria-hidden="true" />
-                  </Button>
-                ) : null}
-              </div>
+            <div className="flex items-center gap-3">
+              <SearchField
+                label={t('searchLabel')}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={t('searchPlaceholder')}
+                value={query}
+                wrapperClassName="min-w-0 max-w-xl flex-1"
+              />
+              {/* A phone keeps the field wide: the shuffle icon carries the action there. */}
               <Button
-                className="size-12 shrink-0 rounded-full bg-card px-0 shadow-[var(--shadow-card)] sm:w-auto sm:px-5"
+                className="max-sm:size-11 max-sm:p-0"
                 disabled={!countries.length}
                 onClick={() => {
                   const picked = pickSurpriseCountry(countries);
@@ -198,8 +182,8 @@ export function AtlasHome() {
                 type="button"
                 variant="outline"
               >
-                <Shuffle aria-hidden="true" className="size-[1.125rem]" />
-                <span className="sr-only sm:not-sr-only">{t('surpriseMe')}</span>
+                <Shuffle aria-hidden="true" data-icon="inline-start" />
+                <span className="max-sm:sr-only">{t('surpriseMe')}</span>
               </Button>
             </div>
 
@@ -217,7 +201,7 @@ export function AtlasHome() {
             </TabsList>
           </div>
 
-          <TabsPanel className="mt-8 flex flex-col gap-10" value="where">
+          <TabsPanel className={cn(PANEL_RHYTHM, 'space-y-10 sm:space-y-12')} value="where">
             {!searching && featured.length ? (
               <section aria-labelledby="atlas-featured">
                 <h2
@@ -313,7 +297,7 @@ export function AtlasHome() {
             </section>
           </TabsPanel>
 
-          <TabsPanel className="mt-8" value="when">
+          <TabsPanel className={PANEL_RHYTHM} value="when">
             <MonthBrowser
               climateYears={index.data?.climateYears ?? null}
               countries={
@@ -326,7 +310,7 @@ export function AtlasHome() {
             />
           </TabsPanel>
 
-          <TabsPanel className="mt-8" value="what">
+          <TabsPanel className={PANEL_RHYTHM} value="what">
             <ThemeBrowser
               active={tab === 'what'}
               countries={countries}
@@ -460,11 +444,7 @@ function MonthBrowser({
           value={[String(month)]}
         >
           {MONTHS.map((option) => (
-            <Chip
-              className="min-h-11 justify-center rounded-[var(--radius-md)] text-sm"
-              key={option}
-              value={String(option)}
-            >
+            <Chip className="min-h-11 justify-center text-sm" key={option} value={String(option)}>
               {monthName(option, locale, 'short')}
             </Chip>
           ))}

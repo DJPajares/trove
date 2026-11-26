@@ -109,7 +109,7 @@ export function TripHubBar({
                 aria-label={
                   currentLabel ? t('moreLabelCurrent', { section: currentLabel }) : t('tripTools')
                 }
-                className="rounded-full"
+
                 size="sm"
                 type="button"
                 variant="outline"

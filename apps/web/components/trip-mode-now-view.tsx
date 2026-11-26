@@ -921,7 +921,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
             {directions && !leavingSoon ? (
               <Button
                 aria-label={t('directionsTo', { name: nextName })}
-                className={cn('size-15 shrink-0 rounded-full border-0', dock.button)}
+                className={cn('size-15 shrink-0 border-0', dock.button)}
                 nativeButton={false}
                 render={<a href={directions} rel="noreferrer" target="_blank" />}
                 size="icon"
@@ -968,7 +968,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
                 {nextReservation ? (
                   <Button
                     aria-label={t('bookingFor', { name: nextReservation.title })}
-                    className={cn('shrink-0 rounded-full', dock.secondary)}
+                    className={cn('shrink-0', dock.secondary)}
                     nativeButton={false}
                     render={<Link href={`/trips/${tripId}/reservations`} />}
                     variant="ghost"
@@ -981,7 +981,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
           ) : nextReservation ? (
             <Button
               aria-label={t('bookingFor', { name: nextReservation.title })}
-              className={cn('mt-4 rounded-full', dock.secondary)}
+              className={cn('mt-4', dock.secondary)}
               nativeButton={false}
               render={<Link href={`/trips/${tripId}/reservations`} />}
               variant="ghost"
@@ -1000,10 +1000,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
           {directions && leavingSoon ? (
             <Button
               aria-label={t('directionsTo', { name: nextName })}
-              className={cn(
-                'mt-4 h-14 w-full rounded-full border-0 text-base font-semibold',
-                dock.button,
-              )}
+              className={cn('mt-4 h-14 w-full border-0 text-base font-semibold', dock.button)}
               nativeButton={false}
               render={<a href={directions} rel="noreferrer" target="_blank" />}
               variant="ghost"
@@ -1033,7 +1030,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
                   opened on this day. Trip Mode reads the plan; it does not
                   rearrange it. */}
               <Button
-                className="w-full rounded-full border-0 bg-[color:var(--score-media-foreground)] text-[color:var(--score-media-background)] hover:bg-[color:var(--score-media-foreground)]/90 hover:text-[color:var(--score-media-background)]"
+                className="w-full border-0 bg-[color:var(--score-media-foreground)] text-[color:var(--score-media-background)] hover:bg-[color:var(--score-media-foreground)]/90 hover:text-[color:var(--score-media-background)]"
                 nativeButton={false}
                 render={
                   <Link
@@ -1073,7 +1070,7 @@ export function TripModeNowView({ tripId }: Readonly<{ tripId: string }>) {
           </div>
           {day ? (
             <div className="space-y-2">
-              <Button className="h-12 w-full rounded-full" onClick={() => setMemoryOpen(true)}>
+              <Button className="h-12 w-full" onClick={() => setMemoryOpen(true)}>
                 <Camera aria-hidden="true" data-icon="inline-start" />
                 {t('dayCompleteMemory')}
               </Button>

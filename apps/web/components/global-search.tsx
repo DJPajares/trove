@@ -380,7 +380,7 @@ export function GlobalSearch({
         <DialogDescription className="sr-only">{t('description')}</DialogDescription>
 
         <div className="flex items-center gap-2 px-4 pt-4 pb-3 sm:border-b sm:border-border-subtle sm:px-5 sm:pt-3">
-          <label className="flex h-12 min-w-0 flex-1 items-center gap-2.5 rounded-[var(--radius-lg)] border border-border bg-field pr-1.5 pl-3.5 transition-[border-color,box-shadow] duration-[var(--motion-standard)] has-[input:focus-visible]:border-brand has-[input:focus-visible]:ring-3 has-[input:focus-visible]:ring-ring/30 sm:border-0 sm:bg-transparent sm:pl-0 sm:has-[input:focus-visible]:ring-0">
+          <label className="flex h-12 min-w-0 flex-1 items-center gap-2.5 rounded-full border border-border bg-field pr-1.5 pl-4 transition-[border-color,box-shadow] duration-[var(--motion-standard)] has-[input:focus-visible]:border-brand has-[input:focus-visible]:ring-3 has-[input:focus-visible]:ring-ring/30 sm:border-0 sm:bg-transparent sm:pl-0 sm:has-[input:focus-visible]:ring-0">
             <Search aria-hidden="true" className="size-[1.125rem] shrink-0 text-muted-foreground" />
             <span className="sr-only">{t('label')}</span>
             <input
@@ -397,7 +397,7 @@ export function GlobalSearch({
             {query ? (
               <Button
                 aria-label={t('clear')}
-                className="shrink-0 rounded-full text-muted-foreground"
+                className="shrink-0 text-muted-foreground"
                 onClick={() => {
                   setQuery('');
                   inputRef.current?.focus();
@@ -438,7 +438,7 @@ export function GlobalSearch({
               .map((key) => (
                 <Button
                   aria-pressed={scope === key}
-                  className="h-9 shrink-0 rounded-full px-3.5 text-[0.8125rem] tabular-nums shadow-none"
+                  className="h-9 shrink-0 px-3.5 text-[0.8125rem] tabular-nums shadow-none"
                   key={key}
                   onClick={() => setScope(key)}
                   size="sm"

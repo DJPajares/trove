@@ -845,7 +845,7 @@ export function AiPlanningReview({
           </h1>
           <Button
             aria-label={t('editDetails')}
-            className="shrink-0 rounded-full border-score-media-foreground/25 bg-transparent text-score-media-foreground shadow-none hover:bg-score-media-foreground/10 hover:text-score-media-foreground"
+            className="shrink-0 border-score-media-foreground/25 bg-transparent text-score-media-foreground shadow-none hover:bg-score-media-foreground/10 hover:text-score-media-foreground"
             disabled={!reviewing || publishing}
             onClick={() => {
               setNameDraft(name);
@@ -1284,7 +1284,7 @@ export function AiPlanningReview({
           </p>
           <div className="flex gap-2">
             <Button
-              className="h-12 rounded-full px-5"
+              className="h-12 px-5"
               disabled={!reviewing || publishing || regenerating}
               onClick={() => openAdjust()}
               type="button"
@@ -1294,7 +1294,7 @@ export function AiPlanningReview({
               {t('adjust')}
             </Button>
             <Button
-              className="h-12 flex-1 rounded-full px-6 sm:flex-none"
+              className="h-12 flex-1 px-6 sm:flex-none"
               disabled={!canApply || publishing || regenerating}
               onClick={() => setConfirmApply(true)}
               type="button"

@@ -199,7 +199,7 @@ export function LandingExperience() {
               {t('closingDescription')}
             </p>
             <Button
-              className="mt-6 rounded-full px-6"
+              className="mt-6 px-6"
               nativeButton={false}
               render={<Link href="/sign-up" />}
               size="lg"

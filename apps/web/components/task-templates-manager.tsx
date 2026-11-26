@@ -299,11 +299,7 @@ export function TaskTemplatesManager() {
           {starters.length ? (
             <StarterGrid onUse={openStarter} starters={starters} title={t('startersTitle')} />
           ) : null}
-          <Button
-            className="h-12 w-full rounded-full sm:w-auto sm:px-6"
-            onClick={openBlank}
-            variant="outline"
-          >
+          <Button className="h-12 w-full sm:w-auto sm:px-6" onClick={openBlank} variant="outline">
             <Plus aria-hidden="true" data-icon="inline-start" />
             {t('startBlank')}
           </Button>
@@ -405,7 +401,7 @@ function TemplateCard({
       <div className="p-3">
         <Button
           aria-label={t('addNamedToTrip', { name: template.name })}
-          className="h-11 w-full rounded-[var(--radius-lg)]"
+          className="h-11 w-full"
           onClick={onAdd}
           variant="secondary"
         >

@@ -131,7 +131,6 @@ export function CurrencyCombobox({
         aria-invalid={ariaInvalid}
         aria-label={ariaLabel}
         aria-required={required}
-        className="h-11 w-full min-w-0 rounded-[var(--radius-md)] border border-input bg-field py-2 text-base shadow-[var(--shadow-control)] transition-[color,background-color,border-color,box-shadow] duration-[var(--motion-standard)] outline-none placeholder:text-muted-foreground hover:border-border-strong focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-60 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm"
         clearLabel={t('clear', { label: ariaLabel ?? placeholder ?? '' })}
         id={id}
         placeholder={status === 'loading' ? t('loading') : placeholder}
@@ -143,11 +142,7 @@ export function CurrencyCombobox({
         <ComboboxEmpty>{t('empty')}</ComboboxEmpty>
         <ComboboxList>
           {(item) => (
-            <ComboboxItem
-              className="relative flex min-h-10 w-full cursor-default items-center gap-3 rounded-[var(--radius-sm)] py-2 pr-9 pl-3 text-sm outline-none select-none data-highlighted:bg-secondary data-highlighted:text-secondary-foreground"
-              key={item.code}
-              value={item}
-            >
+            <ComboboxItem key={item.code} value={item}>
               {item.name} ({item.code})
             </ComboboxItem>
           )}

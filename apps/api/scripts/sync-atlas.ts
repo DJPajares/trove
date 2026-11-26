@@ -37,7 +37,56 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = process.env.ATLAS_CACHE_DIR ?? path.resolve(here, '../node_modules/.cache/atlas');
 const USER_AGENT = process.env.ATLAS_USER_AGENT ?? 'TroveAtlas/1.0';
 const WITH_GUIDES = process.argv.includes('--guides');
+const WITH_DESTINATIONS = process.argv.includes('--destinations');
 const REFRESH_GUIDES = process.argv.includes('--refresh');
+const ONLY_ARG = process.argv.find((arg) => arg.startsWith('--only='));
+const ONLY_CODES = ONLY_ARG
+  ? new Set(
+      ONLY_ARG.slice('--only='.length)
+        .split(',')
+        .map((code) => code.trim().toUpperCase())
+        .filter(Boolean),
+    )
+  : null;
+
+/**
+ * Curated Tier-1 popular travel destinations synced with sub-guides
+ * (Cities + Other destinations, capped per country). Includes the Philippines.
+ */
+const FEATURED_COUNTRIES = [
+  'PH',
+  'JP',
+  'TH',
+  'ID',
+  'VN',
+  'KR',
+  'SG',
+  'MY',
+  'TW',
+  'IT',
+  'FR',
+  'ES',
+  'PT',
+  'GR',
+  'GB',
+  'CH',
+  'IS',
+  'HR',
+  'TR',
+  'US',
+  'CA',
+  'MX',
+  'CO',
+  'PE',
+  'BR',
+  'CR',
+  'NZ',
+  'AU',
+  'MA',
+  'ZA',
+] as const;
+
+const MAX_DESTINATIONS_PER_COUNTRY = 12;
 const WIKIVOYAGE_API = 'https://en.wikivoyage.org/w/api.php';
 const ARCHIVE_URL = 'https://archive-api.open-meteo.com/v1/archive';
 const PAUSE_MS = 1_500;
@@ -245,31 +294,62 @@ async function main() {
   console.log(`\n${written} countries stored, ${withoutClimate} still without a climate pattern.`);
   resetAtlasCountryMemory();
 
-  if (!WITH_GUIDES) return;
-  let guides = 0;
-  let missing = 0;
-  for (const code of codes) {
-    const title = titles.get(code);
-    if (!title) continue;
-    // Wikimedia answers a burst of whole-article requests with 429, so each
-    // country is retried after a growing wait rather than skipped.
+  if (!WITH_GUIDES && !WITH_DESTINATIONS) return;
+  const guideCodes = ONLY_CODES
+    ? codes.filter((code) => ONLY_CODES.has(code))
+    : WITH_DESTINATIONS && !WITH_GUIDES
+      ? [...FEATURED_COUNTRIES].filter((code) => titles.has(code))
+      : codes;
+
+  const syncArticle = async (code: string, title: string, slug = '') => {
     let guide = null;
     const callsBefore = getProviderCallTotal();
     for (let attempt = 0; attempt <= GUIDE_RETRY_WAITS_MS.length; attempt += 1) {
       resetAtlasGuideFailures();
-      guide = await getAtlasGuide(code, { force: REFRESH_GUIDES, title, userAgent: USER_AGENT });
+      guide = await getAtlasGuide(code, {
+        force: REFRESH_GUIDES,
+        slug,
+        title,
+        userAgent: USER_AGENT,
+      });
       if (guide || attempt === GUIDE_RETRY_WAITS_MS.length) break;
       const wait = GUIDE_RETRY_WAITS_MS[attempt]!;
-      process.stdout.write(`(${code}: waiting ${wait / 1_000}s) `);
+      process.stdout.write(`(${code}${slug ? `/${slug}` : ''}: waiting ${wait / 1_000}s) `);
       await sleep(wait);
     }
+    if (getProviderCallTotal() > callsBefore) await sleep(GUIDE_PAUSE_MS);
+    return guide;
+  };
+
+  let guides = 0;
+  let missing = 0;
+  let subGuides = 0;
+  let subMissing = 0;
+  const featuredSet = new Set<string>(FEATURED_COUNTRIES);
+
+  for (const code of guideCodes) {
+    const title = titles.get(code);
+    if (!title) continue;
+    const guide = await syncArticle(code, title);
     if (guide) guides += 1;
     else missing += 1;
     process.stdout.write(`${code}${guide ? '' : '?'} `);
-    // A guide already stored asked Wikivoyage nothing, so needs no pause.
-    if (getProviderCallTotal() > callsBefore) await sleep(GUIDE_PAUSE_MS);
+
+    if (WITH_DESTINATIONS && guide?.destinations?.length && (ONLY_CODES || featuredSet.has(code))) {
+      const targets = guide.destinations
+        .filter((dest) => dest.kind === 'destination' || dest.kind === 'city')
+        .slice(0, MAX_DESTINATIONS_PER_COUNTRY);
+      for (const dest of targets) {
+        const sub = await syncArticle(code, dest.wikivoyageTitle, dest.slug);
+        if (sub) subGuides += 1;
+        else subMissing += 1;
+        process.stdout.write(`${code}/${dest.slug}${sub ? '' : '?'} `);
+      }
+    }
   }
-  console.log(`\n${guides} guides stored, ${missing} could not be read this run.`);
+  console.log(
+    `\n${guides} country guides stored (${missing} missing); ${subGuides} destination guides stored (${subMissing} missing).`,
+  );
 }
 
 await main();

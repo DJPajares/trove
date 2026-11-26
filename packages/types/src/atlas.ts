@@ -90,8 +90,25 @@ export type AtlasSection = {
   blocks: AtlasBlock[];
 };
 
+export type AtlasDestinationKind = 'city' | 'destination' | 'region';
+
+/** A linked Wikivoyage destination extracted from a country guide (e.g. Bohol, Siargao). */
+export type AtlasLinkedDestination = {
+  /** URL-safe slug within the country (e.g. "bohol", "el-nido"). */
+  slug: string;
+  /** Exact Wikivoyage article title used to fetch the sub-guide. */
+  wikivoyageTitle: string;
+  /** Display name shown on the Places to Explore card. */
+  name: string;
+  kind: AtlasDestinationKind;
+  /** Short teaser from the parent country article, when present. */
+  summary: string | null;
+};
+
 export type AtlasGuide = {
   countryCode: string;
+  /** Empty string for the country root guide; destination slug for sub-guides. */
+  slug?: string;
   /** The Wikivoyage article title, for the required credit. */
   title: string;
   revisionId: number;
@@ -100,6 +117,8 @@ export type AtlasGuide = {
   /** The article's opening paragraphs, before its first section. */
   lead: string[];
   sections: AtlasSection[];
+  /** Linked cities, iconic destinations, and regions extracted from the country guide. */
+  destinations?: AtlasLinkedDestination[];
 };
 
 export const ATLAS_LICENCE = {

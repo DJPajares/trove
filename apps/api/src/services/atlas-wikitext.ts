@@ -1,6 +1,8 @@
 import {
   ATLAS_LISTING_KINDS,
   type AtlasBlock,
+  type AtlasDestinationKind,
+  type AtlasLinkedDestination,
   type AtlasListing,
   type AtlasListingKind,
   type AtlasSection,
@@ -27,6 +29,66 @@ const TEXT_TEMPLATES = new Map<string, (params: TemplateParams) => string>([
 ]);
 /** Sections that only point elsewhere or repeat the page's own furniture. */
 const DROPPED_SECTIONS = new Set(['go next', 'see also', 'references', 'notes']);
+
+/**
+ * Option A country-level trimming: once a country guide exposes clickable
+ * `Places to Explore` destination cards, drop duplicate city/destination lists
+ * and generic country-scale boilerplate that belongs inside destination guides.
+ */
+const COUNTRY_TRIMMED_SECTIONS = new Set([
+  'cities',
+  'other-destinations',
+  'sleep',
+  'buy',
+  'work',
+  'learn',
+  'connect',
+]);
+
+/** URL-safe slug for a linked Wikivoyage destination within a country. */
+export function slugifyDestination(title: string) {
+  return title
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/\p{Mark}+/gu, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 100);
+}
+
+/** First internal Wikivoyage article link in a snippet, ignoring files, categories & interwikis. */
+function firstWikiLink(source: string): { label: string; target: string } | null {
+  let index = 0;
+  while (index < source.length) {
+    const start = source.indexOf('[[', index);
+    if (start < 0) return null;
+    const end = closeOf(source, start, '[[', ']]');
+    const [rawTarget = '', ...labels] = splitParams(source.slice(start + 2, end - 2));
+    const trimmedTarget = rawTarget.trim();
+    const isIgnored =
+      /^(file|image|media|category)\s*:/i.test(trimmedTarget) ||
+      /^[a-z-]{1,3}\s*:/i.test(trimmedTarget);
+    if (!isIgnored && trimmedTarget) {
+      const target = trimmedTarget.split('#')[0]!.trim();
+      const label = plainText(labels.length ? labels[labels.length - 1]! : target);
+      if (target && label) return { label, target };
+    }
+    index = end;
+  }
+  return null;
+}
+
+/** Strips a leading "Name — " / "Name: " prefix from a bullet line to isolate its teaser. */
+function summaryAfterName(text: string, name: string): string | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  let rest = trimmed;
+  if (rest.toLowerCase().startsWith(name.toLowerCase())) {
+    rest = rest.slice(name.length).trim();
+  }
+  rest = rest.replace(/^[—–:\-,;.]+\s*/, '').trim();
+  return rest || null;
+}
 
 type TemplateParams = { name: string; positional: string[]; named: Map<string, string> };
 
@@ -167,20 +229,42 @@ function listingFrom(template: TemplateParams): AtlasListing | null {
   };
 }
 
-/** Regionlist templates become a plain list of "Region — description" lines. */
-function regionItems(template: TemplateParams) {
+/** Regionlist templates become a plain list of "Region — description" lines plus linked regions. */
+function regionItems(template: TemplateParams): {
+  destinations: AtlasLinkedDestination[];
+  items: string[];
+} {
   const items: string[] = [];
+  const destinations: AtlasLinkedDestination[] = [];
   for (let n = 1; n <= 30; n += 1) {
-    const name = plainText(template.named.get(`region${n}name`) ?? '');
+    const rawName = template.named.get(`region${n}name`) ?? '';
+    const name = plainText(rawName);
     if (!name) continue;
     const description = plainText(template.named.get(`region${n}description`) ?? '');
     items.push(description ? `${name} — ${description}` : name);
+    const link = firstWikiLink(rawName);
+    const target = link?.target ?? name;
+    const slug = slugifyDestination(target);
+    if (slug) {
+      destinations.push({
+        kind: 'region',
+        name: link?.label ?? name,
+        slug,
+        summary: description || null,
+        wikivoyageTitle: target,
+      });
+    }
   }
-  return items;
+  return { destinations, items };
 }
 
 const LISTING_TOKEN = '\u0000listing:';
 const REGIONS_TOKEN = '\u0000regions:';
+
+type ExtractedListing = {
+  listing: AtlasListing;
+  rawName: string;
+};
 
 /**
  * Replaces block-level templates with tokens the line pass understands, drops
@@ -188,8 +272,8 @@ const REGIONS_TOKEN = '\u0000regions:';
  * `plainText`.
  */
 function extractBlocks(source: string) {
-  const listings: AtlasListing[] = [];
-  const regionLists: string[][] = [];
+  const listings: ExtractedListing[] = [];
+  const regionLists: { destinations: AtlasLinkedDestination[]; items: string[] }[] = [];
   let out = '';
   let index = 0;
   while (index < source.length) {
@@ -197,11 +281,13 @@ function extractBlocks(source: string) {
       const end = closeOf(source, index, '{{', '}}');
       const raw = source.slice(index, end);
       const template = parseTemplate(raw);
-      if (LISTING_TEMPLATES.has(template.name)) {
-        const listing = listingFrom(template);
+      if (LISTING_TEMPLATES.has(template.name) || template.name === 'city') {
+        const listing = listingFrom(
+          template.name === 'city' ? { ...template, name: 'listing' } : template,
+        );
         if (listing) {
           out += `${LISTING_TOKEN}${listings.length}\u0000`;
-          listings.push(listing);
+          listings.push({ listing, rawName: template.named.get('name') ?? '' });
         }
       } else if (template.name === 'regionlist') {
         out += `\n${REGIONS_TOKEN}${regionLists.length}\u0000\n`;
@@ -236,9 +322,24 @@ function sectionId(title: string, taken: Set<string>) {
   return id;
 }
 
-export type ParsedArticle = { lead: string[]; sections: AtlasSection[] };
+export type ParsedArticle = {
+  destinations: AtlasLinkedDestination[];
+  lead: string[];
+  sections: AtlasSection[];
+};
 
-export function parseWikivoyageArticle(wikitext: string): ParsedArticle {
+export type ParseWikivoyageOptions = {
+  /**
+   * `'country'` trims duplicate city/destination lists and generic country-scale
+   * boilerplate when linked sub-destinations are extracted (Option A).
+   */
+  mode?: 'country' | 'destination';
+};
+
+export function parseWikivoyageArticle(
+  wikitext: string,
+  options: ParseWikivoyageOptions = {},
+): ParsedArticle {
   const cleaned = wikitext
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<ref[^>]*\/>/gi, '')
@@ -248,11 +349,26 @@ export function parseWikivoyageArticle(wikitext: string): ParsedArticle {
 
   const lead: string[] = [];
   const sections: AtlasSection[] = [];
+  const destinations: AtlasLinkedDestination[] = [];
+  const seenDestinationSlugs = new Set<string>();
+  const addDestination = (entry: AtlasLinkedDestination) => {
+    if (!entry.slug || seenDestinationSlugs.has(entry.slug)) return;
+    seenDestinationSlugs.add(entry.slug);
+    destinations.push(entry);
+  };
   const ids = new Set<string>();
   let current: AtlasSection | null = null;
   let skipping = false;
   let paragraph: string[] = [];
   let list: string[] | null = null;
+
+  const currentDestinationKind = (): AtlasDestinationKind | null => {
+    if (!current) return null;
+    if (current.id === 'cities') return 'city';
+    if (current.id === 'other-destinations') return 'destination';
+    if (current.id === 'regions') return 'region';
+    return null;
+  };
 
   const blocks = () => current?.blocks ?? null;
   const flushParagraph = () => {
@@ -297,8 +413,9 @@ export function parseWikivoyageArticle(wikitext: string): ParsedArticle {
     const regions = new RegExp(`^${REGIONS_TOKEN}(\\d+)\u0000$`).exec(line);
     if (regions) {
       flush();
-      const items = regionLists[Number(regions[1])] ?? [];
-      if (items.length) push({ type: 'list', items });
+      const entry = regionLists[Number(regions[1])];
+      if (entry?.items.length) push({ type: 'list', items: entry.items });
+      for (const dest of entry?.destinations ?? []) addDestination(dest);
       continue;
     }
     const bullet = /^[*#:;]+\s*(.*)$/.exec(line);
@@ -306,24 +423,52 @@ export function parseWikivoyageArticle(wikitext: string): ParsedArticle {
     const listing = new RegExp(`^${LISTING_TOKEN}(\\d+)\u0000(.*)$`).exec(body);
     if (listing) {
       flush();
-      const record = listings[Number(listing[1])];
-      if (record) {
+      const extracted = listings[Number(listing[1])];
+      if (extracted) {
         const tail = plainText(listing[2] ?? '');
-        push({
-          type: 'listing',
-          listing: tail && !record.content ? { ...record, content: tail } : record,
-        });
+        const resolved =
+          tail && !extracted.listing.content
+            ? { ...extracted.listing, content: tail }
+            : extracted.listing;
+        push({ type: 'listing', listing: resolved });
+        const kind = currentDestinationKind();
+        if (kind) {
+          const link = firstWikiLink(extracted.rawName);
+          const wikivoyageTitle = link?.target ?? resolved.name;
+          addDestination({
+            kind,
+            name: link?.label ?? resolved.name,
+            slug: slugifyDestination(wikivoyageTitle),
+            summary: resolved.content,
+            wikivoyageTitle,
+          });
+        }
       }
       continue;
     }
     const inline = body.replace(
       new RegExp(`${LISTING_TOKEN}(\\d+)\u0000`, 'g'),
-      (_, n: string) => listings[Number(n)]?.name ?? '',
+      (_, n: string) => listings[Number(n)]?.listing.name ?? '',
     );
     if (bullet && /^[*#]/.test(line)) {
       flushParagraph();
       const item = plainText(inline);
-      if (item) (list ??= []).push(item);
+      if (item) {
+        (list ??= []).push(item);
+        const kind = currentDestinationKind();
+        if (kind) {
+          const link = firstWikiLink(inline);
+          if (link) {
+            addDestination({
+              kind,
+              name: link.label,
+              slug: slugifyDestination(link.target),
+              summary: summaryAfterName(item, link.label),
+              wikivoyageTitle: link.target,
+            });
+          }
+        }
+      }
     } else {
       flushList();
       paragraph.push(inline);
@@ -331,5 +476,20 @@ export function parseWikivoyageArticle(wikitext: string): ParsedArticle {
   }
   flush();
 
-  return { lead, sections: sections.filter((section) => section.blocks.length > 0) };
+  const hasSubDestinations = destinations.some(
+    (entry) => entry.kind === 'city' || entry.kind === 'destination',
+  );
+  const filteredSections = sections.filter((section) => {
+    if (section.blocks.length === 0) return false;
+    if (
+      options.mode === 'country' &&
+      hasSubDestinations &&
+      COUNTRY_TRIMMED_SECTIONS.has(section.id)
+    ) {
+      return false;
+    }
+    return true;
+  });
+
+  return { destinations, lead, sections: filteredSections };
 }

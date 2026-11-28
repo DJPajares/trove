@@ -55,11 +55,15 @@ Set these in `trove-api` for Preview and Production:
 - `GOOGLE_PROVIDERS_DISABLED`, `PLAN_SCORE_DISABLED`, and
   `EDITORIAL_IMAGES_DISABLED` — independent provider/feature kill switches.
 - `EDITORIAL_IMAGE_HOURLY_BUDGET` — optional editorial-provider request ceiling.
-- `RATE_LIMIT_REDIS_URL` — Redis URL (`rediss://…`, for example an Upstash
-  database) that holds rate-limit counters, so every function instance shares
-  one count per signed-in user or client address. Without it each instance
-  counts on its own and production logs a warning at startup. If Redis is
-  unreachable, requests are let through rather than refused.
+- Rate-limit counters — a Redis database shared by every function instance, so
+  limits count per signed-in user or client address rather than per instance.
+  Easiest setup: in the `trove-api` project open **Storage → Create Database →
+  Upstash for Redis**, choose the free plan and the Singapore region (the API
+  runs in `sin1`), and connect it to Production. The integration adds `KV_URL`,
+  which the API uses automatically; redeploy afterwards. `RATE_LIMIT_REDIS_URL`
+  overrides it if you use a different Redis. With none set, each instance counts
+  on its own and production logs a warning. If Redis is unreachable, requests
+  are let through rather than refused.
 - `ATLAS_USER_AGENT` — the name and contact address Atlas sends to Wikimedia,
   which throttles unidentified clients. `ATLAS_DISABLED` stops guide text.
 - `ADMIN_CREDENTIALS` — optional scoped operator credential registry; leave unset

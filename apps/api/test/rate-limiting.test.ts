@@ -4,7 +4,11 @@ import { afterEach, expect, test } from 'vitest';
 
 import { PROVIDER_SEARCH_RATE_LIMIT } from '../src/routes/rate-limits.js';
 import { registerCurrencyRoutes } from '../src/routes/currency.js';
-import { DEFAULT_RATE_LIMIT, rateLimitPluginOptions } from '../src/services/rate-limiting.js';
+import {
+  DEFAULT_RATE_LIMIT,
+  rateLimitPluginOptions,
+  rateLimitRedisUrl,
+} from '../src/services/rate-limiting.js';
 
 const apps: Array<{ close: () => Promise<unknown> }> = [];
 
@@ -130,4 +134,13 @@ test('the currency routes carry their provider limit rather than the default', a
   for (const config of configs) {
     expect(config).toMatchObject({ rateLimit: PROVIDER_SEARCH_RATE_LIMIT.rateLimit });
   }
+});
+
+test('the Redis URL comes from the explicit setting, then from the Upstash integration', () => {
+  expect(rateLimitRedisUrl({})).toBeNull();
+  expect(rateLimitRedisUrl({ REDIS_URL: 'rediss://c' })).toBe('rediss://c');
+  expect(rateLimitRedisUrl({ KV_URL: 'rediss://b', REDIS_URL: 'rediss://c' })).toBe('rediss://b');
+  expect(rateLimitRedisUrl({ KV_URL: 'rediss://b', RATE_LIMIT_REDIS_URL: ' rediss://a ' })).toBe(
+    'rediss://a',
+  );
 });

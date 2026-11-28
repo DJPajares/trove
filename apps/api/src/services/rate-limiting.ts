@@ -59,7 +59,20 @@ function rateLimitRedis(url: string, log: FastifyBaseLogger) {
 }
 
 /**
- * Counters live in Redis when `RATE_LIMIT_REDIS_URL` is set, so every instance
+ * An explicit `RATE_LIMIT_REDIS_URL` wins. Otherwise the connection string that
+ * Vercel's Upstash integration adds to a connected project is used as is, so
+ * installing the integration is enough: nothing has to be copied by hand.
+ */
+export function rateLimitRedisUrl(env: Environment = process.env) {
+  for (const key of ['RATE_LIMIT_REDIS_URL', 'KV_URL', 'REDIS_URL']) {
+    const value = env[key]?.trim();
+    if (value) return value;
+  }
+  return null;
+}
+
+/**
+ * Counters live in Redis when a Redis URL is configured, so every instance
  * sees the same count. Without it they live in each instance's memory, which is
  * right for local development and only a per-instance backstop in production.
  *
@@ -71,11 +84,11 @@ export function rateLimitPluginOptions(
   log: FastifyBaseLogger,
   env: Environment = process.env,
 ): RateLimitPluginOptions {
-  const redisUrl = env.RATE_LIMIT_REDIS_URL?.trim();
+  const redisUrl = rateLimitRedisUrl(env);
   if (!redisUrl && env.VERCEL_ENV === 'production') {
     log.warn(
       { kind: 'rate_limit_store_local' },
-      'RATE_LIMIT_REDIS_URL is not set; rate limits are counted per instance',
+      'no Redis URL is set; rate limits are counted per instance',
     );
   }
 

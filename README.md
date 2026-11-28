@@ -67,6 +67,8 @@ Supabase provides Auth and private Storage alongside the database.
 | ------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
 | Product requirements, feature behavior, and Plan Score | [PRD](PRD.md)                                                                                 |
 | Contribution and AI delivery rules                     | [CLAUDE.md](CLAUDE.md)                                                                        |
+| AI skills, agents and expertise                        | [Skills](.claude/skills/) · [Agents](.claude/agents/)                                         |
+| Architecture decisions                                 | [Decisions](docs/decisions/README.md)                                                         |
 | Local development, checks, and troubleshooting         | [Development](docs/development.md)                                                            |
 | Environment variables and provider credentials         | [Environment setup](docs/environment.md)                                                      |
 | Moving to a new Google Cloud account                   | [Google Cloud account switch](docs/google-cloud-account-switch.md)                            |

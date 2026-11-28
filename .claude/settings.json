@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm lint*)",
+      "Bash(pnpm typecheck*)",
+      "Bash(pnpm test*)",
+      "Bash(pnpm build*)",
+      "Bash(pnpm format*)",
+      "Bash(pnpm --filter * lint*)",
+      "Bash(pnpm --filter * typecheck*)",
+      "Bash(pnpm --filter * test*)",
+      "Bash(pnpm --filter @trove/web changelog:check)",
+      "Bash(node scripts/check-versions.mjs*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git branch*)",
+      "Bash(gh pr list*)",
+      "Bash(gh pr view*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.production)",
+      "Read(./apps/*/.env)",
+      "Read(./apps/*/.env.local)",
+      "Read(./docker/local.env)",
+      "Bash(git push origin main*)",
+      "Bash(git push --force*)",
+      "Bash(gh pr merge*)"
+    ]
+  }
+}

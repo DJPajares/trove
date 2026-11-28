@@ -1,0 +1,28 @@
+# Weekly dependency updates. Dependabot PRs get an implied changelog declaration
+# (apps/web/lib/updates/pr-declaration.ts), but the version check stays strict:
+# before merging an npm update, push a patch bump for each app whose files it touched.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+    groups:
+      npm-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+    groups:
+      actions-minor-and-patch:
+        update-types:
+          - minor
+          - patch

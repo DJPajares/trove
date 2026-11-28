@@ -22,3 +22,27 @@ export function checkChangelogDeclaration(
   }
   throw new Error('Use Changelog: added or Changelog: none — <reason>');
 }
+
+/** Dependabot cannot write a changelog declaration, so its PRs carry an implied one. */
+export const DEPENDABOT_LOGIN = 'dependabot[bot]';
+
+export interface PullRequestDeclarationSource {
+  body?: string | null;
+  user?: { login?: string } | null;
+}
+
+/**
+ * The declaration to check for a PR. A Dependabot body is generated release notes, never a
+ * decision, so its PRs declare none, or added once a reviewer pushes a note, and still pass
+ * through the history and new-ID checks. Everyone else writes their own.
+ */
+export function pullRequestDeclaration(
+  pullRequest: PullRequestDeclarationSource,
+  previousIds: readonly string[],
+  currentIds: readonly string[],
+): string {
+  if (pullRequest.user?.login !== DEPENDABOT_LOGIN) return pullRequest.body ?? '';
+  return currentIds.some((id) => !previousIds.includes(id))
+    ? 'Changelog: added'
+    : 'Changelog: none — dependency update';
+}

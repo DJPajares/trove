@@ -11,7 +11,10 @@ import {
   parseInstalledHistory,
   rememberInstalledEntries,
 } from '../lib/updates/history.ts';
-import { checkChangelogDeclaration } from '../lib/updates/pr-declaration.ts';
+import {
+  checkChangelogDeclaration,
+  pullRequestDeclaration,
+} from '../lib/updates/pr-declaration.ts';
 import {
   createReleaseManifest,
   parseChangelogEntry,
@@ -322,6 +325,26 @@ describe('PR changelog decisions', () => {
     expect(() => checkChangelogDeclaration('Changelog: added', ['removed'], ['new'])).toThrow(
       /Preserve/,
     );
+  });
+
+  test('implies the decision only for Dependabot, keeping the history check', () => {
+    const dependabot = { user: { login: 'dependabot[bot]' } };
+    const notes = '<details><summary>Changelog</summary>\nChangelog: see upstream\n</details>';
+    expect(pullRequestDeclaration({ ...dependabot, body: notes }, ['old'], ['old'])).toBe(
+      'Changelog: none — dependency update',
+    );
+    expect(pullRequestDeclaration(dependabot, ['old'], ['old', 'new'])).toBe('Changelog: added');
+    expect(() =>
+      checkChangelogDeclaration(
+        pullRequestDeclaration(dependabot, ['removed'], []),
+        ['removed'],
+        [],
+      ),
+    ).toThrow(/Preserve/);
+    for (const author of [{ login: 'DJPajares' }, { login: 'dependabot' }, null]) {
+      expect(pullRequestDeclaration({ user: author, body: notes }, [], [])).toBe(notes);
+    }
+    expect(pullRequestDeclaration({ user: { login: 'someone' } }, [], [])).toBe('');
   });
 });
 

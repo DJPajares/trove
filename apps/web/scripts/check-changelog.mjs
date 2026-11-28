@@ -3,7 +3,10 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 import { readChangelogCatalog, readChangelogAtRef } from '../lib/updates/catalog.ts';
-import { checkChangelogDeclaration } from '../lib/updates/pr-declaration.ts';
+import {
+  checkChangelogDeclaration,
+  pullRequestDeclaration,
+} from '../lib/updates/pr-declaration.ts';
 import { createReleaseManifest } from '../lib/updates/release.ts';
 
 const release = createReleaseManifest(
@@ -17,9 +20,10 @@ if (process.argv.includes('--pr')) {
     fileURLToPath(new URL('../../../', import.meta.url)),
     event.pull_request.base.sha,
   );
+  const previousIds = base.map((entry) => entry.id);
   checkChangelogDeclaration(
-    event.pull_request.body ?? '',
-    base.map((entry) => entry.id),
+    pullRequestDeclaration(event.pull_request, previousIds, release.entryIds),
+    previousIds,
     release.entryIds,
   );
 }

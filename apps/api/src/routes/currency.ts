@@ -12,17 +12,17 @@ export function registerCurrencyRoutes(app: FastifyInstance) {
 
   app.get(
     '/currency/currencies',
-    { ...PROVIDER_SEARCH_RATE_LIMIT, preHandler: requireAuthenticatedUser },
+    { config: PROVIDER_SEARCH_RATE_LIMIT, preHandler: requireAuthenticatedUser },
     controllers.listCurrencies,
   );
   app.get(
     '/currency/rates',
-    { ...PROVIDER_SEARCH_RATE_LIMIT, preHandler: requireAuthenticatedUser },
+    { config: PROVIDER_SEARCH_RATE_LIMIT, preHandler: requireAuthenticatedUser },
     controllers.getRates,
   );
   app.get(
     '/currency/rate',
-    { ...PROVIDER_SEARCH_RATE_LIMIT, preHandler: requireAuthenticatedUser },
+    { config: PROVIDER_SEARCH_RATE_LIMIT, preHandler: requireAuthenticatedUser },
     controllers.getRate,
   );
 }

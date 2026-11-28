@@ -6,6 +6,7 @@ import { getWebOrigins } from './environment.js';
 import { setAiGenerationTelemetrySink } from './services/ai-generation-telemetry.js';
 import { setAiPlanningTelemetrySink } from './services/ai-planning-telemetry.js';
 import { setProviderUsageSink } from './services/provider-usage.js';
+import { rateLimitPluginOptions } from './services/rate-limiting.js';
 import { registerAtlasRoutes } from './routes/atlas.js';
 import { registerAuthenticationRoutes } from './routes/auth.js';
 import { registerAiPlanningSessionRoutes } from './routes/ai-planning-sessions.js';
@@ -161,10 +162,10 @@ export function buildApp() {
 
   // A rate limiter only sees routes registered after it is loaded, so the routes
   // it protects are registered inside a scope that awaits it rather than beside
-  // it. Limits are opt-in per route (`global: false`); the provider-backed ones
-  // and the public share declare a `rateLimit` config.
+  // it. Every route gets the default limit; the provider-backed ones and the
+  // public share declare a tighter `rateLimit` config of their own.
   void app.register(async (instance) => {
-    await instance.register(rateLimit, { global: false });
+    await instance.register(rateLimit, rateLimitPluginOptions(app.log));
 
     registerAtlasRoutes(instance);
     registerAuthenticationRoutes(instance);

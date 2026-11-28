@@ -1,8 +1,13 @@
 /**
- * A limit exists here for one of two reasons: the route costs money per request,
- * or anybody at all can reach it. The ceilings sit far above what a person
- * clicking through the app produces and far below what a runaway client does,
- * so they are a backstop against a loop rather than a quota on real use.
+ * Every route already shares the default limit in `services/rate-limiting.ts`.
+ * A tighter one exists here for one of two reasons: the route costs money per
+ * request, or anybody at all can reach it. The ceilings sit far above what a
+ * person clicking through the app produces and far below what a runaway client
+ * does, so they are a backstop against a loop rather than a quota on real use.
+ *
+ * Each is counted per signed-in user, or per client address when nobody is
+ * signed in, and goes in a route's `config`, never spread into its options:
+ * the plugin reads `config.rateLimit` and silently ignores a top-level one.
  */
 const perMinute = (max: number) => ({ rateLimit: { max, timeWindow: '1 minute' } }) as const;
 

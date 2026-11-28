@@ -25,7 +25,6 @@ import {
   floatingActionDelay,
   floatingActionOrder,
   floatingActionTriggerClass,
-  mobileOnlyFloatingActions,
   profileInitials,
   searchStandsAlone,
 } from '@/lib/shell/floating-actions';
@@ -167,8 +166,7 @@ export function FloatingActionStack() {
         <Search aria-hidden="true" className="size-5" />
       </Button>
     ),
-    // A destination rather than a control, so it is a link. Phones only: wider
-    // screens carry Tools in the header.
+    // A destination rather than a control, so it is a link.
     tools: (
       <Link
         aria-current={isToolsPath(pathname) ? 'page' : undefined}
@@ -317,7 +315,6 @@ export function FloatingActionStack() {
               {stackOrder.map((action, index) => (
                 <motion.div
                   animate={{ opacity: 1, scale: 1, y: 0 }}
-                  className={mobileOnlyFloatingActions.has(action) ? 'md:hidden' : undefined}
                   exit={{
                     opacity: 0,
                     scale: 0.85,

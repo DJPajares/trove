@@ -19,6 +19,7 @@ import { useTripCreation } from '@/components/trip-creation-provider';
 import { useAtlasTripPicks } from '@/hooks/use-atlas-trip-picks';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
+import { ScrollShadow } from '@/components/ui/scroll-shadow';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAtlasIndex } from '@/hooks/use-atlas-index';
 import { useEditorialImages } from '@/hooks/use-editorial-images';
@@ -208,7 +209,11 @@ export function AtlasDestinationGuideView({
 
       <HomeSheet>
         <div className="grid gap-10 lg:grid-cols-[15.5rem_minmax(0,1fr)] lg:items-start lg:gap-12">
-          <aside className="space-y-6 lg:sticky lg:top-[calc(var(--header-height)+1.5rem)]">
+          <ScrollShadow
+            className="interaction-scrollbar space-y-6 lg:sticky lg:top-[calc(var(--header-height)+1.5rem)] lg:-mx-1 lg:max-h-[calc(100dvh-var(--header-height)-3rem)] lg:overscroll-contain lg:px-1 lg:pb-2"
+            orientation="vertical"
+            render={<aside />}
+          >
             {sections.length ? (
               <nav aria-label={g('sections')} className="hidden lg:block">
                 <p className="mb-2 text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">
@@ -244,7 +249,7 @@ export function AtlasDestinationGuideView({
             >
               ← {g('backToCountry', { country: countryLabel })}
             </Link>
-          </aside>
+          </ScrollShadow>
 
           <div className="min-w-0 max-w-3xl space-y-10">
             {guide.lead.length ? <GuideLead paragraphs={guide.lead} /> : null}

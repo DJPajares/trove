@@ -5,10 +5,10 @@ import { primaryNavigationDestinations } from '@/lib/navigation';
  *
  * The order is the hierarchy the traveller reads top to bottom, nearest the
  * trigger first. Search leads because it is the only one that starts something;
- * Tools follows on phones, where it opens a destination the bottom bar has no
- * room for; notifications and appearance follow, with the account/profile control at
- * the bottom. On the main destinations search leaves the stack and stands
- * beside the trigger as a button of its own (`searchStandsAlone`).
+ * Kit (`tools`) follows across every viewport; notifications and appearance
+ * follow, with the account/profile control at the bottom. On the main
+ * destinations search leaves the stack and stands beside the trigger as a
+ * button of its own (`searchStandsAlone`).
  */
 export const floatingActionOrder = [
   'search',
@@ -21,18 +21,14 @@ export const floatingActionOrder = [
 export type FloatingAction = (typeof floatingActionOrder)[number];
 
 /**
- * Actions that only the phone's stack carries, because a wider screen already
- * shows them in its header.
- */
-export const mobileOnlyFloatingActions: ReadonlySet<FloatingAction> = new Set(['tools']);
-
-/**
  * Search earns a button of its own on the main destinations - Home, Trips,
- * Atlas, Saved and Tools - where it is reached for most. Everywhere else the screen's
+ * Atlas, Saved and Kit - where it is reached for most. Everywhere else the screen's
  * own controls need the corner, so search folds back into the stack, first.
  */
 export function searchStandsAlone(pathname: string) {
-  return primaryNavigationDestinations.some(({ href }) => pathname === href);
+  return (
+    pathname === '/tools' || primaryNavigationDestinations.some(({ href }) => pathname === href)
+  );
 }
 
 /**

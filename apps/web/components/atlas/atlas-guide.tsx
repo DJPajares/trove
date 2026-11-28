@@ -290,7 +290,11 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
       <HomeSheet>
         <div className="grid gap-10 lg:grid-cols-[15.5rem_minmax(0,1fr)] lg:items-start lg:gap-12">
           {/* Left Rail: Essential Facts dossier + numbered book marginalia on desktop */}
-          <aside className="space-y-6 lg:sticky lg:top-[calc(var(--header-height)+1.5rem)]">
+          <ScrollShadow
+            className="interaction-scrollbar space-y-6 lg:sticky lg:top-[calc(var(--header-height)+1.5rem)] lg:-mx-1 lg:max-h-[calc(100dvh-var(--header-height)-3rem)] lg:overscroll-contain lg:px-1 lg:pb-2"
+            orientation="vertical"
+            render={<aside />}
+          >
             <section
               aria-labelledby="atlas-glance"
               className="rounded-[var(--radius-xl)] border border-border-subtle bg-card p-4"
@@ -440,7 +444,7 @@ export function AtlasGuideView({ countryCode }: Readonly<{ countryCode: string }
                 </ol>
               </nav>
             ) : null}
-          </aside>
+          </ScrollShadow>
 
           {/* Right Column: Editorial Reading Spread */}
           <div className="min-w-0 max-w-3xl space-y-10">

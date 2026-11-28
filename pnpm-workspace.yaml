@@ -34,3 +34,7 @@ minimumReleaseAgeExclude:
   - '@turbo/windows-64@2.11.3'
   - '@turbo/windows-arm64@2.11.3'
   - turbo@2.11.3
+overrides:
+  # @prisma/config pins effect@3.20.0, which has a ReDoS (GHSA, fixed in 3.22.1).
+  # Drop this once a Prisma release depends on a patched effect.
+  '@prisma/config>effect': 3.22.5

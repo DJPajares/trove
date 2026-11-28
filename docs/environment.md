@@ -239,6 +239,9 @@ without affecting the country list.
   Supabase Storage access and is used to remove queued private trip covers,
   Memory photos, and reservation documents after trip deletion. Never expose it
   through the web app or a `NEXT_PUBLIC_` variable.
+- `RATE_LIMIT_REDIS_URL` belongs in the API environment and is optional
+  locally. It shares rate-limit counters across Vercel function instances; leave
+  it unset in development, where in-memory counters are enough.
 - `CRON_SECRET` belongs in the API environment and authenticates both daily
   maintenance routes: AI-planning retention and private trip-media cleanup.
   Without it the routes refuse every caller, so retries stop running.

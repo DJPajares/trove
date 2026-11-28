@@ -9,6 +9,52 @@ This document defines the current approved product, including the original MVP a
 
 Section 36 summarizes current scope. Section 37 preserves the original delivery sequence as dependency guidance. Section 40 specifies Atlas, the destination guide. References to MVP rules elsewhere retain those baseline rules unless a narrower, explicit extension is stated.
 
+## Section index
+
+Agents: find the section you need here, then read only that section.
+
+- §1 Product Overview
+- §2 Goals
+- §3 Technical Direction
+- §4 Design Requirements
+- §5 Core Product Architecture
+- §6 Trip Lifecycle
+- §7 Trip Creation
+- §8 Trip Ownership & Sharing
+- §9 Home
+- §10 Trips
+- §11 Places Data Model
+- §12 Custom Places
+- §13 Place Categories
+- §14 Saved Places
+- §15 Trip Places
+- §16 Place Search Behavior
+- §17 Itinerary
+- §18 Routes & Maps
+- §19 Reservations & Travel Logistics
+- §20 Trip Mode
+- §21 Preview Trip Mode
+- §22 Expenses & Currency
+- §23 Tasks
+- §24 Notes
+- §25 Trip Info
+- §26 Tools
+- §27 Notifications
+- §28 Offline Requirements
+- §29 Plan Score
+- §30 Experience Rating
+- §31 Memories
+- §32 Internationalization & Localization
+- §33 Profile & Settings
+- §34 Onboarding
+- §35 Future Features Register
+- §36 Current Approved Scope
+- §37 Delivery History and Dependency Guidance
+- §38 Testing Strategy
+- §39 Product Success Criteria
+- §40 Atlas
+- §41 Decision Log
+
 ---
 
 # 1. Product Overview
@@ -2851,3 +2897,15 @@ Atlas's countries, typical conditions and guides are shared reference data, not 
 - Atlas content is not AI-generated or AI-summarised. The only AI route is Plan with AI, which is the existing Section 7.6 flow.
 - Atlas does not book, price, or claim availability.
 - Picks, guide snapshots, and the Atlas index are not Trove-owned destination truth. Applied trips own only the ordinary trip records listed in Section 40.4.
+
+---
+
+# 41. Decision Log
+
+This log records product and architecture decisions made from now on: what was decided, why, and
+which sections changed. Earlier decisions are already reflected in the sections above. Propose new
+entries through the `update-prd` skill. Architecture decisions also get an ADR in `docs/decisions/`.
+
+| Date | Decision | Status | Why | Sections affected |
+| --- | --- | --- | --- | --- |
+| 2026-11-28 | Start a Decision Log and ADRs; record the stack (ADR 0001) and the provider-data caching rules (ADR 0002) | approved | Keep the reasons for decisions findable outside PRD prose and CLAUDE.md | §3, §11.5, §11.8, §29.5 |

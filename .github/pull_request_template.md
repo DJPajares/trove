@@ -8,6 +8,10 @@
 
 <!-- Bump apps/web and/or apps/api package.json versions for every deployed change (CLAUDE.md, Versioning). -->
 
+## Post-merge action
+
+<!-- Migrations, workflows, environment variables or secrets the user must handle after merge. Write "None" if there are none. -->
+
 ## Changelog
 
 <!-- Replace this comment with exactly one declaration:

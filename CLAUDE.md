@@ -40,18 +40,32 @@ The current approved product requirements live in `PRD.md`. Linear is the source
 - Trove owns application identity and user relationships; external providers enrich data.
 - Google Places data is resolved on demand. Do not pre-mine Google Places into Trove.
 - Mutable provider data such as ratings, hours, photos, and descriptions should not become permanent Trove-owned copies.
-- A Place a user has already reached for may keep a dated snapshot of its durable provider data — name, address, coordinates, types — for up to 30 days, only where provider permissions allow, refreshed once stale. Travel legs follow the same permission-first rule; 30 days is an internal maximum, not blanket permission for every field. This is not pre-mining: nothing is fetched that a user did not ask for. Ask for the cheap field mask (`detail: 'location'`) for autocomplete, decorative and routing-only paths. Explicit itinerary Place selections acquire identity and reusable scoring fields together in one rich request under PRD §29.5, reusing sufficient fresh snapshots.
-- Provider requests cost real money per call. Before adding one to a code path, check what fans out around it: a per-day call inside a per-trip loop is how a development week became a $300 bill.
-- Editorial imagery and Google Places data are separate tracks. Editorial imagery is decorative, free, hotlinked, cached by reference with its attribution metadata, and resolved on demand under its provider permissions. Do not render editorial-image credits on authenticated trip surfaces; choose sources whose attribution requirements can be met by that design. Google Places data is functional, billable, never pre-mined, and necessary ratings/review-count/hours evidence, plus opened Place details' photos (up to three, author always credited) and contact links, may use the accepted 30-day bounded cache in PRD 11.5 and 29.5, separate from Trove-owned truth. Any permitted transient reuse retains its original age. A decorative surface never reaches for the latter.
+- Provider requests cost real money per call; check fan-out before adding one. The full provider, caching and attribution rules live in the `places-provider` skill (`.claude/skills/places-provider/SKILL.md`): read it before touching any provider call or cache.
 - Saved Places and Trip Places are independent relationships to the same Place.
 - Removing a Saved Place must not remove it from Trip Places, and vice versa.
 - Future social/shared itineraries must preserve ownership, attribution, visibility, and source-trip relationships.
 - Trip Mode remains separate from global navigation and supports Preview before travel.
 - Plan Score and Memories build on stable core planning/travel flows; they are part of the current product, not deferred features.
 
+## Expertise
+
+Before building or reviewing work in an area, load the matching skill. An issue's **Expertise**
+field lists tags from this table.
+
+| Tag | Skill | Load when |
+|---|---|---|
+| `domain` | `travel-planning-expert` (`.claude/skills/`) | Trips, dates, places, itinerary, Trip Mode, offline, Memories |
+| `provider` | `places-provider` (`.claude/skills/`) | Any Google Places, imagery, routing or other paid-provider call or cache |
+| `ux` | TasteSkill (`design-taste-frontend`). Not vendored: it's installed for Codex at `~/.codex/skills/taste-skill`. In Claude Code, use `frontend-design:frontend-design` | New or changed screens and flows |
+
+Workflow skills: `start-task`, `ship-pr`, `plan-backlog`, `update-prd`, `verify-manually`.
+Agents: `reviewer` (before every non-trivial PR) and `qa-tester` (UI and behavior changes).
+When a mistake in an area repeats, add one line to that skill's Lessons section.
+
 ## Linear Workflow
 
-Linear is the implementation source of truth for Linear-backed tasks.
+Linear is the implementation source of truth for Linear-backed tasks. The `start-task` and
+`ship-pr` skills are checklists for this workflow and the GitHub Rules below.
 
 Every Trove issue belongs to the `Trove` project on the `wonderland` team. Never
 file one outside it.
@@ -108,6 +122,10 @@ Recommend suitable currently available models for the target AI platform.
 - Prefer the smallest capable model.
 - Use stronger reasoning for architecture, difficult debugging, security-sensitive work, complex multi-file changes, or ambiguous requirements.
 - Keep the reason brief.
+
+### Expertise
+The tags from "Expertise" that apply (for example `domain, provider`), so the right skills load
+while building and reviewing.
 
 ### Acceptance Criteria
 Clear and independently verifiable criteria.

@@ -30,7 +30,7 @@
   "devDependencies": {
     "@trove/config": "workspace:*",
     "@types/pg": "^8.23.1",
-    "prisma": "^7.9.1",
+    "prisma": "^7.10.1",
     "tsx": "^4.23.15"
   }
 }

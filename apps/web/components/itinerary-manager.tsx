@@ -2301,6 +2301,7 @@ export function ItineraryManager({
       ) : null}
 
       <LocatePlaceSheet
+        locationBias={editorLocationBias}
         onLocated={async () => {
           await invalidateTripQueries(queryClient, tripId, PLACE_LOCATION_QUERY_ROOTS);
         }}

@@ -105,6 +105,24 @@ test('every candidate is offered rather than only an unambiguous one', async () 
   expect(result.status === 'ok' && result.candidates).toHaveLength(2);
 });
 
+test("the trip's location is sent as a bias and keeps its own memo entry", async () => {
+  // "The Beach Shack" exists in many countries; the one in El Nido must win.
+  const { provider, requests } = countingProvider();
+  const service = new PlaceLocationCandidatesService(provider);
+  const elNido = { latitude: 11.1956, longitude: 119.4074, radiusMeters: 50_000 };
+
+  await service.find({ locationBias: elNido, textQuery: 'The Beach Shack' });
+  expect(requests[0]?.locationBias).toStrictEqual(elNido);
+
+  // The same wording near another trip is a different question, not a memo hit.
+  await service.find({
+    locationBias: { latitude: 34.0195, longitude: -118.4912, radiusMeters: 50_000 },
+    textQuery: 'The Beach Shack',
+  });
+  await service.find({ locationBias: elNido, textQuery: 'the beach shack' });
+  expect(requests).toHaveLength(2);
+});
+
 test('the same wording is answered from memory rather than bought twice', async () => {
   const { provider, requests } = countingProvider();
   let now = new Date('2026-09-05T09:00:00.000Z');

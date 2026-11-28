@@ -4,6 +4,7 @@ import { GooglePlacesProvider } from './google-places.js';
 import { normalizePlaceLanguageCode } from './place-language.js';
 import {
   PlaceProviderError,
+  type PlaceLocationBias,
   type PlaceProviderName,
   type PlaceTextSearchProvider,
   type PlacesUnavailableCode,
@@ -50,6 +51,7 @@ export type PlaceLocationCandidate = {
 
 export type PlaceLocationCandidatesRequest = {
   languageCode?: string;
+  locationBias?: PlaceLocationBias;
   regionCode?: string;
   textQuery: string;
 };
@@ -71,6 +73,10 @@ function memoKey(request: PlaceLocationCandidatesRequest) {
     normalizeIdentityText(request.textQuery),
     normalizePlaceLanguageCode(request.languageCode),
     request.regionCode?.trim().toLowerCase() ?? '',
+    // The same wording near another trip is a different question.
+    request.locationBias
+      ? `${request.locationBias.latitude},${request.locationBias.longitude},${request.locationBias.radiusMeters}`
+      : '',
   ].join(' ');
 }
 
@@ -116,6 +122,7 @@ export class PlaceLocationCandidatesService {
       const identities = await this.provider.textSearch({
         detail: 'location',
         languageCode: request.languageCode,
+        locationBias: request.locationBias,
         regionCode: request.regionCode,
         textQuery: request.textQuery,
       });

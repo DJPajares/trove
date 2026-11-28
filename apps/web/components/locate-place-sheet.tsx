@@ -1,7 +1,7 @@
 'use client';
 
 import { CircleAlert, Search } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -18,13 +18,24 @@ import {
   ItemTitle,
 } from '@/components/ui/item';
 import { Sheet, SheetContent, SheetHeading } from '@/components/ui/sheet';
+import { useTripContext } from '@/components/trip-provider';
 import { fetchPlaceLocationCandidates, type PlaceLocationCandidate } from '@/lib/saved/api';
+import {
+  destinationLocationBias,
+  type ProviderSearchLocationBias,
+} from '@/lib/saved/provider-search-session';
 import { linkTripPlaceToProvider } from '@/lib/trip-places/api';
 import * as Icons from '@/lib/icons';
 import { ScrollShadow } from '@/components/ui/scroll-shadow';
 
 type LocatePlaceSheetProps = {
   finalFocus?: () => HTMLElement | boolean;
+  /**
+   * Where to look first. Defaults to the trip's destination, so a common name
+   * finds the one on this trip rather than whichever Google ranks first
+   * worldwide; a caller that knows the day's own stops can pass a closer one.
+   */
+  locationBias?: ProviderSearchLocationBias | null;
   onLocated: () => Promise<void> | void;
   onOpenChange: (open: boolean) => void;
   /** The trip's Custom Place being repaired, and the name to search on first. */
@@ -52,12 +63,18 @@ type SearchState = 'empty' | 'idle' | 'results' | 'searching' | 'unavailable';
  */
 export function LocatePlaceSheet({
   finalFocus,
+  locationBias,
   onLocated,
   onOpenChange,
   place,
 }: Readonly<LocatePlaceSheetProps>) {
   const t = useTranslations('placeDetail');
   const locale = useLocale();
+  const tripDestinations = useTripContext()?.trip?.destinations;
+  const searchBias = useMemo(
+    () => locationBias ?? destinationLocationBias(tripDestinations ?? []),
+    [locationBias, tripDestinations],
+  );
   const [query, setQuery] = useState('');
   const [state, setState] = useState<SearchState>('idle');
   const [candidates, setCandidates] = useState<PlaceLocationCandidate[]>([]);
@@ -82,7 +99,9 @@ export function LocatePlaceSheet({
     setFailed(false);
     setCandidates([]);
     try {
-      const result = await fetchPlaceLocationCandidates(place.placeId, trimmed);
+      const result = await fetchPlaceLocationCandidates(place.placeId, trimmed, {
+        locationBias: searchBias,
+      });
       setCandidates(result.candidates);
       setState(result.status === 'empty' ? 'empty' : 'results');
     } catch {

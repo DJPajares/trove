@@ -37,18 +37,20 @@ const sessionTokenSchema = z
   .max(36)
   .regex(/^[A-Za-z0-9_-]+$/);
 
+/** Prefer results inside this circle; Google treats it as a hint, not a filter. */
+const locationBiasSchema = z
+  .object({
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+    radiusMeters: z.number().positive().max(50_000),
+  })
+  .strict();
+
 const placeSearchSchema = z
   .object({
     input: z.string().trim().min(1).max(200),
     languageCode: languageCodeSchema.optional(),
-    locationBias: z
-      .object({
-        latitude: z.number().min(-90).max(90),
-        longitude: z.number().min(-180).max(180),
-        radiusMeters: z.number().positive().max(50_000),
-      })
-      .strict()
-      .optional(),
+    locationBias: locationBiasSchema.optional(),
     regionCode: regionCodeSchema.optional(),
     sessionToken: sessionTokenSchema.optional(),
   })
@@ -111,6 +113,9 @@ const customPlaceParamsSchema = z.object({ placeId: z.uuid() }).strict();
 const placeLocationCandidatesSchema = z
   .object({
     languageCode: languageCodeSchema.optional(),
+    // Where the trip is, so a common name like "The Beach Shack" finds the one
+    // there rather than whichever Google ranks first worldwide.
+    locationBias: locationBiasSchema.optional(),
     query: z.string().trim().min(1).max(200).optional(),
     regionCode: regionCodeSchema.optional(),
   })
@@ -328,6 +333,7 @@ export function createPlacesControllers(
 
       const result = await placeLocationCandidatesService.find({
         languageCode: parsedBody.data.languageCode,
+        locationBias: parsedBody.data.locationBias,
         regionCode: parsedBody.data.regionCode,
         textQuery: parsedBody.data.query ?? placeName,
       });

@@ -1873,5 +1873,15 @@
     "summaries": {
       "en": ["Trips planned from Atlas now open in a moment, with every place already in them."]
     }
+  },
+  {
+    "id": "locate-place-near-trip",
+    "date": "2026-11-28",
+    "version": "1.53.5",
+    "summaries": {
+      "en": [
+        "Locating a place now looks near your trip first, so a common name finds the spot you're visiting instead of one in another country."
+      ]
+    }
   }
 ]

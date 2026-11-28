@@ -383,12 +383,19 @@ export type PlaceLocationCandidatesResult = {
 export function fetchPlaceLocationCandidates(
   placeId: string,
   query?: string,
-  signal?: AbortSignal,
+  options: {
+    locationBias?: ProviderSearchOptions['locationBias'] | null;
+    signal?: AbortSignal;
+  } = {},
 ) {
+  const { locationBias, signal } = options;
   return savedRequest<PlaceLocationCandidatesResult>(
     `/places/custom/${placeId}/location-candidates`,
     {
-      body: JSON.stringify(query?.trim() ? { query: query.trim() } : {}),
+      body: JSON.stringify({
+        ...(query?.trim() ? { query: query.trim() } : {}),
+        ...(locationBias ? { locationBias } : {}),
+      }),
       method: 'POST',
       signal,
     },

@@ -1883,5 +1883,16 @@
         "Locating a place now looks near your trip first, so a common name finds the spot you're visiting instead of one in another country."
       ]
     }
+  },
+  {
+    "id": "atlas-index-scroll-and-kit-menu",
+    "date": "2026-11-28",
+    "version": "1.53.8",
+    "summaries": {
+      "en": [
+        "Scroll the Atlas guide index on its own on tablets and desktops to jump straight to any chapter.",
+        "Kit now lives in the quick-actions menu on tablets and desktops, matching phones."
+      ]
+    }
   }
 ]

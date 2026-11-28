@@ -9,13 +9,12 @@ import {
   toolNavigationDestinations,
 } from '../lib/navigation.ts';
 
-test('the header carries all five destinations, with Atlas between Trips and Saved', () => {
+test('the header carries the four main destinations, with Atlas between Trips and Saved, and leaves Kit for the quick-actions menu', () => {
   expect(primaryNavigationDestinations.map(({ href }) => href)).toEqual([
     '/',
     '/trips',
     '/atlas',
     '/saved',
-    '/tools',
   ]);
 });
 

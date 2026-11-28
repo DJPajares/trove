@@ -134,7 +134,6 @@ export function PrimaryNavigation({ variant }: Readonly<PrimaryNavigationProps>)
     atlas: Icons.Atlas,
     home: Icons.Home,
     saved: Icons.Saved,
-    tools: Icons.Tools,
     trips: Icons.Trips,
   };
   const toItem = ({
